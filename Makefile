@@ -1,29 +1,25 @@
 SHELL := /bin/sh
 UV_CACHE_DIR ?= ./.cache/uv
+COMPOSE_FILE := infra/docker-compose.yml
 
-.PHONY: help setup check-docker up down restart logs ps test test-api test-worker test-web build-web clean
+.PHONY: help setup up down logs restart-api restart-worker restart-web test test-api test-worker test-web check-docker
 
 help:
-	@echo "Sports Alerts Platform commands"
+	@echo "Sports Alerts Platform"
 	@echo ""
-	@echo "Setup:"
-	@echo "  make setup        Copy .env and install local dev deps"
+	@echo "  make setup          First-time setup (env + deps)"
+	@echo "  make up             Start stack in background"
+	@echo "  make logs           Tail all service logs"
+	@echo "  make down           Stop stack"
 	@echo ""
-	@echo "Run:"
-	@echo "  make up           Start full docker stack"
-	@echo "  make down         Stop docker stack"
-	@echo "  make restart      Restart docker stack"
-	@echo "  make logs         Tail docker logs"
-	@echo "  make ps           Show docker services"
+	@echo "  make restart-api    Restart API service"
+	@echo "  make restart-worker Restart worker service"
+	@echo "  make restart-web    Restart frontend service"
 	@echo ""
-	@echo "Test:"
-	@echo "  make test         Run API + worker tests + frontend build"
-	@echo "  make test-api     Run API tests"
-	@echo "  make test-worker  Run worker tests"
-	@echo "  make test-web     Run frontend production build"
-	@echo ""
-	@echo "Maintenance:"
-	@echo "  make clean        Remove local Python virtualenvs"
+	@echo "  make test           Run all checks"
+	@echo "  make test-api       Run API tests"
+	@echo "  make test-worker    Run worker tests"
+	@echo "  make test-web       Run frontend build"
 
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env; fi
@@ -33,21 +29,15 @@ setup:
 
 up:
 	@$(MAKE) check-docker
-	docker compose -f infra/docker-compose.yml up --build
+	docker compose -f $(COMPOSE_FILE) up -d --build
 
 down:
 	@$(MAKE) check-docker
-	docker compose -f infra/docker-compose.yml down
-
-restart: down up
+	docker compose -f $(COMPOSE_FILE) down
 
 logs:
 	@$(MAKE) check-docker
-	docker compose -f infra/docker-compose.yml logs -f
-
-ps:
-	@$(MAKE) check-docker
-	docker compose -f infra/docker-compose.yml ps
+	docker compose -f $(COMPOSE_FILE) logs -f
 
 test: test-api test-worker test-web
 
@@ -60,10 +50,17 @@ test-worker:
 test-web:
 	cd apps/web && npm run build
 
-build-web: test-web
+restart-api:
+	@$(MAKE) check-docker
+	docker compose -f $(COMPOSE_FILE) restart api
 
-clean:
-	rm -rf services/api/.venv services/worker/.venv
+restart-worker:
+	@$(MAKE) check-docker
+	docker compose -f $(COMPOSE_FILE) restart worker
+
+restart-web:
+	@$(MAKE) check-docker
+	docker compose -f $(COMPOSE_FILE) restart web
 
 check-docker:
 	@command -v docker >/dev/null 2>&1 || { \

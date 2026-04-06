@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +19,6 @@ def list_games(
     if status:
         stmt = stmt.where(Game.status == status)
     else:
-        now = datetime.now(timezone.utc)
-        stmt = stmt.where((Game.scheduled_start_time >= now) | (Game.status.in_(["live", "in_progress"])))
+        stmt = stmt.where(Game.is_final.is_(False))
     games = db.scalars(stmt).all()
     return [GameOut.model_validate(game) for game in games]

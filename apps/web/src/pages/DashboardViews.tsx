@@ -22,6 +22,13 @@ function messageFromUnknown(error: unknown): string {
   return "Request failed";
 }
 
+const GAME_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  in_progress: "Live",
+  final: "Final",
+  postponed: "Postponed",
+};
+
 export function OverviewView() {
   return (
     <section className="card">
@@ -119,20 +126,28 @@ export function TeamsView({ token }: { token: string }) {
   );
 }
 
-function formatGameLabel(game: Game) {
-  return `${new Date(game.scheduled_start_time).toLocaleString()} • Game ${game.external_game_id} (${game.status})`;
+function formatGameLabel(game: Game, teamMap: Map<number, Team>) {
+  const home = teamMap.get(game.home_team_id);
+  const away = teamMap.get(game.away_team_id);
+  const matchup =
+    home && away ? `${away.abbreviation} @ ${home.abbreviation}` : `Game ${game.external_game_id}`;
+  const tipoff = new Date(game.scheduled_start_time).toLocaleString();
+  const status = GAME_STATUS_LABELS[game.status] ?? game.status;
+  return `${tipoff} • ${matchup} (${status})`;
 }
 
 export function GamesView({ token }: { token: string }) {
   const [games, setGames] = useState<Game[]>([]);
+  const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
   const [followedGameIds, setFollowedGameIds] = useState<Set<number>>(new Set());
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [availableGames, follows] = await Promise.all([listGames(), listFollows(token)]);
+    const [availableGames, follows, teams] = await Promise.all([listGames(), listFollows(token), listTeams()]);
     setGames(availableGames);
+    setTeamMap(new Map(teams.map((team) => [team.id, team])));
     setFollowedGameIds(new Set(follows.games.map((game) => game.id)));
     if (!selectedGameId && availableGames.length > 0) {
       setSelectedGameId(availableGames[0].id);
@@ -182,10 +197,10 @@ export function GamesView({ token }: { token: string }) {
         <form className="inline-form" onSubmit={onFollow}>
           <select value={selectedGameId ?? ""} onChange={(event) => setSelectedGameId(Number(event.target.value))}>
             {games.map((game) => (
-              <option key={game.id} value={game.id}>
-                {formatGameLabel(game)}
-              </option>
-            ))}
+                <option key={game.id} value={game.id}>
+                {formatGameLabel(game, teamMap)}
+                </option>
+              ))}
           </select>
           <button type="submit" disabled={busy || !selectedGameId}>
             Follow Game
@@ -198,7 +213,7 @@ export function GamesView({ token }: { token: string }) {
       <ul className="list">
         {followedGames.map((game) => (
           <li key={game.id}>
-            <span>{formatGameLabel(game)}</span>
+            <span>{formatGameLabel(game, teamMap)}</span>
             <button disabled={busy} onClick={() => onUnfollow(game.id)}>
               Unfollow
             </button>

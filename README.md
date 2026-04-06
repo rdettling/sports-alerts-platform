@@ -15,10 +15,18 @@ Prerequisite: Docker Desktop installed and running.
    - `make setup`
 2. Start the stack:
    - `make up`
-3. Services:
+3. Tail logs (optional):
+   - `make logs`
+4. Services:
    - Web: `http://localhost:5173`
    - API: `http://localhost:8000`
    - API docs: `http://localhost:8000/docs`
+
+Quick restarts:
+
+- `make restart-api`
+- `make restart-worker`
+- `make restart-web`
 
 ## API endpoints (Milestone 1)
 
