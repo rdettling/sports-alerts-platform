@@ -23,7 +23,10 @@ help:
 	@echo "  make test-web                 Run frontend build"
 
 setup:
-	@if [ ! -f .env ]; then cp .env.example .env; fi
+	@if [ ! -f .env ]; then \
+		echo "JWT_SECRET_KEY=replace-with-long-random-string" > .env; \
+		echo "Created .env with placeholder JWT secret. Update it before deploy."; \
+	fi
 	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
 	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
 	cd apps/web && npm ci --include=optional
