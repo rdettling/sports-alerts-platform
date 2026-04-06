@@ -6,6 +6,41 @@ export type AuthResponse = {
   user: { id: number; email: string; created_at: string };
 };
 
+export type Team = {
+  id: number;
+  external_team_id: string;
+  league: string;
+  name: string;
+  abbreviation: string;
+};
+
+export type Game = {
+  id: number;
+  external_game_id: string;
+  league: string;
+  home_team_id: number;
+  away_team_id: number;
+  scheduled_start_time: string;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
+  period: number | null;
+  clock: string | null;
+  is_final: boolean;
+};
+
+export type CurrentFollows = {
+  teams: Team[];
+  games: Game[];
+};
+
+export type AlertPreference = {
+  alert_type: string;
+  is_enabled: boolean;
+  close_game_margin_threshold: number | null;
+  close_game_time_threshold_seconds: number | null;
+};
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
@@ -35,5 +70,57 @@ export function login(email: string, password: string): Promise<AuthResponse> {
 export function me(token: string) {
   return request<{ id: number; email: string; created_at: string }>("/auth/me", {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+function authHeaders(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
+}
+
+export function listTeams(): Promise<Team[]> {
+  return request<Team[]>("/teams");
+}
+
+export function listGames(): Promise<Game[]> {
+  return request<Game[]>("/games");
+}
+
+export function listFollows(token: string): Promise<CurrentFollows> {
+  return request<CurrentFollows>("/follows", { headers: authHeaders(token) });
+}
+
+export function followTeam(token: string, teamId: number): Promise<{ status: string }> {
+  return request<{ status: string }>(`/follows/teams/${teamId}`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function unfollowTeam(token: string, teamId: number): Promise<{ status: string }> {
+  return request<{ status: string }>(`/follows/teams/${teamId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function followGame(token: string, gameId: number): Promise<{ status: string }> {
+  return request<{ status: string }>(`/follows/games/${gameId}`, { method: "POST", headers: authHeaders(token) });
+}
+
+export function unfollowGame(token: string, gameId: number): Promise<{ status: string }> {
+  return request<{ status: string }>(`/follows/games/${gameId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export function listAlertPreferences(token: string): Promise<AlertPreference[]> {
+  return request<AlertPreference[]>("/alert-preferences", { headers: authHeaders(token) });
+}
+
+export function updateAlertPreference(
+  token: string,
+  alertType: string,
+  payload: {
+    is_enabled?: boolean;
+    close_game_margin_threshold?: number;
+    close_game_time_threshold_seconds?: number;
+  },
+): Promise<AlertPreference> {
+  return request<AlertPreference>(`/alert-preferences/${alertType}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
 }

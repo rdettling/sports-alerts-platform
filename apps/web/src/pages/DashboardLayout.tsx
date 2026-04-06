@@ -1,19 +1,11 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <section className="card">
-      <h2>{title}</h2>
-      <p>Milestone 1 placeholder view.</p>
-    </section>
-  );
-}
+import { GamesView, HistoryPlaceholderView, OverviewView, PreferencesView, TeamsView } from "./DashboardViews";
 
 export function DashboardLayout() {
-  const { user, logout } = useAuth();
-  if (!user) {
+  const { token, user, logout } = useAuth();
+  if (!user || !token) {
     return <Navigate to="/auth" replace />;
   }
 
@@ -36,11 +28,11 @@ export function DashboardLayout() {
       </nav>
 
       <Routes>
-        <Route path="/" element={<Placeholder title="Overview" />} />
-        <Route path="/teams" element={<Placeholder title="Followed Teams" />} />
-        <Route path="/games" element={<Placeholder title="Followed Games" />} />
-        <Route path="/preferences" element={<Placeholder title="Alert Preferences" />} />
-        <Route path="/history" element={<Placeholder title="Alert History" />} />
+        <Route path="/" element={<OverviewView />} />
+        <Route path="/teams" element={<TeamsView token={token} />} />
+        <Route path="/games" element={<GamesView token={token} />} />
+        <Route path="/preferences" element={<PreferencesView token={token} />} />
+        <Route path="/history" element={<HistoryPlaceholderView />} />
       </Routes>
     </div>
   );
