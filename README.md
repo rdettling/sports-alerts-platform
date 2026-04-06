@@ -9,10 +9,12 @@ Milestone 1 baseline for an NBA alerts platform with:
 
 ## Quick start
 
-1. Copy env vars:
-   - `cp .env.example .env`
+Prerequisite: Docker Desktop installed and running.
+
+1. Install dependencies and create `.env`:
+   - `make setup`
 2. Start the stack:
-   - `docker compose -f infra/docker-compose.yml up --build`
+   - `make up`
 3. Services:
    - Web: `http://localhost:5173`
    - API: `http://localhost:8000`
@@ -31,10 +33,19 @@ Milestone 1 baseline for an NBA alerts platform with:
 
 Python tests live in `services/api/tests` and `services/worker/tests`.
 
-Example:
+Run all checks:
 
-- `cd services/api && uv sync --group dev && uv run pytest`
-- `cd services/worker && uv sync --group dev && uv run pytest`
+- `make test`
+
+Run a specific area:
+
+- `make test-api`
+- `make test-worker`
+- `make test-web`
+
+See all commands:
+
+- `make help`
 
 ## Dependency management
 

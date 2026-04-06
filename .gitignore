@@ -18,3 +18,4 @@ coverage/
 alembic.log
 *.db
 *.tsbuildinfo
+.cache/
