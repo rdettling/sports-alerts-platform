@@ -124,6 +124,7 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
+    assert all(row.delivery_status == "sent" for row in sent)
 
 
 def test_ingest_creates_final_result_alert(db_session):
@@ -146,3 +147,4 @@ def test_ingest_creates_final_result_alert(db_session):
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
+    assert sent[0].delivery_status == "sent"

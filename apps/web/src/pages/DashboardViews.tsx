@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
+  AlertHistoryItem,
   AlertPreference,
   Game,
   Team,
   followGame,
   followTeam,
+  listAlertHistory,
   listAlertPreferences,
   listFollows,
   listGames,
@@ -297,11 +299,34 @@ export function PreferencesView({ token }: { token: string }) {
   );
 }
 
-export function HistoryPlaceholderView() {
+export function HistoryView({ token }: { token: string }) {
+  const [items, setItems] = useState<AlertHistoryItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const response = await listAlertHistory(token);
+    setItems(response.items);
+  };
+
+  useEffect(() => {
+    load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
+  }, []);
+
   return (
     <section className="card">
       <h2>Alert History</h2>
-      <p>History UI will be wired in Milestone 5 when email delivery is implemented.</p>
+      {error ? <p className="error">{error}</p> : null}
+      {items.length === 0 ? <p>No alerts have been sent yet.</p> : null}
+      <ul className="list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <span>
+              {new Date(item.sent_at).toLocaleString()} • {item.away_team_abbreviation} @ {item.home_team_abbreviation} •{" "}
+              {item.alert_type} • {item.delivery_status}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

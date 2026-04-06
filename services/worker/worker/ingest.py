@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.models import Game, IngestRun, SentAlert, Team, UserAlertPreference, UserGameFollow, UserTeamFollow
+from worker.delivery import process_pending_alerts
 from worker.config import settings
 from worker.providers.base import NbaProvider, ProviderGame
 
@@ -243,13 +244,16 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                 continue
             alert_records_created += _evaluate_and_record_alerts(db, game)
 
+        delivery_sent, delivery_failed = process_pending_alerts(db)
         db.commit()
         logger.info(
-            "Ingest cycle checked=%s updated=%s tracked=%s alerts_created=%s",
+            "Ingest cycle checked=%s updated=%s tracked=%s alerts_created=%s delivery_sent=%s delivery_failed=%s",
             checked,
             updated,
             len(tracked_game_ids),
             alert_records_created,
+            delivery_sent,
+            delivery_failed,
         )
 
         ingest_run.status = "success"

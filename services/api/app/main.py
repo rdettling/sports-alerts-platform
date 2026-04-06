@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db.session import SessionLocal
 from app.routers.auth import router as auth_router
+from app.routers.alerts import router as alerts_router
 from app.routers.follows import router as follows_router
 from app.routers.games import router as games_router
 from app.routers.health import router as health_router
@@ -44,3 +45,4 @@ app.include_router(teams_router)
 app.include_router(games_router)
 app.include_router(follows_router)
 app.include_router(preferences_router)
+app.include_router(alerts_router)

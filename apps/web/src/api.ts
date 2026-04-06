@@ -41,6 +41,20 @@ export type AlertPreference = {
   close_game_time_threshold_seconds: number | null;
 };
 
+export type AlertHistoryItem = {
+  id: number;
+  game_id: number;
+  alert_type: string;
+  delivery_channel: string;
+  delivery_status: string;
+  sent_at: string;
+  provider_message_id: string | null;
+  metadata_json: Record<string, unknown> | null;
+  game_external_id: string;
+  home_team_abbreviation: string;
+  away_team_abbreviation: string;
+};
+
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
     return detail;
@@ -147,5 +161,11 @@ export function updateAlertPreference(
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
+  });
+}
+
+export function listAlertHistory(token: string): Promise<{ items: AlertHistoryItem[] }> {
+  return request<{ items: AlertHistoryItem[] }>("/alerts/history", {
+    headers: authHeaders(token),
   });
 }

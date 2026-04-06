@@ -1,7 +1,7 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-import { GamesView, HistoryPlaceholderView, OverviewView, PreferencesView, TeamsView } from "./DashboardViews";
+import { GamesView, HistoryView, OverviewView, PreferencesView, TeamsView } from "./DashboardViews";
 
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
@@ -32,7 +32,7 @@ export function DashboardLayout() {
         <Route path="/teams" element={<TeamsView token={token} />} />
         <Route path="/games" element={<GamesView token={token} />} />
         <Route path="/preferences" element={<PreferencesView token={token} />} />
-        <Route path="/history" element={<HistoryPlaceholderView />} />
+        <Route path="/history" element={<HistoryView token={token} />} />
       </Routes>
     </div>
   );

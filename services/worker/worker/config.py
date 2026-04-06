@@ -7,6 +7,8 @@ class WorkerSettings(BaseSettings):
     database_url: str = "postgresql+psycopg://sports:sports@localhost:5432/sports_alerts"
     worker_poll_interval_seconds: int = 60
     nba_provider: str = "espn"
+    delivery_mode: str = "log"
+    from_email: str = "alerts@sports-alerts.local"
 
 
 settings = WorkerSettings()
