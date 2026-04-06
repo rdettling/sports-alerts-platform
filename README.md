@@ -62,5 +62,5 @@ Common commands:
 
 ## Notes
 
-- The worker includes a provider abstraction (`fetch_schedule`, `fetch_game_updates`) and a placeholder adapter.
+- The worker includes a provider abstraction (`fetch_schedule`, `fetch_game_updates`) backed by ESPN NBA scoreboard ingestion for Milestone 3.
 - Alert rule evaluation and email delivery are intentionally deferred to later milestones.

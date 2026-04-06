@@ -30,6 +30,14 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
 
     existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == "NBA"))
     if existing:
+        before = (
+            existing.status,
+            existing.home_score,
+            existing.away_score,
+            existing.period,
+            existing.clock,
+            existing.is_final,
+        )
         existing.status = payload.status
         existing.home_score = payload.home_score
         existing.away_score = payload.away_score
@@ -37,7 +45,15 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
         existing.clock = payload.clock
         existing.is_final = payload.is_final
         existing.last_ingested_at = datetime.now(timezone.utc)
-        return True
+        after = (
+            existing.status,
+            existing.home_score,
+            existing.away_score,
+            existing.period,
+            existing.clock,
+            existing.is_final,
+        )
+        return before != after
 
     db.add(
         Game(
@@ -68,12 +84,22 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     try:
         team_map = _team_id_map(db)
         schedule = provider.fetch_schedule()
-        checked = len(schedule)
+        tracked_game_ids = db.scalars(
+            select(Game.external_game_id).where(Game.league == "NBA", Game.is_final.is_(False))
+        ).all()
+        updates = provider.fetch_game_updates([game_id for game_id in tracked_game_ids if game_id])
+        games_by_id = {game.external_game_id: game for game in schedule}
+        for game in updates:
+            games_by_id[game.external_game_id] = game
+        all_games = list(games_by_id.values())
+
+        checked = len(all_games)
         updated = 0
-        for provider_game in schedule:
+        for provider_game in all_games:
             if _upsert_game(db, provider_game, team_map):
                 updated += 1
         db.commit()
+        logger.info("Ingest cycle checked=%s updated=%s tracked=%s", checked, updated, len(tracked_game_ids))
 
         ingest_run.status = "success"
         ingest_run.games_checked = checked
