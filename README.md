@@ -103,3 +103,18 @@ Container runtime model:
 
 - The worker includes a provider abstraction (`fetch_schedule`, `fetch_game_updates`) backed by ESPN NBA scoreboard ingestion for Milestone 3.
 - Alert rule evaluation and email delivery are intentionally deferred to later milestones.
+
+## Architecture notes
+
+- `web` calls `api` for auth, follows, preferences, games, and alert history.
+- `worker` polls NBA data, upserts game state, evaluates alert rules, and sends queued alerts.
+- Deduplication is enforced in `sent_alerts` via unique `dedupe_key` (`user_id:game_id:alert_type`).
+- API and worker are separate runtime services with shared Postgres state.
+
+## Deployment prep checklist
+
+- Set secure values in `.env` for `JWT_SECRET_KEY` and email provider credentials.
+- Set `CORS_ALLOW_ORIGINS` to your deployed frontend domain.
+- Build and run API/worker images from CI with pinned lockfiles.
+- Run migrations before serving API traffic.
+- Set `DELIVERY_MODE=email` only when provider credentials are configured.

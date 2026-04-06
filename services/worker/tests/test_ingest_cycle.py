@@ -8,6 +8,9 @@ from worker.providers.base import ProviderGame
 
 
 class SuccessProvider:
+    def __init__(self):
+        self.fetch_updates_calls = 0
+
     def fetch_schedule(self):
         return [
             ProviderGame(
@@ -20,6 +23,7 @@ class SuccessProvider:
         ]
 
     def fetch_game_updates(self, external_game_ids):
+        self.fetch_updates_calls += 1
         return []
 
 
@@ -74,10 +78,13 @@ class FinalProvider:
 
 
 def test_ingest_run_success(db_session):
-    result = run_ingest_cycle(SuccessProvider())
+    provider = SuccessProvider()
+    result = run_ingest_cycle(provider)
     assert result["status"] == "success"
     assert result["games_checked"] == 1
     assert result["games_updated"] == 1
+    assert result["next_poll_seconds"] >= 30
+    assert provider.fetch_updates_calls == 0
 
     runs = db_session.scalars(select(IngestRun)).all()
     assert len(runs) == 1
@@ -90,6 +97,7 @@ def test_ingest_run_success(db_session):
 def test_ingest_run_failure(db_session):
     result = run_ingest_cycle(FailingProvider())
     assert result["status"] == "failed"
+    assert result["next_poll_seconds"] > 0
 
     runs = db_session.scalars(select(IngestRun)).all()
     assert len(runs) == 1

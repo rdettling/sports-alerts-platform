@@ -33,3 +33,9 @@ def test_register_conflict_on_existing_email(client):
 
     assert first.status_code == 201
     assert second.status_code == 409
+
+
+def test_register_validation_error_returns_readable_detail(client):
+    response = client.post("/auth/register", json={"email": "not-an-email", "password": "123"})
+    assert response.status_code == 422
+    assert isinstance(response.json().get("detail"), str)

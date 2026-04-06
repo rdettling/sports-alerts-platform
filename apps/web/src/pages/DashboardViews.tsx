@@ -24,6 +24,13 @@ function messageFromUnknown(error: unknown): string {
   return "Request failed";
 }
 
+function scoreSnippet(game: Game): string {
+  if (game.home_score === null || game.away_score === null) {
+    return "";
+  }
+  return ` • ${game.away_score}-${game.home_score}`;
+}
+
 const GAME_STATUS_LABELS: Record<string, string> = {
   scheduled: "Scheduled",
   in_progress: "Live",
@@ -45,14 +52,21 @@ export function TeamsView({ token }: { token: string }) {
   const [followedTeamIds, setFollowedTeamIds] = useState<Set<number>>(new Set());
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [teams, follows] = await Promise.all([listTeams(), listFollows(token)]);
-    setAllTeams(teams);
-    setFollowedTeamIds(new Set(follows.teams.map((team) => team.id)));
-    if (!selectedTeamId && teams.length > 0) {
-      setSelectedTeamId(teams[0].id);
+    setError(null);
+    setLoading(true);
+    try {
+      const [teams, follows] = await Promise.all([listTeams(), listFollows(token)]);
+      setAllTeams(teams);
+      setFollowedTeamIds(new Set(follows.teams.map((team) => team.id)));
+      if (!selectedTeamId && teams.length > 0) {
+        setSelectedTeamId(teams[0].id);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -98,6 +112,9 @@ export function TeamsView({ token }: { token: string }) {
   return (
     <section className="card">
       <h2>Followed Teams</h2>
+      <button disabled={busy || loading} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
+        Refresh
+      </button>
       <form className="inline-form" onSubmit={onFollow}>
         <select value={selectedTeamId ?? ""} onChange={(event) => setSelectedTeamId(Number(event.target.value))}>
           {allTeams.map((team) => (
@@ -111,6 +128,7 @@ export function TeamsView({ token }: { token: string }) {
         </button>
       </form>
       {error ? <p className="error">{error}</p> : null}
+      {loading ? <p>Loading teams...</p> : null}
       <ul className="list">
         {followedTeams.map((team) => (
           <li key={team.id}>
@@ -123,7 +141,7 @@ export function TeamsView({ token }: { token: string }) {
           </li>
         ))}
       </ul>
-      {followedTeams.length === 0 ? <p>No followed teams yet.</p> : null}
+      {followedTeams.length === 0 && !loading ? <p>No followed teams yet.</p> : null}
     </section>
   );
 }
@@ -135,7 +153,7 @@ function formatGameLabel(game: Game, teamMap: Map<number, Team>) {
     home && away ? `${away.abbreviation} @ ${home.abbreviation}` : `Game ${game.external_game_id}`;
   const tipoff = new Date(game.scheduled_start_time).toLocaleString();
   const status = GAME_STATUS_LABELS[game.status] ?? game.status;
-  return `${tipoff} • ${matchup} (${status})`;
+  return `${tipoff} • ${matchup}${scoreSnippet(game)} (${status})`;
 }
 
 export function GamesView({ token }: { token: string }) {
@@ -144,15 +162,22 @@ export function GamesView({ token }: { token: string }) {
   const [followedGameIds, setFollowedGameIds] = useState<Set<number>>(new Set());
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [availableGames, follows, teams] = await Promise.all([listGames(), listFollows(token), listTeams()]);
-    setGames(availableGames);
-    setTeamMap(new Map(teams.map((team) => [team.id, team])));
-    setFollowedGameIds(new Set(follows.games.map((game) => game.id)));
-    if (!selectedGameId && availableGames.length > 0) {
-      setSelectedGameId(availableGames[0].id);
+    setError(null);
+    setLoading(true);
+    try {
+      const [availableGames, follows, teams] = await Promise.all([listGames(), listFollows(token), listTeams()]);
+      setGames(availableGames);
+      setTeamMap(new Map(teams.map((team) => [team.id, team])));
+      setFollowedGameIds(new Set(follows.games.map((game) => game.id)));
+      if (!selectedGameId && availableGames.length > 0) {
+        setSelectedGameId(availableGames[0].id);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -195,6 +220,10 @@ export function GamesView({ token }: { token: string }) {
   return (
     <section className="card">
       <h2>Followed Games</h2>
+      <button disabled={busy || loading} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
+        Refresh
+      </button>
+      {loading ? <p>Loading games...</p> : null}
       {games.length > 0 ? (
         <form className="inline-form" onSubmit={onFollow}>
           <select value={selectedGameId ?? ""} onChange={(event) => setSelectedGameId(Number(event.target.value))}>
@@ -222,7 +251,7 @@ export function GamesView({ token }: { token: string }) {
           </li>
         ))}
       </ul>
-      {followedGames.length === 0 ? <p>No followed games yet.</p> : null}
+      {followedGames.length === 0 && !loading ? <p>No followed games yet.</p> : null}
     </section>
   );
 }
@@ -230,11 +259,18 @@ export function GamesView({ token }: { token: string }) {
 export function PreferencesView({ token }: { token: string }) {
   const [preferences, setPreferences] = useState<AlertPreference[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
 
   const load = async () => {
-    const response = await listAlertPreferences(token);
-    setPreferences(response);
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await listAlertPreferences(token);
+      setPreferences(response);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -274,7 +310,14 @@ export function PreferencesView({ token }: { token: string }) {
   return (
     <section className="card">
       <h2>Alert Preferences</h2>
+      <button
+        disabled={busyAlertType !== null || loading}
+        onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      >
+        Refresh
+      </button>
       {error ? <p className="error">{error}</p> : null}
+      {loading ? <p>Loading preferences...</p> : null}
       <ul className="list">
         {preferences.map((preference) => (
           <li key={preference.alert_type}>
@@ -302,10 +345,17 @@ export function PreferencesView({ token }: { token: string }) {
 export function HistoryView({ token }: { token: string }) {
   const [items, setItems] = useState<AlertHistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    const response = await listAlertHistory(token);
-    setItems(response.items);
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await listAlertHistory(token);
+      setItems(response.items);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -315,8 +365,12 @@ export function HistoryView({ token }: { token: string }) {
   return (
     <section className="card">
       <h2>Alert History</h2>
+      <button onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))} disabled={loading}>
+        Refresh
+      </button>
       {error ? <p className="error">{error}</p> : null}
-      {items.length === 0 ? <p>No alerts have been sent yet.</p> : null}
+      {loading ? <p>Loading alert history...</p> : null}
+      {items.length === 0 && !loading ? <p>No alerts have been sent yet.</p> : null}
       <ul className="list">
         {items.map((item) => (
           <li key={item.id}>

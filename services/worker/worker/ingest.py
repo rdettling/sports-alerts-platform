@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import create_engine, or_, select
+from sqlalchemy import create_engine, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.models import Game, IngestRun, SentAlert, Team, UserAlertPreference, UserGameFollow, UserTeamFollow
@@ -207,6 +207,44 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
     return True, created.id
 
 
+def _recommended_poll_interval_seconds(db: Session) -> int:
+    now = datetime.now(timezone.utc)
+    live_count = db.scalar(
+        select(func.count(Game.id)).where(
+            Game.league == "NBA",
+            Game.is_final.is_(False),
+            Game.status.in_(("in_progress", "live")),
+        )
+    ) or 0
+    if live_count > 0:
+        return max(15, settings.worker_poll_interval_live_seconds)
+
+    soon_count = db.scalar(
+        select(func.count(Game.id)).where(
+            Game.league == "NBA",
+            Game.is_final.is_(False),
+            Game.status == "scheduled",
+            Game.scheduled_start_time >= now - timedelta(minutes=30),
+            Game.scheduled_start_time <= now + timedelta(hours=2),
+        )
+    ) or 0
+    if soon_count > 0:
+        return max(30, settings.worker_poll_interval_soon_seconds)
+
+    same_day_count = db.scalar(
+        select(func.count(Game.id)).where(
+            Game.league == "NBA",
+            Game.is_final.is_(False),
+            Game.scheduled_start_time >= now - timedelta(hours=12),
+            Game.scheduled_start_time <= now + timedelta(hours=24),
+        )
+    ) or 0
+    if same_day_count > 0:
+        return max(60, settings.worker_poll_interval_day_seconds)
+
+    return max(60, settings.worker_poll_interval_idle_seconds)
+
+
 def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     db = SessionLocal()
     ingest_run = IngestRun(status="running", games_checked=0, games_updated=0)
@@ -218,9 +256,18 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         team_map = _team_id_map(db)
         schedule = provider.fetch_schedule()
         tracked_game_ids = db.scalars(
-            select(Game.external_game_id).where(Game.league == "NBA", Game.is_final.is_(False))
+            select(Game.external_game_id).where(
+                Game.league == "NBA",
+                Game.is_final.is_(False),
+                or_(
+                    Game.status.in_(("in_progress", "live")),
+                    Game.scheduled_start_time >= datetime.now(timezone.utc) - timedelta(hours=6),
+                ),
+            )
         ).all()
-        updates = provider.fetch_game_updates([game_id for game_id in tracked_game_ids if game_id])
+        schedule_game_ids = {game.external_game_id for game in schedule}
+        missing_tracked_ids = [game_id for game_id in tracked_game_ids if game_id and game_id not in schedule_game_ids]
+        updates = provider.fetch_game_updates(missing_tracked_ids) if missing_tracked_ids else []
         games_by_id = {game.external_game_id: game for game in schedule}
         for game in updates:
             games_by_id[game.external_game_id] = game
@@ -261,7 +308,8 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         ingest_run.games_updated = updated
         ingest_run.completed_at = datetime.now(timezone.utc)
         db.commit()
-        return {"status": "success", "games_checked": checked, "games_updated": updated}
+        next_poll = _recommended_poll_interval_seconds(db)
+        return {"status": "success", "games_checked": checked, "games_updated": updated, "next_poll_seconds": next_poll}
     except Exception as exc:
         db.rollback()
         ingest_run.status = "failed"
@@ -269,6 +317,11 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         ingest_run.completed_at = datetime.now(timezone.utc)
         db.commit()
         logger.exception("Ingest cycle failed")
-        return {"status": "failed", "games_checked": 0, "games_updated": 0}
+        return {
+            "status": "failed",
+            "games_checked": 0,
+            "games_updated": 0,
+            "next_poll_seconds": settings.worker_poll_interval_seconds,
+        }
     finally:
         db.close()

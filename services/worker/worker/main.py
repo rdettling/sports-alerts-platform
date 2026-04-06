@@ -23,12 +23,17 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop_worker)
 
     provider = get_provider()
-    logger.info("Worker started with provider=%s interval=%ss", settings.nba_provider, settings.worker_poll_interval_seconds)
+    logger.info(
+        "Worker started with provider=%s base_interval=%ss",
+        settings.nba_provider,
+        settings.worker_poll_interval_seconds,
+    )
 
     while _keep_running:
         result = run_ingest_cycle(provider=provider)
-        logger.info("Ingest cycle complete result=%s", result)
-        for _ in range(settings.worker_poll_interval_seconds):
+        next_poll_seconds = int(result.get("next_poll_seconds", settings.worker_poll_interval_seconds))
+        logger.info("Ingest cycle complete result=%s next_poll_seconds=%s", result, next_poll_seconds)
+        for _ in range(next_poll_seconds):
             if not _keep_running:
                 break
             time.sleep(1)

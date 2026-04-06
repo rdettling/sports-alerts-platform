@@ -81,10 +81,15 @@ function normalizeErrorDetail(detail: unknown): string {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    });
+  } catch {
+    throw new Error(`Unable to reach API at ${API_BASE_URL}. Make sure the API service is running.`);
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(normalizeErrorDetail(body.detail));
