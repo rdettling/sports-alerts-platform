@@ -1,5 +1,6 @@
 SHELL := /bin/sh
 UV_CACHE_DIR ?= ./.cache/uv
+UV_PROJECT_ENVIRONMENT ?= .venv-local
 COMPOSE_FILE := infra/docker-compose.yml
 
 .PHONY: help setup up down logs restart-api restart-worker restart-web test test-api test-worker test-web check-docker
@@ -23,8 +24,8 @@ help:
 
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env; fi
-	cd services/api && UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
-	cd services/worker && UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
+	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
+	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
 	cd apps/web && npm install
 
 up:
@@ -42,10 +43,10 @@ logs:
 test: test-api test-worker test-web
 
 test-api:
-	cd services/api && UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
+	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
 
 test-worker:
-	cd services/worker && UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
+	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
 
 test-web:
 	cd apps/web && npm run build

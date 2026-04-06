@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+.venv-local/
 node_modules/
 dist/
 coverage/
