@@ -1,9 +1,9 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app/apps/web
 
 COPY apps/web/package*.json ./
-RUN npm install
+RUN npm ci --include=optional
 
 COPY apps /app/apps
 
