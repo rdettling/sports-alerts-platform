@@ -242,6 +242,7 @@ export function PreferencesView({ token }: { token: string }) {
     setBusyAlertType("close_game_late");
     try {
       await updateAlertPreference(token, "close_game_late", {
+        is_enabled: true,
         close_game_margin_threshold: 5,
         close_game_time_threshold_seconds: 120,
       });
@@ -289,4 +290,3 @@ export function HistoryPlaceholderView() {
     </section>
   );
 }
-
