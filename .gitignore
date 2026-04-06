@@ -16,3 +16,4 @@ coverage/
 .vscode/
 *.log
 alembic.log
+*.db

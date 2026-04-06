@@ -33,8 +33,21 @@ Python tests live in `services/api/tests` and `services/worker/tests`.
 
 Example:
 
-- `cd services/api && pytest`
-- `cd services/worker && pytest`
+- `cd services/api && uv sync --group dev && uv run pytest`
+- `cd services/worker && uv sync --group dev && uv run pytest`
+
+## Dependency management
+
+Python dependencies are managed with `uv` via `pyproject.toml` + `uv.lock` in each service:
+
+- `services/api/pyproject.toml`
+- `services/worker/pyproject.toml`
+
+Common commands:
+
+- `uv lock` (update lockfile after dependency changes)
+- `uv sync` (install runtime deps)
+- `uv sync --group dev` (install test/dev deps)
 
 ## Notes
 

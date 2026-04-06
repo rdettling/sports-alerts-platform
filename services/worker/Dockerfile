@@ -4,11 +4,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/services/api:/app/services/worker
 
+COPY --from=ghcr.io/astral-sh/uv:0.6.16 /uv /uvx /bin/
+
 WORKDIR /app/services/worker
 
-COPY services/worker/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+COPY services/worker/pyproject.toml services/worker/uv.lock ./
+RUN uv sync --frozen --no-dev
 
 COPY services /app/services
 
-CMD ["python", "-m", "worker.main"]
+CMD ["uv", "run", "python", "-m", "worker.main"]
