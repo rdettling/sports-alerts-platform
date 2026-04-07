@@ -84,11 +84,6 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.dashboard-stack {
-  display: grid;
-  gap: 1rem;
-}
-
 .tab-link {
   color: #1d4ed8;
   text-decoration: none;
@@ -138,16 +133,6 @@ select {
   padding: 0.65rem 0.85rem;
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.section-header h2 {
-  margin: 0;
-}
-
 .team-row {
   display: inline-flex;
   align-items: center;
@@ -173,12 +158,6 @@ select {
   color: #475569;
 }
 
-.chip-row {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 .chip {
   display: inline-flex;
   align-items: center;
@@ -191,11 +170,6 @@ select {
 .chip-neutral {
   background: #eef2ff;
   color: #334155;
-}
-
-.chip-live {
-  background: #d1fae5;
-  color: #065f46;
 }
 
 .chip-final {
