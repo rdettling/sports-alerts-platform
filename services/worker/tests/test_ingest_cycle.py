@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db.models import Game, GameOddsCurrent, IngestRun, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
-from app.services.odds import MoneylineOdds
 from worker.ingest import run_ingest_cycle
+from worker.odds import MoneylineOdds
 from worker.providers.base import ProviderGame
 
 

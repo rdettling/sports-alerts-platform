@@ -11,6 +11,15 @@ class WorkerSettings(BaseSettings):
     worker_poll_interval_day_seconds: int
     worker_poll_interval_idle_seconds: int
     nba_provider: str
+    odds_provider: str
+    odds_api_key: str
+    odds_api_base_url: str
+    odds_api_sport_key: str
+    odds_api_regions: str
+    odds_api_market: str
+    odds_api_format: str
+    odds_api_timeout_seconds: int
+    odds_api_cache_seconds: int
     delivery_mode: str
     from_email: str
     resend_api_key: str

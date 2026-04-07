@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import settings as api_settings
 from app.db.models import (
     Game,
     GameOddsCurrent,
@@ -17,9 +16,9 @@ from app.db.models import (
     UserGameFollow,
     UserTeamFollow,
 )
-from app.services.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.delivery import process_pending_alerts
 from worker.config import settings
+from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.providers.base import NbaProvider, ProviderGame
 
 logger = logging.getLogger(__name__)
@@ -227,8 +226,8 @@ def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> None:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == api_settings.odds_provider,
-            GameOddsCurrent.market == api_settings.odds_api_market,
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == settings.odds_api_market,
         )
     )
     if row:
@@ -241,8 +240,8 @@ def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> None:
     db.add(
         GameOddsCurrent(
             game_id=game_id,
-            provider=api_settings.odds_provider,
-            market=api_settings.odds_api_market,
+            provider=settings.odds_provider,
+            market=settings.odds_api_market,
             home_moneyline=odds.home_moneyline,
             away_moneyline=odds.away_moneyline,
             bookmaker=odds.bookmaker,
