@@ -55,6 +55,8 @@ export type AlertHistoryItem = {
   away_team_abbreviation: string;
 };
 
+export type AlertType = "game_start" | "close_game_late" | "final_result";
+
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
     return detail;
@@ -169,8 +171,22 @@ export function updateAlertPreference(
   });
 }
 
-export function listAlertHistory(token: string): Promise<{ items: AlertHistoryItem[] }> {
-  return request<{ items: AlertHistoryItem[] }>("/alerts/history", {
+export function listAlertHistory(
+  token: string,
+  options?: { alertType?: AlertType; sinceHours?: number; limit?: number },
+): Promise<{ items: AlertHistoryItem[] }> {
+  const params = new URLSearchParams();
+  if (options?.alertType) {
+    params.set("alert_type", options.alertType);
+  }
+  if (options?.sinceHours) {
+    params.set("since_hours", String(options.sinceHours));
+  }
+  if (options?.limit) {
+    params.set("limit", String(options.limit));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request<{ items: AlertHistoryItem[] }>(`/alerts/history${suffix}`, {
     headers: authHeaders(token),
   });
 }

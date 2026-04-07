@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   AlertHistoryItem,
+  AlertType,
   AlertPreference,
   Game,
   Team,
@@ -185,6 +186,22 @@ export function GamesView({ token }: { token: string }) {
     load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
   }, []);
 
+  const now = Date.now();
+  const liveGames = useMemo(
+    () => games.filter((game) => game.status === "in_progress" || game.status === "live"),
+    [games],
+  );
+  const startingSoonGames = useMemo(
+    () =>
+      games.filter((game) => {
+        if (game.status !== "scheduled") {
+          return false;
+        }
+        const startsInMs = new Date(game.scheduled_start_time).getTime() - now;
+        return startsInMs >= 0 && startsInMs <= 6 * 60 * 60 * 1000;
+      }),
+    [games, now],
+  );
   const followedGames = useMemo(() => games.filter((game) => followedGameIds.has(game.id)), [games, followedGameIds]);
 
   const onFollow = async (event: FormEvent) => {
@@ -224,6 +241,16 @@ export function GamesView({ token }: { token: string }) {
         Refresh
       </button>
       {loading ? <p>Loading games...</p> : null}
+      {!loading && liveGames.length > 0 ? (
+        <p>
+          Live now: {liveGames.length} game{liveGames.length === 1 ? "" : "s"}
+        </p>
+      ) : null}
+      {!loading && startingSoonGames.length > 0 ? (
+        <p>
+          Starting soon (next 6h): {startingSoonGames.length} game{startingSoonGames.length === 1 ? "" : "s"}
+        </p>
+      ) : null}
       {games.length > 0 ? (
         <form className="inline-form" onSubmit={onFollow}>
           <select value={selectedGameId ?? ""} onChange={(event) => setSelectedGameId(Number(event.target.value))}>
@@ -344,6 +371,8 @@ export function PreferencesView({ token }: { token: string }) {
 
 export function HistoryView({ token }: { token: string }) {
   const [items, setItems] = useState<AlertHistoryItem[]>([]);
+  const [alertTypeFilter, setAlertTypeFilter] = useState<"all" | AlertType>("all");
+  const [timeFilter, setTimeFilter] = useState<"all" | "24h" | "7d">("all");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -351,7 +380,10 @@ export function HistoryView({ token }: { token: string }) {
     setError(null);
     setLoading(true);
     try {
-      const response = await listAlertHistory(token);
+      const response = await listAlertHistory(token, {
+        alertType: alertTypeFilter === "all" ? undefined : alertTypeFilter,
+        sinceHours: timeFilter === "24h" ? 24 : timeFilter === "7d" ? 24 * 7 : undefined,
+      });
       setItems(response.items);
     } finally {
       setLoading(false);
@@ -360,7 +392,7 @@ export function HistoryView({ token }: { token: string }) {
 
   useEffect(() => {
     load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
-  }, []);
+  }, [alertTypeFilter, timeFilter]);
 
   return (
     <section className="card">
@@ -368,6 +400,19 @@ export function HistoryView({ token }: { token: string }) {
       <button onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))} disabled={loading}>
         Refresh
       </button>
+      <div className="inline-form">
+        <select value={alertTypeFilter} onChange={(event) => setAlertTypeFilter(event.target.value as "all" | AlertType)}>
+          <option value="all">All alert types</option>
+          <option value="game_start">Game start</option>
+          <option value="close_game_late">Close game late</option>
+          <option value="final_result">Final result</option>
+        </select>
+        <select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value as "all" | "24h" | "7d")}>
+          <option value="all">All time</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+        </select>
+      </div>
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading alert history...</p> : null}
       {items.length === 0 && !loading ? <p>No alerts have been sent yet.</p> : null}
