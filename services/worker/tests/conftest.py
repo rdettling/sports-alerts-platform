@@ -6,7 +6,38 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 TEST_DB_PATH = Path(__file__).parent / "worker_test.db"
-os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{TEST_DB_PATH}"
+os.environ.update(
+    {
+        "APP_NAME": "sports-alerts-api-test",
+        "API_HOST": "127.0.0.1",
+        "API_PORT": "8000",
+        "DATABASE_URL": f"sqlite+pysqlite:///{TEST_DB_PATH}",
+        "JWT_SECRET_KEY": "test-secret",
+        "JWT_ALGORITHM": "HS256",
+        "JWT_EXPIRE_MINUTES": "10080",
+        "CORS_ALLOW_ORIGINS": "http://localhost:5173",
+        "ODDS_API_KEY": "test-odds-key",
+        "ODDS_API_BASE_URL": "https://api.the-odds-api.com/v4/sports",
+        "ODDS_PROVIDER": "the_odds_api",
+        "ODDS_API_SPORT_KEY": "basketball_nba",
+        "ODDS_API_REGIONS": "us",
+        "ODDS_API_MARKET": "h2h",
+        "ODDS_API_FORMAT": "american",
+        "ODDS_API_TIMEOUT_SECONDS": "6",
+        "ODDS_API_CACHE_SECONDS": "60",
+        "DEV_MODE": "false",
+        "WORKER_POLL_INTERVAL_SECONDS": "60",
+        "WORKER_POLL_INTERVAL_LIVE_SECONDS": "30",
+        "WORKER_POLL_INTERVAL_SOON_SECONDS": "120",
+        "WORKER_POLL_INTERVAL_DAY_SECONDS": "300",
+        "WORKER_POLL_INTERVAL_IDLE_SECONDS": "900",
+        "NBA_PROVIDER": "espn",
+        "DELIVERY_MODE": "log",
+        "FROM_EMAIL": "alerts@test.local",
+        "RESEND_API_KEY": "test-key",
+        "RESEND_API_URL": "https://api.resend.com/emails",
+    }
+)
 
 from app.db.models import Base, Team  # noqa: E402
 from worker.ingest import SessionLocal  # noqa: E402

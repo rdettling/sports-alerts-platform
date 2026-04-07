@@ -24,8 +24,42 @@ help:
 
 setup:
 	@if [ ! -f .env ]; then \
-		echo "JWT_SECRET_KEY=replace-with-long-random-string" > .env; \
-		echo "Created .env with placeholder JWT secret. Update it before deploy."; \
+		printf '%s\n' \
+			'APP_NAME=sports-alerts-api' \
+			'API_HOST=0.0.0.0' \
+			'API_PORT=8000' \
+			'POSTGRES_USER=sports' \
+			'POSTGRES_PASSWORD=sports' \
+			'POSTGRES_DB=sports_alerts' \
+			'POSTGRES_PORT=5432' \
+			'DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts' \
+			'JWT_SECRET_KEY=replace-with-long-random-string' \
+			'JWT_ALGORITHM=HS256' \
+			'JWT_EXPIRE_MINUTES=10080' \
+			'CORS_ALLOW_ORIGINS=http://localhost:5173' \
+			'ODDS_API_KEY=replace-with-the-odds-api-key' \
+			'ODDS_API_BASE_URL=https://api.the-odds-api.com/v4/sports' \
+			'ODDS_PROVIDER=the_odds_api' \
+			'ODDS_API_SPORT_KEY=basketball_nba' \
+			'ODDS_API_REGIONS=us' \
+			'ODDS_API_MARKET=h2h' \
+			'ODDS_API_FORMAT=american' \
+			'ODDS_API_TIMEOUT_SECONDS=6' \
+			'ODDS_API_CACHE_SECONDS=60' \
+			'DEV_MODE=false' \
+			'NBA_PROVIDER=espn' \
+			'DELIVERY_MODE=log' \
+			'FROM_EMAIL=alerts@livegamealerts.com' \
+			'RESEND_API_KEY=replace-with-resend-api-key' \
+			'RESEND_API_URL=https://api.resend.com/emails' \
+			'WORKER_POLL_INTERVAL_SECONDS=60' \
+			'WORKER_POLL_INTERVAL_LIVE_SECONDS=30' \
+			'WORKER_POLL_INTERVAL_SOON_SECONDS=120' \
+			'WORKER_POLL_INTERVAL_DAY_SECONDS=300' \
+			'WORKER_POLL_INTERVAL_IDLE_SECONDS=900' \
+			'VITE_API_BASE_URL=http://localhost:8000' \
+			> .env; \
+		echo "Created .env with all required variables. Fill in real secret values."; \
 	fi
 	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
 	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev

@@ -20,9 +20,12 @@ Use Neon for managed Postgres.
 
 Required env vars:
 
-- `DATABASE_URL=postgresql+psycopg://...?...`
-- `JWT_SECRET_KEY=...`
-- `CORS_ALLOW_ORIGINS=https://<frontend>.onrender.com`
+- Set all API variables listed in `docs/environment-variables.md` (API section equivalents).
+- At minimum this includes: `APP_NAME`, `API_HOST`, `API_PORT`, `DATABASE_URL`,
+  `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`, `CORS_ALLOW_ORIGINS`,
+  `ODDS_API_KEY`, `ODDS_API_BASE_URL`, `ODDS_PROVIDER`, `ODDS_API_SPORT_KEY`,
+  `ODDS_API_REGIONS`, `ODDS_API_MARKET`, `ODDS_API_FORMAT`,
+  `ODDS_API_TIMEOUT_SECONDS`, `ODDS_API_CACHE_SECONDS`, `DEV_MODE`.
 
 ## Worker Service Settings
 
@@ -34,14 +37,12 @@ Required env vars:
 
 Required env vars:
 
-- `DATABASE_URL=postgresql+psycopg://...?...`
-- `NBA_PROVIDER=espn`
-- `DELIVERY_MODE=log` (or `email`)
-
-When `DELIVERY_MODE=email`, also set:
-
-- `RESEND_API_KEY=<resend-api-key>`
-- `FROM_EMAIL=<verified-sender@your-domain>`
+- Set all Worker variables listed in `docs/environment-variables.md` (Worker section equivalents).
+- This includes: `DATABASE_URL`, `NBA_PROVIDER`, `DELIVERY_MODE`, `FROM_EMAIL`,
+  `RESEND_API_KEY`, `RESEND_API_URL`, `WORKER_POLL_INTERVAL_SECONDS`,
+  `WORKER_POLL_INTERVAL_LIVE_SECONDS`, `WORKER_POLL_INTERVAL_SOON_SECONDS`,
+  `WORKER_POLL_INTERVAL_DAY_SECONDS`, `WORKER_POLL_INTERVAL_IDLE_SECONDS`,
+  `DEV_MODE`.
 
 ## Frontend Static Site Settings
 
@@ -49,9 +50,10 @@ When `DELIVERY_MODE=email`, also set:
 - Build Command: `npm ci --include=optional && npm run build`
 - Publish Directory: `dist`
 
-Required env var:
+Required env vars:
 
 - `VITE_API_BASE_URL=https://<api>.onrender.com`
+- `DEV_MODE=false` (recommended in production)
 
 ## Smoke Test
 

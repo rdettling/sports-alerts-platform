@@ -9,7 +9,7 @@
 ## Setup
 
 1. `make setup`
-2. Edit `.env` and set `JWT_SECRET_KEY`
+2. Edit `.env` and set all required values from `docs/environment-variables.md`
 3. `make rebuild`
 
 ## Useful Commands

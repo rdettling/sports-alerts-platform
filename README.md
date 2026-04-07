@@ -37,26 +37,8 @@ Prerequisites:
 ## Local Secrets
 
 - Keep real secrets in local `.env` only (gitignored).
-- Minimum local `.env`:
-
-```env
-JWT_SECRET_KEY=replace-with-long-random-string
-```
-
-- Optional for game odds in the dashboard (used by worker ingest):
-
-```env
-ODDS_API_KEY=your_the_odds_api_key
-```
-
-- Optional for local email testing via the `Test` tab:
-
-```env
-DEV_MODE=true
-DELIVERY_MODE=email
-FROM_EMAIL=alerts@your-domain.com
-RESEND_API_KEY=your_resend_api_key
-```
+- This repo uses strict env loading (no fallback defaults for required vars).
+- Set all required variables from: `docs/environment-variables.md`
 
 ## Deploy URLs
 
