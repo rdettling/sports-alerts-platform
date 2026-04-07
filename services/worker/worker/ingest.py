@@ -6,7 +6,18 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.models import Game, IngestRun, SentAlert, Team, UserAlertPreference, UserGameFollow, UserTeamFollow
+from app.config import settings as api_settings
+from app.db.models import (
+    Game,
+    GameOddsCurrent,
+    IngestRun,
+    SentAlert,
+    Team,
+    UserAlertPreference,
+    UserGameFollow,
+    UserTeamFollow,
+)
+from app.services.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.delivery import process_pending_alerts
 from worker.config import settings
 from worker.providers.base import NbaProvider, ProviderGame
@@ -20,6 +31,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, clas
 def _team_id_map(db: Session) -> dict[str, int]:
     rows = db.scalars(select(Team)).all()
     return {team.external_team_id: team.id for team in rows}
+
+
+def _team_name_map(db: Session) -> dict[int, str]:
+    rows = db.scalars(select(Team)).all()
+    return {team.id: team.name for team in rows}
 
 
 def _parse_clock_seconds(clock: str | None) -> int | None:
@@ -207,6 +223,34 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
     return True, created.id
 
 
+def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> None:
+    row = db.scalar(
+        select(GameOddsCurrent).where(
+            GameOddsCurrent.game_id == game_id,
+            GameOddsCurrent.provider == api_settings.odds_provider,
+            GameOddsCurrent.market == api_settings.odds_api_market,
+        )
+    )
+    if row:
+        row.home_moneyline = odds.home_moneyline
+        row.away_moneyline = odds.away_moneyline
+        row.bookmaker = odds.bookmaker
+        row.fetched_at = odds.last_update or datetime.now(timezone.utc)
+        return
+
+    db.add(
+        GameOddsCurrent(
+            game_id=game_id,
+            provider=api_settings.odds_provider,
+            market=api_settings.odds_api_market,
+            home_moneyline=odds.home_moneyline,
+            away_moneyline=odds.away_moneyline,
+            bookmaker=odds.bookmaker,
+            fetched_at=odds.last_update or datetime.now(timezone.utc),
+        )
+    )
+
+
 def _recommended_poll_interval_seconds(db: Session) -> int:
     now = datetime.now(timezone.utc)
     live_count = db.scalar(
@@ -254,6 +298,7 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
 
     try:
         team_map = _team_id_map(db)
+        team_names = _team_name_map(db)
         schedule = provider.fetch_schedule()
         tracked_game_ids = db.scalars(
             select(Game.external_game_id).where(
@@ -276,13 +321,29 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         checked = len(all_games)
         updated = 0
         alert_records_created = 0
+        odds_updated = 0
+        odds_by_matchup = fetch_nba_odds_index()
         touched_game_ids: list[int] = []
+        game_key_by_id: dict[int, tuple[str, str]] = {}
         for provider_game in all_games:
             did_update, game_id = _upsert_game(db, provider_game, team_map)
             if did_update:
                 updated += 1
             if game_id:
                 touched_game_ids.append(game_id)
+                home_id = team_map.get(provider_game.home_external_team_id)
+                away_id = team_map.get(provider_game.away_external_team_id)
+                home_name = team_names.get(home_id) if home_id else None
+                away_name = team_names.get(away_id) if away_id else None
+                if home_name and away_name:
+                    game_key_by_id[game_id] = game_key(home_name, away_name)
+
+        for game_id, key in game_key_by_id.items():
+            odds = odds_by_matchup.get(key)
+            if not odds:
+                continue
+            _upsert_game_odds(db, game_id, odds)
+            odds_updated += 1
 
         db.flush()
         for game_id in touched_game_ids:
@@ -294,10 +355,11 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         delivery_sent, delivery_failed = process_pending_alerts(db)
         db.commit()
         logger.info(
-            "Ingest cycle checked=%s updated=%s tracked=%s alerts_created=%s delivery_sent=%s delivery_failed=%s",
+            "Ingest cycle checked=%s updated=%s tracked=%s odds_updated=%s alerts_created=%s delivery_sent=%s delivery_failed=%s",
             checked,
             updated,
             len(tracked_game_ids),
+            odds_updated,
             alert_records_created,
             delivery_sent,
             delivery_failed,

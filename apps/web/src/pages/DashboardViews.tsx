@@ -222,6 +222,13 @@ function formatTipoff(dateIso: string): string {
   return new Date(dateIso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function formatMoneyline(value: number | null): string {
+  if (value === null) {
+    return "—";
+  }
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
 export function GamesView({ token }: { token: string }) {
   const [games, setGames] = useState<Game[]>([]);
   const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
@@ -325,6 +332,13 @@ export function GamesView({ token }: { token: string }) {
                     {scoreSnippet(game) ? <span className="score-pill">{scoreSnippet(game)}</span> : null}
                     <span className={`chip ${statusClass(game.status)}`}>{GAME_STATUS_LABELS[game.status] ?? game.status}</span>
                   </div>
+                  {game.odds ? (
+                    <div className="muted">
+                      Moneyline • {away.abbreviation} {formatMoneyline(game.odds.away_moneyline)} • {home.abbreviation}{" "}
+                      {formatMoneyline(game.odds.home_moneyline)}
+                      {game.odds.bookmaker ? ` • ${game.odds.bookmaker}` : ""}
+                    </div>
+                  ) : null}
                 </div>
                 <button
                   className={isFollowed ? "btn-secondary" : ""}

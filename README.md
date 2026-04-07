@@ -43,6 +43,12 @@ Prerequisites:
 JWT_SECRET_KEY=replace-with-long-random-string
 ```
 
+- Optional for game odds in the dashboard (used by worker ingest):
+
+```env
+ODDS_API_KEY=your_the_odds_api_key
+```
+
 ## Deploy URLs
 
 - API root (`/`) returns `404` by design.

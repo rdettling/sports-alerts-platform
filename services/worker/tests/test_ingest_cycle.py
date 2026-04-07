@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, IngestRun, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
+from app.db.models import Game, GameOddsCurrent, IngestRun, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
+from app.services.odds import MoneylineOdds
 from worker.ingest import run_ingest_cycle
 from worker.providers.base import ProviderGame
 
@@ -156,3 +157,27 @@ def test_ingest_creates_final_result_alert(db_session):
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
     assert sent[0].delivery_status == "sent"
+
+
+def test_ingest_persists_current_odds(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "worker.ingest.fetch_nba_odds_index",
+        lambda: {
+            ("atlanta hawks", "boston celtics"): MoneylineOdds(
+                home_moneyline=-130,
+                away_moneyline=110,
+                bookmaker="DraftKings",
+                last_update=datetime.now(timezone.utc),
+            )
+        },
+    )
+
+    result = run_ingest_cycle(SuccessProvider())
+    assert result["status"] == "success"
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-1"))
+    assert game is not None
+    odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id))
+    assert odds is not None
+    assert odds.home_moneyline == -130
+    assert odds.away_moneyline == 110

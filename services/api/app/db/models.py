@@ -55,6 +55,22 @@ class Game(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class GameOddsCurrent(Base):
+    __tablename__ = "game_odds_current"
+    __table_args__ = (UniqueConstraint("game_id", "provider", "market", name="uq_game_odds_current_game_provider_market"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="the_odds_api")
+    market: Mapped[str] = mapped_column(String(16), default="h2h")
+    home_moneyline: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    away_moneyline: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bookmaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UserTeamFollow(Base):
     __tablename__ = "user_team_follows"
     __table_args__ = (UniqueConstraint("user_id", "team_id", name="uq_user_team_follows_user_team"),)

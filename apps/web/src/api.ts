@@ -27,6 +27,12 @@ export type Game = {
   period: number | null;
   clock: string | null;
   is_final: boolean;
+  odds: {
+    home_moneyline: number | null;
+    away_moneyline: number | null;
+    bookmaker: string | null;
+    last_update: string | null;
+  } | null;
 };
 
 export type CurrentFollows = {
