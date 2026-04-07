@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     odds_api_format: str = "american"
     odds_api_timeout_seconds: int = 6
     odds_api_cache_seconds: int = 60
+    dev_mode: bool = False
 
 
 settings = Settings()

@@ -62,6 +62,7 @@ export type AlertHistoryItem = {
 };
 
 export type AlertType = "game_start" | "close_game_late" | "final_result";
+export type DeliveryStatus = "pending" | "sent" | "failed";
 
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
@@ -195,4 +196,18 @@ export function listAlertHistory(
   return request<{ items: AlertHistoryItem[] }>(`/alerts/history${suffix}`, {
     headers: authHeaders(token),
   });
+}
+
+export function sendDevTestEmail(
+  token: string,
+  payload: { alert_type: AlertType; game_id?: number },
+): Promise<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }> {
+  return request<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }>(
+    "/alerts/dev/test-email",
+    {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(payload),
+    },
+  );
 }

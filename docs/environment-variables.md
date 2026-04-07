@@ -12,8 +12,16 @@ JWT_SECRET_KEY=replace-with-long-random-string
 VITE_API_BASE_URL=http://localhost:8000
 DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts
 CORS_ALLOW_ORIGINS=http://localhost:5173
+DEV_MODE=true
+DELIVERY_MODE=email
+FROM_EMAIL=alerts@your-domain.com
+RESEND_API_KEY=your_resend_api_key
 ODDS_API_KEY=your_the_odds_api_key
 ```
+
+`DEV_MODE` now controls both:
+- API dev-only endpoints (like `/alerts/dev/test-email`)
+- Frontend `Test` tab visibility
 
 ## Render: API
 

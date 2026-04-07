@@ -19,3 +19,15 @@ class AlertHistoryItemOut(BaseModel):
 
 class AlertHistoryResponse(BaseModel):
     items: list[AlertHistoryItemOut]
+
+
+class DevTestAlertRequest(BaseModel):
+    alert_type: str
+    game_id: int | None = None
+
+
+class DevTestAlertResponse(BaseModel):
+    id: int
+    game_id: int
+    alert_type: str
+    delivery_status: str

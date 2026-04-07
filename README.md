@@ -49,6 +49,15 @@ JWT_SECRET_KEY=replace-with-long-random-string
 ODDS_API_KEY=your_the_odds_api_key
 ```
 
+- Optional for local email testing via the `Test` tab:
+
+```env
+DEV_MODE=true
+DELIVERY_MODE=email
+FROM_EMAIL=alerts@your-domain.com
+RESEND_API_KEY=your_resend_api_key
+```
+
 ## Deploy URLs
 
 - API root (`/`) returns `404` by design.

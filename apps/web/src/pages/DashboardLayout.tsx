@@ -1,10 +1,12 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-import { AlertsView, FollowingView, GamesView } from "./DashboardViews";
+import { AlertsView, DevToolsView, FollowingView, GamesView } from "./DashboardViews";
 
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
+  const devModeValue = ((import.meta.env.DEV_MODE ?? import.meta.env.VITE_DEV_MODE ?? "") as string).toLowerCase();
+  const isDevMode = devModeValue === "true" || devModeValue === "1" || devModeValue === "yes" || devModeValue === "on";
   if (!user || !token) {
     return <Navigate to="/auth" replace />;
   }
@@ -29,6 +31,11 @@ export function DashboardLayout() {
         <NavLink to="alerts" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
           Alerts
         </NavLink>
+        {isDevMode ? (
+          <NavLink to="test" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+            Test
+          </NavLink>
+        ) : null}
       </nav>
 
       <Routes>
@@ -36,6 +43,7 @@ export function DashboardLayout() {
         <Route path="/games" element={<GamesView token={token} />} />
         <Route path="/following" element={<FollowingView token={token} />} />
         <Route path="/alerts" element={<AlertsView token={token} />} />
+        {isDevMode ? <Route path="/test" element={<DevToolsView token={token} />} /> : null}
       </Routes>
     </div>
   );
