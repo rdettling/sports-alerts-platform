@@ -1,4 +1,4 @@
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
 import { GamesView, HistoryView, OverviewView, PreferencesView, TeamsView } from "./DashboardViews";
@@ -20,11 +20,21 @@ export function DashboardLayout() {
       </header>
 
       <nav className="tabs">
-        <Link to="">Overview</Link>
-        <Link to="teams">Followed Teams</Link>
-        <Link to="games">Followed Games</Link>
-        <Link to="preferences">Alert Preferences</Link>
-        <Link to="history">Alert History</Link>
+        <NavLink to="" end className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Overview
+        </NavLink>
+        <NavLink to="teams" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Followed Teams
+        </NavLink>
+        <NavLink to="games" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Followed Games
+        </NavLink>
+        <NavLink to="preferences" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Alert Preferences
+        </NavLink>
+        <NavLink to="history" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Alert History
+        </NavLink>
       </nav>
 
       <Routes>

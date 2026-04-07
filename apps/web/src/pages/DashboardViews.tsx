@@ -1,9 +1,9 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   AlertHistoryItem,
-  AlertType,
   AlertPreference,
+  AlertType,
   Game,
   Team,
   followGame,
@@ -29,7 +29,32 @@ function scoreSnippet(game: Game): string {
   if (game.home_score === null || game.away_score === null) {
     return "";
   }
-  return ` • ${game.away_score}-${game.home_score}`;
+  return `${game.away_score}-${game.home_score}`;
+}
+
+function teamLogoUrl(team: Team): string {
+  return `https://cdn.nba.com/logos/nba/${team.external_team_id}/global/L/logo.svg`;
+}
+
+function TeamLogo({ team, size = 26 }: { team: Team; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span className="team-logo-fallback" style={{ width: size, height: size }}>
+        {team.abbreviation.slice(0, 2)}
+      </span>
+    );
+  }
+  return (
+    <img
+      className="team-logo"
+      src={teamLogoUrl(team)}
+      width={size}
+      height={size}
+      alt={`${team.name} logo`}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 const GAME_STATUS_LABELS: Record<string, string> = {
@@ -39,11 +64,54 @@ const GAME_STATUS_LABELS: Record<string, string> = {
   postponed: "Postponed",
 };
 
+const PREFERENCE_LABELS: Record<string, string> = {
+  game_start: "Game start",
+  close_game_late: "Close game late",
+  final_result: "Final result",
+};
+
+const ALERT_TYPE_LABELS: Record<string, string> = {
+  game_start: "Game start",
+  close_game_late: "Close game late",
+  final_result: "Final result",
+};
+
+function statusClass(status: string): string {
+  if (status === "in_progress" || status === "live") return "chip-live";
+  if (status === "final") return "chip-final";
+  return "chip-neutral";
+}
+
+function deliveryStatusClass(status: string): string {
+  if (status === "sent") return "chip-final";
+  if (status === "failed") return "chip-error";
+  return "chip-neutral";
+}
+
+function SectionHeader({
+  title,
+  onRefresh,
+  disabled,
+}: {
+  title: string;
+  onRefresh: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="section-header">
+      <h2>{title}</h2>
+      <button className="btn-secondary" disabled={disabled} onClick={onRefresh}>
+        Refresh
+      </button>
+    </div>
+  );
+}
+
 export function OverviewView() {
   return (
     <section className="card">
       <h2>Overview</h2>
-      <p>Use the tabs to follow teams/games and configure your alert preferences.</p>
+      <p>Use tabs to follow teams and games, manage preferences, and view alert history.</p>
     </section>
   );
 }
@@ -80,8 +148,7 @@ export function TeamsView({ token }: { token: string }) {
     [allTeams, followedTeamIds],
   );
 
-  const onFollow = async (event: FormEvent) => {
-    event.preventDefault();
+  const onFollow = async () => {
     if (!selectedTeamId) {
       return;
     }
@@ -112,11 +179,12 @@ export function TeamsView({ token }: { token: string }) {
 
   return (
     <section className="card">
-      <h2>Followed Teams</h2>
-      <button disabled={busy || loading} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
-        Refresh
-      </button>
-      <form className="inline-form" onSubmit={onFollow}>
+      <SectionHeader
+        title="Followed Teams"
+        disabled={busy || loading}
+        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      />
+      <div className="inline-form">
         <select value={selectedTeamId ?? ""} onChange={(event) => setSelectedTeamId(Number(event.target.value))}>
           {allTeams.map((team) => (
             <option key={team.id} value={team.id}>
@@ -124,19 +192,22 @@ export function TeamsView({ token }: { token: string }) {
             </option>
           ))}
         </select>
-        <button type="submit" disabled={busy || !selectedTeamId}>
+        <button type="button" disabled={busy || !selectedTeamId} onClick={onFollow}>
           Follow Team
         </button>
-      </form>
+      </div>
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading teams...</p> : null}
       <ul className="list">
         {followedTeams.map((team) => (
-          <li key={team.id}>
-            <span>
-              {team.name} ({team.abbreviation})
+          <li key={team.id} className="row-card">
+            <span className="team-row">
+              <TeamLogo team={team} />
+              <span>
+                {team.name} <span className="muted">({team.abbreviation})</span>
+              </span>
             </span>
-            <button disabled={busy} onClick={() => onUnfollow(team.id)}>
+            <button className="btn-secondary" disabled={busy} onClick={() => onUnfollow(team.id)}>
               Unfollow
             </button>
           </li>
@@ -147,24 +218,17 @@ export function TeamsView({ token }: { token: string }) {
   );
 }
 
-function formatGameLabel(game: Game, teamMap: Map<number, Team>) {
-  const home = teamMap.get(game.home_team_id);
-  const away = teamMap.get(game.away_team_id);
-  const matchup =
-    home && away ? `${away.abbreviation} @ ${home.abbreviation}` : `Game ${game.external_game_id}`;
-  const tipoff = new Date(game.scheduled_start_time).toLocaleString();
-  const status = GAME_STATUS_LABELS[game.status] ?? game.status;
-  return `${tipoff} • ${matchup}${scoreSnippet(game)} (${status})`;
+function formatTipoff(dateIso: string): string {
+  return new Date(dateIso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function GamesView({ token }: { token: string }) {
   const [games, setGames] = useState<Game[]>([]);
   const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
   const [followedGameIds, setFollowedGameIds] = useState<Set<number>>(new Set());
-  const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyGameId, setBusyGameId] = useState<number | null>(null);
 
   const load = async () => {
     setError(null);
@@ -174,9 +238,6 @@ export function GamesView({ token }: { token: string }) {
       setGames(availableGames);
       setTeamMap(new Map(teams.map((team) => [team.id, team])));
       setFollowedGameIds(new Set(follows.games.map((game) => game.id)));
-      if (!selectedGameId && availableGames.length > 0) {
-        setSelectedGameId(availableGames[0].id);
-      }
     } finally {
       setLoading(false);
     }
@@ -202,83 +263,83 @@ export function GamesView({ token }: { token: string }) {
       }),
     [games, now],
   );
-  const followedGames = useMemo(() => games.filter((game) => followedGameIds.has(game.id)), [games, followedGameIds]);
 
-  const onFollow = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedGameId) {
-      return;
-    }
+  const sortedGames = useMemo(
+    () => [...games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()),
+    [games],
+  );
+  const followedGames = useMemo(() => sortedGames.filter((game) => followedGameIds.has(game.id)), [sortedGames, followedGameIds]);
+
+  const onToggleFollow = async (gameId: number, isFollowed: boolean) => {
     setError(null);
-    setBusy(true);
+    setBusyGameId(gameId);
     try {
-      await followGame(token, selectedGameId);
+      if (isFollowed) {
+        await unfollowGame(token, gameId);
+      } else {
+        await followGame(token, gameId);
+      }
       await load();
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
     } finally {
-      setBusy(false);
-    }
-  };
-
-  const onUnfollow = async (gameId: number) => {
-    setError(null);
-    setBusy(true);
-    try {
-      await unfollowGame(token, gameId);
-      await load();
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setBusy(false);
+      setBusyGameId(null);
     }
   };
 
   return (
     <section className="card">
-      <h2>Followed Games</h2>
-      <button disabled={busy || loading} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
-        Refresh
-      </button>
-      {loading ? <p>Loading games...</p> : null}
-      {!loading && liveGames.length > 0 ? (
-        <p>
-          Live now: {liveGames.length} game{liveGames.length === 1 ? "" : "s"}
-        </p>
+      <SectionHeader
+        title="Followed Games"
+        disabled={loading || busyGameId !== null}
+        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      />
+      {!loading ? (
+        <div className="chip-row">
+          <span className="chip chip-live">Live now: {liveGames.length}</span>
+          <span className="chip chip-neutral">Starting soon (6h): {startingSoonGames.length}</span>
+        </div>
       ) : null}
-      {!loading && startingSoonGames.length > 0 ? (
-        <p>
-          Starting soon (next 6h): {startingSoonGames.length} game{startingSoonGames.length === 1 ? "" : "s"}
-        </p>
-      ) : null}
-      {games.length > 0 ? (
-        <form className="inline-form" onSubmit={onFollow}>
-          <select value={selectedGameId ?? ""} onChange={(event) => setSelectedGameId(Number(event.target.value))}>
-            {games.map((game) => (
-                <option key={game.id} value={game.id}>
-                {formatGameLabel(game, teamMap)}
-                </option>
-              ))}
-          </select>
-          <button type="submit" disabled={busy || !selectedGameId}>
-            Follow Game
-          </button>
-        </form>
-      ) : (
-        <p>No upcoming/live games available yet.</p>
-      )}
       {error ? <p className="error">{error}</p> : null}
-      <ul className="list">
-        {followedGames.map((game) => (
-          <li key={game.id}>
-            <span>{formatGameLabel(game, teamMap)}</span>
-            <button disabled={busy} onClick={() => onUnfollow(game.id)}>
-              Unfollow
-            </button>
-          </li>
-        ))}
-      </ul>
-      {followedGames.length === 0 && !loading ? <p>No followed games yet.</p> : null}
+      {loading ? <p>Loading games...</p> : null}
+
+      {!loading ? (
+        <ul className="list">
+          {sortedGames.map((game) => {
+            const home = teamMap.get(game.home_team_id);
+            const away = teamMap.get(game.away_team_id);
+            const isFollowed = followedGameIds.has(game.id);
+            if (!home || !away) {
+              return null;
+            }
+            return (
+              <li key={game.id} className="game-card">
+                <div className="game-card-main">
+                  <div className="muted">{formatTipoff(game.scheduled_start_time)}</div>
+                  <div className="matchup-row">
+                    <TeamLogo team={away} />
+                    <span className="matchup-code">{away.abbreviation}</span>
+                    <span className="muted">@</span>
+                    <TeamLogo team={home} />
+                    <span className="matchup-code">{home.abbreviation}</span>
+                    {scoreSnippet(game) ? <span className="score-pill">{scoreSnippet(game)}</span> : null}
+                    <span className={`chip ${statusClass(game.status)}`}>{GAME_STATUS_LABELS[game.status] ?? game.status}</span>
+                  </div>
+                </div>
+                <button
+                  className={isFollowed ? "btn-secondary" : ""}
+                  disabled={busyGameId === game.id}
+                  onClick={() => onToggleFollow(game.id, isFollowed)}
+                >
+                  {isFollowed ? "Unfollow" : "Follow"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {!loading && sortedGames.length === 0 ? <p>No upcoming/live games available yet.</p> : null}
+      {!loading && followedGames.length === 0 ? <p>No followed games yet.</p> : null}
     </section>
   );
 }
@@ -336,34 +397,35 @@ export function PreferencesView({ token }: { token: string }) {
 
   return (
     <section className="card">
-      <h2>Alert Preferences</h2>
-      <button
+      <SectionHeader
+        title="Alert Preferences"
         disabled={busyAlertType !== null || loading}
-        onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
-      >
-        Refresh
-      </button>
+        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      />
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading preferences...</p> : null}
       <ul className="list">
         {preferences.map((preference) => (
-          <li key={preference.alert_type}>
+          <li key={preference.alert_type} className="row-card">
             <span>
-              {preference.alert_type} {preference.is_enabled ? "enabled" : "disabled"}
+              <strong>{PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type}</strong>{" "}
+              <span className={`chip ${preference.is_enabled ? "chip-final" : "chip-neutral"}`}>
+                {preference.is_enabled ? "Enabled" : "Disabled"}
+              </span>
               {preference.alert_type === "close_game_late"
                 ? ` • margin=${preference.close_game_margin_threshold ?? "-"} • seconds=${
                     preference.close_game_time_threshold_seconds ?? "-"
                   }`
                 : ""}
             </span>
-            <button disabled={busyAlertType === preference.alert_type} onClick={() => onToggle(preference)}>
+            <button className="btn-secondary" disabled={busyAlertType === preference.alert_type} onClick={() => onToggle(preference)}>
               {preference.is_enabled ? "Disable" : "Enable"}
             </button>
           </li>
         ))}
       </ul>
-      <button disabled={busyAlertType === "close_game_late"} onClick={onCloseGameDefaults}>
-        Reset close_game_late to defaults
+      <button className="btn-secondary" disabled={busyAlertType === "close_game_late"} onClick={onCloseGameDefaults}>
+        Reset close_game_late defaults
       </button>
     </section>
   );
@@ -396,10 +458,11 @@ export function HistoryView({ token }: { token: string }) {
 
   return (
     <section className="card">
-      <h2>Alert History</h2>
-      <button onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))} disabled={loading}>
-        Refresh
-      </button>
+      <SectionHeader
+        title="Alert History"
+        disabled={loading}
+        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      />
       <div className="inline-form">
         <select value={alertTypeFilter} onChange={(event) => setAlertTypeFilter(event.target.value as "all" | AlertType)}>
           <option value="all">All alert types</option>
@@ -418,11 +481,12 @@ export function HistoryView({ token }: { token: string }) {
       {items.length === 0 && !loading ? <p>No alerts have been sent yet.</p> : null}
       <ul className="list">
         {items.map((item) => (
-          <li key={item.id}>
+          <li key={item.id} className="row-card">
             <span>
               {new Date(item.sent_at).toLocaleString()} • {item.away_team_abbreviation} @ {item.home_team_abbreviation} •{" "}
-              {item.alert_type} • {item.delivery_status}
+              {ALERT_TYPE_LABELS[item.alert_type] ?? item.alert_type}
             </span>
+            <span className={`chip ${deliveryStatusClass(item.delivery_status)}`}>{item.delivery_status}</span>
           </li>
         ))}
       </ul>
