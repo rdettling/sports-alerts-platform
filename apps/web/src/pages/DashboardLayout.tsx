@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-import { GamesView, HistoryView, OverviewView, PreferencesView, TeamsView } from "./DashboardViews";
+import { AlertsView, FollowingView, GamesView } from "./DashboardViews";
 
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
@@ -20,29 +20,22 @@ export function DashboardLayout() {
       </header>
 
       <nav className="tabs">
-        <NavLink to="" end className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-          Overview
-        </NavLink>
-        <NavLink to="teams" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-          Followed Teams
-        </NavLink>
         <NavLink to="games" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-          Followed Games
+          Games
         </NavLink>
-        <NavLink to="preferences" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-          Alert Preferences
+        <NavLink to="following" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Following
         </NavLink>
-        <NavLink to="history" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-          Alert History
+        <NavLink to="alerts" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+          Alerts
         </NavLink>
       </nav>
 
       <Routes>
-        <Route path="/" element={<OverviewView />} />
-        <Route path="/teams" element={<TeamsView token={token} />} />
+        <Route path="/" element={<Navigate to="games" replace />} />
         <Route path="/games" element={<GamesView token={token} />} />
-        <Route path="/preferences" element={<PreferencesView token={token} />} />
-        <Route path="/history" element={<HistoryView token={token} />} />
+        <Route path="/following" element={<FollowingView token={token} />} />
+        <Route path="/alerts" element={<AlertsView token={token} />} />
       </Routes>
     </div>
   );

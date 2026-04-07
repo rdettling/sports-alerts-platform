@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   AlertHistoryItem,
@@ -271,15 +271,28 @@ function compactStatusText(game: Game): string | null {
   return parts.join(" • ");
 }
 
+function isGameActive(game: Game): boolean {
+  return !game.is_final && game.status !== "final";
+}
+
+function isRecentlyCompletedGame(game: Game, nowMs: number): boolean {
+  if (isGameActive(game)) {
+    return false;
+  }
+  const startedAtMs = new Date(game.scheduled_start_time).getTime();
+  return nowMs - startedAtMs <= 24 * 60 * 60 * 1000;
+}
+
 export function GamesView({ token }: { token: string }) {
   const [games, setGames] = useState<Game[]>([]);
   const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
   const [followedGameIds, setFollowedGameIds] = useState<Set<number>>(new Set());
+  const [filter, setFilter] = useState<"all" | "live" | "today" | "following">("all");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
@@ -290,34 +303,55 @@ export function GamesView({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
-  }, []);
+  }, [load]);
 
-  const now = Date.now();
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
+    }, 120_000);
+    return () => window.clearInterval(intervalId);
+  }, [load]);
+
   const liveGames = useMemo(
     () => games.filter((game) => game.status === "in_progress" || game.status === "live"),
     [games],
   );
-  const startingSoonGames = useMemo(
+  const todayGames = useMemo(
     () =>
       games.filter((game) => {
-        if (game.status !== "scheduled") {
-          return false;
-        }
-        const startsInMs = new Date(game.scheduled_start_time).getTime() - now;
-        return startsInMs >= 0 && startsInMs <= 6 * 60 * 60 * 1000;
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        const d = today.getDate();
+        const gameDate = new Date(game.scheduled_start_time);
+        return gameDate.getFullYear() === y && gameDate.getMonth() === m && gameDate.getDate() === d;
       }),
-    [games, now],
+    [games],
   );
+  const todayGameIds = useMemo(() => new Set(todayGames.map((game) => game.id)), [todayGames]);
 
   const sortedGames = useMemo(
     () => [...games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()),
     [games],
   );
-  const followedGames = useMemo(() => sortedGames.filter((game) => followedGameIds.has(game.id)), [sortedGames, followedGameIds]);
+  const activeFollowedGameCount = useMemo(
+    () => sortedGames.filter((game) => followedGameIds.has(game.id)).length,
+    [sortedGames, followedGameIds],
+  );
+  const visibleGames = useMemo(() => {
+    if (filter === "all") return sortedGames;
+    if (filter === "live") {
+      return sortedGames.filter((game) => game.status === "in_progress" || game.status === "live");
+    }
+    if (filter === "today") {
+      return sortedGames.filter((game) => todayGameIds.has(game.id));
+    }
+    return sortedGames.filter((game) => followedGameIds.has(game.id));
+  }, [filter, sortedGames, followedGameIds, todayGameIds]);
 
   const onToggleFollow = async (gameId: number, isFollowed: boolean) => {
     setError(null);
@@ -339,14 +373,26 @@ export function GamesView({ token }: { token: string }) {
   return (
     <section className="card">
       <div className="games-header">
-        <h2>Followed Games</h2>
-        <div className="games-header-right">
-          {!loading ? (
-            <>
-              <span className="chip chip-live">Live: {liveGames.length}</span>
-              <span className="chip chip-neutral">Soon: {startingSoonGames.length}</span>
-            </>
-          ) : null}
+        <h2>Games</h2>
+        <div className="games-toolbar">
+          <div className="games-filter-row">
+            <button className={filter === "all" ? "" : "btn-secondary"} onClick={() => setFilter("all")} disabled={loading}>
+              All
+            </button>
+            <button className={filter === "live" ? "" : "btn-secondary"} onClick={() => setFilter("live")} disabled={loading}>
+              Live ({liveGames.length})
+            </button>
+            <button className={filter === "today" ? "" : "btn-secondary"} onClick={() => setFilter("today")} disabled={loading}>
+              Today ({todayGames.length})
+            </button>
+            <button
+              className={filter === "following" ? "" : "btn-secondary"}
+              onClick={() => setFilter("following")}
+              disabled={loading}
+            >
+              Following ({activeFollowedGameCount})
+            </button>
+          </div>
           <button
             className="btn-secondary"
             disabled={loading || busyGameId !== null}
@@ -371,7 +417,7 @@ export function GamesView({ token }: { token: string }) {
             <span>Action</span>
           </div>
           <ul className="list games-table-list">
-            {sortedGames.map((game) => {
+            {visibleGames.map((game) => {
               const home = teamMap.get(game.home_team_id);
               const away = teamMap.get(game.away_team_id);
               const isFollowed = followedGameIds.has(game.id);
@@ -423,8 +469,137 @@ export function GamesView({ token }: { token: string }) {
           </ul>
         </div>
       ) : null}
-      {!loading && sortedGames.length === 0 ? <p>No upcoming/live games available yet.</p> : null}
-      {!loading && followedGames.length === 0 ? <p>No followed games yet.</p> : null}
+      {!loading && visibleGames.length === 0 ? <p>No games in this filter.</p> : null}
+    </section>
+  );
+}
+
+export function FollowingView({ token }: { token: string }) {
+  return (
+    <div className="dashboard-stack">
+      <TeamsView token={token} />
+      <FollowingGamesOnlyView token={token} />
+    </div>
+  );
+}
+
+function FollowingGamesOnlyView({ token }: { token: string }) {
+  const [games, setGames] = useState<Game[]>([]);
+  const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyGameId, setBusyGameId] = useState<number | null>(null);
+
+  const load = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const [follows, teams] = await Promise.all([listFollows(token), listTeams()]);
+      setGames(follows.games.sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()));
+      setTeamMap(new Map(teams.map((team) => [team.id, team])));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
+  }, []);
+
+  const onUnfollow = async (gameId: number) => {
+    setError(null);
+    setBusyGameId(gameId);
+    try {
+      await unfollowGame(token, gameId);
+      await load();
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
+    } finally {
+      setBusyGameId(null);
+    }
+  };
+
+  const nowMs = Date.now();
+  const activeGames = useMemo(
+    () =>
+      games
+        .filter((game) => isGameActive(game))
+        .sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()),
+    [games],
+  );
+  const recentCompletedGames = useMemo(
+    () =>
+      games
+        .filter((game) => isRecentlyCompletedGame(game, nowMs))
+        .sort((a, b) => new Date(b.scheduled_start_time).getTime() - new Date(a.scheduled_start_time).getTime()),
+    [games, nowMs],
+  );
+
+  return (
+    <section className="card">
+      <SectionHeader
+        title="Followed Games"
+        disabled={loading || busyGameId !== null}
+        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+      />
+      {error ? <p className="error">{error}</p> : null}
+      {loading ? <p>Loading followed games...</p> : null}
+      {!loading && activeGames.length === 0 ? <p>No active followed games.</p> : null}
+      <ul className="list">
+        {activeGames.map((game) => {
+          const away = teamMap.get(game.away_team_id);
+          const home = teamMap.get(game.home_team_id);
+          if (!away || !home) {
+            return null;
+          }
+          return (
+            <li key={game.id} className="row-card">
+              <span className="team-row">
+                <TeamLogo team={away} size={20} />
+                <strong>{away.abbreviation}</strong>
+                <span className="muted">@</span>
+                <TeamLogo team={home} size={20} />
+                <strong>{home.abbreviation}</strong>
+                <span className="muted">• {formatTipoff(game.scheduled_start_time)}</span>
+              </span>
+              <button className="btn-secondary" disabled={busyGameId === game.id} onClick={() => onUnfollow(game.id)}>
+                Unfollow
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {!loading ? (
+        <>
+          <h3>Recently Completed (24h)</h3>
+          {recentCompletedGames.length === 0 ? <p className="muted">No recently completed followed games.</p> : null}
+          <ul className="list">
+            {recentCompletedGames.map((game) => {
+              const away = teamMap.get(game.away_team_id);
+              const home = teamMap.get(game.home_team_id);
+              if (!away || !home) {
+                return null;
+              }
+              return (
+                <li key={game.id} className="row-card">
+                  <span className="team-row">
+                    <TeamLogo team={away} size={20} />
+                    <strong>{away.abbreviation}</strong>
+                    <span className="muted">@</span>
+                    <TeamLogo team={home} size={20} />
+                    <strong>{home.abbreviation}</strong>
+                    <span className="muted">• {formatTipoff(game.scheduled_start_time)} • Final</span>
+                  </span>
+                  <button className="btn-secondary" disabled={busyGameId === game.id} onClick={() => onUnfollow(game.id)}>
+                    Unfollow
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -576,5 +751,14 @@ export function HistoryView({ token }: { token: string }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+export function AlertsView({ token }: { token: string }) {
+  return (
+    <div className="dashboard-stack">
+      <PreferencesView token={token} />
+      <HistoryView token={token} />
+    </div>
   );
 }
