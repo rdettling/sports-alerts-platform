@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,47 @@ def _build_body(alert: SentAlert, game: Game, home: Team | None, away: Team | No
     )
 
 
+def _merge_metadata(alert: SentAlert, updates: dict[str, object]) -> None:
+    existing = alert.metadata_json if isinstance(alert.metadata_json, dict) else {}
+    alert.metadata_json = {**existing, **updates}
+
+
+def _send_email_resend(to_email: str, subject: str, body: str) -> tuple[bool, str | None, dict[str, object] | None]:
+    if not settings.resend_api_key:
+        return False, None, {"error": "missing_resend_api_key"}
+
+    payload = {
+        "from": settings.from_email,
+        "to": [to_email],
+        "subject": subject,
+        "text": body,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.resend_api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        response = httpx.post(settings.resend_api_url, json=payload, headers=headers, timeout=15.0)
+        if response.is_success:
+            body_json = response.json()
+            provider_id = body_json.get("id")
+            if isinstance(provider_id, str) and provider_id:
+                return True, provider_id, None
+            return True, None, {"provider_warning": "missing_message_id"}
+
+        return (
+            False,
+            None,
+            {
+                "error": "resend_request_failed",
+                "status_code": response.status_code,
+                "response_body": response.text[:500],
+            },
+        )
+    except httpx.HTTPError as exc:
+        return False, None, {"error": "resend_http_error", "detail": str(exc)}
+
+
 def process_pending_alerts(db: Session, limit: int = 100) -> tuple[int, int]:
     pending = db.scalars(
         select(SentAlert)
@@ -44,7 +86,7 @@ def process_pending_alerts(db: Session, limit: int = 100) -> tuple[int, int]:
         game = db.get(Game, alert.game_id)
         if not user or not game:
             alert.delivery_status = "failed"
-            alert.metadata_json = {"error": "missing user or game"}
+            _merge_metadata(alert, {"error": "missing user or game"})
             failed_count += 1
             continue
 
@@ -64,13 +106,25 @@ def process_pending_alerts(db: Session, limit: int = 100) -> tuple[int, int]:
             alert.delivery_status = "sent"
             alert.provider_message_id = f"log-{alert.id}"
             sent_count += 1
+        elif settings.delivery_mode == "email":
+            sent, provider_message_id, error_metadata = _send_email_resend(user.email, subject, body)
+            if sent:
+                alert.delivery_status = "sent"
+                alert.provider_message_id = provider_message_id
+                if error_metadata:
+                    _merge_metadata(alert, error_metadata)
+                sent_count += 1
+            else:
+                alert.delivery_status = "failed"
+                if error_metadata:
+                    _merge_metadata(alert, error_metadata)
+                failed_count += 1
         else:
             alert.delivery_status = "failed"
-            alert.metadata_json = {"error": f"unsupported delivery_mode={settings.delivery_mode}"}
+            _merge_metadata(alert, {"error": f"unsupported delivery_mode={settings.delivery_mode}"})
             failed_count += 1
 
         alert.sent_at = datetime.now(timezone.utc)
 
     db.flush()
     return sent_count, failed_count
-

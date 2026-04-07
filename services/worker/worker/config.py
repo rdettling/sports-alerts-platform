@@ -13,6 +13,8 @@ class WorkerSettings(BaseSettings):
     nba_provider: str = "espn"
     delivery_mode: str = "log"
     from_email: str = "alerts@sports-alerts.local"
+    resend_api_key: str | None = None
+    resend_api_url: str = "https://api.resend.com/emails"
 
 
 settings = WorkerSettings()

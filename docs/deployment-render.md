@@ -36,7 +36,12 @@ Required env vars:
 
 - `DATABASE_URL=postgresql+psycopg://...?...`
 - `NBA_PROVIDER=espn`
-- `DELIVERY_MODE=log`
+- `DELIVERY_MODE=log` (or `email`)
+
+When `DELIVERY_MODE=email`, also set:
+
+- `RESEND_API_KEY=<resend-api-key>`
+- `FROM_EMAIL=<verified-sender@your-domain>`
 
 ## Frontend Static Site Settings
 

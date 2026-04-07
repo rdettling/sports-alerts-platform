@@ -28,11 +28,14 @@ Optional:
 ## Render: Worker
 
 - `DATABASE_URL`
+- `DELIVERY_MODE`
 
 Recommended:
 
 - `NBA_PROVIDER=espn`
-- `DELIVERY_MODE=log`
+- `DELIVERY_MODE=log` (or `email` when Resend is configured)
+- `RESEND_API_KEY` (required when `DELIVERY_MODE=email`)
+- `FROM_EMAIL` (verified sender address for Resend)
 - `WORKER_POLL_INTERVAL_SECONDS`
 - `WORKER_POLL_INTERVAL_LIVE_SECONDS`
 - `WORKER_POLL_INTERVAL_SOON_SECONDS`
