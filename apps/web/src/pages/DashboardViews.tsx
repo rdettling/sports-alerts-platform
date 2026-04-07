@@ -229,6 +229,48 @@ function formatMoneyline(value: number | null): string {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function impliedProbabilityFromAmericanOdds(odds: number | null): number | null {
+  if (odds === null || odds === 0) {
+    return null;
+  }
+  if (odds > 0) {
+    return 100 / (odds + 100);
+  }
+  const absoluteOdds = Math.abs(odds);
+  return absoluteOdds / (absoluteOdds + 100);
+}
+
+function noVigProbabilities(game: Game): { home: number; away: number } | null {
+  if (!game.odds) {
+    return null;
+  }
+  const rawHome = impliedProbabilityFromAmericanOdds(game.odds.home_moneyline);
+  const rawAway = impliedProbabilityFromAmericanOdds(game.odds.away_moneyline);
+  if (rawHome === null || rawAway === null) {
+    return null;
+  }
+  const total = rawHome + rawAway;
+  if (total <= 0) {
+    return null;
+  }
+  return {
+    home: rawHome / total,
+    away: rawAway / total,
+  };
+}
+
+function compactStatusText(game: Game): string | null {
+  if (game.status === "scheduled") {
+    return null;
+  }
+  const parts = [GAME_STATUS_LABELS[game.status] ?? game.status];
+  const score = scoreSnippet(game);
+  if (score) {
+    parts.push(score);
+  }
+  return parts.join(" • ");
+}
+
 export function GamesView({ token }: { token: string }) {
   const [games, setGames] = useState<Game[]>([]);
   const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
@@ -296,61 +338,90 @@ export function GamesView({ token }: { token: string }) {
 
   return (
     <section className="card">
-      <SectionHeader
-        title="Followed Games"
-        disabled={loading || busyGameId !== null}
-        onRefresh={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
-      />
-      {!loading ? (
-        <div className="chip-row">
-          <span className="chip chip-live">Live now: {liveGames.length}</span>
-          <span className="chip chip-neutral">Starting soon (6h): {startingSoonGames.length}</span>
+      <div className="games-header">
+        <h2>Followed Games</h2>
+        <div className="games-header-right">
+          {!loading ? (
+            <>
+              <span className="chip chip-live">Live: {liveGames.length}</span>
+              <span className="chip chip-neutral">Soon: {startingSoonGames.length}</span>
+            </>
+          ) : null}
+          <button
+            className="btn-secondary"
+            disabled={loading || busyGameId !== null}
+            onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}
+          >
+            Refresh
+          </button>
         </div>
-      ) : null}
+      </div>
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p>Loading games...</p> : null}
 
       {!loading ? (
-        <ul className="list">
-          {sortedGames.map((game) => {
-            const home = teamMap.get(game.home_team_id);
-            const away = teamMap.get(game.away_team_id);
-            const isFollowed = followedGameIds.has(game.id);
-            if (!home || !away) {
-              return null;
-            }
-            return (
-              <li key={game.id} className="game-card">
-                <div className="game-card-main">
-                  <div className="muted">{formatTipoff(game.scheduled_start_time)}</div>
+        <div className="games-table-wrap">
+          <div className="games-table-head">
+            <span>Time</span>
+            <span>Matchup</span>
+            <span>Win %</span>
+            <span>Edge</span>
+            <span>Odds</span>
+            <span>Book</span>
+            <span>Action</span>
+          </div>
+          <ul className="list games-table-list">
+            {sortedGames.map((game) => {
+              const home = teamMap.get(game.home_team_id);
+              const away = teamMap.get(game.away_team_id);
+              const isFollowed = followedGameIds.has(game.id);
+              const probabilities = noVigProbabilities(game);
+              const awayPercent = probabilities ? Math.round(probabilities.away * 100) : null;
+              const homePercent = awayPercent !== null ? 100 - awayPercent : null;
+              const statusText = compactStatusText(game);
+              if (!home || !away) {
+                return null;
+              }
+              return (
+                <li key={game.id} className="games-table-row">
+                  <div className="games-time-cell">
+                    <span>{formatTipoff(game.scheduled_start_time)}</span>
+                    {statusText ? <span className="muted games-row-subtext">{statusText}</span> : null}
+                  </div>
                   <div className="matchup-row">
-                    <TeamLogo team={away} />
+                    <TeamLogo team={away} size={18} />
                     <span className="matchup-code">{away.abbreviation}</span>
                     <span className="muted">@</span>
-                    <TeamLogo team={home} />
+                    <TeamLogo team={home} size={18} />
                     <span className="matchup-code">{home.abbreviation}</span>
-                    {scoreSnippet(game) ? <span className="score-pill">{scoreSnippet(game)}</span> : null}
-                    <span className={`chip ${statusClass(game.status)}`}>{GAME_STATUS_LABELS[game.status] ?? game.status}</span>
                   </div>
-                  {game.odds ? (
-                    <div className="muted">
-                      Moneyline • {away.abbreviation} {formatMoneyline(game.odds.away_moneyline)} • {home.abbreviation}{" "}
-                      {formatMoneyline(game.odds.home_moneyline)}
-                      {game.odds.bookmaker ? ` • ${game.odds.bookmaker}` : ""}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  className={isFollowed ? "btn-secondary" : ""}
-                  disabled={busyGameId === game.id}
-                  onClick={() => onToggleFollow(game.id, isFollowed)}
-                >
-                  {isFollowed ? "Unfollow" : "Follow"}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                  <div className="games-win-cell">{probabilities ? `${awayPercent}% / ${homePercent}%` : "—"}</div>
+                  <div className="games-bar-cell">
+                    {probabilities ? (
+                      <div className="probability-bar" aria-label="Win probability">
+                        <div className="probability-away" style={{ width: `${probabilities.away * 100}%` }} />
+                        <div className="probability-home" style={{ width: `${probabilities.home * 100}%` }} />
+                      </div>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </div>
+                  <div className="games-odds-cell">
+                    {game.odds ? `${formatMoneyline(game.odds.away_moneyline)} / ${formatMoneyline(game.odds.home_moneyline)}` : "—"}
+                  </div>
+                  <div className="muted games-book-cell">{game.odds?.bookmaker ?? "—"}</div>
+                  <button
+                    className={`${isFollowed ? "btn-secondary" : ""} game-action-button games-action-cell`.trim()}
+                    disabled={busyGameId === game.id}
+                    onClick={() => onToggleFollow(game.id, isFollowed)}
+                  >
+                    {isFollowed ? "Unfollow" : "Follow"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       ) : null}
       {!loading && sortedGames.length === 0 ? <p>No upcoming/live games available yet.</p> : null}
       {!loading && followedGames.length === 0 ? <p>No followed games yet.</p> : null}

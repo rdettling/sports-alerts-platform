@@ -203,13 +203,64 @@ select {
   color: #b91c1c;
 }
 
-.game-card {
-  align-items: stretch !important;
+.games-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.game-card-main {
+.games-header h2 {
+  margin: 0;
+}
+
+.games-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.games-table-wrap {
   display: grid;
   gap: 0.35rem;
+}
+
+.games-table-head {
+  display: grid;
+  grid-template-columns: 170px minmax(170px, 1fr) 90px 130px 110px 90px 86px;
+  gap: 0.6rem;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 0.7rem;
+}
+
+.games-table-list {
+  gap: 0.35rem;
+}
+
+.games-table-row {
+  display: grid !important;
+  grid-template-columns: 170px minmax(170px, 1fr) 90px 130px 110px 90px 86px;
+  align-items: center !important;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem !important;
+  min-height: 48px;
+}
+
+.games-time-cell {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.games-row-subtext {
+  font-size: 0.74rem;
+  line-height: 1.15;
+  font-weight: 500;
 }
 
 .matchup-row {
@@ -221,12 +272,58 @@ select {
 
 .matchup-code {
   font-weight: 700;
+  font-size: 0.96rem;
 }
 
-.score-pill {
-  background: #0f172a;
-  color: #fff;
+.probability-bar {
+  height: 6px;
+  width: 100%;
   border-radius: 999px;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
+  overflow: hidden;
+  border: 1px solid #d1dbe9;
+  display: flex;
+}
+
+.probability-away {
+  background: #4f46e5;
+}
+
+.probability-home {
+  background: #0f172a;
+}
+
+.games-win-cell,
+.games-odds-cell,
+.games-book-cell {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.games-win-cell,
+.games-odds-cell {
+  color: #1e293b;
+}
+
+.games-book-cell {
+  font-weight: 500;
+}
+
+.games-bar-cell {
+  display: flex;
+  align-items: center;
+}
+
+.game-action-button {
+  width: 86px;
+  height: 30px;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.games-action-cell {
+  justify-self: end;
+}
+
+.games-table-head span:last-child {
+  text-align: right;
 }
