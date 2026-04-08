@@ -328,6 +328,38 @@ def _recommended_poll_interval_seconds(db: Session) -> int:
     return max(60, settings.worker_poll_interval_idle_seconds)
 
 
+def _should_refresh_odds(db: Session, all_games: list[ProviderGame]) -> bool:
+    if not settings.odds_enabled:
+        return False
+
+    now = datetime.now(timezone.utc)
+    has_relevant_games = any(
+        (
+            game.status in ("in_progress", "live")
+            or (
+                game.status == "scheduled"
+                and game.scheduled_start_time >= now - timedelta(hours=1)
+                and game.scheduled_start_time <= now + timedelta(hours=24)
+            )
+        )
+        for game in all_games
+    )
+    if not has_relevant_games:
+        return False
+
+    last_fetched = db.scalar(
+        select(func.max(GameOddsCurrent.fetched_at)).where(
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == settings.odds_api_market,
+        )
+    )
+    if last_fetched is None:
+        return True
+
+    fetched_at = last_fetched if last_fetched.tzinfo else last_fetched.replace(tzinfo=timezone.utc)
+    return (now - fetched_at).total_seconds() >= settings.odds_refresh_seconds
+
+
 def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     db = SessionLocal()
     ingest_run = IngestRun(status="running", games_checked=0, games_updated=0)
@@ -361,7 +393,6 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         updated = 0
         alert_records_created = 0
         odds_updated = 0
-        odds_by_matchup = fetch_nba_odds_index()
         touched_game_ids: list[int] = []
         game_key_by_id: dict[int, tuple[str, str]] = {}
         for provider_game in all_games:
@@ -376,6 +407,10 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                 away_name = team_names.get(away_id) if away_id else None
                 if home_name and away_name:
                     game_key_by_id[game_id] = game_key(home_name, away_name)
+
+        odds_by_matchup: dict[tuple[str, str], list[MoneylineOdds]] = {}
+        if _should_refresh_odds(db, all_games):
+            odds_by_matchup = fetch_nba_odds_index()
 
         for game_id, key in game_key_by_id.items():
             game = db.get(Game, game_id)

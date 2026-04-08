@@ -32,6 +32,8 @@ ODDS_API_MARKET=h2h
 ODDS_API_FORMAT=american
 ODDS_API_TIMEOUT_SECONDS=6
 ODDS_API_CACHE_SECONDS=60
+ODDS_ENABLED=true
+ODDS_REFRESH_SECONDS=5400
 
 DEV_MODE=false
 
@@ -56,6 +58,8 @@ VITE_API_BASE_URL=http://localhost:8000
   - Frontend `Test` tab visibility
 - `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and `FROM_EMAIL`.
 - `ODDS_API_KEY` is required because odds ingestion is part of core game display.
+- `ODDS_ENABLED=false` hard-disables odds API calls without disabling game ingest.
+- `ODDS_REFRESH_SECONDS` is the minimum time between odds refreshes when relevant games exist.
 
 ## Render mapping
 

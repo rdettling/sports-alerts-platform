@@ -43,6 +43,8 @@ setup:
 			'ODDS_API_FORMAT=american' \
 			'ODDS_API_TIMEOUT_SECONDS=6' \
 			'ODDS_API_CACHE_SECONDS=60' \
+			'ODDS_ENABLED=true' \
+			'ODDS_REFRESH_SECONDS=5400' \
 			'DEV_MODE=false' \
 			'NBA_PROVIDER=espn' \
 			'DELIVERY_MODE=log' \

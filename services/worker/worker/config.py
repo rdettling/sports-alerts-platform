@@ -20,6 +20,8 @@ class WorkerSettings(BaseSettings):
     odds_api_format: str
     odds_api_timeout_seconds: int
     odds_api_cache_seconds: int
+    odds_enabled: bool
+    odds_refresh_seconds: int
     delivery_mode: str
     from_email: str
     resend_api_key: str
