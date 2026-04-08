@@ -40,10 +40,10 @@ export function DashboardLayout() {
 
       <Routes>
         <Route path="/" element={<Navigate to="games" replace />} />
-        <Route path="/games" element={<GamesView token={token} />} />
-        <Route path="/following" element={<FollowingView token={token} />} />
-        <Route path="/alerts" element={<AlertsView token={token} />} />
-        {isDevMode ? <Route path="/test" element={<DevToolsView token={token} />} /> : null}
+        <Route path="games" element={<GamesView token={token} />} />
+        <Route path="following" element={<FollowingView token={token} />} />
+        <Route path="alerts" element={<AlertsView token={token} />} />
+        {isDevMode ? <Route path="test" element={<DevToolsView token={token} />} /> : null}
       </Routes>
     </div>
   );

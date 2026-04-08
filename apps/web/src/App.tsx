@@ -14,8 +14,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
-      <Route path="/dashboard/*" element={token ? <DashboardLayout /> : <Navigate to="/auth" replace />} />
-      <Route path="*" element={<Navigate to={token ? "/dashboard" : "/auth"} replace />} />
+      <Route path="/*" element={token ? <DashboardLayout /> : <Navigate to="/auth" replace />} />
+      <Route path="*" element={<Navigate to={token ? "/games" : "/auth"} replace />} />
     </Routes>
   );
 }

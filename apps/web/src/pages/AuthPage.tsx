@@ -22,7 +22,7 @@ export function AuthPage() {
       } else {
         await registerWithPassword(email, password);
       }
-      navigate("/dashboard");
+      navigate("/games");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Auth request failed");
     } finally {
