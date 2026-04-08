@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -72,6 +72,33 @@ class FinalProvider:
                 clock="00:00",
                 is_final=True,
             )
+        ]
+
+    def fetch_game_updates(self, external_game_ids):
+        return []
+
+
+class RepeatMatchupProvider:
+    def __init__(self, first_start: datetime, second_start: datetime):
+        self.first_start = first_start
+        self.second_start = second_start
+
+    def fetch_schedule(self):
+        return [
+            ProviderGame(
+                external_game_id="game-repeat-1",
+                home_external_team_id="1610612737",
+                away_external_team_id="1610612738",
+                scheduled_start_time=self.first_start,
+                status="scheduled",
+            ),
+            ProviderGame(
+                external_game_id="game-repeat-2",
+                home_external_team_id="1610612737",
+                away_external_team_id="1610612738",
+                scheduled_start_time=self.second_start,
+                status="scheduled",
+            ),
         ]
 
     def fetch_game_updates(self, external_game_ids):
@@ -181,3 +208,84 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
     assert odds is not None
     assert odds.home_moneyline == -130
     assert odds.away_moneyline == 110
+
+
+def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeypatch):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    first_start = now + timedelta(hours=2)
+    second_start = now + timedelta(days=2, hours=2)
+    provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
+
+    monkeypatch.setattr(
+        "worker.ingest.fetch_nba_odds_index",
+        lambda: {
+            ("atlanta hawks", "boston celtics"): [
+                MoneylineOdds(
+                    home_moneyline=-140,
+                    away_moneyline=120,
+                    bookmaker="FanDuel",
+                    last_update=now,
+                    commence_time=first_start,
+                ),
+                MoneylineOdds(
+                    home_moneyline=-210,
+                    away_moneyline=175,
+                    bookmaker="FanDuel",
+                    last_update=now,
+                    commence_time=second_start,
+                ),
+            ]
+        },
+    )
+
+    result = run_ingest_cycle(provider)
+    assert result["status"] == "success"
+
+    first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
+    second_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-2"))
+    assert first_game is not None
+    assert second_game is not None
+
+    first_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == first_game.id))
+    second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
+    assert first_odds is not None
+    assert second_odds is not None
+    assert first_odds.home_moneyline == -140
+    assert first_odds.away_moneyline == 120
+    assert second_odds.home_moneyline == -210
+    assert second_odds.away_moneyline == 175
+
+
+def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    first_start = now + timedelta(hours=2)
+    second_start = now + timedelta(days=2, hours=2)
+    provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
+
+    monkeypatch.setattr(
+        "worker.ingest.fetch_nba_odds_index",
+        lambda: {
+            ("atlanta hawks", "boston celtics"): [
+                MoneylineOdds(
+                    home_moneyline=-145,
+                    away_moneyline=122,
+                    bookmaker="FanDuel",
+                    last_update=now,
+                    commence_time=first_start,
+                )
+            ]
+        },
+    )
+
+    result = run_ingest_cycle(provider)
+    assert result["status"] == "success"
+
+    first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
+    second_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-2"))
+    assert first_game is not None
+    assert second_game is not None
+
+    first_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == first_game.id))
+    second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
+    assert first_odds is not None
+    assert second_odds is None

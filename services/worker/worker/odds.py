@@ -19,7 +19,7 @@ TEAM_NAME_ALIASES = {
 
 _CACHE_LOCK = threading.Lock()
 _CACHE_FETCHED_AT = 0.0
-_CACHE_DATA: dict[tuple[str, str], "MoneylineOdds"] = {}
+_CACHE_DATA: dict[tuple[str, str], list["MoneylineOdds"]] = {}
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class MoneylineOdds:
     away_moneyline: int | None
     bookmaker: str | None
     last_update: datetime | None
+    commence_time: datetime | None = None
 
 
 def _normalize_team_name(name: str) -> str:
@@ -83,11 +84,12 @@ def _extract_event_moneyline(event: dict) -> MoneylineOdds | None:
                 away_moneyline=prices_by_team.get(away_name),
                 bookmaker=bookmaker.get("title") if isinstance(bookmaker, dict) else None,
                 last_update=_parse_datetime(bookmaker.get("last_update") if isinstance(bookmaker, dict) else None),
+                commence_time=_parse_datetime(event.get("commence_time")),
             )
     return None
 
 
-def _fetch_from_provider() -> dict[tuple[str, str], MoneylineOdds]:
+def _fetch_from_provider() -> dict[tuple[str, str], list[MoneylineOdds]]:
     query = urlencode(
         {
             "apiKey": settings.odds_api_key,
@@ -103,7 +105,7 @@ def _fetch_from_provider() -> dict[tuple[str, str], MoneylineOdds]:
     if not isinstance(payload, list):
         return {}
 
-    odds_index: dict[tuple[str, str], MoneylineOdds] = {}
+    odds_index: dict[tuple[str, str], list[MoneylineOdds]] = {}
     for event in payload:
         if not isinstance(event, dict):
             continue
@@ -113,11 +115,14 @@ def _fetch_from_provider() -> dict[tuple[str, str], MoneylineOdds]:
             continue
         odds = _extract_event_moneyline(event)
         if odds:
-            odds_index[(home_name, away_name)] = odds
+            key = (home_name, away_name)
+            existing = odds_index.get(key, [])
+            existing.append(odds)
+            odds_index[key] = existing
     return odds_index
 
 
-def fetch_nba_odds_index() -> dict[tuple[str, str], MoneylineOdds]:
+def fetch_nba_odds_index() -> dict[tuple[str, str], list[MoneylineOdds]]:
     global _CACHE_FETCHED_AT, _CACHE_DATA  # noqa: PLW0603
 
     now = monotonic()

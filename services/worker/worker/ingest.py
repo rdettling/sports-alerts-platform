@@ -22,6 +22,7 @@ from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.providers.base import NbaProvider, ProviderGame
 
 logger = logging.getLogger(__name__)
+ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, class_=Session)
@@ -250,6 +251,45 @@ def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> None:
     )
 
 
+def _delete_game_odds(db: Session, game_id: int) -> bool:
+    row = db.scalar(
+        select(GameOddsCurrent).where(
+            GameOddsCurrent.game_id == game_id,
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == settings.odds_api_market,
+        )
+    )
+    if not row:
+        return False
+    db.delete(row)
+    return True
+
+
+def _select_best_odds_for_game(
+    options: list[MoneylineOdds] | MoneylineOdds | None,
+    scheduled_start_time: datetime,
+) -> MoneylineOdds | None:
+    if options is None:
+        return None
+    candidates = options if isinstance(options, list) else [options]
+    if not candidates:
+        return None
+
+    target = scheduled_start_time if scheduled_start_time.tzinfo else scheduled_start_time.replace(tzinfo=timezone.utc)
+    with_commence = [odds for odds in candidates if odds.commence_time]
+    if not with_commence:
+        return candidates[0]
+
+    closest = min(
+        with_commence,
+        key=lambda odds: abs(((odds.commence_time if odds.commence_time.tzinfo else odds.commence_time.replace(tzinfo=timezone.utc)) - target).total_seconds()),
+    )
+    closest_commence = closest.commence_time if closest.commence_time.tzinfo else closest.commence_time.replace(tzinfo=timezone.utc)
+    if abs((closest_commence - target).total_seconds()) > ODDS_MATCH_MAX_COMMENCE_DIFF.total_seconds():
+        return None
+    return closest
+
+
 def _recommended_poll_interval_seconds(db: Session) -> int:
     now = datetime.now(timezone.utc)
     live_count = db.scalar(
@@ -338,8 +378,14 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                     game_key_by_id[game_id] = game_key(home_name, away_name)
 
         for game_id, key in game_key_by_id.items():
-            odds = odds_by_matchup.get(key)
+            game = db.get(Game, game_id)
+            if not game:
+                continue
+            matchup_odds = odds_by_matchup.get(key)
+            odds = _select_best_odds_for_game(matchup_odds, game.scheduled_start_time)
             if not odds:
+                if matchup_odds:
+                    _delete_game_odds(db, game_id)
                 continue
             _upsert_game_odds(db, game_id, odds)
             odds_updated += 1
