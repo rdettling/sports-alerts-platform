@@ -4,8 +4,8 @@ import { Game, Team, followGame, listFollows, listGames, listTeams, unfollowGame
 import {
   TeamLogo,
   compactStatusText,
+  formatGameTime,
   formatMoneyline,
-  formatTipoff,
   messageFromUnknown,
   noVigProbabilities,
 } from "./shared";
@@ -158,7 +158,7 @@ export function GamesView({ token }: { token: string }) {
               return (
                 <li key={game.id} className="games-table-row">
                   <div className="games-time-cell">
-                    <span>{formatTipoff(game.scheduled_start_time)}</span>
+                    <span>{formatGameTime(game)}</span>
                     {statusText ? <span className="muted games-row-subtext">{statusText}</span> : null}
                   </div>
                   <div className="matchup-row">

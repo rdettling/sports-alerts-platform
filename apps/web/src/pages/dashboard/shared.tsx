@@ -70,6 +70,33 @@ export function formatTipoff(dateIso: string): string {
   return new Date(dateIso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function formatPeriod(period: number | null): string {
+  if (period === null) {
+    return "";
+  }
+  if (period <= 4) {
+    return `Q${period}`;
+  }
+  return `OT${period - 4}`;
+}
+
+export function formatGameTime(game: Game): string {
+  if (game.status === "in_progress" || game.status === "live") {
+    const period = formatPeriod(game.period);
+    const clock = (game.clock ?? "").trim();
+    if (period && clock) {
+      return `${period} ${clock}`;
+    }
+    if (period) {
+      return period;
+    }
+    if (clock) {
+      return clock;
+    }
+  }
+  return formatTipoff(game.scheduled_start_time);
+}
+
 export function formatMoneyline(value: number | null): string {
   if (value === null) {
     return "—";
