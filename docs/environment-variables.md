@@ -1,11 +1,10 @@
 # Environment Variables
 
-This repo now uses **strict env loading**: no runtime defaults for required settings.
-If a required variable is missing, API/worker/frontend startup fails.
+This repo uses strict env loading: if a required variable is missing, startup fails.
 
-## Single local `.env` contract
+## Single local `.env` file
 
-Keep all variables below in your local `.env`.
+Keep one `.env` at repo root with all required variables:
 
 ```env
 APP_NAME=sports-alerts-api
@@ -23,7 +22,7 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=10080
 CORS_ALLOW_ORIGINS=http://localhost:5173
 
-ODDS_API_KEY=replace-with-the-odds-api-key
+ODDS_API_KEY=replace-with-the-odds-api-key-or-placeholder
 ODDS_API_BASE_URL=https://api.the-odds-api.com/v4/sports
 ODDS_PROVIDER=the_odds_api
 ODDS_API_SPORT_KEY=basketball_nba
@@ -32,7 +31,7 @@ ODDS_API_MARKET=h2h
 ODDS_API_FORMAT=american
 ODDS_API_TIMEOUT_SECONDS=6
 ODDS_API_CACHE_SECONDS=60
-ODDS_ENABLED=true
+ODDS_ENABLED=false
 ODDS_REFRESH_SECONDS=5400
 
 DEV_MODE=false
@@ -42,6 +41,7 @@ DELIVERY_MODE=log
 FROM_EMAIL=alerts@livegamealerts.com
 RESEND_API_KEY=replace-with-resend-api-key
 RESEND_API_URL=https://api.resend.com/emails
+
 WORKER_POLL_INTERVAL_SECONDS=60
 WORKER_POLL_INTERVAL_LIVE_SECONDS=30
 WORKER_POLL_INTERVAL_SOON_SECONDS=120
@@ -51,26 +51,23 @@ WORKER_POLL_INTERVAL_IDLE_SECONDS=900
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-## Usage notes
+## Notes
 
-- `DEV_MODE` controls both:
-  - API dev-only endpoints (for example `/alerts/dev/test-email`)
-  - Frontend `Test` tab visibility
-- `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and `FROM_EMAIL`.
-- `ODDS_API_KEY` is required because odds ingestion is part of core game display.
-- `ODDS_ENABLED=false` hard-disables odds API calls without disabling game ingest.
-- `ODDS_REFRESH_SECONDS` is the minimum time between odds refreshes when relevant games exist.
+- `ODDS_ENABLED=false` disables odds API fetches in worker.
+- `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.
+- `DEV_MODE=true` enables:
+  - API dev endpoint: `/alerts/dev/test-email`
+  - frontend `Test` tab
+- `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and verified sender (`FROM_EMAIL`).
 
-## Render mapping
+## Service mapping
 
-Set the same variables in Render service environment settings:
+- API service needs API/auth/DB/cors/odds/dev variables.
+- Worker service needs DB/provider/odds/delivery/polling variables.
+- Frontend service needs `VITE_API_BASE_URL` and optional `DEV_MODE`.
 
-- API: API/JWT/CORS/odds/env flags/database vars
-- Worker: database/provider/delivery/poll/odds/env flags
-- Frontend: `VITE_API_BASE_URL` and `DEV_MODE` (if you want the test tab in non-local environments)
+## Secrets policy
 
-## Secret handling
-
-- Never commit real secrets.
-- Keep real values in local `.env` and Render environment settings only.
-- Use different `JWT_SECRET_KEY` and `RESEND_API_KEY` values across local and deployed environments.
+- Never commit secrets.
+- Keep real values only in local `.env` and Render env settings.
+- Use different secrets for local and deployed environments.

@@ -1,68 +1,70 @@
 # Deployment (Render + Neon)
 
+This app deploys as three Render services plus one Neon Postgres database.
+
+Current production frontend domain: [https://livegamealerts.com](https://livegamealerts.com)
+
 ## Services
 
-Create 3 Render services:
+- `sports-alerts-platform-api` — Docker Web Service
+- `sports-alerts-platform-worker` — Docker Background Worker
+- `sports-alerts-platform-frontend` — Static Site
 
-- `sports-alerts-platform-api` (Docker Web Service)
-- `sports-alerts-platform-worker` (Docker Background Worker)
-- `sports-alerts-platform-frontend` (Static Site)
-
-Use Neon for managed Postgres.
-
-## API Service Settings
+## 1) API Service (Docker Web Service)
 
 - Root Directory: `.`
 - Docker Build Context Directory: `.`
 - Dockerfile Path: `services/api/Dockerfile`
-- Docker Command: leave blank (uses Dockerfile CMD)
-- Pre-Deploy Command: leave blank on free plan
+- Docker Command: leave blank
+- Pre-Deploy Command: leave blank
 
-Required env vars:
+Set all required API env vars from `docs/environment-variables.md`.
 
-- Set all API variables listed in `docs/environment-variables.md` (API section equivalents).
-- At minimum this includes: `APP_NAME`, `API_HOST`, `API_PORT`, `DATABASE_URL`,
-  `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`, `CORS_ALLOW_ORIGINS`,
-  `ODDS_API_KEY`, `ODDS_API_BASE_URL`, `ODDS_PROVIDER`, `ODDS_API_SPORT_KEY`,
-  `ODDS_API_REGIONS`, `ODDS_API_MARKET`, `ODDS_API_FORMAT`,
-  `ODDS_API_TIMEOUT_SECONDS`, `ODDS_API_CACHE_SECONDS`, `ODDS_ENABLED`,
-  `ODDS_REFRESH_SECONDS`, `DEV_MODE`.
+Health checks:
 
-## Worker Service Settings
+- `GET /healthz` must return `200`
+- `GET /docs` should load OpenAPI docs
+
+## 2) Worker Service (Docker Background Worker)
 
 - Root Directory: `.`
 - Docker Build Context Directory: `.`
 - Dockerfile Path: `services/worker/Dockerfile`
 - Docker Command: `uv run python -m worker.main`
-- Pre-Deploy Command: blank
+- Pre-Deploy Command: leave blank
 
-Required env vars:
+Set all required worker env vars from `docs/environment-variables.md`.
 
-- Set all Worker variables listed in `docs/environment-variables.md` (Worker section equivalents).
-- This includes: `DATABASE_URL`, `NBA_PROVIDER`, `ODDS_PROVIDER`, `ODDS_API_KEY`,
-  `ODDS_API_BASE_URL`, `ODDS_API_SPORT_KEY`, `ODDS_API_REGIONS`,
-  `ODDS_API_MARKET`, `ODDS_API_FORMAT`, `ODDS_API_TIMEOUT_SECONDS`,
-  `ODDS_API_CACHE_SECONDS`, `ODDS_ENABLED`, `ODDS_REFRESH_SECONDS`,
-  `DELIVERY_MODE`, `FROM_EMAIL`, `RESEND_API_KEY`,
-  `RESEND_API_URL`, `WORKER_POLL_INTERVAL_SECONDS`,
-  `WORKER_POLL_INTERVAL_LIVE_SECONDS`, `WORKER_POLL_INTERVAL_SOON_SECONDS`,
-  `WORKER_POLL_INTERVAL_DAY_SECONDS`, `WORKER_POLL_INTERVAL_IDLE_SECONDS`,
-  `DEV_MODE`.
+Important behavior:
 
-## Frontend Static Site Settings
+- If `ODDS_ENABLED=false`, worker still ingests games and evaluates alerts; only odds fetches are skipped.
+
+## 3) Frontend Service (Static Site)
 
 - Root Directory: `apps/web`
 - Build Command: `npm ci --include=optional && npm run build`
 - Publish Directory: `dist`
 
-Required env vars:
+Required frontend env:
 
-- `VITE_API_BASE_URL=https://<api>.onrender.com`
-- `DEV_MODE=false` (recommended in production)
+- `VITE_API_BASE_URL=https://<your-api-domain>`
+- Optional: `DEV_MODE=false`
 
-## Smoke Test
+## 4) Neon Postgres
 
-- API `.../healthz` returns 200
-- Register/login works in frontend
-- Teams/games load
-- Worker logs show ingest cycles
+- Create database in Neon.
+- Copy connection string into Render `DATABASE_URL` for API and worker.
+
+## 5) Custom Domains
+
+- Configure DNS at your registrar (for example Namecheap) using values from Render.
+- Wait for DNS propagation, then verify in Render.
+- Keep the Render default domain enabled until custom cert is active.
+
+## Post-Deploy Smoke Test
+
+1. Open frontend and register/login.
+2. Confirm games/following/alerts tabs load.
+3. Confirm API health endpoint is green.
+4. Check worker logs for successful ingest cycles.
+5. If using email delivery, trigger a dev test alert with `DEV_MODE=true` and verify delivery.

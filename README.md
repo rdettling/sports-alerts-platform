@@ -1,54 +1,52 @@
 # Sports Alerts Platform
 
-Sports Alerts is an NBA alerting app with:
+Sports Alerts is a production-style NBA alerts app with a separated web/API/worker architecture.
 
-- `apps/web`: React + Vite frontend
-- `services/api`: FastAPI backend
-- `services/worker`: background ingest + alert worker
-- `infra/docker-compose.yml`: local runtime stack
+Production site: [https://livegamealerts.com](https://livegamealerts.com)
 
-## Quick Start
+## What Works Today
 
-Prerequisites:
+- Email/password auth with JWT session.
+- **Games** view with live/today/following filters.
+- Moneyline odds display (book + no-vig win %) when odds are available.
+- **Following** view for teams and games, including recently completed games.
+- **Alerts** view for rule toggles, close-game threshold settings, and alert history filters.
+- Background worker ingest, rule evaluation, and email/log delivery pipeline.
+- Optional **Test** tab (when `DEV_MODE=true`) for manual dev email triggers.
 
-- Docker Desktop
-- `uv`
-- Node.js 20+
+## Stack
 
-1. Initialize local deps and `.env`:
-   - `make setup`
-2. Start services:
-   - `make rebuild`
-3. Open apps:
+- `apps/web`: React + Vite
+- `services/api`: FastAPI + SQLAlchemy + Alembic
+- `services/worker`: polling, odds ingest, alert evaluation, delivery
+- `infra/docker-compose.yml`: local orchestration
+
+## Quick Start (Local)
+
+1. `make setup`
+2. Fill required values in `.env`
+3. `make rebuild`
+4. Open:
    - Web: `http://localhost:5173`
    - API docs: `http://localhost:8000/docs`
    - API health: `http://localhost:8000/healthz`
 
-## Daily Commands
+## Core Commands
 
-- `make up` — start stack from existing images
-- `make down` — stop stack (keeps DB data)
-- `make logs` — tail logs for all services
-- `make logs SERVICE=api` — tail one service
-- `make ps` — show service status
-- `make restart SERVICE=worker` — restart one service
-- `make test` — run API, worker, and web checks
+- `make setup` — bootstrap `.env` + local deps
+- `make up` — start existing images/containers
+- `make rebuild` — rebuild images and start fresh app containers
+- `make down` — stop stack, keep DB volume
+- `make reset` — stop stack and remove DB volume
+- `make logs` — tail all logs (`SERVICE=api|worker|web|db` optional)
+- `make test` — run API + worker + web checks
 
-## Local Secrets
+## Docs
 
-- Keep real secrets in local `.env` only (gitignored).
-- This repo uses strict env loading (no fallback defaults for required vars).
-- Set all required variables from: `docs/environment-variables.md`
-
-## Deploy URLs
-
-- API root (`/`) returns `404` by design.
-- Use `.../healthz` and `.../docs` for API checks.
-
-## Further Docs
-
+- App functionality: `docs/functionality.md`
 - Architecture: `docs/architecture.md`
-- Local/dev operations: `docs/local-development.md`
-- Deployment (Render + Neon): `docs/deployment-render.md`
+- Local development: `docs/local-development.md`
 - Environment variables: `docs/environment-variables.md`
-- Archived plan: `docs/archive/sports_alerts_v1_plan.md`
+- Render deployment: `docs/deployment-render.md`
+- Troubleshooting runbook: `docs/runbook.md`
+- Product roadmap: `docs/roadmap.md`

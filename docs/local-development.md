@@ -2,29 +2,37 @@
 
 ## Prerequisites
 
-- Docker Desktop
+- Docker Desktop (running)
 - `uv`
 - Node.js 20+
 
-## Setup
+## First-Time Setup
 
 1. `make setup`
-2. Edit `.env` and set all required values from `docs/environment-variables.md`
+2. Edit `.env` (required variables documented in `docs/environment-variables.md`)
 3. `make rebuild`
 
-## Useful Commands
+## Daily Workflow
 
-- `make up`
-- `make down`
-- `make reset` (destructive: removes DB volume)
-- `make logs`
-- `make logs SERVICE=api`
-- `make ps`
-- `make restart SERVICE=worker`
-- `make test`
+- Start: `make up`
+- Stop: `make down`
+- Logs: `make logs` (or `make logs SERVICE=worker`)
+- Tests: `make test`
 
-## Common Debug Checks
+Use `make rebuild` when Dockerfiles/dependencies change.
+Use `make reset` only when you intentionally want to wipe local DB data.
 
-- API health: `http://localhost:8000/healthz`
-- API docs: `http://localhost:8000/docs`
-- If web says API unreachable, confirm `VITE_API_BASE_URL` and API logs.
+## Local Verification Checklist
+
+- API health responds: `GET http://localhost:8000/healthz`
+- API docs open: `http://localhost:8000/docs`
+- Frontend opens: `http://localhost:5173`
+- Register/login works
+- Games/follows load
+- Worker logs show ingest cycles
+
+## Notes
+
+- API root (`/`) returns `404` by design.
+- If `ODDS_ENABLED=false`, games still load but odds columns show empty values.
+- If `DEV_MODE=true`, frontend shows a `Test` tab and API exposes `/alerts/dev/test-email`.
