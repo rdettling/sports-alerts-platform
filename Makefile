@@ -2,25 +2,22 @@ SHELL := /bin/sh
 UV_CACHE_DIR ?= ./.cache/uv
 UV_PROJECT_ENVIRONMENT ?= .venv-local
 COMPOSE_FILE := infra/docker-compose.yml
+ENV_FILE ?= .env
+COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
+ESSENTIAL_ENV_VARS := API_HOST API_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT VITE_API_BASE_URL
 
-.PHONY: help setup up rebuild down reset logs ps restart test test-api test-worker test-web check-docker
+.PHONY: help setup up rebuild down reset logs test _test-api _test-worker _test-web _check-docker _check-env
 
 help:
 	@echo "Sports Alerts Platform"
 	@echo ""
-	@echo "  make setup                    First-time local setup (.env + local deps for tests)"
-	@echo "  make up                       Start stack from existing images"
-	@echo "  make rebuild                  Rebuild images and start stack"
-	@echo "  make down                     Stop stack"
-	@echo "  make reset                    Stop stack and remove volumes"
-	@echo "  make logs [SERVICE=api]       Tail logs (all services by default)"
-	@echo "  make ps                       Show service status"
-	@echo "  make restart SERVICE=api      Restart one service"
-	@echo ""
-	@echo "  make test                     Run all checks"
-	@echo "  make test-api                 Run API tests"
-	@echo "  make test-worker              Run worker tests"
-	@echo "  make test-web                 Run frontend build"
+	@echo "  make setup      First-time local setup (.env + deps)"
+	@echo "  make up         Start stack"
+	@echo "  make rebuild    Rebuild images and start stack"
+	@echo "  make down       Stop stack"
+	@echo "  make reset      Stop stack and wipe volumes"
+	@echo "  make logs       Tail logs (all services, or SERVICE=api)"
+	@echo "  make test       Run API + worker + web checks"
 
 setup:
 	@if [ ! -f .env ]; then \
@@ -66,49 +63,39 @@ setup:
 	cd apps/web && npm ci --include=optional
 
 up:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) up -d
+	@$(MAKE) _check-docker
+	@$(MAKE) _check-env
+	$(COMPOSE) up -d
 
 rebuild:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) up -d --build
+	@$(MAKE) _check-docker
+	@$(MAKE) _check-env
+	$(COMPOSE) up -d --build
 
 down:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) down
+	@$(MAKE) _check-docker
+	$(COMPOSE) down
 
 reset:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans
+	@$(MAKE) _check-docker
+	$(COMPOSE) down -v --remove-orphans
 
 logs:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) logs -f $(SERVICE)
+	@$(MAKE) _check-docker
+	$(COMPOSE) logs -f $(SERVICE)
 
-ps:
-	@$(MAKE) check-docker
-	docker compose -f $(COMPOSE_FILE) ps
+test: _test-api _test-worker _test-web
 
-test: test-api test-worker test-web
-
-test-api:
+_test-api:
 	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
 
-test-worker:
+_test-worker:
 	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
 
-test-web:
+_test-web:
 	cd apps/web && npm ci --include=optional && npm run build
 
-restart:
-	@$(MAKE) check-docker
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "Usage: make restart SERVICE=api|worker|web|db"; \
-		exit 1; \
-	fi
-	docker compose -f $(COMPOSE_FILE) restart $(SERVICE)
-
-check-docker:
+_check-docker:
 	@command -v docker >/dev/null 2>&1 || { \
 		echo "Docker CLI not found."; \
 		echo "Install Docker Desktop: https://www.docker.com/products/docker-desktop/"; \
@@ -119,3 +106,20 @@ check-docker:
 		echo "Start Docker Desktop once, then re-run this command."; \
 		exit 1; \
 	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker daemon is not reachable."; \
+		echo "Make sure Docker Desktop is running and retry."; \
+		exit 1; \
+	}
+
+_check-env:
+	@[ -f "$(ENV_FILE)" ] || { \
+		echo "Missing $(ENV_FILE). Run 'make setup' first."; \
+		exit 1; \
+	}
+	@for v in $(ESSENTIAL_ENV_VARS); do \
+		grep -q "^$$v=" "$(ENV_FILE)" || { \
+			echo "Missing $$v in $(ENV_FILE)."; \
+			exit 1; \
+		}; \
+	done

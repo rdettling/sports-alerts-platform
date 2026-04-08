@@ -58,6 +58,10 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
 
         assert "api.resend.com" in url
         assert json["to"] == ["delivery@example.com"]
+        assert json["subject"].startswith("[Sports Alerts] Tip-off:")
+        assert "html" in json
+        assert "Sports Alerts" in json["html"]
+        assert "text" in json
         assert "Bearer test-key" in headers["Authorization"]
         assert timeout == 15.0
         return Response()
