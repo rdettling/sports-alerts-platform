@@ -133,7 +133,7 @@ def test_ingest_run_failure(db_session):
 
 
 def test_ingest_creates_deduped_live_alerts(db_session):
-    user = User(email="alerts@example.com", password_hash="hash")
+    user = User(email="alerts@example.com")
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
@@ -164,7 +164,7 @@ def test_ingest_creates_deduped_live_alerts(db_session):
 
 
 def test_ingest_creates_final_result_alert(db_session):
-    user = User(email="final@example.com", password_hash="hash")
+    user = User(email="final@example.com")
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)

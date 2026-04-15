@@ -8,7 +8,7 @@ from worker.delivery import process_pending_alerts
 
 
 def _seed_pending_alert(db_session) -> SentAlert:
-    user = User(email="delivery@example.com", password_hash="hash")
+    user = User(email="delivery@example.com")
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)

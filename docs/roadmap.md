@@ -8,7 +8,7 @@ Build a clean, reliable live-game alerts product where a user can quickly follow
 
 The app currently supports:
 
-- Email/password auth with JWT sessions.
+- Email magic-link auth with JWT sessions.
 - Games listing with live/today/following filters.
 - Team and game follows.
 - Alert rule configuration (`game_start`, `close_game_late`, `final_result`).

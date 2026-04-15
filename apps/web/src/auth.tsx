@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { login, me, register } from "./api";
+import { me, startMagicLink, verifyMagicLink } from "./api";
 
 type User = { id: number; email: string; created_at: string };
 
@@ -9,8 +9,8 @@ type AuthContextType = {
   token: string | null;
   user: User | null;
   error: string | null;
-  loginWithPassword: (email: string, password: string) => Promise<void>;
-  registerWithPassword: (email: string, password: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<{ message: string }>;
+  verifyMagicLinkToken: (token: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -42,21 +42,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     run();
   }, [token]);
 
-  const loginWithPassword = async (email: string, password: string) => {
+  const sendMagicLink = useCallback(async (email: string): Promise<{ message: string }> => {
     setError(null);
-    const response = await login(email, password);
-    localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
-    setToken(response.access_token);
-    setUser(response.user);
-  };
+    const response = await startMagicLink(email);
+    return { message: response.message };
+  }, []);
 
-  const registerWithPassword = async (email: string, password: string) => {
+  const verifyMagicLinkToken = useCallback(async (tokenValue: string) => {
     setError(null);
-    const response = await register(email, password);
+    const response = await verifyMagicLink(tokenValue);
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
     setToken(response.access_token);
     setUser(response.user);
-  };
+  }, []);
 
   const logout = () => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -70,11 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       user,
       error,
-      loginWithPassword,
-      registerWithPassword,
+      sendMagicLink,
+      verifyMagicLinkToken,
       logout,
     }),
-    [isLoading, token, user, error],
+    [isLoading, token, user, error, sendMagicLink, verifyMagicLinkToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -11,7 +11,15 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str
     jwt_expire_minutes: int
+    magic_link_ttl_minutes: int
+    magic_link_cooldown_seconds: int
+    magic_link_max_requests_per_hour: int
+    web_base_url: str
     cors_allow_origins: str
+    delivery_mode: str
+    from_email: str
+    resend_api_key: str
+    resend_api_url: str
     odds_api_key: str
     odds_api_base_url: str
     odds_provider: str

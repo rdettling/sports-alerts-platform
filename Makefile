@@ -32,7 +32,11 @@ setup:
 			'DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts' \
 			'JWT_SECRET_KEY=replace-with-long-random-string' \
 			'JWT_ALGORITHM=HS256' \
-			'JWT_EXPIRE_MINUTES=10080' \
+			'JWT_EXPIRE_MINUTES=86400' \
+			'MAGIC_LINK_TTL_MINUTES=15' \
+			'MAGIC_LINK_COOLDOWN_SECONDS=60' \
+			'MAGIC_LINK_MAX_REQUESTS_PER_HOUR=5' \
+			'WEB_BASE_URL=http://localhost:5173' \
 			'CORS_ALLOW_ORIGINS=http://localhost:5173' \
 			'ODDS_API_KEY=replace-with-the-odds-api-key' \
 			'ODDS_API_BASE_URL=https://api.the-odds-api.com/v4/sports' \

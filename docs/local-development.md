@@ -27,7 +27,7 @@ Use `make reset` only when you intentionally want to wipe local DB data.
 - API health responds: `GET http://localhost:8000/healthz`
 - API docs open: `http://localhost:8000/docs`
 - Frontend opens: `http://localhost:5173`
-- Register/login works
+- Magic-link sign-in works
 - Games/follows load
 - Worker logs show ingest cycles
 

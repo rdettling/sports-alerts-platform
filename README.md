@@ -6,7 +6,7 @@ Production site: [https://livegamealerts.com](https://livegamealerts.com)
 
 ## What Works Today
 
-- Email/password auth with JWT session.
+- Email magic-link auth with JWT session.
 - **Games** view with live/today/following filters.
 - Moneyline odds display (book + no-vig win %) when odds are available.
 - **Following** view for teams and games, including recently completed games.

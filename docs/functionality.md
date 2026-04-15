@@ -4,8 +4,8 @@ This document describes what the app currently does in production code.
 
 ## Authentication
 
-- Register with email/password.
-- Login with email/password.
+- Request a one-time magic link with email.
+- Verify token from magic link callback to sign in.
 - JWT bearer auth for protected API routes.
 - Session persistence in frontend local storage.
 

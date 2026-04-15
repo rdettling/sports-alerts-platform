@@ -3,14 +3,16 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 
 
-class RegisterRequest(BaseModel):
+class MagicLinkStartRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+class MagicLinkStartResponse(BaseModel):
+    message: str
+
+
+class MagicLinkVerifyRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=1024)
 
 
 class UserOut(BaseModel):

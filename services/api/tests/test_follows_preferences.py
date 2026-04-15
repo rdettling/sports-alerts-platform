@@ -2,14 +2,25 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from app.core.security import create_access_token
 from app.db.models import Game, Team
 from app.db.session import SessionLocal
+from app.db.models import User
 
 
 def _auth_headers(client, email: str = "m2@example.com") -> dict[str, str]:
-    register_response = client.post("/auth/register", json={"email": email, "password": "password123"})
-    token = register_response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == email))
+        if not user:
+            user = User(email=email)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_access_token(subject=str(user.id))
+        return {"Authorization": f"Bearer {token}"}
+    finally:
+        db.close()
 
 
 def _create_game() -> int:

@@ -10,6 +10,10 @@ export type AuthResponse = {
   user: { id: number; email: string; created_at: string };
 };
 
+export type MagicLinkStartResponse = {
+  message: string;
+};
+
 export type Team = {
   id: number;
   external_team_id: string;
@@ -110,17 +114,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function register(email: string, password: string): Promise<AuthResponse> {
-  return request<AuthResponse>("/auth/register", {
+export function startMagicLink(email: string): Promise<MagicLinkStartResponse> {
+  return request<MagicLinkStartResponse>("/auth/magic-link/start", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email }),
   });
 }
 
-export function login(email: string, password: string): Promise<AuthResponse> {
-  return request<AuthResponse>("/auth/login", {
+export function verifyMagicLink(token: string): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/magic-link/verify", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ token }),
   });
 }
 
