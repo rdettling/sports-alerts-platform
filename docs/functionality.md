@@ -55,22 +55,17 @@ This document describes what the app currently does in production code.
   - delivery status (`all`, `sent`, `failed`, `pending`)
 - Auto-refresh every 2 minutes.
 
-## Ops Tab (Admin Only)
+## Admin Tab (Admin Only)
 
 - Visible only when authenticated user has `role=admin`.
-- Backed by admin-only API endpoints (`/ops/*`) with server-side `403` for non-admins.
-- Displays:
+- Backed by admin-only API endpoints (`/ops/*` and `/alerts/admin/test-email`) with server-side `403` for non-admins.
+- Includes API usage dashboard views:
   - total/success/error/rate-limited outbound provider calls
   - provider and endpoint breakdowns
   - recent hourly points with expected vs actual counts
   - ingest-run expected vs actual ESPN/Odds calls
-- Supports window filters (`24h`, `7d`, `30d`).
-
-## Dev Test Tab (Optional)
-
-- Visible only when `DEV_MODE=true` in frontend env.
-- Lets you enqueue test alerts through `/alerts/dev/test-email`.
-- Intended for local/dev validation of delivery flow.
+- Supports usage window filters (`24h`, `7d`, `30d`).
+- Includes test email tools to enqueue pending alerts for validation.
 
 ## Worker Behavior
 

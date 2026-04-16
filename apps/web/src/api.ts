@@ -276,7 +276,7 @@ export function sendDevTestEmail(
   payload: { alert_type: AlertType; game_id?: number },
 ): Promise<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }> {
   return request<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }>(
-    "/alerts/dev/test-email",
+    "/alerts/admin/test-email",
     {
       method: "POST",
       headers: authHeaders(token),

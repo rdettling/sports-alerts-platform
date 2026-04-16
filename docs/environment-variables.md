@@ -38,8 +38,6 @@ ODDS_API_CACHE_SECONDS=60
 ODDS_ENABLED=false
 ODDS_REFRESH_SECONDS=5400
 
-DEV_MODE=false
-
 NBA_PROVIDER=espn
 DELIVERY_MODE=log
 FROM_EMAIL=alerts@livegamealerts.com
@@ -59,17 +57,14 @@ VITE_API_BASE_URL=http://localhost:8000
 
 - `ODDS_ENABLED=false` disables odds API fetches in worker.
 - `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.
-- `DEV_MODE=true` enables:
-  - API dev endpoint: `/alerts/dev/test-email`
-  - frontend `Test` tab
 - `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and verified sender (`FROM_EMAIL`).
   API uses the same delivery config for magic-link emails.
 
 ## Service mapping
 
-- API service needs API/auth/DB/cors/odds/dev variables, plus delivery and magic-link settings.
+- API service needs API/auth/DB/cors/odds variables, plus delivery and magic-link settings.
 - Worker service needs DB/provider/odds/delivery/polling variables.
-- Frontend service needs `VITE_API_BASE_URL` and optional `DEV_MODE`.
+- Frontend service needs `VITE_API_BASE_URL`.
 
 ## Secrets policy
 

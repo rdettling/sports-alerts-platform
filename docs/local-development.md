@@ -35,4 +35,4 @@ Use `make reset` only when you intentionally want to wipe local DB data.
 
 - API root (`/`) returns `404` by design.
 - If `ODDS_ENABLED=false`, games still load but odds columns show empty values.
-- If `DEV_MODE=true`, frontend shows a `Test` tab and API exposes `/alerts/dev/test-email`.
+- Admin-only tools are available in the `Admin` tab and are gated by `users.role='admin'`.

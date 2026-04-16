@@ -2,21 +2,23 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.core.security import create_access_token
 from app.db.models import Game, SentAlert, Team, User
 from app.db.session import SessionLocal
 
 
-def _auth_headers(client, email: str = "dev-alerts@example.com") -> dict[str, str]:
+def _auth_headers(client, email: str = "dev-alerts@example.com", role: str = "user") -> dict[str, str]:
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == email))
         if not user:
-            user = User(email=email)
+            user = User(email=email, role=role)
             db.add(user)
             db.commit()
             db.refresh(user)
+        else:
+            user.role = role
+            db.commit()
         token = create_access_token(subject=str(user.id))
         return {"Authorization": f"Bearer {token}"}
     finally:
@@ -43,26 +45,24 @@ def _create_game(external_game_id: str) -> int:
         db.close()
 
 
-def test_dev_test_email_endpoint_hidden_when_not_in_dev_mode(client, monkeypatch):
-    headers = _auth_headers(client)
-    monkeypatch.setattr(settings, "dev_mode", False)
+def test_admin_test_email_endpoint_forbidden_for_non_admin(client):
+    headers = _auth_headers(client, role="user")
     game_id = _create_game("dev-hidden-game")
 
     response = client.post(
-        "/alerts/dev/test-email",
+        "/alerts/admin/test-email",
         headers=headers,
         json={"alert_type": "game_start", "game_id": game_id},
     )
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
-def test_dev_test_email_endpoint_creates_pending_alert(client, monkeypatch):
-    monkeypatch.setattr(settings, "dev_mode", True)
-    headers = _auth_headers(client, email="dev-alerts-on@example.com")
+def test_admin_test_email_endpoint_creates_pending_alert(client):
+    headers = _auth_headers(client, email="dev-alerts-on@example.com", role="admin")
     game_id = _create_game("dev-enabled-game")
 
     response = client.post(
-        "/alerts/dev/test-email",
+        "/alerts/admin/test-email",
         headers=headers,
         json={"alert_type": "final_result", "game_id": game_id},
     )

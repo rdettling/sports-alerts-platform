@@ -48,7 +48,6 @@ Important behavior:
 Required frontend env:
 
 - `VITE_API_BASE_URL=https://<your-api-domain>`
-- Optional: `DEV_MODE=false`
 
 ## 4) Neon Postgres
 
@@ -65,7 +64,7 @@ Required frontend env:
 
 1. Open frontend and request a magic-link sign-in.
 2. Confirm games/following/alerts tabs load.
-3. If signed in as an admin user (`users.role='admin'`), confirm the `Ops` tab loads.
+3. If signed in as an admin user (`users.role='admin'`), confirm the `Admin` tab loads.
 4. Confirm API health endpoint is green.
 5. Check worker logs for successful ingest cycles.
-6. If using email delivery, trigger a dev test alert with `DEV_MODE=true` and verify delivery.
+6. If using email delivery, use the admin test-email tools and verify delivery.

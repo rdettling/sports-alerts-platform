@@ -65,7 +65,7 @@ export function DevToolsView({ token }: { token: string }) {
   return (
     <section className="card">
       <div className="following-header">
-        <h2>Dev Tools</h2>
+        <h2>Test Email Tools</h2>
         <button className="btn-secondary" disabled={loading || busyAlertType !== null} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
           Refresh
         </button>

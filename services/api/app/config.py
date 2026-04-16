@@ -31,7 +31,4 @@ class Settings(BaseSettings):
     odds_api_cache_seconds: int
     odds_enabled: bool
     odds_refresh_seconds: int
-    dev_mode: bool
-
-
 settings = Settings()

@@ -5,10 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.config import settings
 from app.db.models import Game, SentAlert, Team, User, UserGameFollow
 from app.db.session import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -58,15 +57,12 @@ def get_alert_history(
     return AlertHistoryResponse(items=items)
 
 
-@router.post("/dev/test-email", response_model=DevTestAlertResponse)
-def create_dev_test_alert(
+@router.post("/admin/test-email", response_model=DevTestAlertResponse)
+def create_admin_test_alert(
     payload: DevTestAlertRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> DevTestAlertResponse:
-    if not settings.dev_mode:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-
     allowed_alert_types = {"game_start", "close_game_late", "final_result"}
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert type")

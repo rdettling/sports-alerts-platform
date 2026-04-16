@@ -54,7 +54,7 @@ export function OpsView({ token }: { token: string }) {
   return (
     <section className="card">
       <div className="games-header">
-        <h2>Ops</h2>
+        <h2>Admin</h2>
         <div className="games-toolbar">
           <label>
             Window
@@ -72,6 +72,7 @@ export function OpsView({ token }: { token: string }) {
 
       {!loading && !error && summary ? (
         <>
+          <h3>API usage</h3>
           <ul className="list">
             <li>
               <span>Total calls</span>

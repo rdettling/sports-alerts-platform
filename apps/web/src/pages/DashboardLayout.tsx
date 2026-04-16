@@ -1,12 +1,10 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-import { AlertsView, DevToolsView, FollowingView, GamesView, OpsView } from "./DashboardViews";
+import { AdminView, AlertsView, FollowingView, GamesView } from "./DashboardViews";
 
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
-  const devModeValue = ((import.meta.env.DEV_MODE ?? import.meta.env.VITE_DEV_MODE ?? "") as string).toLowerCase();
-  const isDevMode = devModeValue === "true" || devModeValue === "1" || devModeValue === "yes" || devModeValue === "on";
   if (!user || !token) {
     return <Navigate to="/auth" replace />;
   }
@@ -33,13 +31,8 @@ export function DashboardLayout() {
           Alerts
         </NavLink>
         {isAdmin ? (
-          <NavLink to="ops" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-            Ops
-          </NavLink>
-        ) : null}
-        {isDevMode ? (
-          <NavLink to="test" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
-            Test
+          <NavLink to="admin" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+            Admin
           </NavLink>
         ) : null}
       </nav>
@@ -49,8 +42,9 @@ export function DashboardLayout() {
         <Route path="games" element={<GamesView token={token} />} />
         <Route path="following" element={<FollowingView token={token} />} />
         <Route path="alerts" element={<AlertsView token={token} />} />
-        <Route path="ops" element={isAdmin ? <OpsView token={token} /> : <Navigate to="games" replace />} />
-        {isDevMode ? <Route path="test" element={<DevToolsView token={token} />} /> : null}
+        <Route path="admin" element={isAdmin ? <AdminView token={token} /> : <Navigate to="games" replace />} />
+        <Route path="ops" element={<Navigate to="admin" replace />} />
+        <Route path="test" element={<Navigate to="admin" replace />} />
       </Routes>
     </div>
   );
