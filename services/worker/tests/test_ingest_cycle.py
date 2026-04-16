@@ -5,14 +5,12 @@ from sqlalchemy import select
 from app.db.models import Game, GameOddsCurrent, IngestRun, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
 from worker.ingest import run_ingest_cycle
 from worker.odds import MoneylineOdds
-from worker.providers.base import ProviderGame
+from worker.planner import FetchPlan
+from worker.providers.base import EspnRequest, ProviderGame
 
 
 class SuccessProvider:
-    def __init__(self):
-        self.fetch_updates_calls = 0
-
-    def fetch_schedule(self):
+    def fetch_games(self, requests):
         return [
             ProviderGame(
                 external_game_id="game-1",
@@ -23,27 +21,20 @@ class SuccessProvider:
             )
         ]
 
-    def fetch_game_updates(self, external_game_ids):
-        self.fetch_updates_calls += 1
-        return []
-
-    def expected_schedule_call_count(self):
-        return 3
-
-    def expected_updates_call_count(self, external_game_ids):
-        return 3 if external_game_ids else 0
+    def expected_call_count(self, requests):
+        return len(requests)
 
 
 class FailingProvider:
-    def fetch_schedule(self):
+    def fetch_games(self, requests):
         raise RuntimeError("boom")
 
-    def fetch_game_updates(self, external_game_ids):
-        return []
+    def expected_call_count(self, requests):
+        return len(requests)
 
 
 class LiveCloseProvider:
-    def fetch_schedule(self):
+    def fetch_games(self, requests):
         return [
             ProviderGame(
                 external_game_id="game-live",
@@ -59,12 +50,12 @@ class LiveCloseProvider:
             )
         ]
 
-    def fetch_game_updates(self, external_game_ids):
-        return []
+    def expected_call_count(self, requests):
+        return len(requests)
 
 
 class FinalProvider:
-    def fetch_schedule(self):
+    def fetch_games(self, requests):
         return [
             ProviderGame(
                 external_game_id="game-final",
@@ -80,8 +71,8 @@ class FinalProvider:
             )
         ]
 
-    def fetch_game_updates(self, external_game_ids):
-        return []
+    def expected_call_count(self, requests):
+        return len(requests)
 
 
 class RepeatMatchupProvider:
@@ -89,7 +80,7 @@ class RepeatMatchupProvider:
         self.first_start = first_start
         self.second_start = second_start
 
-    def fetch_schedule(self):
+    def fetch_games(self, requests):
         return [
             ProviderGame(
                 external_game_id="game-repeat-1",
@@ -107,8 +98,8 @@ class RepeatMatchupProvider:
             ),
         ]
 
-    def fetch_game_updates(self, external_game_ids):
-        return []
+    def expected_call_count(self, requests):
+        return len(requests)
 
 
 def test_ingest_run_success(db_session):
@@ -118,15 +109,14 @@ def test_ingest_run_success(db_session):
     assert result["games_checked"] == 1
     assert result["games_updated"] == 1
     assert result["next_poll_seconds"] >= 30
-    assert provider.fetch_updates_calls == 0
 
     runs = db_session.scalars(select(IngestRun)).all()
     assert len(runs) == 1
     assert runs[0].status == "success"
-    assert runs[0].expected_espn_calls == 3
+    assert runs[0].expected_espn_calls == 1
     assert runs[0].expected_odds_calls in {0, 1}
     assert runs[0].actual_espn_calls == 0
-    assert runs[0].poll_mode in {"live", "soon", "day", "idle"}
+    assert runs[0].poll_mode in {"live", "active", "idle"}
 
     games = db_session.scalars(select(Game)).all()
     assert len(games) == 1
@@ -170,7 +160,7 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
-    assert all(row.delivery_status == "sent" for row in sent)
+    assert all(row.delivery_status == "pending" for row in sent)
 
 
 def test_ingest_creates_final_result_alert(db_session):
@@ -193,10 +183,22 @@ def test_ingest_creates_final_result_alert(db_session):
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
-    assert sent[0].delivery_status == "sent"
+    assert sent[0].delivery_status == "pending"
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "worker.ingest.build_fetch_plan",
+        lambda db: FetchPlan(
+            mode="active",
+            next_ingest_seconds=300,
+            espn_requests=[EspnRequest(date="20260416")],
+            odds_refresh=True,
+            odds_refresh_reason="forced_for_test",
+            expected_espn_calls=1,
+            expected_odds_calls=1,
+        ),
+    )
     monkeypatch.setattr(
         "worker.ingest.fetch_nba_odds_index",
         lambda: {
@@ -225,6 +227,18 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
+    monkeypatch.setattr(
+        "worker.ingest.build_fetch_plan",
+        lambda db: FetchPlan(
+            mode="active",
+            next_ingest_seconds=300,
+            espn_requests=[EspnRequest(date="20260416"), EspnRequest(date="20260417")],
+            odds_refresh=True,
+            odds_refresh_reason="forced_for_test",
+            expected_espn_calls=2,
+            expected_odds_calls=1,
+        ),
+    )
 
     monkeypatch.setattr(
         "worker.ingest.fetch_nba_odds_index",
@@ -271,6 +285,18 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
+    monkeypatch.setattr(
+        "worker.ingest.build_fetch_plan",
+        lambda db: FetchPlan(
+            mode="active",
+            next_ingest_seconds=300,
+            espn_requests=[EspnRequest(date="20260416"), EspnRequest(date="20260417")],
+            odds_refresh=True,
+            odds_refresh_reason="forced_for_test",
+            expected_espn_calls=2,
+            expected_odds_calls=1,
+        ),
+    )
 
     monkeypatch.setattr(
         "worker.ingest.fetch_nba_odds_index",
@@ -302,7 +328,18 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
 
 
 def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypatch):
-    monkeypatch.setattr("worker.ingest._should_refresh_odds", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "worker.ingest.build_fetch_plan",
+        lambda db: FetchPlan(
+            mode="active",
+            next_ingest_seconds=300,
+            espn_requests=[EspnRequest(date="20260416")],
+            odds_refresh=True,
+            odds_refresh_reason="forced_for_test",
+            expected_espn_calls=1,
+            expected_odds_calls=1,
+        ),
+    )
     monkeypatch.setattr("worker.ingest.fetch_nba_odds_index", lambda: {})
 
     result = run_ingest_cycle(SuccessProvider())

@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import create_engine, func, or_, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.db.models import (
     ApiCallEvent,
@@ -17,16 +17,14 @@ from app.db.models import (
     UserGameFollow,
     UserTeamFollow,
 )
-from worker.delivery import process_pending_alerts
+from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
+from worker.planner import build_fetch_plan
 from worker.providers.base import NbaProvider, ProviderGame
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
-
-engine = create_engine(settings.database_url, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, class_=Session)
 
 
 def _team_id_map(db: Session) -> dict[str, int]:
@@ -291,80 +289,10 @@ def _select_best_odds_for_game(
     return closest
 
 
-def _poll_mode_and_interval_seconds(db: Session) -> tuple[str, int]:
-    now = datetime.now(timezone.utc)
-    live_count = db.scalar(
-        select(func.count(Game.id)).where(
-            Game.league == "NBA",
-            Game.is_final.is_(False),
-            Game.status.in_(("in_progress", "live")),
-        )
-    ) or 0
-    if live_count > 0:
-        return "live", max(15, settings.worker_poll_interval_live_seconds)
-
-    soon_count = db.scalar(
-        select(func.count(Game.id)).where(
-            Game.league == "NBA",
-            Game.is_final.is_(False),
-            Game.status == "scheduled",
-            Game.scheduled_start_time >= now - timedelta(minutes=30),
-            Game.scheduled_start_time <= now + timedelta(hours=2),
-        )
-    ) or 0
-    if soon_count > 0:
-        return "soon", max(30, settings.worker_poll_interval_soon_seconds)
-
-    same_day_count = db.scalar(
-        select(func.count(Game.id)).where(
-            Game.league == "NBA",
-            Game.is_final.is_(False),
-            Game.scheduled_start_time >= now - timedelta(hours=12),
-            Game.scheduled_start_time <= now + timedelta(hours=24),
-        )
-    ) or 0
-    if same_day_count > 0:
-        return "day", max(60, settings.worker_poll_interval_day_seconds)
-
-    return "idle", max(60, settings.worker_poll_interval_idle_seconds)
-
-
-def _should_refresh_odds(db: Session, all_games: list[ProviderGame]) -> bool:
-    if not settings.odds_enabled:
-        return False
-
-    now = datetime.now(timezone.utc)
-    has_relevant_games = any(
-        (
-            game.status in ("in_progress", "live")
-            or (
-                game.status == "scheduled"
-                and game.scheduled_start_time >= now - timedelta(hours=1)
-                and game.scheduled_start_time <= now + timedelta(hours=24)
-            )
-        )
-        for game in all_games
-    )
-    if not has_relevant_games:
-        return False
-
-    last_fetched = db.scalar(
-        select(func.max(GameOddsCurrent.fetched_at)).where(
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
-        )
-    )
-    if last_fetched is None:
-        return True
-
-    fetched_at = last_fetched if last_fetched.tzinfo else last_fetched.replace(tzinfo=timezone.utc)
-    return (now - fetched_at).total_seconds() >= settings.odds_refresh_seconds
-
-
 def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     db = SessionLocal()
-    poll_mode, _ = _poll_mode_and_interval_seconds(db)
-    ingest_run = IngestRun(status="running", games_checked=0, games_updated=0, poll_mode=poll_mode)
+    plan = build_fetch_plan(db)
+    ingest_run = IngestRun(status="running", games_checked=0, games_updated=0, poll_mode=plan.mode)
     db.add(ingest_run)
     db.commit()
     db.refresh(ingest_run)
@@ -375,30 +303,7 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     try:
         team_map = _team_id_map(db)
         team_names = _team_name_map(db)
-        expected_schedule_calls = 0
-        if hasattr(provider, "expected_schedule_call_count"):
-            expected_schedule_calls = int(provider.expected_schedule_call_count())  # type: ignore[attr-defined]
-        schedule = provider.fetch_schedule()
-        tracked_game_ids = db.scalars(
-            select(Game.external_game_id).where(
-                Game.league == "NBA",
-                Game.is_final.is_(False),
-                or_(
-                    Game.status.in_(("in_progress", "live")),
-                    Game.scheduled_start_time >= datetime.now(timezone.utc) - timedelta(hours=6),
-                ),
-            )
-        ).all()
-        schedule_game_ids = {game.external_game_id for game in schedule}
-        missing_tracked_ids = [game_id for game_id in tracked_game_ids if game_id and game_id not in schedule_game_ids]
-        expected_update_calls = 0
-        if hasattr(provider, "expected_updates_call_count"):
-            expected_update_calls = int(provider.expected_updates_call_count(missing_tracked_ids))  # type: ignore[attr-defined]
-        updates = provider.fetch_game_updates(missing_tracked_ids) if missing_tracked_ids else []
-        games_by_id = {game.external_game_id: game for game in schedule}
-        for game in updates:
-            games_by_id[game.external_game_id] = game
-        all_games = list(games_by_id.values())
+        all_games = provider.fetch_games(plan.espn_requests)
 
         checked = len(all_games)
         updated = 0
@@ -420,9 +325,7 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                     game_key_by_id[game_id] = game_key(home_name, away_name)
 
         odds_by_matchup: dict[tuple[str, str], list[MoneylineOdds]] = {}
-        should_refresh_odds = _should_refresh_odds(db, all_games)
-        expected_odds_calls = 1 if should_refresh_odds else 0
-        if should_refresh_odds:
+        if plan.odds_refresh:
             odds_by_matchup = fetch_nba_odds_index()
 
         for game_id, key in game_key_by_id.items():
@@ -445,7 +348,6 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                 continue
             alert_records_created += _evaluate_and_record_alerts(db, game)
 
-        delivery_sent, delivery_failed = process_pending_alerts(db, ingest_run_id=ingest_run.id)
         actual_espn_calls = db.scalar(
             select(func.count(ApiCallEvent.id)).where(
                 ApiCallEvent.ingest_run_id == ingest_run.id,
@@ -458,20 +360,21 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
                 ApiCallEvent.provider == "odds",
             )
         ) or 0
-        ingest_run.expected_espn_calls = expected_schedule_calls + expected_update_calls
-        ingest_run.expected_odds_calls = expected_odds_calls
+        expected_espn_calls = provider.expected_call_count(plan.espn_requests)
+        ingest_run.expected_espn_calls = expected_espn_calls
+        ingest_run.expected_odds_calls = plan.expected_odds_calls
         ingest_run.actual_espn_calls = int(actual_espn_calls)
         ingest_run.actual_odds_calls = int(actual_odds_calls)
         db.commit()
         logger.info(
-            "Ingest cycle checked=%s updated=%s tracked=%s odds_updated=%s alerts_created=%s delivery_sent=%s delivery_failed=%s",
+            "Ingest cycle mode=%s checked=%s updated=%s odds_refresh=%s(%s) odds_updated=%s alerts_created=%s",
+            plan.mode,
             checked,
             updated,
-            len(tracked_game_ids),
+            plan.odds_refresh,
+            plan.odds_refresh_reason,
             odds_updated,
             alert_records_created,
-            delivery_sent,
-            delivery_failed,
         )
 
         ingest_run.status = "success"
@@ -479,9 +382,13 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         ingest_run.games_updated = updated
         ingest_run.completed_at = datetime.now(timezone.utc)
         db.commit()
-        ingest_run.poll_mode, next_poll = _poll_mode_and_interval_seconds(db)
-        db.commit()
-        return {"status": "success", "games_checked": checked, "games_updated": updated, "next_poll_seconds": next_poll}
+        return {
+            "status": "success",
+            "games_checked": checked,
+            "games_updated": updated,
+            "next_poll_seconds": plan.next_ingest_seconds,
+            "mode": plan.mode,
+        }
     except Exception as exc:
         db.rollback()
         ingest_run.status = "failed"
@@ -493,7 +400,7 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
             "status": "failed",
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": settings.worker_poll_interval_seconds,
+            "next_poll_seconds": settings.ingest_interval_active_seconds,
         }
     finally:
         if hasattr(provider, "set_telemetry_context"):

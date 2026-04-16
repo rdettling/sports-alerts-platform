@@ -57,11 +57,10 @@ setup:
 			'FROM_EMAIL=alerts@livegamealerts.com' \
 			'RESEND_API_KEY=replace-with-resend-api-key' \
 			'RESEND_API_URL=https://api.resend.com/emails' \
-			'WORKER_POLL_INTERVAL_SECONDS=60' \
-			'WORKER_POLL_INTERVAL_LIVE_SECONDS=30' \
-			'WORKER_POLL_INTERVAL_SOON_SECONDS=120' \
-			'WORKER_POLL_INTERVAL_DAY_SECONDS=300' \
-			'WORKER_POLL_INTERVAL_IDLE_SECONDS=3600' \
+			'INGEST_INTERVAL_LIVE_SECONDS=60' \
+			'INGEST_INTERVAL_ACTIVE_SECONDS=300' \
+			'INGEST_INTERVAL_IDLE_SECONDS=3600' \
+			'DELIVERY_TICK_SECONDS=30' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \

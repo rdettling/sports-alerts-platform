@@ -48,13 +48,10 @@ function formatDuration(seconds: number | null): string {
 
 function cadenceLabel(pollMode: string | null): string {
   if (pollMode === "live") {
-    return "Live: every 30s";
+    return "Live: every 60s";
   }
-  if (pollMode === "soon") {
-    return "Soon: every 2m";
-  }
-  if (pollMode === "day") {
-    return "Day: every 5m";
+  if (pollMode === "active") {
+    return "Active: every 5m";
   }
   if (pollMode === "idle") {
     return "Idle: every 60m";
@@ -215,7 +212,7 @@ export function OpsView({ token }: { token: string }) {
 
           <section className="admin-panel admin-panel-scroll admin-ingest-panel">
             <h3>Recent ingest cycles</h3>
-            <p className="muted admin-ingest-legend">Modes: Live 30s · Soon 2m · Day 5m · Idle 60m</p>
+            <p className="muted admin-ingest-legend">Modes: Live 60s · Active 5m · Idle 60m</p>
             {ingestSummary ? (
               <div className="admin-ingest-summary-grid">
                 <article className="admin-ingest-summary-item">

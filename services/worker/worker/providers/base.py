@@ -5,6 +5,11 @@ from datetime import datetime
 from typing import Protocol
 
 
+@dataclass(frozen=True)
+class EspnRequest:
+    date: str
+
+
 @dataclass
 class ProviderGame:
     external_game_id: str
@@ -20,6 +25,6 @@ class ProviderGame:
 
 
 class NbaProvider(Protocol):
-    def fetch_schedule(self) -> list[ProviderGame]: ...
+    def fetch_games(self, requests: list[EspnRequest]) -> list[ProviderGame]: ...
 
-    def fetch_game_updates(self, external_game_ids: list[str]) -> list[ProviderGame]: ...
+    def expected_call_count(self, requests: list[EspnRequest]) -> int: ...

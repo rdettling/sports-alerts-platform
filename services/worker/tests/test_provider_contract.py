@@ -1,4 +1,5 @@
 from worker.providers.balldontlie import BallDontLieProvider
+from worker.providers.base import EspnRequest
 
 
 def test_provider_parses_espn_payload_shape():
@@ -25,7 +26,7 @@ def test_provider_parses_espn_payload_shape():
     }
 
     provider = BallDontLieProvider(fetch_json=lambda _: payload)
-    schedule = provider.fetch_schedule()
+    schedule = provider.fetch_games([EspnRequest(date="20260406")])
 
     assert len(schedule) == 1
     game = schedule[0]

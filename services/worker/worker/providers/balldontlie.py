@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+import logging
 from time import monotonic
 from typing import Any, Callable
 
@@ -8,7 +9,9 @@ import httpx
 
 from app.services.api_usage import record_api_call_event
 from sqlalchemy.orm import Session
-from worker.providers.base import NbaProvider, ProviderGame
+from worker.providers.base import EspnRequest, NbaProvider, ProviderGame
+
+logger = logging.getLogger(__name__)
 
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
 ABBR_TO_EXTERNAL_TEAM_ID = {
@@ -131,31 +134,30 @@ class BallDontLieProvider(NbaProvider):
     def _fetch_events_for_dates(self, dates: list[str]) -> list[dict[str, Any]]:
         by_id: dict[str, dict[str, Any]] = {}
         for date in dates:
-            payload = self._fetch_json({"dates": date})
+            try:
+                payload = self._fetch_json({"dates": date})
+            except Exception:  # pragma: no cover - exercised through integration behavior
+                # Keep existing game rows when a targeted request fails; retry next planner tick.
+                # This prevents widening to a broad fallback request in the same cycle.
+                logger.warning("ESPN request failed for date=%s; preserving stale game rows until next cycle", date)
+                continue
             for event in payload.get("events", []):
                 event_id = str(event.get("id"))
                 if event_id:
                     by_id[event_id] = event
         return list(by_id.values())
 
-    def fetch_schedule(self) -> list[ProviderGame]:
-        today = datetime.now(UTC).date()
-        dates = [(today + timedelta(days=offset)).strftime("%Y%m%d") for offset in (-1, 0, 1)]
-        events = self._fetch_events_for_dates(dates)
+    def fetch_games(self, requests: list[EspnRequest]) -> list[ProviderGame]:
+        if not requests:
+            today = datetime.now(UTC).date().strftime("%Y%m%d")
+            request_dates = [today]
+        else:
+            request_dates = sorted({request.date for request in requests})
+        events = self._fetch_events_for_dates(request_dates)
         games = [self._parse_event(event) for event in events]
         return [game for game in games if game]
 
-    def fetch_game_updates(self, external_game_ids: list[str]) -> list[ProviderGame]:
-        if not external_game_ids:
-            return []
-        schedule_games = self.fetch_schedule()
-        wanted_ids = set(external_game_ids)
-        return [game for game in schedule_games if game.external_game_id in wanted_ids]
-
-    def expected_schedule_call_count(self) -> int:
-        return 3
-
-    def expected_updates_call_count(self, external_game_ids: list[str]) -> int:
-        if not external_game_ids:
-            return 0
-        return 3
+    def expected_call_count(self, requests: list[EspnRequest]) -> int:
+        if not requests:
+            return 1
+        return len({request.date for request in requests})
