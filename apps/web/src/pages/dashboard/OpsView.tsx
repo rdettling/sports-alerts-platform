@@ -11,6 +11,50 @@ import {
   type OpsWindow,
 } from "../../api";
 
+type OpsRun = OpsIngestRunsResponse["items"][number];
+
+function relativeTimeLabel(isoTime: string, nowMs: number): string {
+  const diffSeconds = Math.max(0, Math.floor((nowMs - new Date(isoTime).getTime()) / 1000));
+  if (diffSeconds < 60) {
+    return `${diffSeconds}s ago`;
+  }
+  if (diffSeconds < 3600) {
+    return `${Math.floor(diffSeconds / 60)}m ago`;
+  }
+  if (diffSeconds < 86400) {
+    return `${Math.floor(diffSeconds / 3600)}h ago`;
+  }
+  return `${Math.floor(diffSeconds / 86400)}d ago`;
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null || Number.isNaN(seconds)) {
+    return "n/a";
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  return `${minutes}m ${remaining}s`;
+}
+
+function cadenceLabel(pollMode: string | null): string {
+  if (pollMode === "live") {
+    return "Live: every 30s";
+  }
+  if (pollMode === "soon") {
+    return "Soon: every 2m";
+  }
+  if (pollMode === "day") {
+    return "Day: every 5m";
+  }
+  if (pollMode === "idle") {
+    return "Idle: every 60m";
+  }
+  return "Cadence unavailable";
+}
+
 export function OpsView({ token }: { token: string }) {
   const [window, setWindow] = useState<OpsWindow>("24h");
   const [summary, setSummary] = useState<OpsSummaryResponse | null>(null);
@@ -51,11 +95,36 @@ export function OpsView({ token }: { token: string }) {
       .slice(0, 10);
   }, [timeseries]);
 
+  const ingestSummary = useMemo(() => {
+    const runs = ingestRuns?.items ?? [];
+    if (runs.length === 0) {
+      return null;
+    }
+
+    const nowMs = Date.now();
+    const in24h = runs.filter((run) => nowMs - new Date(run.started_at).getTime() <= 24 * 3600 * 1000);
+    const denominator = in24h.length > 0 ? in24h.length : runs.length;
+    const successes = (in24h.length > 0 ? in24h : runs).filter((run) => run.status === "success").length;
+    const successRate = Math.round((successes / denominator) * 100);
+    const durations = runs.map((run) => run.cycle_duration_seconds).filter((value): value is number => value !== null);
+    const averageDuration = durations.length > 0 ? Math.round(durations.reduce((acc, value) => acc + value, 0) / durations.length) : null;
+    const lastFailure = runs.find((run) => run.status !== "success");
+    const latest = runs[0];
+
+    return {
+      latest,
+      successRate,
+      averageDuration,
+      lastFailure,
+      nowMs,
+    };
+  }, [ingestRuns]);
+
   return (
-    <section className="card">
-      <div className="games-header">
+    <section className="card admin-ops-card">
+      <div className="admin-ops-header">
         <h2>Admin</h2>
-        <div className="games-toolbar">
+        <div className="admin-toolbar">
           <label>
             Window
             <select value={window} onChange={(event) => setWindow(event.target.value as OpsWindow)}>
@@ -71,70 +140,119 @@ export function OpsView({ token }: { token: string }) {
       {error ? <p className="error">{error}</p> : null}
 
       {!loading && !error && summary ? (
-        <>
-          <h3>API usage</h3>
-          <ul className="list">
-            <li>
-              <span>Total calls</span>
-              <strong>{summary.totals.actual_calls}</strong>
-            </li>
-            <li>
-              <span>Success</span>
-              <strong>{summary.totals.success_calls}</strong>
-            </li>
-            <li>
-              <span>Errors</span>
-              <strong>{summary.totals.error_calls}</strong>
-            </li>
-            <li>
-              <span>Rate limited</span>
-              <strong>{summary.totals.rate_limited_calls}</strong>
-            </li>
-          </ul>
+        <div className="admin-ops-content">
+          <section className="admin-panel">
+            <h3>API usage</h3>
+            <div className="admin-kpi-grid">
+              <article className="admin-kpi-card">
+                <span>Total calls</span>
+                <strong>{summary.totals.actual_calls}</strong>
+              </article>
+              <article className="admin-kpi-card">
+                <span>Success</span>
+                <strong>{summary.totals.success_calls}</strong>
+              </article>
+              <article className="admin-kpi-card">
+                <span>Errors</span>
+                <strong>{summary.totals.error_calls}</strong>
+              </article>
+              <article className="admin-kpi-card">
+                <span>Rate limited</span>
+                <strong>{summary.totals.rate_limited_calls}</strong>
+              </article>
+            </div>
+          </section>
 
-          <h3>By provider</h3>
-          <ul className="list">
-            {summary.by_provider.map((provider) => (
-              <li key={provider.provider}>
-                <span>
-                  {provider.provider} (expected: {provider.expected_calls ?? "n/a"})
-                </span>
-                <span>
-                  actual {provider.actual_calls} | err {provider.error_calls} | 429 {provider.rate_limited_calls}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="admin-ops-mid-grid">
+            <section className="admin-panel admin-panel-scroll">
+              <h3>By provider</h3>
+              <div className="admin-scroll-body">
+                <ul className="list">
+                  {summary.by_provider.map((provider) => (
+                    <li key={provider.provider}>
+                      <span>
+                        {provider.provider} (expected: {provider.expected_calls ?? "n/a"})
+                      </span>
+                      <span>
+                        actual {provider.actual_calls} | err {provider.error_calls} | 429 {provider.rate_limited_calls}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
 
-          <h3>Latest hourly points</h3>
-          <ul className="list">
-            {latestByProvider.map((point) => (
-              <li key={`${point.bucket_start}-${point.provider}`}>
-                <span>
-                  {point.provider} @ {new Date(point.bucket_start).toLocaleString()}
-                </span>
-                <span>
-                  expected {point.expected_calls ?? "n/a"} | actual {point.actual_calls}
-                </span>
-              </li>
-            ))}
-          </ul>
+            <section className="admin-panel admin-panel-scroll">
+              <h3>Latest hourly points</h3>
+              <div className="admin-scroll-body">
+                <ul className="list">
+                  {latestByProvider.map((point) => (
+                    <li key={`${point.bucket_start}-${point.provider}`}>
+                      <span>
+                        {point.provider} @ {new Date(point.bucket_start).toLocaleString()}
+                      </span>
+                      <span>
+                        expected {point.expected_calls ?? "n/a"} | actual {point.actual_calls}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          </div>
 
-          <h3>Ingest runs</h3>
-          <ul className="list">
-            {(ingestRuns?.items ?? []).map((run) => (
-              <li key={run.ingest_run_id}>
-                <span>
-                  #{run.ingest_run_id} {run.status} ({run.poll_mode ?? "n/a"})
-                </span>
-                <span>
-                  ESPN {run.actual_espn_calls}/{run.expected_espn_calls} | Odds {run.actual_odds_calls}/
-                  {run.expected_odds_calls}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
+          <section className="admin-panel admin-panel-scroll admin-ingest-panel">
+            <h3>Recent ingest cycles</h3>
+            <p className="muted admin-ingest-legend">Modes: Live 30s · Soon 2m · Day 5m · Idle 60m</p>
+            {ingestSummary ? (
+              <div className="admin-ingest-summary-grid">
+                <article className="admin-ingest-summary-item">
+                  <span>Last cycle</span>
+                  <strong>{relativeTimeLabel(ingestSummary.latest.started_at, ingestSummary.nowMs)}</strong>
+                </article>
+                <article className="admin-ingest-summary-item">
+                  <span>Success rate (24h)</span>
+                  <strong>{ingestSummary.successRate}%</strong>
+                </article>
+                <article className="admin-ingest-summary-item">
+                  <span>Avg duration</span>
+                  <strong>{formatDuration(ingestSummary.averageDuration)}</strong>
+                </article>
+                <article className="admin-ingest-summary-item">
+                  <span>Last failure</span>
+                  <strong>
+                    {ingestSummary.lastFailure
+                      ? relativeTimeLabel(ingestSummary.lastFailure.started_at, ingestSummary.nowMs)
+                      : "none"}
+                  </strong>
+                </article>
+              </div>
+            ) : null}
+            <div className="admin-scroll-body">
+              <ul className="list admin-ingest-list">
+                {(ingestRuns?.items ?? []).map((run: OpsRun) => (
+                  <li key={run.ingest_run_id}>
+                    <div className="admin-ingest-main">
+                      <span className="admin-ingest-time">{relativeTimeLabel(run.started_at, Date.now())}</span>
+                      <span className={`admin-pill ${run.status === "success" ? "admin-pill-success" : "admin-pill-fail"}`}>
+                        {run.status}
+                      </span>
+                      <span className="admin-pill admin-pill-neutral">{run.poll_mode ?? "n/a"}</span>
+                      <span className="muted">{cadenceLabel(run.poll_mode)}</span>
+                    </div>
+                    <div className="admin-ingest-meta">
+                      <span>ESPN calls {run.actual_espn_calls}/{run.expected_espn_calls}</span>
+                      <span>Odds calls {run.actual_odds_calls}/{run.expected_odds_calls}</span>
+                      <span>Games changed {run.games_updated}/{run.games_checked}</span>
+                      <span>Duration {formatDuration(run.cycle_duration_seconds)}</span>
+                      <span className="muted">run #{run.ingest_run_id}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </div>
       ) : null}
     </section>
   );

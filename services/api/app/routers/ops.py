@@ -190,8 +190,15 @@ def api_usage_ingest_runs(
                 ingest_run_id=row.id,
                 started_at=row.started_at,
                 completed_at=row.completed_at,
+                cycle_duration_seconds=(
+                    int((row.completed_at - row.started_at).total_seconds())
+                    if row.completed_at is not None and row.started_at is not None
+                    else None
+                ),
                 status=row.status,
                 poll_mode=row.poll_mode,
+                games_checked=row.games_checked,
+                games_updated=row.games_updated,
                 expected_espn_calls=row.expected_espn_calls,
                 actual_espn_calls=row.actual_espn_calls,
                 expected_odds_calls=row.expected_odds_calls,

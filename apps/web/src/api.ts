@@ -128,8 +128,11 @@ export type OpsIngestRunsResponse = {
     ingest_run_id: number;
     started_at: string;
     completed_at: string | null;
+    cycle_duration_seconds: number | null;
     status: string;
     poll_mode: string | null;
+    games_checked: number;
+    games_updated: number;
     expected_espn_calls: number;
     actual_espn_calls: number;
     expected_odds_calls: number;
@@ -273,7 +276,7 @@ export function listAlertHistory(
 
 export function sendDevTestEmail(
   token: string,
-  payload: { alert_type: AlertType; game_id?: number },
+  payload: { alert_type: AlertType },
 ): Promise<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }> {
   return request<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }>(
     "/alerts/admin/test-email",

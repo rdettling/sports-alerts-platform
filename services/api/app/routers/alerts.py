@@ -5,12 +5,27 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import Game, SentAlert, Team, User, UserGameFollow
+from app.db.models import Game, SentAlert, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
+DEFAULT_TEST_AWAY_ABBR = "ATL"
+DEFAULT_TEST_HOME_ABBR = "BOS"
+
+
+def _resolve_admin_test_teams(db: Session) -> tuple[Team, Team]:
+    teams = db.scalars(select(Team).order_by(Team.id.asc())).all()
+    if len(teams) < 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough teams available for test alerts")
+
+    by_abbr = {team.abbreviation.upper(): team for team in teams}
+    away = by_abbr.get(DEFAULT_TEST_AWAY_ABBR)
+    home = by_abbr.get(DEFAULT_TEST_HOME_ABBR)
+    if away and home and away.id != home.id:
+        return away, home
+    return teams[0], teams[1]
 
 
 @router.get("/history", response_model=AlertHistoryResponse)
@@ -67,25 +82,22 @@ def create_admin_test_alert(
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert type")
 
-    target_game: Game | None = None
-    if payload.game_id is not None:
-        target_game = db.get(Game, payload.game_id)
-        if not target_game:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
-    else:
-        followed_game_id = db.scalar(
-            select(UserGameFollow.game_id)
-            .where(UserGameFollow.user_id == current_user.id)
-            .order_by(UserGameFollow.id.desc())
-            .limit(1)
-        )
-        if followed_game_id:
-            target_game = db.get(Game, followed_game_id)
-        if not target_game:
-            target_game = db.scalar(select(Game).order_by(Game.scheduled_start_time.asc()).limit(1))
-
-    if not target_game:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No games available to create test alert")
+    away_team, home_team = _resolve_admin_test_teams(db)
+    target_game = Game(
+        external_game_id=f"admin-test-game-{uuid4()}",
+        league="NBA",
+        home_team_id=home_team.id,
+        away_team_id=away_team.id,
+        scheduled_start_time=datetime.now(timezone.utc) + timedelta(minutes=30),
+        status="scheduled",
+        home_score=None,
+        away_score=None,
+        period=None,
+        clock=None,
+        is_final=False,
+    )
+    db.add(target_game)
+    db.flush()
 
     sent_alert = SentAlert(
         user_id=current_user.id,

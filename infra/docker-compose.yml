@@ -88,7 +88,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    command: npm run dev -- --host 0.0.0.0 --port 5173
+    command: sh -c "rm -rf /app/apps/web/node_modules/.vite && npm ci --include=optional && npm run dev -- --host 0.0.0.0 --port 5173"
 
 volumes:
   postgres_data:

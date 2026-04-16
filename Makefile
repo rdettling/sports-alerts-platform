@@ -6,7 +6,7 @@ ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 ESSENTIAL_ENV_VARS := API_HOST API_PORT POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT VITE_API_BASE_URL
 
-.PHONY: help setup up rebuild down reset logs test _test-api _test-worker _test-web _check-docker _check-env
+.PHONY: help setup up rebuild down reset logs test web web-fix _test-api _test-worker _test-web _check-docker _check-env
 
 help:
 	@echo "Sports Alerts Platform"
@@ -17,6 +17,8 @@ help:
 	@echo "  make down       Stop stack"
 	@echo "  make reset      Stop stack and wipe volumes"
 	@echo "  make logs       Tail logs (all services, or SERVICE=api)"
+	@echo "  make web        Recreate only web service"
+	@echo "  make web-fix    Repair web node_modules and recreate web"
 	@echo "  make test       Run API + worker + web checks"
 
 setup:
@@ -59,7 +61,7 @@ setup:
 			'WORKER_POLL_INTERVAL_LIVE_SECONDS=30' \
 			'WORKER_POLL_INTERVAL_SOON_SECONDS=120' \
 			'WORKER_POLL_INTERVAL_DAY_SECONDS=300' \
-			'WORKER_POLL_INTERVAL_IDLE_SECONDS=900' \
+			'WORKER_POLL_INTERVAL_IDLE_SECONDS=3600' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \
@@ -89,6 +91,17 @@ reset:
 logs:
 	@$(MAKE) _check-docker
 	$(COMPOSE) logs -f $(SERVICE)
+
+web:
+	@$(MAKE) _check-docker
+	@$(MAKE) _check-env
+	$(COMPOSE) up -d --force-recreate web
+
+web-fix:
+	@$(MAKE) _check-docker
+	@$(MAKE) _check-env
+	$(COMPOSE) run --rm --entrypoint "" web npm ci --include=optional
+	$(COMPOSE) up -d --force-recreate web
 
 test: _test-api _test-worker _test-web
 

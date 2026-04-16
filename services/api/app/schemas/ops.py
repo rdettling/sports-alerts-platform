@@ -56,8 +56,11 @@ class IngestRunUsageOut(BaseModel):
     ingest_run_id: int
     started_at: datetime
     completed_at: datetime | None
+    cycle_duration_seconds: int | None
     status: str
     poll_mode: str | None
+    games_checked: int
+    games_updated: int
     expected_espn_calls: int
     actual_espn_calls: int
     expected_odds_calls: int

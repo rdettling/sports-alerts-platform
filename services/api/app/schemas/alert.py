@@ -23,7 +23,6 @@ class AlertHistoryResponse(BaseModel):
 
 class DevTestAlertRequest(BaseModel):
     alert_type: str
-    game_id: int | None = None
 
 
 class DevTestAlertResponse(BaseModel):
