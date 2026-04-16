@@ -27,6 +27,13 @@ def _team_abbr(team: Team | None, fallback: str) -> str:
     return (team.abbreviation if team and team.abbreviation else fallback).upper()
 
 
+def _team_logo_url(team: Team | None, fallback_abbr: str) -> str:
+    abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
+    if not abbr:
+        return ""
+    return f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr}.png"
+
+
 def _scoreline(game: Game) -> str:
     if game.away_score is None or game.home_score is None:
         return "—"
@@ -69,12 +76,12 @@ def _build_subject(alert: SentAlert, game: Game, home: Team | None, away: Team |
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
     if alert.alert_type == "final_result":
-        return f"[Sports Alerts] Final: {away_abbr} {_scoreline(game)} {home_abbr}"
+        return f"Final · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "game_start":
-        return f"[Sports Alerts] Tip-off: {away_abbr} @ {home_abbr}"
+        return f"Tip-off · {away_abbr} @ {home_abbr}"
     if alert.alert_type == "close_game_late":
-        return f"[Sports Alerts] Close Game: {away_abbr} {_scoreline(game)} {home_abbr}"
-    return f"[Sports Alerts] {ALERT_LABELS.get(alert.alert_type, 'Alert')}: {away_abbr} @ {home_abbr}"
+        return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
+    return f"{ALERT_LABELS.get(alert.alert_type, 'Alert')} · {away_abbr} @ {home_abbr}"
 
 
 def _build_email_content(alert: SentAlert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
@@ -82,6 +89,10 @@ def _build_email_content(alert: SentAlert, game: Game, home: Team | None, away: 
     away_name = away.name if away else f"Team {game.away_team_id}"
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
+    away_logo = _team_logo_url(away, away_abbr)
+    home_logo = _team_logo_url(home, home_abbr)
+    away_score = "—" if game.away_score is None else str(game.away_score)
+    home_score = "—" if game.home_score is None else str(game.home_score)
     alert_label = ALERT_LABELS.get(alert.alert_type, alert.alert_type.replace("_", " ").title())
     primary_line = _primary_status_line(alert, game, away_abbr, home_abbr)
     clock = _format_clock(game)
@@ -94,12 +105,14 @@ def _build_email_content(alert: SentAlert, game: Game, home: Team | None, away: 
     if clock:
         details_parts.append(f"{clock} left")
     details_line = " \u2022 ".join(details_parts)
+    if not details_line:
+        details_line = "Live update"
     sent_at = datetime.now(timezone.utc).strftime("%b %d, %Y %I:%M %p UTC")
 
     return (
         f"Sports Alerts\n"
         f"{alert_label}\n\n"
-        f"{away_abbr} @ {home_abbr}\n"
+        f"{away_abbr} ({away_score}) @ {home_abbr} ({home_score})\n"
         f"{primary_line}\n"
         f"{away_name} at {home_name}\n"
         f"{details_line}\n"
@@ -113,9 +126,27 @@ def _build_email_content(alert: SentAlert, game: Game, home: Team | None, away: 
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #dbe3f1;border-radius:14px;padding:24px;">
             <tr><td style="font-size:14px;font-weight:700;color:#4d5ddb;letter-spacing:0.4px;text-transform:uppercase;">Sports Alerts</td></tr>
             <tr><td style="padding-top:8px;font-size:20px;font-weight:700;color:#121a2f;">{html.escape(alert_label)}</td></tr>
-            <tr><td style="padding-top:16px;font-size:28px;font-weight:800;color:#101934;">{html.escape(away_abbr)} @ {html.escape(home_abbr)}</td></tr>
-            <tr><td style="padding-top:10px;font-size:18px;font-weight:600;color:#1d2a4d;">{html.escape(primary_line)}</td></tr>
-            <tr><td style="padding-top:8px;font-size:15px;color:#5b6784;">{html.escape(away_name)} at {html.escape(home_name)}</td></tr>
+            <tr>
+              <td style="padding-top:14px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #dbe3f1;border-radius:12px;background:#f8fbff;">
+                  <tr>
+                    <td width="44%" align="center" style="padding:14px 8px;">
+                      <img src="{html.escape(away_logo)}" alt="{html.escape(away_abbr)} logo" width="42" height="42" style="display:block;margin:0 auto 8px auto;" />
+                      <div style="font-size:24px;font-weight:800;color:#101934;line-height:1;">{html.escape(away_abbr)}</div>
+                      <div style="padding-top:4px;font-size:28px;font-weight:800;color:#101934;line-height:1;">{html.escape(away_score)}</div>
+                    </td>
+                    <td width="12%" align="center" style="padding:14px 0;font-size:20px;font-weight:700;color:#6b7a90;">@</td>
+                    <td width="44%" align="center" style="padding:14px 8px;">
+                      <img src="{html.escape(home_logo)}" alt="{html.escape(home_abbr)} logo" width="42" height="42" style="display:block;margin:0 auto 8px auto;" />
+                      <div style="font-size:24px;font-weight:800;color:#101934;line-height:1;">{html.escape(home_abbr)}</div>
+                      <div style="padding-top:4px;font-size:28px;font-weight:800;color:#101934;line-height:1;">{html.escape(home_score)}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr><td style="padding-top:12px;font-size:17px;font-weight:600;color:#1d2a4d;">{html.escape(primary_line)}</td></tr>
+            <tr><td style="padding-top:6px;font-size:15px;color:#5b6784;">{html.escape(away_name)} at {html.escape(home_name)}</td></tr>
             <tr><td style="padding-top:4px;font-size:14px;color:#7c89a8;">{html.escape(details_line)}</td></tr>
             <tr><td style="padding-top:20px;font-size:12px;color:#97a2bd;">Sent {html.escape(sent_at)}</td></tr>
           </table>

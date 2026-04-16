@@ -13,6 +13,13 @@ import {
 
 type OpsRun = OpsIngestRunsResponse["items"][number];
 
+function formatCount(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+  return new Intl.NumberFormat().format(value);
+}
+
 function relativeTimeLabel(isoTime: string, nowMs: number): string {
   const diffSeconds = Math.max(0, Math.floor((nowMs - new Date(isoTime).getTime()) / 1000));
   if (diffSeconds < 60) {
@@ -123,7 +130,7 @@ export function OpsView({ token }: { token: string }) {
   return (
     <section className="card admin-ops-card">
       <div className="admin-ops-header">
-        <h2>Admin</h2>
+        <h2>Admin Overview</h2>
         <div className="admin-toolbar">
           <label>
             Window
@@ -169,13 +176,16 @@ export function OpsView({ token }: { token: string }) {
               <div className="admin-scroll-body">
                 <ul className="list">
                   {summary.by_provider.map((provider) => (
-                    <li key={provider.provider}>
-                      <span>
-                        {provider.provider} (expected: {provider.expected_calls ?? "n/a"})
-                      </span>
-                      <span>
-                        actual {provider.actual_calls} | err {provider.error_calls} | 429 {provider.rate_limited_calls}
-                      </span>
+                    <li key={provider.provider} className="admin-metric-row">
+                      <div className="admin-metric-main">
+                        <span className="admin-metric-title">{provider.provider}</span>
+                        <span className="admin-metric-subtitle">expected {formatCount(provider.expected_calls)}</span>
+                      </div>
+                      <div className="admin-metric-values">
+                        <span className="admin-metric-pill">actual {formatCount(provider.actual_calls)}</span>
+                        <span className="admin-metric-pill">errors {formatCount(provider.error_calls)}</span>
+                        <span className="admin-metric-pill">rate-limited {formatCount(provider.rate_limited_calls)}</span>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -187,13 +197,15 @@ export function OpsView({ token }: { token: string }) {
               <div className="admin-scroll-body">
                 <ul className="list">
                   {latestByProvider.map((point) => (
-                    <li key={`${point.bucket_start}-${point.provider}`}>
-                      <span>
-                        {point.provider} @ {new Date(point.bucket_start).toLocaleString()}
-                      </span>
-                      <span>
-                        expected {point.expected_calls ?? "n/a"} | actual {point.actual_calls}
-                      </span>
+                    <li key={`${point.bucket_start}-${point.provider}`} className="admin-metric-row">
+                      <div className="admin-metric-main">
+                        <span className="admin-metric-title">{point.provider}</span>
+                        <span className="admin-metric-subtitle">{new Date(point.bucket_start).toLocaleString()}</span>
+                      </div>
+                      <div className="admin-metric-values">
+                        <span className="admin-metric-pill">expected {formatCount(point.expected_calls)}</span>
+                        <span className="admin-metric-pill">actual {formatCount(point.actual_calls)}</span>
+                      </div>
                     </li>
                   ))}
                 </ul>

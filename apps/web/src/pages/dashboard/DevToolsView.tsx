@@ -72,7 +72,7 @@ export function DevToolsView({ token }: { token: string }) {
   return (
     <section className="card admin-tools-card">
       <div className="following-header admin-tools-header">
-        <h2>Test Email Tools</h2>
+        <h2>Admin Tools</h2>
       </div>
       <div className="admin-tools-body">
         <p className="muted">Each action generates a synthetic test game (default ATL @ BOS) and queues one pending alert for your user.</p>
