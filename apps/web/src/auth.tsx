@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { me, startMagicLink, verifyMagicLink } from "./api";
+import { me, startMagicLink, verifyMagicLink, type UserProfile } from "./api";
 
-type User = { id: number; email: string; created_at: string };
+type User = UserProfile;
 
 type AuthContextType = {
   isLoading: boolean;

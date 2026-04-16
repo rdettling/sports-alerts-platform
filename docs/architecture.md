@@ -2,8 +2,8 @@
 
 ## Services
 
-- **Web** (`apps/web`): React UI for auth, games, following, and alerts.
-- **API** (`services/api`): FastAPI HTTP service for auth, reads, follows, and preference updates.
+- **Web** (`apps/web`): React UI for magic-link auth, games, following, alerts, and admin-only ops.
+- **API** (`services/api`): FastAPI HTTP service for auth, reads, follows, preferences, and ops usage endpoints.
 - **Worker** (`services/worker`): background ingest + rule evaluation + delivery.
 - **Postgres**: system of record for users, follows, games, preferences, odds, and sent alerts.
 
@@ -19,6 +19,7 @@
 ## Core Data Model
 
 - `users`
+- `email_login_tokens`
 - `teams`
 - `games`
 - `user_team_follows`
@@ -27,10 +28,13 @@
 - `sent_alerts` (dedupe + delivery status)
 - `ingest_runs` (worker cycle observability)
 - `game_odds_current` (latest matched odds per game)
+- `api_call_events` (raw outbound API call telemetry)
+- `api_call_rollups_hourly` (hourly aggregates for ops dashboards)
 
 ## Key Design Decisions
 
 - Separate worker service avoids blocking request/response API paths.
 - Rule evaluation is stateful and idempotent via dedupe keys.
 - Odds are cached/persisted; UI reads from DB, not direct provider calls.
+- RBAC is DB-backed (`users.role`) and admin-only ops routes are API-enforced.
 - Env config is strict: missing required vars fail fast at startup.

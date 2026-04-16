@@ -74,7 +74,8 @@ def start_magic_link(
     db.commit()
 
     magic_link = _make_magic_link(raw_token)
-    send_magic_link_email(email, magic_link)
+    send_magic_link_email(email, magic_link, db=db)
+    db.commit()
     return MagicLinkStartResponse(message=NEUTRAL_START_MESSAGE)
 
 

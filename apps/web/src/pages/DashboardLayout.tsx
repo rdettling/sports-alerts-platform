@@ -1,7 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "../auth";
-import { AlertsView, DevToolsView, FollowingView, GamesView } from "./DashboardViews";
+import { AlertsView, DevToolsView, FollowingView, GamesView, OpsView } from "./DashboardViews";
 
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
@@ -10,6 +10,7 @@ export function DashboardLayout() {
   if (!user || !token) {
     return <Navigate to="/auth" replace />;
   }
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="container">
@@ -31,6 +32,11 @@ export function DashboardLayout() {
         <NavLink to="alerts" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
           Alerts
         </NavLink>
+        {isAdmin ? (
+          <NavLink to="ops" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
+            Ops
+          </NavLink>
+        ) : null}
         {isDevMode ? (
           <NavLink to="test" className={({ isActive }) => `tab-link ${isActive ? "active" : ""}`}>
             Test
@@ -43,6 +49,7 @@ export function DashboardLayout() {
         <Route path="games" element={<GamesView token={token} />} />
         <Route path="following" element={<FollowingView token={token} />} />
         <Route path="alerts" element={<AlertsView token={token} />} />
+        <Route path="ops" element={isAdmin ? <OpsView token={token} /> : <Navigate to="games" replace />} />
         {isDevMode ? <Route path="test" element={<DevToolsView token={token} />} /> : null}
       </Routes>
     </div>

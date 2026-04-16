@@ -27,6 +27,12 @@ class SuccessProvider:
         self.fetch_updates_calls += 1
         return []
 
+    def expected_schedule_call_count(self):
+        return 3
+
+    def expected_updates_call_count(self, external_game_ids):
+        return 3 if external_game_ids else 0
+
 
 class FailingProvider:
     def fetch_schedule(self):
@@ -117,6 +123,10 @@ def test_ingest_run_success(db_session):
     runs = db_session.scalars(select(IngestRun)).all()
     assert len(runs) == 1
     assert runs[0].status == "success"
+    assert runs[0].expected_espn_calls == 3
+    assert runs[0].expected_odds_calls in {0, 1}
+    assert runs[0].actual_espn_calls == 0
+    assert runs[0].poll_mode in {"live", "soon", "day", "idle"}
 
     games = db_session.scalars(select(Game)).all()
     assert len(games) == 1
@@ -289,3 +299,15 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
     assert first_odds is not None
     assert second_odds is None
+
+
+def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypatch):
+    monkeypatch.setattr("worker.ingest._should_refresh_odds", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("worker.ingest.fetch_nba_odds_index", lambda: {})
+
+    result = run_ingest_cycle(SuccessProvider())
+    assert result["status"] == "success"
+
+    run = db_session.scalar(select(IngestRun).order_by(IngestRun.id.desc()))
+    assert run is not None
+    assert run.expected_odds_calls == 1

@@ -3,12 +3,14 @@ from __future__ import annotations
 import html
 import logging
 from datetime import datetime, timezone
+from time import monotonic
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, SentAlert, Team, User
+from app.services.api_usage import record_api_call_event
 from worker.config import settings
 
 logger = logging.getLogger(__name__)
@@ -131,10 +133,12 @@ def _merge_metadata(alert: SentAlert, updates: dict[str, object]) -> None:
 
 
 def _send_email_resend(
+    db: Session,
     to_email: str,
     subject: str,
     text_body: str,
     html_body: str,
+    ingest_run_id: int | None = None,
 ) -> tuple[bool, str | None, dict[str, object] | None]:
     if not settings.resend_api_key:
         return False, None, {"error": "missing_resend_api_key"}
@@ -150,8 +154,22 @@ def _send_email_resend(
         "Authorization": f"Bearer {settings.resend_api_key}",
         "Content-Type": "application/json",
     }
+    started_at = monotonic()
     try:
         response = httpx.post(settings.resend_api_url, json=payload, headers=headers, timeout=15.0)
+        record_api_call_event(
+            db,
+            service="worker",
+            provider="resend",
+            endpoint_key="resend_send_email",
+            attempt_status="rate_limited"
+            if response.status_code == 429
+            else ("success" if response.is_success else "error"),
+            http_status=response.status_code,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            ingest_run_id=ingest_run_id,
+            error_code=None if response.is_success else "resend_request_failed",
+        )
         if response.is_success:
             body_json = response.json()
             provider_id = body_json.get("id")
@@ -169,10 +187,20 @@ def _send_email_resend(
             },
         )
     except httpx.HTTPError as exc:
+        record_api_call_event(
+            db,
+            service="worker",
+            provider="resend",
+            endpoint_key="resend_send_email",
+            attempt_status="error",
+            latency_ms=int((monotonic() - started_at) * 1000),
+            ingest_run_id=ingest_run_id,
+            error_code="resend_http_error",
+        )
         return False, None, {"error": "resend_http_error", "detail": str(exc)}
 
 
-def process_pending_alerts(db: Session, limit: int = 100) -> tuple[int, int]:
+def process_pending_alerts(db: Session, limit: int = 100, ingest_run_id: int | None = None) -> tuple[int, int]:
     pending = db.scalars(
         select(SentAlert)
         .where(SentAlert.delivery_status == "pending")
@@ -208,7 +236,14 @@ def process_pending_alerts(db: Session, limit: int = 100) -> tuple[int, int]:
             alert.provider_message_id = f"log-{alert.id}"
             sent_count += 1
         elif settings.delivery_mode == "email":
-            sent, provider_message_id, error_metadata = _send_email_resend(user.email, subject, text_body, html_body)
+            sent, provider_message_id, error_metadata = _send_email_resend(
+                db,
+                user.email,
+                subject,
+                text_body,
+                html_body,
+                ingest_run_id=ingest_run_id,
+            )
             if sent:
                 alert.delivery_status = "sent"
                 alert.provider_message_id = provider_message_id

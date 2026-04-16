@@ -7,11 +7,18 @@ if (!API_BASE_URL) {
 export type AuthResponse = {
   access_token: string;
   token_type: string;
-  user: { id: number; email: string; created_at: string };
+  user: { id: number; email: string; role: "user" | "admin"; created_at: string };
 };
 
 export type MagicLinkStartResponse = {
   message: string;
+};
+
+export type UserProfile = {
+  id: number;
+  email: string;
+  role: "user" | "admin";
+  created_at: string;
 };
 
 export type Team = {
@@ -72,6 +79,64 @@ export type AlertHistoryItem = {
 export type AlertType = "game_start" | "close_game_late" | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
 
+export type OpsWindow = "24h" | "7d" | "30d";
+export type OpsTimeseriesWindow = "24h" | "7d";
+
+export type OpsSummaryResponse = {
+  window: OpsWindow;
+  totals: {
+    actual_calls: number;
+    success_calls: number;
+    error_calls: number;
+    rate_limited_calls: number;
+  };
+  expected_vs_actual: Record<string, { expected: number; actual: number }>;
+  by_provider: Array<{
+    provider: string;
+    actual_calls: number;
+    success_calls: number;
+    error_calls: number;
+    rate_limited_calls: number;
+    expected_calls: number | null;
+  }>;
+  by_endpoint: Array<{
+    provider: string;
+    endpoint_key: string;
+    actual_calls: number;
+    success_calls: number;
+    error_calls: number;
+    rate_limited_calls: number;
+  }>;
+};
+
+export type OpsTimeseriesResponse = {
+  window: OpsTimeseriesWindow;
+  bucket: "hour";
+  points: Array<{
+    bucket_start: string;
+    provider: string;
+    actual_calls: number;
+    success_calls: number;
+    error_calls: number;
+    rate_limited_calls: number;
+    expected_calls: number | null;
+  }>;
+};
+
+export type OpsIngestRunsResponse = {
+  items: Array<{
+    ingest_run_id: number;
+    started_at: string;
+    completed_at: string | null;
+    status: string;
+    poll_mode: string | null;
+    expected_espn_calls: number;
+    actual_espn_calls: number;
+    expected_odds_calls: number;
+    actual_odds_calls: number;
+  }>;
+};
+
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
     return detail;
@@ -129,7 +194,7 @@ export function verifyMagicLink(token: string): Promise<AuthResponse> {
 }
 
 export function me(token: string) {
-  return request<{ id: number; email: string; created_at: string }>("/auth/me", {
+  return request<UserProfile>("/auth/me", {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -218,4 +283,25 @@ export function sendDevTestEmail(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export function getOpsApiUsageSummary(token: string, window: OpsWindow): Promise<OpsSummaryResponse> {
+  return request<OpsSummaryResponse>(`/ops/api-usage/summary?window=${encodeURIComponent(window)}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function getOpsApiUsageTimeseries(token: string, window: OpsTimeseriesWindow): Promise<OpsTimeseriesResponse> {
+  return request<OpsTimeseriesResponse>(
+    `/ops/api-usage/timeseries?window=${encodeURIComponent(window)}&bucket=hour`,
+    {
+      headers: authHeaders(token),
+    },
+  );
+}
+
+export function getOpsApiUsageIngestRuns(token: string, limit: number = 50): Promise<OpsIngestRunsResponse> {
+  return request<OpsIngestRunsResponse>(`/ops/api-usage/ingest-runs?limit=${encodeURIComponent(String(limit))}`, {
+    headers: authHeaders(token),
+  });
 }

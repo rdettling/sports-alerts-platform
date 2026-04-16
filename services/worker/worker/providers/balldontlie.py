@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Any, Callable
 
 import httpx
 
+from app.services.api_usage import record_api_call_event
+from sqlalchemy.orm import Session
 from worker.providers.base import NbaProvider, ProviderGame
 
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
@@ -49,9 +52,28 @@ ABBR_TO_EXTERNAL_TEAM_ID = {
 class BallDontLieProvider(NbaProvider):
     def __init__(self, fetch_json: Callable[[dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
+        self._telemetry_db: Session | None = None
+        self._ingest_run_id: int | None = None
+
+    def set_telemetry_context(self, db: Session | None, ingest_run_id: int | None) -> None:
+        self._telemetry_db = db
+        self._ingest_run_id = ingest_run_id
 
     def _default_fetch_json(self, params: dict[str, str]) -> dict[str, Any]:
+        started_at = monotonic()
         response = httpx.get(SCOREBOARD_URL, params=params, timeout=15.0)
+        status_code = int(response.status_code)
+        if self._telemetry_db is not None:
+            record_api_call_event(
+                self._telemetry_db,
+                service="worker",
+                provider="espn",
+                endpoint_key="scoreboard",
+                attempt_status="rate_limited" if status_code == 429 else ("success" if 200 <= status_code < 300 else "error"),
+                http_status=status_code,
+                latency_ms=int((monotonic() - started_at) * 1000),
+                ingest_run_id=self._ingest_run_id,
+            )
         response.raise_for_status()
         return response.json()
 
@@ -129,3 +151,11 @@ class BallDontLieProvider(NbaProvider):
         schedule_games = self.fetch_schedule()
         wanted_ids = set(external_game_ids)
         return [game for game in schedule_games if game.external_game_id in wanted_ids]
+
+    def expected_schedule_call_count(self) -> int:
+        return 3
+
+    def expected_updates_call_count(self, external_game_ids: list[str]) -> int:
+        if not external_game_ids:
+            return 0
+        return 3

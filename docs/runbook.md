@@ -4,7 +4,7 @@
 
 Symptoms:
 
-- Login/register fails with "Unable to reach API..."
+- Magic-link login fails with "Unable to reach API..."
 
 Checks:
 
@@ -56,7 +56,7 @@ Use carefully:
 - `make rebuild` (rebuild and restart)
 - `make reset` (wipe DB volume)
 
-`make reset` deletes local DB data and requires re-registering users.
+`make reset` deletes local DB data and requires signing in again with a new magic link.
 
 ## Strict env startup failures
 

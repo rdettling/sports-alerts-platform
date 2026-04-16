@@ -6,9 +6,12 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+from app.services.api_usage import record_api_call_event
+from sqlalchemy.orm import Session
 from worker.config import settings
 
 logger = logging.getLogger(__name__)
@@ -20,6 +23,8 @@ TEAM_NAME_ALIASES = {
 _CACHE_LOCK = threading.Lock()
 _CACHE_FETCHED_AT = 0.0
 _CACHE_DATA: dict[tuple[str, str], list["MoneylineOdds"]] = {}
+_TELEMETRY_DB: Session | None = None
+_TELEMETRY_INGEST_RUN_ID: int | None = None
 
 
 @dataclass(frozen=True)
@@ -29,6 +34,12 @@ class MoneylineOdds:
     bookmaker: str | None
     last_update: datetime | None
     commence_time: datetime | None = None
+
+
+def set_telemetry_context(db: Session | None, ingest_run_id: int | None) -> None:
+    global _TELEMETRY_DB, _TELEMETRY_INGEST_RUN_ID  # noqa: PLW0603
+    _TELEMETRY_DB = db
+    _TELEMETRY_INGEST_RUN_ID = ingest_run_id
 
 
 def _normalize_team_name(name: str) -> str:
@@ -100,8 +111,63 @@ def _fetch_from_provider() -> dict[tuple[str, str], list[MoneylineOdds]]:
     )
     url = f"{settings.odds_api_base_url.rstrip('/')}/{settings.odds_api_sport_key}/odds?{query}"
 
-    with urlopen(url, timeout=settings.odds_api_timeout_seconds) as response:  # noqa: S310
-        payload = json.loads(response.read().decode("utf-8"))
+    started_at = monotonic()
+    try:
+        with urlopen(url, timeout=settings.odds_api_timeout_seconds) as response:  # noqa: S310
+            status_code = int(getattr(response, "status", 200))
+            payload = json.loads(response.read().decode("utf-8"))
+            if _TELEMETRY_DB is not None:
+                record_api_call_event(
+                    _TELEMETRY_DB,
+                    service="worker",
+                    provider="odds",
+                    endpoint_key=settings.odds_api_market,
+                    attempt_status="success" if 200 <= status_code < 300 else "error",
+                    http_status=status_code,
+                    latency_ms=int((monotonic() - started_at) * 1000),
+                    ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
+                )
+    except HTTPError as exc:
+        if _TELEMETRY_DB is not None:
+            record_api_call_event(
+                _TELEMETRY_DB,
+                service="worker",
+                provider="odds",
+                endpoint_key=settings.odds_api_market,
+                attempt_status="rate_limited" if int(exc.code) == 429 else "error",
+                http_status=int(exc.code),
+                latency_ms=int((monotonic() - started_at) * 1000),
+                error_code="http_error",
+                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
+            )
+        raise
+    except URLError:
+        if _TELEMETRY_DB is not None:
+            record_api_call_event(
+                _TELEMETRY_DB,
+                service="worker",
+                provider="odds",
+                endpoint_key=settings.odds_api_market,
+                attempt_status="error",
+                latency_ms=int((monotonic() - started_at) * 1000),
+                error_code="network_error",
+                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
+            )
+        raise
+    except Exception:
+        if _TELEMETRY_DB is not None:
+            record_api_call_event(
+                _TELEMETRY_DB,
+                service="worker",
+                provider="odds",
+                endpoint_key=settings.odds_api_market,
+                attempt_status="error",
+                latency_ms=int((monotonic() - started_at) * 1000),
+                error_code="unexpected_error",
+                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
+            )
+        raise
+
     if not isinstance(payload, list):
         return {}
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -15,6 +15,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    role: Mapped[str] = mapped_column(Enum("user", "admin", name="user_role"), default="user", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -147,4 +148,46 @@ class IngestRun(Base):
     status: Mapped[str] = mapped_column(String(32))
     games_checked: Mapped[int] = mapped_column(Integer, default=0)
     games_updated: Mapped[int] = mapped_column(Integer, default=0)
+    expected_espn_calls: Mapped[int] = mapped_column(Integer, default=0)
+    expected_odds_calls: Mapped[int] = mapped_column(Integer, default=0)
+    actual_espn_calls: Mapped[int] = mapped_column(Integer, default=0)
+    actual_odds_calls: Mapped[int] = mapped_column(Integer, default=0)
+    poll_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ApiCallEvent(Base):
+    __tablename__ = "api_call_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    service: Mapped[str] = mapped_column(String(16), index=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    endpoint_key: Mapped[str] = mapped_column(String(64), index=True)
+    attempt_status: Mapped[str] = mapped_column(String(32), index=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ingest_run_id: Mapped[int | None] = mapped_column(ForeignKey("ingest_runs.id"), nullable=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ApiCallRollupHourly(Base):
+    __tablename__ = "api_call_rollups_hourly"
+    __table_args__ = (
+        UniqueConstraint(
+            "bucket_start",
+            "service",
+            "provider",
+            "endpoint_key",
+            "attempt_status",
+            name="uq_api_call_rollups_hourly_bucket_dims",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    service: Mapped[str] = mapped_column(String(16), index=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    endpoint_key: Mapped[str] = mapped_column(String(64), index=True)
+    attempt_status: Mapped[str] = mapped_column(String(32), index=True)
+    call_count: Mapped[int] = mapped_column(Integer, default=0)

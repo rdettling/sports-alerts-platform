@@ -55,6 +55,17 @@ This document describes what the app currently does in production code.
   - delivery status (`all`, `sent`, `failed`, `pending`)
 - Auto-refresh every 2 minutes.
 
+## Ops Tab (Admin Only)
+
+- Visible only when authenticated user has `role=admin`.
+- Backed by admin-only API endpoints (`/ops/*`) with server-side `403` for non-admins.
+- Displays:
+  - total/success/error/rate-limited outbound provider calls
+  - provider and endpoint breakdowns
+  - recent hourly points with expected vs actual counts
+  - ingest-run expected vs actual ESPN/Odds calls
+- Supports window filters (`24h`, `7d`, `30d`).
+
 ## Dev Test Tab (Optional)
 
 - Visible only when `DEV_MODE=true` in frontend env.
@@ -70,6 +81,7 @@ This document describes what the app currently does in production code.
 - Delivers pending alerts via configured delivery mode:
   - `log`
   - `email` (Resend)
+- Records outbound call telemetry for ESPN, Odds, and Resend.
 
 ## Odds Behavior
 

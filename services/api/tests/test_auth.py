@@ -29,10 +29,12 @@ def test_magic_link_start_verify_and_me_flow(client, monkeypatch):
     verify_data = verify_response.json()
     assert "access_token" in verify_data
     assert verify_data["user"]["email"] == "user@example.com"
+    assert verify_data["user"]["role"] == "user"
 
     me_response = client.get("/auth/me", headers={"Authorization": f"Bearer {verify_data['access_token']}"})
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "user@example.com"
+    assert me_response.json()["role"] == "user"
 
 
 def test_magic_link_start_always_returns_neutral_message_for_unknown_email(client):

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, SentAlert, Team, User
+from app.db.models import ApiCallEvent, Game, SentAlert, Team, User
 from worker import delivery
 from worker.delivery import process_pending_alerts
 
@@ -79,6 +79,9 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
     assert updated.delivery_status == "sent"
     assert updated.provider_message_id == "email_123"
     assert updated.metadata_json == {"status": "in_progress"}
+    resend_events = db_session.scalars(select(ApiCallEvent).where(ApiCallEvent.provider == "resend")).all()
+    assert len(resend_events) == 1
+    assert resend_events[0].attempt_status == "success"
 
 
 def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monkeypatch):
@@ -111,3 +114,6 @@ def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monk
     assert updated.metadata_json["status"] == "in_progress"
     assert updated.metadata_json["error"] == "resend_request_failed"
     assert updated.metadata_json["status_code"] == 401
+    resend_events = db_session.scalars(select(ApiCallEvent).where(ApiCallEvent.provider == "resend")).all()
+    assert len(resend_events) == 1
+    assert resend_events[0].attempt_status == "error"

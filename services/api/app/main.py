@@ -15,6 +15,7 @@ from app.routers.games import router as games_router
 from app.routers.health import router as health_router
 from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
+from app.routers.ops import router as ops_router
 from app.services.seed import seed_teams_if_empty
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -48,6 +49,7 @@ app.include_router(games_router)
 app.include_router(follows_router)
 app.include_router(preferences_router)
 app.include_router(alerts_router)
+app.include_router(ops_router)
 
 
 @app.exception_handler(RequestValidationError)

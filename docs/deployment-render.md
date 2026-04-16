@@ -63,8 +63,9 @@ Required frontend env:
 
 ## Post-Deploy Smoke Test
 
-1. Open frontend and register/login.
+1. Open frontend and request a magic-link sign-in.
 2. Confirm games/following/alerts tabs load.
-3. Confirm API health endpoint is green.
-4. Check worker logs for successful ingest cycles.
-5. If using email delivery, trigger a dev test alert with `DEV_MODE=true` and verify delivery.
+3. If signed in as an admin user (`users.role='admin'`), confirm the `Ops` tab loads.
+4. Confirm API health endpoint is green.
+5. Check worker logs for successful ingest cycles.
+6. If using email delivery, trigger a dev test alert with `DEV_MODE=true` and verify delivery.
