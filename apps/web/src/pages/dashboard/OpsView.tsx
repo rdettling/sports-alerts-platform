@@ -12,6 +12,8 @@ import {
 } from "../../api";
 
 type OpsRun = OpsIngestRunsResponse["items"][number];
+type OpsPoint = OpsTimeseriesResponse["points"][number];
+type TrendProvider = "all" | OpsPoint["provider"];
 
 function formatCount(value: number | null | undefined): string {
   if (value === null || value === undefined) {
@@ -59,6 +61,24 @@ function cadenceLabel(pollMode: string | null): string {
   return "Cadence unavailable";
 }
 
+function sparklinePath(values: number[], width: number = 88, height: number = 24): string {
+  if (values.length === 0) {
+    return `M0 ${height}`;
+  }
+  if (values.length === 1) {
+    return `M0 ${height - 2} L${width} ${height - 2}`;
+  }
+  const maxValue = Math.max(1, ...values);
+  const stepX = width / (values.length - 1);
+  return values
+    .map((value, index) => {
+      const x = index * stepX;
+      const y = height - (value / maxValue) * (height - 2);
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
 export function OpsView({ token }: { token: string }) {
   const [window, setWindow] = useState<OpsWindow>("24h");
   const [summary, setSummary] = useState<OpsSummaryResponse | null>(null);
@@ -66,6 +86,7 @@ export function OpsView({ token }: { token: string }) {
   const [ingestRuns, setIngestRuns] = useState<OpsIngestRunsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trendProvider, setTrendProvider] = useState<TrendProvider>("all");
 
   useEffect(() => {
     const load = async () => {
@@ -90,13 +111,55 @@ export function OpsView({ token }: { token: string }) {
     load();
   }, [token, window]);
 
-  const latestByProvider = useMemo(() => {
+  const trendRows = useMemo(() => {
     if (!timeseries) {
       return [];
     }
-    return [...timeseries.points]
-      .sort((left, right) => right.bucket_start.localeCompare(left.bucket_start))
-      .slice(0, 10);
+
+    const grouped = new Map<string, OpsPoint[]>();
+    for (const point of timeseries.points) {
+      const list = grouped.get(point.provider) ?? [];
+      list.push(point);
+      grouped.set(point.provider, list);
+    }
+
+    const providers = Array.from(grouped.keys()).sort();
+    return providers
+      .map((provider) => {
+        const points = (grouped.get(provider) ?? []).sort((a, b) => a.bucket_start.localeCompare(b.bucket_start));
+        const latest = points[points.length - 1] ?? null;
+        const previous = points.length > 1 ? points[points.length - 2] : null;
+        const values = points.map((point) => point.actual_calls);
+        const delta = latest && previous ? latest.actual_calls - previous.actual_calls : 0;
+        const hasAnomaly = points.some(
+          (point) =>
+            point.error_calls > 0 ||
+            point.rate_limited_calls > 0 ||
+            (point.expected_calls !== null && point.expected_calls !== point.actual_calls),
+        );
+        return {
+          provider,
+          values,
+          latest,
+          previous,
+          delta,
+          hasAnomaly,
+          anomalyCount: points.filter(
+            (point) =>
+              point.error_calls > 0 ||
+              point.rate_limited_calls > 0 ||
+              (point.expected_calls !== null && point.expected_calls !== point.actual_calls),
+          ).length,
+        };
+      })
+      .filter((row) => trendProvider === "all" || row.provider === trendProvider);
+  }, [timeseries, trendProvider]);
+
+  const trendProviderOptions = useMemo(() => {
+    if (!timeseries) {
+      return [];
+    }
+    return Array.from(new Set(timeseries.points.map((point) => point.provider))).sort();
   }, [timeseries]);
 
   const ingestSummary = useMemo(() => {
@@ -190,18 +253,53 @@ export function OpsView({ token }: { token: string }) {
             </section>
 
             <section className="admin-panel admin-panel-scroll">
-              <h3>Latest hourly points</h3>
+              <div className="admin-trend-header">
+                <h3>Hourly trend (24h)</h3>
+                <div className="admin-trend-chips">
+                  <button
+                    type="button"
+                    className={`admin-trend-chip ${trendProvider === "all" ? "active" : ""}`}
+                    onClick={() => setTrendProvider("all")}
+                  >
+                    all
+                  </button>
+                  {trendProviderOptions.map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      className={`admin-trend-chip ${trendProvider === provider ? "active" : ""}`}
+                      onClick={() => setTrendProvider(provider)}
+                    >
+                      {provider}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="admin-scroll-body">
-                <ul className="list">
-                  {latestByProvider.map((point) => (
-                    <li key={`${point.bucket_start}-${point.provider}`} className="admin-metric-row">
-                      <div className="admin-metric-main">
-                        <span className="admin-metric-title">{point.provider}</span>
-                        <span className="admin-metric-subtitle">{new Date(point.bucket_start).toLocaleString()}</span>
+                <ul className="list admin-trend-list">
+                  {trendRows.map((row) => (
+                    <li key={row.provider} className="admin-trend-row">
+                      <div className="admin-trend-left">
+                        <span className="admin-metric-title">{row.provider}</span>
+                        <span className="admin-metric-subtitle">
+                          {row.latest ? new Date(row.latest.bucket_start).toLocaleString() : "no data"}
+                        </span>
+                      </div>
+                      <div className="admin-trend-sparkline">
+                        <svg viewBox="0 0 88 24" aria-hidden="true">
+                          <path d={sparklinePath(row.values)} />
+                        </svg>
                       </div>
                       <div className="admin-metric-values">
-                        <span className="admin-metric-pill">expected {formatCount(point.expected_calls)}</span>
-                        <span className="admin-metric-pill">actual {formatCount(point.actual_calls)}</span>
+                        <span className="admin-metric-pill">
+                          this hr {formatCount(row.latest?.actual_calls ?? 0)}/{formatCount(row.latest?.expected_calls)}
+                        </span>
+                        <span className="admin-metric-pill">{row.delta >= 0 ? `Δ +${row.delta}` : `Δ ${row.delta}`}</span>
+                        {row.hasAnomaly ? (
+                          <span className="admin-metric-pill admin-metric-pill-warn">{row.anomalyCount} anomaly</span>
+                        ) : (
+                          <span className="admin-metric-pill">healthy</span>
+                        )}
                       </div>
                     </li>
                   ))}
