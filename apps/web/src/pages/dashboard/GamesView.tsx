@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Game, Team, followGame, listAlertHistory, listFollows, listGames, listTeams, unfollowGame } from "../../api";
 import { useDashboardShell } from "./shell";
-import {
-  TeamLogo,
-  compactStatusText,
-  formatGameTime,
-  formatMoneyline,
-  messageFromUnknown,
-  noVigProbabilities,
-} from "./shared";
+import { TeamLogo, formatGameTime, formatMoneyline, messageFromUnknown, noVigProbabilities } from "./shared";
+
+type GameDayGroup = {
+  label: string;
+  items: Awaited<ReturnType<typeof listGames>>;
+};
 
 export function GamesView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
@@ -145,8 +143,8 @@ export function GamesView({ token }: { token: string }) {
       .sort((a, b) => b.activeCount - a.activeCount || a.team.name.localeCompare(b.team.name));
   }, [followedTeams, sortedGames]);
 
-  const groupedVisibleGames = useMemo(() => {
-    const groups = new Map<string, typeof visibleGames>();
+  const groupedVisibleGames: GameDayGroup[] = useMemo(() => {
+    const groups = new Map<string, Awaited<ReturnType<typeof listGames>>>();
     visibleGames.forEach((game) => {
       const date = new Date(game.scheduled_start_time);
       const label = date.toLocaleDateString(undefined, {
@@ -186,7 +184,7 @@ export function GamesView({ token }: { token: string }) {
   };
 
   return (
-    <section className="view-stack">
+    <section className="view-stack games-page">
       <div className="metric-grid">
         <article className="metric-card">
           <span>Live</span>
@@ -206,7 +204,7 @@ export function GamesView({ token }: { token: string }) {
         </article>
       </div>
 
-      <section className="panel">
+      <section className="panel games-panel">
         <div className="section-header">
           <h3>Game Feed</h3>
           <p>Track tipoff times, probabilities, and follow actions in one place.</p>
@@ -247,22 +245,34 @@ export function GamesView({ token }: { token: string }) {
         {!loading ? (
           <div className="games-feed-grid">
             <div className="data-table-wrap">
-              <div className="data-table-head games-table-grid">
-                <span>Time</span>
-                <span>Matchup</span>
-                <span>Win %</span>
-                <span>Odds</span>
-                <span>Book</span>
-                <span>Action</span>
-              </div>
-              <div className="games-group-stack">
-                {groupedVisibleGames.map((group) => (
-                  <section key={group.label} className="games-day-group">
-                    <header className="games-day-header">
-                      <strong>{group.label}</strong>
-                      <span className="muted">{group.items.length} games</span>
-                    </header>
-                    <ul className="list data-table-list">
+              <table className="games-table" role="table" aria-label="Games feed">
+                <colgroup>
+                  <col className="games-col-time" />
+                  <col className="games-col-matchup" />
+                  <col className="games-col-win" />
+                  <col className="games-col-odds" />
+                  <col className="games-col-action" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Matchup</th>
+                    <th>Win %</th>
+                    <th>Odds</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedVisibleGames.map((group) => (
+                    <Fragment key={group.label}>
+                      <tr className="games-group-row">
+                        <td colSpan={5}>
+                          <div className="games-group-row-inner">
+                            <strong>{group.label}</strong>
+                            <span className="muted">{group.items.length} games</span>
+                          </div>
+                        </td>
+                      </tr>
                       {group.items.map((game) => {
                         const home = teamMap.get(game.home_team_id);
                         const away = teamMap.get(game.away_team_id);
@@ -270,43 +280,56 @@ export function GamesView({ token }: { token: string }) {
                         const probabilities = noVigProbabilities(game);
                         const awayPercent = probabilities ? Math.round(probabilities.away * 100) : null;
                         const homePercent = awayPercent !== null ? 100 - awayPercent : null;
-                        const statusText = compactStatusText(game);
                         if (!home || !away) {
                           return null;
                         }
                         return (
-                          <li key={game.id} className="data-table-row games-table-grid">
-                            <div className="games-time-cell">
-                              <span>{rowTimeLabel(game)}</span>
-                              {statusText ? <span className="muted games-row-subtext">{statusText}</span> : null}
-                            </div>
-                            <div className="team-row">
-                              <TeamLogo team={away} size={22} />
-                              <strong>{away.abbreviation}</strong>
-                              <span className="muted">@</span>
-                              <TeamLogo team={home} size={22} />
-                              <strong>{home.abbreviation}</strong>
-                            </div>
-                            <div className="games-win-cell">{probabilities ? `${awayPercent}% / ${homePercent}%` : "—"}</div>
-                            <div className="games-odds-cell">
-                              {game.odds ? `${formatMoneyline(game.odds.away_moneyline)} / ${formatMoneyline(game.odds.home_moneyline)}` : "—"}
-                            </div>
-                            <div className="muted games-book-cell">{game.odds?.bookmaker ?? "—"}</div>
-                            <button
-                              className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()}
-                              disabled={busyGameId === game.id}
-                              onClick={() => onToggleFollow(game.id, isFollowed)}
-                            >
-                              {isFollowed ? "Following" : "Follow"}
-                            </button>
-                          </li>
+                          <tr key={game.id} className="games-data-row">
+                            <td colSpan={5}>
+                              <div className="games-data-row-grid">
+                                <div className="games-time-cell">{rowTimeLabel(game)}</div>
+                                <div>
+                                  <div className="team-row">
+                                    <TeamLogo team={away} size={24} />
+                                    <strong>{away.abbreviation}</strong>
+                                    <span className="muted">@</span>
+                                    <TeamLogo team={home} size={24} />
+                                    <strong>{home.abbreviation}</strong>
+                                  </div>
+                                </div>
+                                <div className="games-win-cell">{probabilities ? `${awayPercent}% / ${homePercent}%` : "—"}</div>
+                                <div className="games-odds-cell">
+                                  {game.odds ? (
+                                    <>
+                                      <span className="games-odds-main">
+                                        {formatMoneyline(game.odds.away_moneyline)} / {formatMoneyline(game.odds.home_moneyline)}
+                                      </span>
+                                      <span className="games-odds-book muted">{game.odds.bookmaker}</span>
+                                    </>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </div>
+                                <div className="games-action-cell-wrap">
+                                  <button
+                                    className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()}
+                                    disabled={busyGameId === game.id}
+                                    onClick={() => onToggleFollow(game.id, isFollowed)}
+                                  >
+                                    {isFollowed ? "Following" : "Follow"}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         );
                       })}
-                    </ul>
-                  </section>
-                ))}
-              </div>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
             </div>
+
             <aside className="games-side-rail">
               <section className="games-side-card">
                 <div className="games-side-header">
@@ -332,6 +355,7 @@ export function GamesView({ token }: { token: string }) {
             </aside>
           </div>
         ) : null}
+
         {!loading && visibleGames.length === 0 ? <p className="muted">No games in this filter.</p> : null}
       </section>
     </section>
