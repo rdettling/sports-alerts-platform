@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.models import ApiCallEvent, ApiCallRollupHourly
+
+
+class TelemetrySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    telemetry_raw_events_enabled: bool = False
+
+
+telemetry_settings = TelemetrySettings()
 
 
 def _find_pending_rollup(
@@ -47,7 +55,7 @@ def record_api_call_event(
 ) -> None:
     event_time = occurred_at or datetime.now(timezone.utc)
     bucket_start = event_time.replace(minute=0, second=0, microsecond=0)
-    if settings.telemetry_raw_events_enabled:
+    if telemetry_settings.telemetry_raw_events_enabled:
         event = ApiCallEvent(
             service=service,
             provider=provider,
