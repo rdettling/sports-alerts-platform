@@ -35,6 +35,8 @@ os.environ.update(
         "ODDS_ENABLED": "true",
         "ODDS_REFRESH_SECONDS": "5400",
         "TELEMETRY_RAW_EVENTS_ENABLED": "true",
+        "GAMES_RETENTION_PAST_HOURS": "36",
+        "GAMES_RETENTION_FUTURE_DAYS": "7",
         "DEV_MODE": "true",
     }
 )

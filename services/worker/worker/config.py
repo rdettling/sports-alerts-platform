@@ -7,16 +7,16 @@ class WorkerSettings(BaseSettings):
     database_url: str
     ingest_interval_active_seconds: int
     ingest_interval_idle_seconds: int
-    scheduler_max_sleep_seconds: int = 60
-    ingest_freshness_target_seconds: int = 60
-    delivery_empty_backoff_seconds: int = 300
-    delivery_active_backoff_seconds: int = 30
-    cleanup_interval_seconds: int = 1800
-    games_retention_past_hours: int = 36
-    games_retention_future_days: int = 7
-    job_max_retries: int = 5
-    job_retry_base_seconds: int = 30
-    telemetry_raw_events_enabled: bool = False
+    scheduler_max_sleep_seconds: int
+    ingest_freshness_target_seconds: int
+    delivery_empty_backoff_seconds: int
+    delivery_active_backoff_seconds: int
+    cleanup_interval_seconds: int
+    games_retention_past_hours: int
+    games_retention_future_days: int
+    job_max_retries: int
+    job_retry_base_seconds: int
+    telemetry_raw_events_enabled: bool
     nba_provider: str
     odds_provider: str
     odds_api_key: str

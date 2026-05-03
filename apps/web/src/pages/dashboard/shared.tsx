@@ -80,10 +80,17 @@ function formatPeriod(period: number | null): string {
   return `OT${period - 4}`;
 }
 
+function isClockAtZero(clock: string): boolean {
+  return clock === "0" || clock === "0.0" || clock === "00:00" || clock === "0:00";
+}
+
 export function formatGameTime(game: Game): string {
   if (game.status === "in_progress" || game.status === "live") {
     const period = formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
+    if (game.period === 2 && isClockAtZero(clock)) {
+      return "Halftime";
+    }
     if (period && clock) {
       return `${period} ${clock}`;
     }

@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     odds_api_cache_seconds: int
     odds_enabled: bool
     odds_refresh_seconds: int
-    telemetry_raw_events_enabled: bool = False
-    games_retention_past_hours: int = 36
-    games_retention_future_days: int = 7
+    telemetry_raw_events_enabled: bool
+    games_retention_past_hours: int
+    games_retention_future_days: int
 
 
 settings = Settings()
