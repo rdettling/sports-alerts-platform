@@ -47,6 +47,43 @@ function dateLabel(isoTime: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+function titleCaseMode(mode: string | null | undefined): string {
+  if (!mode) {
+    return "n/a";
+  }
+  return mode.replace(/_/g, " ");
+}
+
+function eventTrendPoints(events: OpsIngestHealthResponse["events"]): number[] {
+  const now = Date.now();
+  const bucketHours = 6;
+  const buckets = Array.from({ length: bucketHours }, () => 0);
+  for (const event of events) {
+    const diffHours = (now - new Date(event.occurred_at).getTime()) / (1000 * 60 * 60);
+    if (diffHours < 0 || diffHours >= bucketHours) {
+      continue;
+    }
+    const idx = bucketHours - 1 - Math.floor(diffHours);
+    buckets[idx] += 1;
+  }
+  return buckets;
+}
+
+function sparklinePath(points: number[], width: number, height: number): string {
+  if (points.length === 0) {
+    return "";
+  }
+  const max = Math.max(...points, 1);
+  const stepX = points.length > 1 ? width / (points.length - 1) : width;
+  return points
+    .map((value, idx) => {
+      const x = idx * stepX;
+      const y = height - (value / max) * height;
+      return `${idx === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
 function statusLabel(status: "healthy" | "watch" | "at_risk"): string {
   if (status === "at_risk") {
     return "At Risk";
@@ -189,74 +226,113 @@ function DbStatsPanel({
 }) {
   const events = ingestHealth?.events ?? [];
   const states = ingestHealth?.states ?? [];
-  const latestEvent = events[0] ?? null;
   const failures = events.filter((event) => event.event_type === "error");
+  const trendPoints = eventTrendPoints(events);
+  const trendPath = sparklinePath(trendPoints, 110, 28);
 
   return (
-    <div className="admin-simple-stack">
-      <section className="card admin-simple-panel">
-        <h3>DB stats</h3>
-        <p className="muted">Internal ingest telemetry + Neon compute usage for the current billing cycle.</p>
-        <p className="muted">
-          {neonUsage?.dashboard_url ? (
-            <a href={neonUsage.dashboard_url} target="_blank" rel="noreferrer">
-              Open Neon dashboard
-            </a>
-          ) : null}
-        </p>
-        <div className="admin-simple-metrics">
+    <div className="admin-db-layout">
+      <section className="card admin-simple-panel admin-db-shell">
+        <header className="admin-db-header">
           <div>
-            <span className="muted">Neon CPU used</span>
-            <strong>{neonUsage?.cpu_used_sec === null || neonUsage?.cpu_used_sec === undefined ? "n/a" : `${(neonUsage.cpu_used_sec / 3600).toFixed(2)} CUh`}</strong>
+            <h3>DB stats</h3>
+            <p className="muted">Single-view database health, compute, and ingest diagnostics.</p>
           </div>
-          <div>
-            <span className="muted">Neon active time</span>
-            <strong>{neonUsage?.active_time_sec === null || neonUsage?.active_time_sec === undefined ? "n/a" : `${(neonUsage.active_time_sec / 3600).toFixed(2)}h`}</strong>
-          </div>
-          <div>
-            <span className="muted">Avg CU while active</span>
-            <strong>{neonUsage?.avg_cu_while_active === null || neonUsage?.avg_cu_while_active === undefined ? "n/a" : `${neonUsage.avg_cu_while_active.toFixed(3)} CU`}</strong>
-          </div>
-          <div>
-            <span className="muted">Cycle end</span>
-            <strong>{dateLabel(neonUsage?.consumption_period_end)}</strong>
-          </div>
-          <div>
-            <span className="muted">Scheduler mode</span>
-            <strong>{ingestHealth?.scheduler_mode ?? "n/a"}</strong>
-          </div>
-          <div>
-            <span className="muted">Next run</span>
-            <strong>{ingestHealth?.next_run_at ? timeAgoLabel(ingestHealth.next_run_at) : "n/a"}</strong>
-          </div>
-          <div>
-            <span className="muted">Last success</span>
-            <strong>{ingestHealth?.last_success_at ? timeAgoLabel(ingestHealth.last_success_at) : "n/a"}</strong>
-          </div>
-          <div>
-            <span className="muted">Recent errors</span>
-            <strong>{failures.length}</strong>
-          </div>
-        </div>
-        <p className="muted">Tracked sources: {states.length}</p>
-        {!neonUsage?.available && neonUsage?.message ? <p className="muted">{neonUsage.message}</p> : null}
-      </section>
+        </header>
 
-      <section className="card admin-simple-panel admin-panel-scroll">
-        <h3>Recent ingest events</h3>
-        <div className="admin-scroll-body">
-          <ul className="list">
-            {events.map((event) => (
-              <li key={event.id} className="admin-simple-incident">
-                <strong>{event.event_type} · {event.source_key}</strong>
-                <p className="muted">
-                  {timeAgoLabel(event.occurred_at)} · mode {event.mode ?? "n/a"}
-                </p>
-                {event.message ? <p className="muted">{event.message}</p> : null}
-              </li>
-            ))}
-            {!latestEvent ? <li className="admin-simple-incident"><strong>No events yet</strong></li> : null}
-          </ul>
+        <div className="admin-db-grid">
+          <section className="admin-db-card">
+            <h4>Neon Compute</h4>
+            <div className="admin-db-kpis">
+              <article>
+                <span className="muted">CPU used</span>
+                <strong>{neonUsage?.cpu_used_sec === null || neonUsage?.cpu_used_sec === undefined ? "n/a" : `${(neonUsage.cpu_used_sec / 3600).toFixed(2)} CUh`}</strong>
+              </article>
+              <article>
+                <span className="muted">Active time</span>
+                <strong>{neonUsage?.active_time_sec === null || neonUsage?.active_time_sec === undefined ? "n/a" : `${(neonUsage.active_time_sec / 3600).toFixed(2)}h`}</strong>
+              </article>
+              <article>
+                <span className="muted">Avg CU</span>
+                <strong>{neonUsage?.avg_cu_while_active === null || neonUsage?.avg_cu_while_active === undefined ? "n/a" : `${neonUsage.avg_cu_while_active.toFixed(3)} CU`}</strong>
+              </article>
+              <article>
+                <span className="muted">Cycle end</span>
+                <strong>{dateLabel(neonUsage?.consumption_period_end)}</strong>
+              </article>
+            </div>
+          </section>
+
+          <section className="admin-db-card">
+            <h4>Scheduler</h4>
+            <div className="admin-db-status-grid">
+              <article>
+                <span className="muted">Mode</span>
+                <strong className={`admin-health-pill ${ingestHealth?.scheduler_mode ?? "off"}`}>{titleCaseMode(ingestHealth?.scheduler_mode ?? "n/a")}</strong>
+              </article>
+              <article>
+                <span className="muted">Next run</span>
+                <strong>{ingestHealth?.next_run_at ? timeAgoLabel(ingestHealth.next_run_at) : "n/a"}</strong>
+              </article>
+              <article>
+                <span className="muted">Last success</span>
+                <strong>{ingestHealth?.last_success_at ? timeAgoLabel(ingestHealth.last_success_at) : "n/a"}</strong>
+              </article>
+            </div>
+          </section>
+
+          <section className="admin-db-card">
+            <h4>Actions</h4>
+            <div className="admin-db-actions">
+              <a className="admin-test-btn" href={neonUsage?.dashboard_url ?? "#"} target="_blank" rel="noreferrer">
+                <span>Open Neon Dashboard</span>
+                <span className="admin-test-btn-meta">External</span>
+              </a>
+              <button className="admin-test-btn" type="button" disabled>
+                <span>Run Snapshot</span>
+                <span className="admin-test-btn-meta">Soon</span>
+              </button>
+            </div>
+            {!neonUsage?.available && neonUsage?.message ? <p className="muted">{neonUsage.message}</p> : null}
+          </section>
+
+          <section className="admin-db-card admin-db-events-card">
+            <h4>Recent Ingest Events</h4>
+            <div className="admin-db-events-scroll">
+              <ul className="list">
+                {events.map((event) => (
+                  <li key={event.id} className="admin-simple-incident">
+                    <strong>{event.event_type} · {event.source_key}</strong>
+                    <p className="muted">
+                      {timeAgoLabel(event.occurred_at)} · mode {event.mode ?? "n/a"}
+                    </p>
+                    {event.message ? <p className="muted">{event.message}</p> : null}
+                  </li>
+                ))}
+                {events.length === 0 ? <li className="admin-simple-incident"><strong>No events yet</strong></li> : null}
+              </ul>
+            </div>
+          </section>
+
+          <section className="admin-db-card admin-db-health-card">
+            <h4>Health &amp; Drift</h4>
+            <div className="admin-db-health-metrics">
+              <article>
+                <span className="muted">Tracked sources</span>
+                <strong>{states.length}</strong>
+              </article>
+              <article>
+                <span className="muted">Recent errors</span>
+                <strong>{failures.length}</strong>
+              </article>
+            </div>
+            <div className="admin-db-sparkline">
+              <svg viewBox="0 0 110 28" role="img" aria-label="Ingest events trend">
+                <path d={trendPath} />
+              </svg>
+              <span className="muted">Last 6h events</span>
+            </div>
+          </section>
         </div>
       </section>
     </div>

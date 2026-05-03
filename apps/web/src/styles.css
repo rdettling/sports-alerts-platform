@@ -840,6 +840,42 @@ button:disabled {
 .admin-simple-metrics > div strong { font-size: 1.06rem; color: #152745; }
 .admin-simple-incident { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0.5rem; display: grid; gap: 0.2rem; }
 
+.admin-db-layout { min-height: 0; height: 100%; display: grid; }
+.admin-db-shell { min-height: 0; height: 100%; display: grid; gap: 0.65rem; grid-template-rows: auto minmax(0, 1fr); padding: 0.85rem; }
+.admin-db-header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.7rem; }
+.admin-db-header p { margin: 0; }
+.admin-db-grid { min-height: 0; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); }
+.admin-db-card { border: 1px solid #d7e0ef; border-radius: 12px; background: #fff; padding: 0.65rem 0.72rem; display: grid; gap: 0.55rem; min-height: 0; }
+.admin-db-card h4 { margin: 0; font-size: 0.92rem; letter-spacing: 0.03em; text-transform: uppercase; color: #2f4568; }
+.admin-db-kpis { display: grid; gap: 0.45rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-db-kpis article { border: 1px solid var(--border); border-radius: 10px; background: #f8fbff; padding: 0.45rem 0.5rem; display: grid; gap: 0.14rem; }
+.admin-db-kpis article span { line-height: 1.2; }
+.admin-db-kpis article strong {
+  font-size: 0.98rem;
+  color: #14274a;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+.admin-db-status-grid { display: grid; gap: 0.45rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-db-status-grid article { border: 1px solid var(--border); border-radius: 10px; background: #f8fbff; padding: 0.45rem 0.5rem; display: grid; gap: 0.14rem; align-content: start; }
+.admin-db-status-grid article strong { font-size: 1rem; color: #1a2b4d; }
+.admin-db-actions { display: grid; gap: 0.5rem; align-content: start; }
+.admin-db-actions .admin-test-btn { padding: 0.58rem 0.7rem; font-size: 0.9rem; }
+.admin-db-events-card { grid-column: 1 / span 2; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.admin-db-events-scroll { min-height: 0; overflow: auto; padding-right: 0.2rem; }
+.admin-db-events-scroll .list { display: grid; gap: 0.45rem; }
+.admin-db-events-scroll .admin-simple-incident { min-height: 84px; }
+.admin-db-health-card { grid-column: 3; min-height: 0; align-content: start; grid-template-rows: auto auto auto; }
+.admin-db-health-metrics { display: grid; gap: 0.45rem; }
+.admin-db-health-metrics article { border: 1px solid var(--border); border-radius: 10px; padding: 0.45rem 0.5rem; background: #f8fbff; display: grid; gap: 0.12rem; }
+.admin-db-health-metrics article strong { font-size: 1.03rem; color: #16294c; }
+.admin-db-sparkline { border: 1px solid var(--border); border-radius: 10px; background: #f8fbff; padding: 0.45rem 0.5rem; display: grid; gap: 0.25rem; }
+.admin-db-sparkline svg { width: 100%; height: 34px; }
+.admin-db-sparkline path { fill: none; stroke: #2f548f; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+
 /* Auth compatibility */
 .container {
   max-width: 560px;
@@ -886,6 +922,27 @@ button:disabled {
   .games-table {
     --games-row-cols: 14% 30% 16% 24% 16%;
   }
+
+  .admin-db-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .admin-db-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-db-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-db-events-card {
+    grid-column: 1 / span 2;
+  }
+
+  .admin-db-health-card {
+    grid-column: 1 / span 2;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -921,6 +978,20 @@ button:disabled {
 
   .admin-ops-card,
   .admin-tools-card {
+    height: auto;
+  }
+
+  .admin-db-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(5, auto);
+  }
+
+  .admin-db-events-card,
+  .admin-db-health-card {
+    grid-column: auto;
+  }
+
+  .admin-db-shell {
     height: auto;
   }
 }
