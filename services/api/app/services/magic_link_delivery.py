@@ -8,25 +8,14 @@ from urllib.request import Request, urlopen
 
 from app.config import settings
 from app.services.api_usage import record_api_call_event
+from app.services.email_templates import build_magic_link_email
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
 
 def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = None) -> None:
-    subject = "[Sports Alerts] Your sign-in link"
-    text_body = (
-        "Use this one-time link to sign in:\n\n"
-        f"{magic_link}\n\n"
-        f"This link expires in {settings.magic_link_ttl_minutes} minutes."
-    )
-    html_body = (
-        "<!doctype html><html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">"
-        "<h2>Sports Alerts sign in</h2>"
-        f"<p><a href=\"{magic_link}\">Click here to sign in</a></p>"
-        f"<p>This link expires in {settings.magic_link_ttl_minutes} minutes.</p>"
-        "</body></html>"
-    )
+    subject, text_body, html_body = build_magic_link_email(magic_link, settings.magic_link_ttl_minutes)
 
     if settings.delivery_mode == "log":
         logger.info("Magic link email to=%s subject=%s link=%s", to_email, subject, magic_link)

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db.models import ApiCallRollupHourly, Game, SentAlert, Team, User
+from app.services.email_branding import APP_BRAND_NAME
 from worker import delivery
 from worker.delivery import process_pending_alerts
 
@@ -60,7 +61,7 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
         assert json["to"] == ["delivery@example.com"]
         assert json["subject"].startswith("Tip-off ·")
         assert "html" in json
-        assert "Sports Alerts" in json["html"]
+        assert APP_BRAND_NAME in json["html"]
         assert "text" in json
         assert "Bearer test-key" in headers["Authorization"]
         assert timeout == 15.0
