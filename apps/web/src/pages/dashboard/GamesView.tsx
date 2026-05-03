@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Team, followGame, listAlertHistory, listFollows, listGames, listTeams, unfollowGame } from "../../api";
+import { Game, Team, followGame, listAlertHistory, listFollows, listGames, listTeams, unfollowGame } from "../../api";
 import { useDashboardShell } from "./shell";
 import {
   TeamLogo,
@@ -15,8 +15,10 @@ export function GamesView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
   const [games, setGames] = useState<Awaited<ReturnType<typeof listGames>>>([]);
   const [teamMap, setTeamMap] = useState<Map<number, Team>>(new Map());
+  const [followedTeams, setFollowedTeams] = useState<Team[]>([]);
   const [followedGameIds, setFollowedGameIds] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState<"all" | "live" | "today" | "following">("all");
+  const [sortBy, setSortBy] = useState<"tipoff">("tipoff");
   const [teamFilter, setTeamFilter] = useState<number | "all">("all");
   const [query, setQuery] = useState("");
   const [sentAlerts24h, setSentAlerts24h] = useState(0);
@@ -36,6 +38,7 @@ export function GamesView({ token }: { token: string }) {
       ]);
       setGames(availableGames);
       setTeamMap(new Map(teams.map((team) => [team.id, team])));
+      setFollowedTeams(follows.teams);
       setFollowedGameIds(new Set(follows.games.map((game) => game.id)));
       setSentAlerts24h(alerts24h.items.filter((item) => item.delivery_status === "sent").length);
       setLastSync(new Date());
@@ -94,6 +97,14 @@ export function GamesView({ token }: { token: string }) {
     () => sortedGames.filter((game) => followedGameIds.has(game.id)).length,
     [sortedGames, followedGameIds],
   );
+  const startingSoonCount = useMemo(() => {
+    const now = Date.now();
+    const windowEnd = now + 3 * 60 * 60 * 1000;
+    return sortedGames.filter((game) => {
+      const ts = new Date(game.scheduled_start_time).getTime();
+      return ts >= now && ts <= windowEnd && game.status !== "final";
+    }).length;
+  }, [sortedGames]);
 
   const visibleGames = useMemo(() => {
     let result = sortedGames;
@@ -123,6 +134,33 @@ export function GamesView({ token }: { token: string }) {
     return result;
   }, [filter, followedGameIds, query, sortedGames, teamFilter, teamMap, todayGameIds]);
 
+  const watchedTeams = useMemo(() => {
+    return followedTeams
+      .map((team) => {
+        const activeCount = sortedGames.filter(
+          (game) => game.status !== "final" && (game.home_team_id === team.id || game.away_team_id === team.id),
+        ).length;
+        return { team, activeCount };
+      })
+      .sort((a, b) => b.activeCount - a.activeCount || a.team.name.localeCompare(b.team.name));
+  }, [followedTeams, sortedGames]);
+
+  const groupedVisibleGames = useMemo(() => {
+    const groups = new Map<string, typeof visibleGames>();
+    visibleGames.forEach((game) => {
+      const date = new Date(game.scheduled_start_time);
+      const label = date.toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+      const current = groups.get(label) ?? [];
+      current.push(game);
+      groups.set(label, current);
+    });
+    return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
+  }, [visibleGames]);
+
   const onToggleFollow = async (gameId: number, isFollowed: boolean) => {
     setError(null);
     setBusyGameId(gameId);
@@ -140,6 +178,13 @@ export function GamesView({ token }: { token: string }) {
     }
   };
 
+  const rowTimeLabel = (game: Game): string => {
+    if (game.status === "scheduled") {
+      return new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    return formatGameTime(game);
+  };
+
   return (
     <section className="view-stack">
       <div className="metric-grid">
@@ -148,8 +193,8 @@ export function GamesView({ token }: { token: string }) {
           <strong>{liveGames.length}</strong>
         </article>
         <article className="metric-card">
-          <span>Today</span>
-          <strong>{todayGames.length}</strong>
+          <span>Starting Soon</span>
+          <strong>{startingSoonCount}</strong>
         </article>
         <article className="metric-card">
           <span>Following</span>
@@ -163,11 +208,11 @@ export function GamesView({ token }: { token: string }) {
 
       <section className="panel">
         <div className="section-header">
-          <h3>Game Board</h3>
+          <h3>Game Feed</h3>
           <p>Track tipoff times, probabilities, and follow actions in one place.</p>
         </div>
 
-        <div className="toolbar unified-toolbar">
+        <div className="toolbar unified-toolbar games-toolbar">
           <input
             placeholder="Search team or abbreviation"
             value={query}
@@ -182,80 +227,109 @@ export function GamesView({ token }: { token: string }) {
               </option>
             ))}
           </select>
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "tipoff")}>
+            <option value="tipoff">Sort: Tipoff</option>
+          </select>
           <div className="chip-row">
             <button className={`chip-btn ${filter === "all" ? "active" : ""}`.trim()} onClick={() => setFilter("all")} disabled={loading}>All</button>
             <button className={`chip-btn ${filter === "live" ? "active" : ""}`.trim()} onClick={() => setFilter("live")} disabled={loading}>Live ({liveGames.length})</button>
             <button className={`chip-btn ${filter === "today" ? "active" : ""}`.trim()} onClick={() => setFilter("today")} disabled={loading}>Today ({todayGames.length})</button>
             <button className={`chip-btn ${filter === "following" ? "active" : ""}`.trim()} onClick={() => setFilter("following")} disabled={loading}>Following ({activeFollowedGameCount})</button>
           </div>
-          <button className="btn btn-secondary" disabled={loading || busyGameId !== null} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>Refresh</button>
+          <button className="btn btn-secondary games-refresh-btn" disabled={loading || busyGameId !== null} onClick={() => load().catch((fetchError) => setError(messageFromUnknown(fetchError)))}>
+            Refresh
+          </button>
         </div>
 
         {error ? <p className="error">{error}</p> : null}
         {loading ? <p className="muted">Loading games...</p> : null}
 
         {!loading ? (
-          <div className="data-table-wrap">
-            <div className="data-table-head games-table-grid">
-              <span>Time</span>
-              <span>Matchup</span>
-              <span>Win %</span>
-              <span>Edge</span>
-              <span>Odds</span>
-              <span>Book</span>
-              <span>Action</span>
+          <div className="games-feed-grid">
+            <div className="data-table-wrap">
+              <div className="data-table-head games-table-grid">
+                <span>Time</span>
+                <span>Matchup</span>
+                <span>Win %</span>
+                <span>Odds</span>
+                <span>Book</span>
+                <span>Action</span>
+              </div>
+              <div className="games-group-stack">
+                {groupedVisibleGames.map((group) => (
+                  <section key={group.label} className="games-day-group">
+                    <header className="games-day-header">
+                      <strong>{group.label}</strong>
+                      <span className="muted">{group.items.length} games</span>
+                    </header>
+                    <ul className="list data-table-list">
+                      {group.items.map((game) => {
+                        const home = teamMap.get(game.home_team_id);
+                        const away = teamMap.get(game.away_team_id);
+                        const isFollowed = followedGameIds.has(game.id);
+                        const probabilities = noVigProbabilities(game);
+                        const awayPercent = probabilities ? Math.round(probabilities.away * 100) : null;
+                        const homePercent = awayPercent !== null ? 100 - awayPercent : null;
+                        const statusText = compactStatusText(game);
+                        if (!home || !away) {
+                          return null;
+                        }
+                        return (
+                          <li key={game.id} className="data-table-row games-table-grid">
+                            <div className="games-time-cell">
+                              <span>{rowTimeLabel(game)}</span>
+                              {statusText ? <span className="muted games-row-subtext">{statusText}</span> : null}
+                            </div>
+                            <div className="team-row">
+                              <TeamLogo team={away} size={22} />
+                              <strong>{away.abbreviation}</strong>
+                              <span className="muted">@</span>
+                              <TeamLogo team={home} size={22} />
+                              <strong>{home.abbreviation}</strong>
+                            </div>
+                            <div className="games-win-cell">{probabilities ? `${awayPercent}% / ${homePercent}%` : "—"}</div>
+                            <div className="games-odds-cell">
+                              {game.odds ? `${formatMoneyline(game.odds.away_moneyline)} / ${formatMoneyline(game.odds.home_moneyline)}` : "—"}
+                            </div>
+                            <div className="muted games-book-cell">{game.odds?.bookmaker ?? "—"}</div>
+                            <button
+                              className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()}
+                              disabled={busyGameId === game.id}
+                              onClick={() => onToggleFollow(game.id, isFollowed)}
+                            >
+                              {isFollowed ? "Following" : "Follow"}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             </div>
-            <ul className="list data-table-list">
-              {visibleGames.map((game) => {
-                const home = teamMap.get(game.home_team_id);
-                const away = teamMap.get(game.away_team_id);
-                const isFollowed = followedGameIds.has(game.id);
-                const probabilities = noVigProbabilities(game);
-                const awayPercent = probabilities ? Math.round(probabilities.away * 100) : null;
-                const homePercent = awayPercent !== null ? 100 - awayPercent : null;
-                const statusText = compactStatusText(game);
-                if (!home || !away) {
-                  return null;
-                }
-                return (
-                  <li key={game.id} className="data-table-row games-table-grid">
-                    <div className="games-time-cell">
-                      <span>{formatGameTime(game)}</span>
-                      {statusText ? <span className="muted games-row-subtext">{statusText}</span> : null}
-                    </div>
-                    <div className="team-row">
-                      <TeamLogo team={away} size={18} />
-                      <strong>{away.abbreviation}</strong>
-                      <span className="muted">@</span>
-                      <TeamLogo team={home} size={18} />
-                      <strong>{home.abbreviation}</strong>
-                    </div>
-                    <div className="games-win-cell">{probabilities ? `${awayPercent}% / ${homePercent}%` : "—"}</div>
-                    <div className="games-bar-cell">
-                      {probabilities ? (
-                        <div className="probability-bar" aria-label="Win probability">
-                          <div className="probability-away" style={{ width: `${probabilities.away * 100}%` }} />
-                          <div className="probability-home" style={{ width: `${probabilities.home * 100}%` }} />
+            <aside className="games-side-rail">
+              <section className="games-side-card">
+                <div className="games-side-header">
+                  <h4>Watched Teams</h4>
+                  <span className="muted">{watchedTeams.length}</span>
+                </div>
+                {watchedTeams.length === 0 ? (
+                  <p className="muted">No followed teams yet.</p>
+                ) : (
+                  <ul className="games-watch-list">
+                    {watchedTeams.map(({ team, activeCount }) => (
+                      <li key={team.id}>
+                        <div className="games-watch-team">
+                          <TeamLogo team={team} size={18} />
+                          <span>{team.name}</span>
                         </div>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </div>
-                    <div className="games-odds-cell">
-                      {game.odds ? `${formatMoneyline(game.odds.away_moneyline)} / ${formatMoneyline(game.odds.home_moneyline)}` : "—"}
-                    </div>
-                    <div className="muted games-book-cell">{game.odds?.bookmaker ?? "—"}</div>
-                    <button
-                      className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()}
-                      disabled={busyGameId === game.id}
-                      onClick={() => onToggleFollow(game.id, isFollowed)}
-                    >
-                      {isFollowed ? "Unfollow" : "Follow"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                        <span className="games-watch-count">{activeCount}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </aside>
           </div>
         ) : null}
         {!loading && visibleGames.length === 0 ? <p className="muted">No games in this filter.</p> : null}

@@ -375,7 +375,7 @@ button:disabled {
 
 .games-table-grid {
   display: grid;
-  grid-template-columns: 180px minmax(190px, 1fr) 95px 140px 120px 100px 96px;
+  grid-template-columns: 170px minmax(170px, 1fr) 105px 140px 105px 102px;
   gap: 0.6rem;
   align-items: center;
 }
@@ -384,21 +384,133 @@ button:disabled {
   min-height: 54px;
 }
 
+.games-toolbar {
+  align-items: center;
+}
+
+.games-refresh-btn {
+  margin-left: auto;
+}
+
+.games-feed-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.games-group-stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.games-day-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.games-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding: 0.65rem 0.7rem 0.35rem;
+}
+
+.games-side-rail {
+  position: sticky;
+  top: var(--space-2);
+}
+
+.games-side-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fcfeff;
+  padding: var(--space-4);
+  box-shadow: var(--shadow-panel);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.games-side-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.games-side-header h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.games-watch-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.games-watch-list li {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.28rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.games-watch-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.games-watch-team span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.games-watch-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.4rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: #f3f7ff;
+  color: #26406a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .games-time-cell {
   display: grid;
   gap: 0.1rem;
   font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 
 .games-row-subtext {
   font-size: 0.74rem;
+  white-space: nowrap;
 }
 
 .team-row {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .team-logo {
@@ -437,6 +549,16 @@ button:disabled {
   justify-self: end;
   width: 90px;
   text-align: center;
+}
+
+.games-win-cell,
+.games-odds-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.games-book-cell {
+  white-space: nowrap;
 }
 
 .sticky-toolbar {
@@ -670,11 +792,19 @@ button:disabled {
 
 @media (max-width: 1200px) {
   .games-table-grid {
-    grid-template-columns: 165px minmax(170px, 1fr) 90px 120px 110px 90px 90px;
+    grid-template-columns: 160px minmax(160px, 1fr) 100px 125px 92px 92px;
   }
 
   .metric-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .games-feed-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .games-side-rail {
+    position: static;
   }
 }
 
