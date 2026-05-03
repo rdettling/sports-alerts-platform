@@ -10,9 +10,11 @@ import {
   listTeams,
   updateAlertPreference,
 } from "../../api";
+import { useDashboardShell } from "./shell";
 import { ALERT_TYPE_LABELS, PREFERENCE_LABELS, TeamLogo, deliveryStatusClass, messageFromUnknown } from "./shared";
 
 export function AlertsView({ token }: { token: string }) {
+  const { setLastSync } = useDashboardShell();
   const [preferences, setPreferences] = useState<AlertPreference[]>([]);
   const [items, setItems] = useState<AlertHistoryItem[]>([]);
   const [last24hItems, setLast24hItems] = useState<AlertHistoryItem[]>([]);
@@ -50,11 +52,13 @@ export function AlertsView({ token }: { token: string }) {
       setItems(historyResponse.items);
       setLast24hItems(history24Response.items);
       setTeams(teamsResponse);
-      setUpdatedAt(new Date());
+      const now = new Date();
+      setUpdatedAt(now);
+      setLastSync(now);
     } finally {
       setLoading(false);
     }
-  }, [alertTypeFilter, timeFilter, token]);
+  }, [alertTypeFilter, setLastSync, timeFilter, token]);
 
   useEffect(() => {
     load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
@@ -124,34 +128,36 @@ export function AlertsView({ token }: { token: string }) {
   );
 
   return (
-    <section className="card">
-      <div className="alerts-header">
-        <h2>Alerts</h2>
-        <span className="muted">{updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : "Loading..."}</span>
-      </div>
-      {error ? <p className="error">{error}</p> : null}
-
-      <div className="alerts-health-grid">
-        <div className="alerts-health-card">
-          <span className="muted">Last sent</span>
+    <section className="view-stack">
+      <div className="metric-grid">
+        <article className="metric-card">
+          <span>Last sent</span>
           <strong>{lastSentAt}</strong>
-        </div>
-        <div className="alerts-health-card">
-          <span className="muted">Sent (24h)</span>
+        </article>
+        <article className="metric-card">
+          <span>Sent (24h)</span>
           <strong>{sent24hCount}</strong>
-        </div>
-        <div className="alerts-health-card">
-          <span className="muted">Failed (24h)</span>
+        </article>
+        <article className="metric-card">
+          <span>Failed (24h)</span>
           <strong>{failed24hCount}</strong>
-        </div>
+        </article>
+        <article className="metric-card">
+          <span>Updated</span>
+          <strong>{updatedAt ? updatedAt.toLocaleTimeString() : "Loading..."}</strong>
+        </article>
       </div>
 
-      {loading ? <p>Loading alert settings and history...</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+      {loading ? <p className="muted">Loading alert settings and history...</p> : null}
 
       {!loading ? (
-        <div className="alerts-grid">
-          <div className="alerts-panel">
-            <h3>Alert Rules</h3>
+        <div className="alerts-layout">
+          <section className="panel">
+            <div className="section-header">
+              <h3>Alert Rules</h3>
+              <p>Enable delivery rules and tune close-game sensitivity.</p>
+            </div>
             <ul className="list">
               {preferences.map((preference) => (
                 <li
@@ -230,23 +236,28 @@ export function AlertsView({ token }: { token: string }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
 
-          <div className="alerts-panel">
-            <h3>Recent Alerts</h3>
-            <div className="alerts-filters">
+          <section className="panel">
+            <div className="section-header section-header-inline">
+              <div>
+                <h3>Recent Alerts</h3>
+                <p>Filter by type, status, and time window.</p>
+              </div>
+            </div>
+            <div className="toolbar sticky-toolbar">
               <select value={alertTypeFilter} onChange={(event) => setAlertTypeFilter(event.target.value as "all" | AlertType)}>
                 <option value="all">All alert types</option>
                 <option value="game_start">Game start</option>
                 <option value="close_game_late">Close game late</option>
                 <option value="final_result">Final result</option>
               </select>
-              <select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value as "24h" | "7d" | "all")}>
+              <select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value as "24h" | "7d" | "all") }>
                 <option value="24h">Last 24 hours</option>
                 <option value="7d">Last 7 days</option>
                 <option value="all">All time</option>
               </select>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "sent" | "failed" | "pending")}>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "sent" | "failed" | "pending") }>
                 <option value="all">All statuses</option>
                 <option value="sent">Sent</option>
                 <option value="failed">Failed</option>
@@ -284,7 +295,7 @@ export function AlertsView({ token }: { token: string }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         </div>
       ) : null}
     </section>
