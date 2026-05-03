@@ -113,7 +113,7 @@ def test_ingest_run_success(db_session):
     runs = db_session.scalars(select(IngestRun)).all()
     assert len(runs) == 1
     assert runs[0].status == "success"
-    assert runs[0].expected_espn_calls == 1
+    assert runs[0].expected_espn_calls == 3
     assert runs[0].expected_odds_calls in {0, 1}
     assert runs[0].actual_espn_calls == 0
     assert runs[0].poll_mode in {"live", "active", "idle"}

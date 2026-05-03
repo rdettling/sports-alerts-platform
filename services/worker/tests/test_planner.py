@@ -48,7 +48,16 @@ def test_planner_idle_mode_and_interval(db_session):
     plan = build_fetch_plan(db_session, now=now)
     assert plan.mode == "idle"
     assert plan.next_ingest_seconds == 900
-    assert len(plan.espn_requests) == 1
+    assert len(plan.espn_requests) == 3
+
+
+def test_planner_always_includes_yesterday_today_tomorrow(db_session):
+    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
+    plan = build_fetch_plan(db_session, now=now)
+    dates = [request.date for request in plan.espn_requests]
+    assert "20260502" in dates
+    assert "20260503" in dates
+    assert "20260504" in dates
 
 
 def test_planner_odds_refresh_disabled(db_session):

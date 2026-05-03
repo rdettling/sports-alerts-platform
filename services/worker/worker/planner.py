@@ -79,19 +79,13 @@ def _tracked_dates(db: Session, now: datetime) -> set[str]:
     return dates
 
 
-def _default_dates_for_mode(mode: str, now: datetime) -> set[str]:
+def _default_dates_for_mode(_mode: str, now: datetime) -> set[str]:
     today = now.date()
-    if mode == "live":
-        return {
-            (today - timedelta(days=1)).strftime("%Y%m%d"),
-            today.strftime("%Y%m%d"),
-        }
-    if mode == "active":
-        return {
-            today.strftime("%Y%m%d"),
-            (today + timedelta(days=1)).strftime("%Y%m%d"),
-        }
-    return {today.strftime("%Y%m%d")}
+    return {
+        (today - timedelta(days=1)).strftime("%Y%m%d"),
+        today.strftime("%Y%m%d"),
+        (today + timedelta(days=1)).strftime("%Y%m%d"),
+    }
 
 
 def _build_espn_requests(db: Session, mode: str, now: datetime) -> list[EspnRequest]:
