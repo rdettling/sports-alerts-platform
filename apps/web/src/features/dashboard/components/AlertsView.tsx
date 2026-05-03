@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { updateAlertPreference, type AlertPreference, type AlertType } from "../../../shared/api";
+import { listAlertHistory, listAlertPreferences, listTeams, updateAlertPreference, type AlertHistoryItem, type AlertPreference, type AlertType, type Team } from "../../../shared/api";
 import { ALERT_TYPE_LABELS, PREFERENCE_LABELS, TeamLogo, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
-import { useAlertsData } from "../hooks/useAlertsData";
 
 export function AlertsView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
-  const queryClient = useQueryClient();
 
   const [alertTypeFilter, setAlertTypeFilter] = useState<"all" | AlertType>("all");
   const [timeFilter, setTimeFilter] = useState<"24h" | "7d" | "all">("24h");
@@ -17,42 +14,69 @@ export function AlertsView({ token }: { token: string }) {
   const [closeGameMinutesInput, setCloseGameMinutesInput] = useState(2);
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [preferences, setPreferences] = useState<AlertPreference[]>([]);
+  const [items, setItems] = useState<AlertHistoryItem[]>([]);
+  const [last24hItems, setLast24hItems] = useState<AlertHistoryItem[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  const { data, isLoading } = useAlertsData(token, alertTypeFilter, timeFilter);
-
-  const preferences = data?.preferences ?? [];
-  const items = data?.items ?? [];
-  const last24hItems = data?.last24hItems ?? [];
-  const teams = data?.teams ?? [];
+  const load = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const [preferenceResponse, historyResponse, history24Response, teamsResponse] = await Promise.all([
+        listAlertPreferences(token),
+        listAlertHistory(token, {
+          alertType: alertTypeFilter === "all" ? undefined : alertTypeFilter,
+          sinceHours: timeFilter === "24h" ? 24 : timeFilter === "7d" ? 24 * 7 : undefined,
+          limit: 200,
+        }),
+        listAlertHistory(token, { sinceHours: 24, limit: 200 }),
+        listTeams(),
+      ]);
+      setPreferences(preferenceResponse);
+      setItems(historyResponse.items);
+      setLast24hItems(history24Response.items);
+      setTeams(teamsResponse);
+      const closePref = preferenceResponse.find((preference) => preference.alert_type === "close_game_late");
+      if (closePref) {
+        setCloseGameMarginInput(closePref.close_game_margin_threshold ?? 5);
+        setCloseGameMinutesInput(Math.max(1, Math.round((closePref.close_game_time_threshold_seconds ?? 120) / 60)));
+      }
+      const now = new Date();
+      setUpdatedAt(now);
+      setLastSync(now);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!data) return;
-    setLastSync(new Date());
-    const closePref = data.preferences.find((preference) => preference.alert_type === "close_game_late");
-    if (closePref) {
-      setCloseGameMarginInput(closePref.close_game_margin_threshold ?? 5);
-      setCloseGameMinutesInput(Math.max(1, Math.round((closePref.close_game_time_threshold_seconds ?? 120) / 60)));
-    }
-  }, [data, setLastSync]);
+    load().catch((loadError) => setError(messageFromUnknown(loadError)));
+  }, [token, alertTypeFilter, timeFilter]);
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ alertType, payload }: { alertType: string; payload: Parameters<typeof updateAlertPreference>[2] }) =>
-      updateAlertPreference(token, alertType, payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["alerts-page", token] });
-      setLastSync(new Date());
-    },
-    onError: (mutationError) => setError(messageFromUnknown(mutationError)),
-  });
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      load().catch((loadError) => setError(messageFromUnknown(loadError)));
+    }, 120_000);
+    return () => window.clearInterval(id);
+  }, [token, alertTypeFilter, timeFilter]);
+
+  useEffect(() => {
+    setLastSync(new Date());
+  }, [setLastSync]);
 
   const onToggle = async (preference: AlertPreference) => {
     setError(null);
     setBusyAlertType(preference.alert_type);
     try {
-      await updateMutation.mutateAsync({
-        alertType: preference.alert_type,
-        payload: { is_enabled: !preference.is_enabled },
+      await updateAlertPreference(token, preference.alert_type, {
+        is_enabled: !preference.is_enabled,
       });
+      await load();
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
     } finally {
       setBusyAlertType(null);
     }
@@ -64,14 +88,14 @@ export function AlertsView({ token }: { token: string }) {
     setError(null);
     setBusyAlertType("close_game_late");
     try {
-      await updateMutation.mutateAsync({
-        alertType: "close_game_late",
-        payload: {
-          is_enabled: closePref.is_enabled,
-          close_game_margin_threshold: nextMargin,
-          close_game_time_threshold_seconds: nextMinutes * 60,
-        },
+      await updateAlertPreference(token, "close_game_late", {
+        is_enabled: closePref.is_enabled,
+        close_game_margin_threshold: nextMargin,
+        close_game_time_threshold_seconds: nextMinutes * 60,
       });
+      await load();
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
     } finally {
       setBusyAlertType(null);
     }
@@ -95,13 +119,13 @@ export function AlertsView({ token }: { token: string }) {
         <article className="metric-card"><span>Last sent</span><strong>{lastSentAt}</strong></article>
         <article className="metric-card"><span>Sent (24h)</span><strong>{sent24hCount}</strong></article>
         <article className="metric-card"><span>Failed (24h)</span><strong>{failed24hCount}</strong></article>
-        <article className="metric-card"><span>Updated</span><strong>{data ? new Date().toLocaleTimeString() : "Loading..."}</strong></article>
+        <article className="metric-card"><span>Updated</span><strong>{updatedAt ? updatedAt.toLocaleTimeString() : "Loading..."}</strong></article>
       </div>
 
       {error ? <p className="error">{error}</p> : null}
-      {isLoading ? <p className="muted">Loading alert settings and history...</p> : null}
+      {loading ? <p className="muted">Loading alert settings and history...</p> : null}
 
-      {!isLoading ? (
+      {!loading ? (
         <div className="alerts-layout">
           <section className="panel">
             <div className="section-header"><h3>Alert Rules</h3><p>Enable delivery rules and tune close-game sensitivity.</p></div>

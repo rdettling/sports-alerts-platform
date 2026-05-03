@@ -20,3 +20,5 @@ alembic.log
 *.db
 *.tsbuildinfo
 .cache/
+.neon
+/package-lock.json

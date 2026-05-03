@@ -1,22 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { followTeam, unfollowGame, unfollowTeam, type Game, type Team } from "../../../shared/api";
+import { followTeam, listFollows, listTeams, unfollowGame, unfollowTeam, type Game, type Team } from "../../../shared/api";
 import { TeamLogo, formatTipoff, isGameActive, isRecentlyCompletedGame, messageFromUnknown, scoreSnippet } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
-import { useFollowingData } from "../hooks/useFollowingData";
 
 export function FollowingView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
-  const queryClient = useQueryClient();
-  const { data, isLoading, refetch } = useFollowingData(token);
-
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [gamesTab, setGamesTab] = useState<"active" | "recent">("active");
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
+  const [followedTeamIds, setFollowedTeamIds] = useState<Set<number>>(new Set());
+  const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
+  const [busyGameId, setBusyGameId] = useState<number | null>(null);
+  const [addingTeam, setAddingTeam] = useState(false);
 
-  const allTeams = data?.teams ?? [];
-  const follows = data?.follows;
+  const load = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const [follows, teams] = await Promise.all([listFollows(token), listTeams()]);
+      setAllTeams(teams);
+      setFollowedTeamIds(new Set(follows.teams.map((team) => team.id)));
+      setGames([...follows.games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()));
+      setLastSync(new Date());
+    } catch (loadError) {
+      setError(messageFromUnknown(loadError));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load().catch((loadError) => setError(messageFromUnknown(loadError)));
+  }, [token]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      load().catch((loadError) => setError(messageFromUnknown(loadError)));
+    }, 120_000);
+    return () => window.clearInterval(id);
+  }, [token]);
 
   useEffect(() => {
     if (!selectedTeamId && allTeams.length > 0) {
@@ -24,17 +50,6 @@ export function FollowingView({ token }: { token: string }) {
     }
   }, [allTeams, selectedTeamId]);
 
-  const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["following-page", token] });
-    setLastSync(new Date());
-  };
-
-  const unfollowGameMutation = useMutation({ mutationFn: async (gameId: number) => unfollowGame(token, gameId), onSuccess: invalidate, onError: (e) => setError(messageFromUnknown(e)) });
-  const followTeamMutation = useMutation({ mutationFn: async (teamId: number) => followTeam(token, teamId), onSuccess: invalidate, onError: (e) => setError(messageFromUnknown(e)) });
-  const unfollowTeamMutation = useMutation({ mutationFn: async (teamId: number) => unfollowTeam(token, teamId), onSuccess: invalidate, onError: (e) => setError(messageFromUnknown(e)) });
-
-  const followedTeamIds = useMemo(() => new Set((follows?.teams ?? []).map((team) => team.id)), [follows?.teams]);
-  const games = useMemo(() => [...(follows?.games ?? [])].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()), [follows?.games]);
   const teamMap = useMemo(() => new Map(allTeams.map((team: Team) => [team.id, team])), [allTeams]);
   const followedTeams = useMemo(() => allTeams.filter((team) => followedTeamIds.has(team.id)), [allTeams, followedTeamIds]);
   const activeGames = useMemo(() => games.filter((game) => isGameActive(game)).sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()), [games]);
@@ -49,7 +64,7 @@ export function FollowingView({ token }: { token: string }) {
       <section className="panel">
         <div className="section-header section-header-inline">
           <div><h3>Following Workspace</h3><p>Manage followed teams and quickly trim followed games.</p></div>
-          <button className="btn btn-secondary" disabled={isLoading} onClick={() => refetch().then(() => setLastSync(new Date())).catch((err) => setError(messageFromUnknown(err)))}>Refresh</button>
+          <button className="btn btn-secondary" disabled={isLoading || busyGameId !== null || addingTeam} onClick={() => load().catch((err) => setError(messageFromUnknown(err)))}>Refresh</button>
         </div>
         {error ? <p className="error">{error}</p> : null}
         {isLoading ? <p className="muted">Loading following data...</p> : null}
@@ -62,14 +77,50 @@ export function FollowingView({ token }: { token: string }) {
                 <select value={selectedTeamId ?? ""} onChange={(event) => setSelectedTeamId(Number(event.target.value))}>
                   {allTeams.map((team) => <option key={team.id} value={team.id}>{team.name} ({team.abbreviation})</option>)}
                 </select>
-                <button className="btn" type="button" disabled={!selectedTeamId || followTeamMutation.isPending} onClick={() => selectedTeamId && followTeamMutation.mutate(selectedTeamId)}>Follow Team</button>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={!selectedTeamId || addingTeam}
+                  onClick={async () => {
+                    if (!selectedTeamId) return;
+                    setError(null);
+                    setAddingTeam(true);
+                    try {
+                      await followTeam(token, selectedTeamId);
+                      await load();
+                    } catch (requestError) {
+                      setError(messageFromUnknown(requestError));
+                    } finally {
+                      setAddingTeam(false);
+                    }
+                  }}
+                >
+                  Follow Team
+                </button>
               </div>
               {followedTeams.length === 0 ? <p className="muted">No followed teams yet.</p> : null}
               <ul className="list">
                 {followedTeams.map((team) => (
                   <li key={team.id} className="row-card">
                     <span className="team-row"><TeamLogo team={team} size={22} /><span>{team.name} <span className="muted">({team.abbreviation})</span></span></span>
-                    <button className="btn btn-secondary" disabled={unfollowTeamMutation.isPending} onClick={() => unfollowTeamMutation.mutate(team.id)}>Unfollow</button>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={busyTeamId === team.id}
+                      onClick={async () => {
+                        setError(null);
+                        setBusyTeamId(team.id);
+                        try {
+                          await unfollowTeam(token, team.id);
+                          await load();
+                        } catch (requestError) {
+                          setError(messageFromUnknown(requestError));
+                        } finally {
+                          setBusyTeamId(null);
+                        }
+                      }}
+                    >
+                      Unfollow
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -90,7 +141,24 @@ export function FollowingView({ token }: { token: string }) {
                   return (
                     <li key={game.id} className="row-card">
                       <span className="team-row"><TeamLogo team={away} size={20} /><strong>{away.abbreviation}</strong><span className="muted">@</span><TeamLogo team={home} size={20} /><strong>{home.abbreviation}</strong><span className="muted">{!isGameActive(game) ? ` • ${scoreSnippet(game) || formatTipoff(game.scheduled_start_time)} • Final` : ` • ${formatTipoff(game.scheduled_start_time)}`}</span></span>
-                      <button className="btn btn-secondary" disabled={unfollowGameMutation.isPending} onClick={() => unfollowGameMutation.mutate(game.id)}>Unfollow</button>
+                      <button
+                        className="btn btn-secondary"
+                        disabled={busyGameId === game.id}
+                        onClick={async () => {
+                          setError(null);
+                          setBusyGameId(game.id);
+                          try {
+                            await unfollowGame(token, game.id);
+                            await load();
+                          } catch (requestError) {
+                            setError(messageFromUnknown(requestError));
+                          } finally {
+                            setBusyGameId(null);
+                          }
+                        }}
+                      >
+                        Unfollow
+                      </button>
                     </li>
                   );
                 })}
