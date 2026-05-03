@@ -107,7 +107,7 @@ export function DashboardLayout() {
             </div>
           </header>
 
-          <main className={`app-content ${currentRoute.key === "admin" ? "admin-context" : ""}`.trim()}>
+          <main className={`app-content ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>
             <Routes>
               <Route path="/" element={<Navigate to="games" replace />} />
               <Route path="games" element={<GamesView token={token} />} />

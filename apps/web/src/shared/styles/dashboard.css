@@ -41,9 +41,11 @@ body {
 }
 
 .app-shell {
+  height: 100vh;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .app-sidebar {
@@ -178,6 +180,10 @@ body {
   overflow: auto;
 }
 
+.games-context {
+  overflow: hidden;
+}
+
 .admin-context {
   background: linear-gradient(180deg, rgba(238, 246, 255, 0.8) 0%, rgba(233, 243, 255, 0.35) 100%);
   overflow: hidden;
@@ -189,16 +195,21 @@ body {
 }
 
 .games-page {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
 }
 
 .games-panel {
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .metric-grid {
@@ -375,190 +386,203 @@ button:disabled {
 .data-table-wrap {
   display: grid;
   gap: 0.6rem;
+  height: 100%;
+  flex: 1;
   min-height: 0;
   overflow: auto;
   padding-right: 0.2rem;
 }
 
-.games-toolbar {
-  align-items: center;
-}
-
 .games-refresh-btn {
-  margin-left: auto;
+  align-self: start;
 }
 
 .games-feed-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.games-side-rail {
+.games-day-filter {
   position: sticky;
   top: var(--space-2);
   align-self: start;
-}
-
-.games-side-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: #fcfeff;
-  padding: var(--space-4);
   box-shadow: var(--shadow-panel);
+  padding: 0.6rem;
   display: grid;
-  gap: var(--space-3);
+  gap: 0.3rem;
 }
 
-.games-side-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.games-side-header h4 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.games-watch-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.games-watch-list li {
-  border: 0;
-  border-radius: 0;
+.games-day-filter-btn {
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
-  padding: 0.28rem 0;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.games-watch-team {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-  font-weight: 600;
-}
-
-.games-watch-team span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.games-watch-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.7rem;
-  height: 1.4rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: #f3f7ff;
-  color: #26406a;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.games-table {
+  gap: 0.75rem;
   width: 100%;
-  min-width: 0;
-  border-collapse: separate;
-  border-spacing: 0 10px;
-  table-layout: fixed;
-  --games-row-cols: 14% 33% 15% 22% 16%;
-}
-
-.games-table thead th {
-  color: #64748b;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.92rem;
+  font-weight: 650;
   text-align: left;
-  padding: 0 0.9rem 0.2rem;
+  cursor: pointer;
 }
 
-.games-table .games-col-time {
-  width: 14%;
+.games-day-filter-btn:hover:not(:disabled) {
+  background: #f4f7ff;
 }
 
-.games-table .games-col-matchup {
-  width: 33%;
+.games-day-filter-btn.active {
+  background: #e8efff;
+  border-color: #cfdaf6;
+  color: #163462;
 }
 
-.games-table .games-col-win {
-  width: 15%;
+.games-day-filter-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
-.games-table .games-col-odds {
-  width: 22%;
+.games-list {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
 }
 
-.games-table .games-col-action {
-  width: 16%;
-}
-
-.games-group-row td {
-  padding: 0.5rem 0.8rem 0.2rem;
-  border-top: 1px solid var(--border);
+.games-day-group {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
 }
 
 .games-group-row-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding: 0.45rem 0.2rem 0;
 }
 
 .games-group-row-inner strong {
-  font-size: 1.15rem;
+  font-size: 1rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.games-data-row > td {
-  padding: 0;
-  border: 0;
-  background: transparent;
+.games-cards {
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
 }
 
-.games-data-row-grid {
+.games-card-row {
   display: grid;
-  grid-template-columns: var(--games-row-cols);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem;
   align-items: center;
-  column-gap: 0;
-  padding: 0.9rem 0.9rem;
+  padding: 0.95rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: #fff;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
 }
 
-.games-time-cell {
-  display: block;
-  font-weight: 600;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  font-size: 1.02rem;
+.games-card-main {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(170px, 1.15fr) minmax(170px, 1fr);
+  gap: 1rem;
+  align-items: center;
+  min-width: 0;
 }
 
-.team-row {
-  display: flex;
+.games-matchup-lines {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.games-team-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.games-team-ident {
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+}
+
+.games-team-ident strong {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.games-team-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  min-width: 2.6ch;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.games-team-line.winner .games-team-score {
+  color: #166534;
+  font-weight: 800;
+}
+
+.games-winner-tag {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0.16rem 0.32rem;
+  border-radius: var(--radius-pill);
+  color: #14532d;
+  background: #dcfce7;
+}
+
+.games-status-cell {
   white-space: nowrap;
-  overflow: visible;
+}
+
+.games-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 0.26rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.games-status-pill.scheduled {
+  color: #1d355e;
+  background: #e7eefb;
+}
+
+.games-status-pill.final {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.games-status-pill.live {
+  color: #b91c1c;
+  background: #fee2e2;
 }
 
 .team-logo {
@@ -598,25 +622,40 @@ button:disabled {
 }
 
 .games-action-cell {
-  width: 104px;
+  width: 112px;
   text-align: center;
 }
 
 .games-win-cell,
 .games-odds-cell {
-  white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  font-size: 1rem;
+  font-size: 0.94rem;
   font-weight: 600;
+  min-width: 0;
+}
+
+.games-win-prob-grid {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.games-win-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .games-odds-cell {
   display: grid;
-  gap: 0.08rem;
+  gap: 0.12rem;
 }
 
 .games-odds-main {
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .games-odds-book {
@@ -1029,28 +1068,16 @@ button:disabled {
     overflow: visible;
   }
 
-  .games-side-rail {
+  .games-day-filter {
     position: static;
   }
 
-  .games-table .games-col-time {
-    width: 14%;
+  .games-card-main {
+    grid-template-columns: minmax(210px, 2fr) minmax(120px, 1fr) minmax(155px, 1fr);
   }
 
-  .games-table .games-col-win {
-    width: 16%;
-  }
-
-  .games-table .games-col-odds {
-    width: 24%;
-  }
-
-  .games-table .games-col-action {
-    width: 16%;
-  }
-
-  .games-table {
-    --games-row-cols: 14% 30% 16% 24% 16%;
+  .games-odds-cell {
+    display: none;
   }
 
   .admin-db-grid {
@@ -1076,6 +1103,22 @@ button:disabled {
 
   .admin-db-health-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .games-card-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .games-card-main {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+
+  .games-action-cell-wrap {
+    text-align: left;
   }
 }
 
