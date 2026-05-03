@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
-import { useAuth } from "../auth";
-import { AdminView, AlertsView, FollowingView, GamesView } from "./DashboardViews";
-import { DASHBOARD_ROUTES, DashboardRouteMeta, DashboardShellProvider } from "./dashboard/shell";
+import { useAuth } from "../auth/auth-context";
+import { AdminView, AlertsView, FollowingView, GamesView } from "./index";
+import { DASHBOARD_ROUTES, DashboardRouteMeta, DashboardShellProvider } from "./components/shell";
 
 function NavIcon({ routeKey }: { routeKey: string }) {
   if (routeKey === "games") {
@@ -45,7 +45,7 @@ function routeForPath(pathname: string): DashboardRouteMeta {
 
 function relativeTimeLabel(timestamp: Date | null): string {
   if (!timestamp) return "Sync pending";
-  const diff = Math.max(0, Math.floor((Date.now() - timestamp.getTime()) / 1000));
+  const diff = Math.max(0, Math.floor((new Date().getTime() - timestamp.getTime()) / 1000));
   if (diff < 60) return `Last sync ${diff}s ago`;
   const minutes = Math.floor(diff / 60);
   if (minutes < 60) return `Last sync ${minutes}m ago`;
@@ -58,16 +58,16 @@ export function DashboardLayout() {
   const location = useLocation();
   const [lastSync, setLastSync] = useState<Date | null>(null);
 
-  if (!user || !token) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  const isAdmin = user.role === "admin";
+  const isAdmin = user?.role === "admin";
   const currentRoute = routeForPath(location.pathname);
   const navRoutes = useMemo(
     () => DASHBOARD_ROUTES.filter((route) => (route.adminOnly ? isAdmin : true)),
     [isAdmin],
   );
+
+  if (!user || !token) {
+    return <Navigate to="/auth" replace />;
+  }
 
   return (
     <DashboardShellProvider value={{ setLastSync }}>

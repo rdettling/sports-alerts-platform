@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getOpsAdminOverview, type OpsAdminOverviewResponse, type OpsAdminOverviewWindow } from "../../api";
+import { getOpsAdminOverview, type OpsAdminOverviewResponse, type OpsAdminOverviewWindow } from "../../../shared/api";
 
 type HealthState = "healthy" | "watch" | "at_risk";
 

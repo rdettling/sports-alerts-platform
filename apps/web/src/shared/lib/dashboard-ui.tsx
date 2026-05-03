@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Game, Team } from "../../api";
+import { Game, Team } from "../api";
 
 const GAME_STATUS_LABELS: Record<string, string> = {
   scheduled: "Scheduled",

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AlertType, Team, listTeams, sendDevTestEmail } from "../../api";
-import { TeamLogo, messageFromUnknown } from "./shared";
+import { AlertType, Team, listTeams, sendDevTestEmail } from "../../../shared/api";
+import { TeamLogo, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 
 const TEST_ALERT_TYPES: AlertType[] = ["game_start", "close_game_late", "final_result"];
 const DEFAULT_TEST_AWAY_ABBR = "ATL";

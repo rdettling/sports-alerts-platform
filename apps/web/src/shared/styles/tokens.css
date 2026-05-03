@@ -1,0 +1,30 @@
+:root {
+  --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --bg-app: #eef3fb;
+  --bg-panel: #ffffff;
+  --bg-elevated: #f8fbff;
+  --bg-sidebar: #0f1a31;
+  --bg-sidebar-soft: #172544;
+  --bg-accent-soft: #dde8ff;
+  --text-main: #111b33;
+  --text-muted: #54627d;
+  --text-inverse: #f4f7ff;
+  --accent: #2f5bd1;
+  --accent-strong: #163b9d;
+  --border: #d4dfef;
+  --border-strong: #b8c8e0;
+  --success: #15803d;
+  --error: #b4232c;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --space-1: 0.35rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --shadow-panel: 0 6px 18px rgba(16, 28, 56, 0.08);
+}

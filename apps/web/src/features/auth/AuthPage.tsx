@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { useAuth } from "../auth";
+import { useAuth } from "./auth-context";
 
 export function AuthPage() {
   const navigate = useNavigate();

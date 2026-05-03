@@ -8,7 +8,7 @@ import {
   type OpsAdminOverviewWindow,
   type OpsIngestHealthResponse,
   type OpsNeonUsageResponse,
-} from "../../api";
+} from "../../../shared/api";
 import { DevToolsView } from "./DevToolsView";
 
 type AdminTab = "espn" | "odds" | "resend" | "db" | "tools";

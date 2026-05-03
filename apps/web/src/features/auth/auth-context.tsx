@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { me, startMagicLink, verifyMagicLink, type UserProfile } from "./api";
+import { me, startMagicLink, verifyMagicLink, type UserProfile } from "../../shared/api";
 
 type User = UserProfile;
 

@@ -1,8 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import { AuthPage } from "./pages/AuthPage";
-import { DashboardLayout } from "./pages/DashboardLayout";
-import { useAuth } from "./auth";
+import { AuthPage } from "../features/auth/AuthPage";
+import { DashboardLayout } from "../features/dashboard/DashboardLayout";
+import { useAuth } from "../features/auth/auth-context";
 
 export default function App() {
   const { isLoading, token } = useAuth();
