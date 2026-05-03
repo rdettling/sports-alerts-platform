@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from time import monotonic
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, SentAlert, Team, User
@@ -295,3 +295,9 @@ def process_pending_alerts(db: Session, limit: int = 100, ingest_run_id: int | N
 
     db.flush()
     return sent_count, failed_count
+
+
+def count_pending_alerts(db: Session) -> int:
+    return db.scalar(
+        select(func.count(SentAlert.id)).where(SentAlert.delivery_status == "pending")
+    ) or 0

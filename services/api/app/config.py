@@ -31,4 +31,7 @@ class Settings(BaseSettings):
     odds_api_cache_seconds: int
     odds_enabled: bool
     odds_refresh_seconds: int
+    telemetry_raw_events_enabled: bool = False
+
+
 settings = Settings()

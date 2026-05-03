@@ -3,7 +3,7 @@ import signal
 import threading
 
 from worker.config import settings
-from worker.loops import delivery_loop, ingest_loop
+from worker import scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("worker")
@@ -21,21 +21,12 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop_worker)
 
     logger.info(
-        "Worker started provider=%s ingest_live=%ss ingest_active=%ss ingest_idle=%ss delivery_tick=%ss",
+        "Worker started provider=%s scheduler_max_sleep=%ss ingest_freshness_target=%ss",
         settings.nba_provider,
-        settings.ingest_interval_live_seconds,
-        settings.ingest_interval_active_seconds,
-        settings.ingest_interval_idle_seconds,
-        settings.delivery_tick_seconds,
+        settings.scheduler_max_sleep_seconds,
+        settings.ingest_freshness_target_seconds,
     )
-    ingest_thread = threading.Thread(target=ingest_loop.run, args=(_stop_event,), name="ingest-loop", daemon=True)
-    delivery_thread = threading.Thread(target=delivery_loop.run, args=(_stop_event,), name="delivery-loop", daemon=True)
-    ingest_thread.start()
-    delivery_thread.start()
-    ingest_thread.join()
-    _stop_event.set()
-    delivery_thread.join()
-
+    scheduler.run(_stop_event)
     logger.info("Worker stopped")
 
 

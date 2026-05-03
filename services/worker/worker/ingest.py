@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -52,35 +52,50 @@ def _parse_clock_seconds(clock: str | None) -> int | None:
         return None
 
 
-def _active_user_ids_for_game(db: Session, game: Game) -> list[int]:
-    rows = db.execute(
-        select(UserTeamFollow.user_id, UserGameFollow.user_id)
-        .select_from(Game)
-        .outerjoin(UserTeamFollow, or_(UserTeamFollow.team_id == Game.home_team_id, UserTeamFollow.team_id == Game.away_team_id))
-        .outerjoin(UserGameFollow, UserGameFollow.game_id == Game.id)
-        .where(Game.id == game.id)
+def _load_game_watchers(db: Session, games: list[Game]) -> dict[int, set[int]]:
+    game_ids = [game.id for game in games]
+    if not game_ids:
+        return {}
+    game_map = {game.id: game for game in games}
+
+    direct_rows = db.execute(
+        select(UserGameFollow.game_id, UserGameFollow.user_id).where(UserGameFollow.game_id.in_(game_ids))
     ).all()
-    user_ids: set[int] = set()
-    for team_user_id, game_user_id in rows:
-        if team_user_id:
-            user_ids.add(team_user_id)
-        if game_user_id:
-            user_ids.add(game_user_id)
-    return sorted(user_ids)
+    by_game: dict[int, set[int]] = {game_id: set() for game_id in game_ids}
+    for game_id, user_id in direct_rows:
+        by_game.setdefault(game_id, set()).add(user_id)
+
+    team_ids = sorted(
+        {
+            team_id
+            for game in games
+            for team_id in (game.home_team_id, game.away_team_id)
+        }
+    )
+    if team_ids:
+        team_rows = db.execute(
+            select(UserTeamFollow.team_id, UserTeamFollow.user_id).where(UserTeamFollow.team_id.in_(team_ids))
+        ).all()
+        watchers_by_team: dict[int, set[int]] = {}
+        for team_id, user_id in team_rows:
+            watchers_by_team.setdefault(team_id, set()).add(user_id)
+
+        for game_id, game in game_map.items():
+            by_game.setdefault(game_id, set()).update(watchers_by_team.get(game.home_team_id, set()))
+            by_game.setdefault(game_id, set()).update(watchers_by_team.get(game.away_team_id, set()))
+    return by_game
 
 
-def _preference_for_user(
-    db: Session,
-    user_id: int,
-    alert_type: str,
-) -> UserAlertPreference | None:
-    return db.scalar(
+def _load_enabled_preferences(db: Session, user_ids: set[int]) -> dict[tuple[int, str], UserAlertPreference]:
+    if not user_ids:
+        return {}
+    rows = db.scalars(
         select(UserAlertPreference).where(
-            UserAlertPreference.user_id == user_id,
-            UserAlertPreference.alert_type == alert_type,
+            UserAlertPreference.user_id.in_(sorted(user_ids)),
             UserAlertPreference.is_enabled.is_(True),
         )
-    )
+    ).all()
+    return {(row.user_id, row.alert_type): row for row in rows}
 
 
 def _should_trigger_close_game_late(game: Game, preference: UserAlertPreference | None) -> bool:
@@ -104,69 +119,79 @@ def _should_trigger_close_game_late(game: Game, preference: UserAlertPreference 
     return seconds_left <= time_threshold
 
 
-def _create_sent_alert(
-    db: Session,
-    user_id: int,
-    game: Game,
-    alert_type: str,
-    metadata: dict[str, str | int | bool],
-) -> bool:
-    dedupe_key = f"{user_id}:{game.id}:{alert_type}"
-    existing = db.scalar(select(SentAlert.id).where(SentAlert.dedupe_key == dedupe_key))
-    if existing:
-        return False
-    db.add(
-        SentAlert(
-            user_id=user_id,
-            game_id=game.id,
-            alert_type=alert_type,
-            delivery_channel="email",
-            delivery_status="pending",
-            dedupe_key=dedupe_key,
-            metadata_json=metadata,
-        )
-    )
-    db.flush()
-    return True
+def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
+    if not games:
+        return 0
+    watchers_by_game = _load_game_watchers(db, games)
+    all_user_ids = {user_id for users in watchers_by_game.values() for user_id in users}
+    prefs_by_user_type = _load_enabled_preferences(db, all_user_ids)
 
+    candidate_alerts: list[SentAlert] = []
+    candidate_dedupe_keys: set[str] = set()
+    for game in games:
+        user_ids = watchers_by_game.get(game.id, set())
+        for user_id in user_ids:
+            if prefs_by_user_type.get((user_id, "game_start")) and game.status in {"in_progress", "live"}:
+                key = f"{user_id}:{game.id}:game_start"
+                if key not in candidate_dedupe_keys:
+                    candidate_dedupe_keys.add(key)
+                    candidate_alerts.append(
+                        SentAlert(
+                            user_id=user_id,
+                            game_id=game.id,
+                            alert_type="game_start",
+                            delivery_channel="email",
+                            delivery_status="pending",
+                            dedupe_key=key,
+                            metadata_json={"status": game.status},
+                        )
+                    )
 
-def _evaluate_and_record_alerts(db: Session, game: Game) -> int:
-    user_ids = _active_user_ids_for_game(db, game)
-    created = 0
-    for user_id in user_ids:
-        game_start_pref = _preference_for_user(db, user_id, "game_start")
-        if game_start_pref and game.status in {"in_progress", "live"}:
-            if _create_sent_alert(
-                db,
-                user_id=user_id,
-                game=game,
-                alert_type="game_start",
-                metadata={"status": game.status},
-            ):
-                created += 1
+            if prefs_by_user_type.get((user_id, "final_result")) and (game.is_final or game.status == "final"):
+                key = f"{user_id}:{game.id}:final_result"
+                if key not in candidate_dedupe_keys:
+                    candidate_dedupe_keys.add(key)
+                    candidate_alerts.append(
+                        SentAlert(
+                            user_id=user_id,
+                            game_id=game.id,
+                            alert_type="final_result",
+                            delivery_channel="email",
+                            delivery_status="pending",
+                            dedupe_key=key,
+                            metadata_json={"status": game.status},
+                        )
+                    )
 
-        final_pref = _preference_for_user(db, user_id, "final_result")
-        if final_pref and (game.is_final or game.status == "final"):
-            if _create_sent_alert(
-                db,
-                user_id=user_id,
-                game=game,
-                alert_type="final_result",
-                metadata={"status": game.status},
-            ):
-                created += 1
+            close_pref = prefs_by_user_type.get((user_id, "close_game_late"))
+            if _should_trigger_close_game_late(game, close_pref):
+                key = f"{user_id}:{game.id}:close_game_late"
+                if key not in candidate_dedupe_keys:
+                    candidate_dedupe_keys.add(key)
+                    candidate_alerts.append(
+                        SentAlert(
+                            user_id=user_id,
+                            game_id=game.id,
+                            alert_type="close_game_late",
+                            delivery_channel="email",
+                            delivery_status="pending",
+                            dedupe_key=key,
+                            metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
+                        )
+                    )
 
-        close_pref = _preference_for_user(db, user_id, "close_game_late")
-        if _should_trigger_close_game_late(game, close_pref):
-            if _create_sent_alert(
-                db,
-                user_id=user_id,
-                game=game,
-                alert_type="close_game_late",
-                metadata={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
-            ):
-                created += 1
-    return created
+    if not candidate_alerts:
+        return 0
+
+    existing = {
+        row[0]
+        for row in db.execute(select(SentAlert.dedupe_key).where(SentAlert.dedupe_key.in_(sorted(candidate_dedupe_keys)))).all()
+    }
+    to_insert = [alert for alert in candidate_alerts if alert.dedupe_key not in existing]
+    if to_insert:
+        db.add_all(to_insert)
+        db.flush()
+    return len(to_insert)
 
 
 def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -> tuple[bool, int | None]:
@@ -342,11 +367,8 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
             odds_updated += 1
 
         db.flush()
-        for game_id in touched_game_ids:
-            game = db.get(Game, game_id)
-            if not game:
-                continue
-            alert_records_created += _evaluate_and_record_alerts(db, game)
+        touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
+        alert_records_created += _evaluate_and_record_alerts_batched(db, touched_games)
 
         actual_espn_calls = db.scalar(
             select(func.count(ApiCallEvent.id)).where(

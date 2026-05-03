@@ -1,0 +1,74 @@
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import select
+
+from app.db.models import WorkerJob
+from worker import scheduler
+
+
+def test_bootstrap_jobs_creates_ingest_and_delivery(db_session):
+    scheduler._bootstrap_jobs()
+    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc())).all()
+    assert [job.job_type for job in jobs] == ["delivery", "ingest"]
+    assert all(job.status == "queued" for job in jobs)
+
+
+def test_mark_job_failed_applies_backoff(db_session):
+    now = datetime.now(timezone.utc)
+    job = WorkerJob(
+        job_type="ingest",
+        status="queued",
+        next_run_at=now,
+        attempt_count=0,
+        max_attempts=3,
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+
+    scheduler._mark_job_failed(job.id, "boom", now)
+
+    db_session.expire_all()
+    updated = db_session.get(WorkerJob, job.id)
+    assert updated is not None
+    assert updated.status == "queued"
+    assert updated.attempt_count == 1
+    assert updated.backoff_until is not None
+    min_expected = (now + timedelta(seconds=1)).replace(tzinfo=None)
+    assert updated.next_run_at >= min_expected
+
+
+def test_mark_job_failed_sets_terminal_status_after_max_attempts(db_session):
+    now = datetime.now(timezone.utc)
+    job = WorkerJob(
+        job_type="delivery",
+        status="queued",
+        next_run_at=now,
+        attempt_count=1,
+        max_attempts=2,
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+
+    scheduler._mark_job_failed(job.id, "fatal", now)
+
+    db_session.expire_all()
+    updated = db_session.get(WorkerJob, job.id)
+    assert updated is not None
+    assert updated.status == "failed"
+    assert updated.attempt_count == 2
+
+
+def test_run_delivery_job_uses_empty_backoff(db_session, monkeypatch):
+    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
+    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
+    next_seconds = scheduler._run_delivery_job()
+    assert next_seconds == scheduler.settings.delivery_empty_backoff_seconds
+
+
+def test_run_delivery_job_uses_active_backoff_when_pending(db_session, monkeypatch):
+    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
+    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 5)
+    next_seconds = scheduler._run_delivery_job()
+    assert next_seconds == scheduler.settings.delivery_active_backoff_seconds

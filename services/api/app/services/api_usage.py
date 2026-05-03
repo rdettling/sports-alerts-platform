@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.models import ApiCallEvent, ApiCallRollupHourly
 
 
@@ -46,18 +47,19 @@ def record_api_call_event(
 ) -> None:
     event_time = occurred_at or datetime.now(timezone.utc)
     bucket_start = event_time.replace(minute=0, second=0, microsecond=0)
-    event = ApiCallEvent(
-        service=service,
-        provider=provider,
-        endpoint_key=endpoint_key,
-        attempt_status=attempt_status,
-        http_status=http_status,
-        latency_ms=latency_ms,
-        error_code=error_code,
-        ingest_run_id=ingest_run_id,
-        occurred_at=event_time,
-    )
-    db.add(event)
+    if settings.telemetry_raw_events_enabled:
+        event = ApiCallEvent(
+            service=service,
+            provider=provider,
+            endpoint_key=endpoint_key,
+            attempt_status=attempt_status,
+            http_status=http_status,
+            latency_ms=latency_ms,
+            error_code=error_code,
+            ingest_run_id=ingest_run_id,
+            occurred_at=event_time,
+        )
+        db.add(event)
 
     pending_rollup = _find_pending_rollup(
         db,

@@ -34,6 +34,7 @@ os.environ.update(
         "ODDS_API_CACHE_SECONDS": "60",
         "ODDS_ENABLED": "true",
         "ODDS_REFRESH_SECONDS": "5400",
+        "TELEMETRY_RAW_EVENTS_ENABLED": "true",
         "DEV_MODE": "true",
     }
 )

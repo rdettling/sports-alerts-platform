@@ -5,10 +5,15 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str
-    ingest_interval_live_seconds: int
     ingest_interval_active_seconds: int
     ingest_interval_idle_seconds: int
-    delivery_tick_seconds: int
+    scheduler_max_sleep_seconds: int = 60
+    ingest_freshness_target_seconds: int = 60
+    delivery_empty_backoff_seconds: int = 300
+    delivery_active_backoff_seconds: int = 30
+    job_max_retries: int = 5
+    job_retry_base_seconds: int = 30
+    telemetry_raw_events_enabled: bool = False
     nba_provider: str
     odds_provider: str
     odds_api_key: str

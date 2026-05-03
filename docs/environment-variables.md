@@ -44,10 +44,15 @@ FROM_EMAIL=alerts@livegamealerts.com
 RESEND_API_KEY=replace-with-resend-api-key
 RESEND_API_URL=https://api.resend.com/emails
 
-INGEST_INTERVAL_LIVE_SECONDS=60
 INGEST_INTERVAL_ACTIVE_SECONDS=300
 INGEST_INTERVAL_IDLE_SECONDS=3600
-DELIVERY_TICK_SECONDS=30
+SCHEDULER_MAX_SLEEP_SECONDS=60
+INGEST_FRESHNESS_TARGET_SECONDS=60
+DELIVERY_EMPTY_BACKOFF_SECONDS=300
+DELIVERY_ACTIVE_BACKOFF_SECONDS=30
+JOB_MAX_RETRIES=5
+JOB_RETRY_BASE_SECONDS=30
+TELEMETRY_RAW_EVENTS_ENABLED=false
 
 VITE_API_BASE_URL=http://localhost:8000
 ```
@@ -55,6 +60,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ## Notes
 
 - `ODDS_ENABLED=false` disables odds API fetches in worker.
+- `TELEMETRY_RAW_EVENTS_ENABLED=false` keeps hourly rollups but skips per-call raw event writes.
 - `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.
 - `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and verified sender (`FROM_EMAIL`).
   API uses the same delivery config for magic-link emails.

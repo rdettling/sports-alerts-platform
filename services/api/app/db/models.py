@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -49,7 +49,10 @@ class Team(Base):
 
 class Game(Base):
     __tablename__ = "games"
-    __table_args__ = (UniqueConstraint("external_game_id", "league", name="uq_games_external_league"),)
+    __table_args__ = (
+        UniqueConstraint("external_game_id", "league", name="uq_games_external_league"),
+        Index("ix_games_league_is_final_status_sched", "league", "is_final", "status", "scheduled_start_time"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     external_game_id: Mapped[str] = mapped_column(String(64))
@@ -139,6 +142,9 @@ class SentAlert(Base):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
+Index("ix_sent_alerts_delivery_status_sent_at", SentAlert.delivery_status, SentAlert.sent_at)
+
+
 class IngestRun(Base):
     __tablename__ = "ingest_runs"
 
@@ -191,3 +197,22 @@ class ApiCallRollupHourly(Base):
     endpoint_key: Mapped[str] = mapped_column(String(64), index=True)
     attempt_status: Mapped[str] = mapped_column(String(32), index=True)
     call_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class WorkerJob(Base):
+    __tablename__ = "worker_jobs"
+    __table_args__ = (
+        UniqueConstraint("job_type", name="uq_worker_jobs_job_type"),
+        Index("ix_worker_jobs_status_next_run", "status", "next_run_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_type: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -52,7 +52,7 @@ def _pick_mode(db: Session, now: datetime) -> str:
 
 def _mode_interval_seconds(mode: str) -> int:
     if mode == "live":
-        return max(15, settings.ingest_interval_live_seconds)
+        return max(15, settings.ingest_freshness_target_seconds)
     if mode == "active":
         return max(30, settings.ingest_interval_active_seconds)
     return max(60, settings.ingest_interval_idle_seconds)
