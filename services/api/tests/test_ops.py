@@ -79,3 +79,11 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     ingest_runs = client.get("/ops/api-usage/ingest-runs?limit=10", headers=headers)
     assert ingest_runs.status_code == 200
     assert len(ingest_runs.json()["items"]) >= 1
+
+    overview = client.get("/ops/admin/overview?window=24h&limit=10", headers=headers)
+    assert overview.status_code == 200
+    overview_json = overview.json()
+    assert "global_health" in overview_json
+    assert "providers" in overview_json
+    assert "risk_cards" in overview_json
+    assert len(overview_json["providers"]) >= 1

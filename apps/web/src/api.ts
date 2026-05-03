@@ -140,6 +140,58 @@ export type OpsIngestRunsResponse = {
   }>;
 };
 
+export type OpsAdminOverviewWindow = "1h" | "6h" | "24h" | "7d";
+
+export type OpsAdminOverviewResponse = {
+  global_health: {
+    status: "healthy" | "watch" | "at_risk";
+    providers_at_risk: number;
+    providers_on_watch: number;
+  };
+  thresholds: {
+    utilization_watch_pct: number;
+    utilization_risk_pct: number;
+    error_watch_pct: number;
+    error_risk_pct: number;
+  };
+  risk_cards: Array<{
+    key: string;
+    label: string;
+    value: number;
+    status: "ok" | "medium" | "high";
+  }>;
+  providers: Array<{
+    provider: string;
+    quota_limit_24h: number | null;
+    quota_limit_window: number | null;
+    total_calls: number;
+    success_calls: number;
+    error_calls: number;
+    rate_limited_calls: number;
+    utilization_pct: number | null;
+    remaining_budget: number | null;
+    calls_per_hour: number;
+    error_pct: number;
+    trend_delta_calls: number;
+    trend_direction: "up" | "down" | "flat";
+    status: "healthy" | "watch" | "at_risk";
+    reasons: string[];
+  }>;
+  incidents: Array<{
+    id: string;
+    occurred_at: string;
+    provider: string | null;
+    type: string;
+    severity: "low" | "medium" | "high";
+    title: string;
+    detail: string;
+  }>;
+  meta: {
+    last_updated_at: string;
+    window: OpsAdminOverviewWindow;
+  };
+};
+
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
     return detail;
@@ -305,6 +357,24 @@ export function getOpsApiUsageTimeseries(token: string, window: OpsTimeseriesWin
 
 export function getOpsApiUsageIngestRuns(token: string, limit: number = 50): Promise<OpsIngestRunsResponse> {
   return request<OpsIngestRunsResponse>(`/ops/api-usage/ingest-runs?limit=${encodeURIComponent(String(limit))}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function getOpsAdminOverview(
+  token: string,
+  window: OpsAdminOverviewWindow,
+  options?: { provider?: string; limit?: number },
+): Promise<OpsAdminOverviewResponse> {
+  const params = new URLSearchParams();
+  params.set("window", window);
+  if (options?.provider) {
+    params.set("provider", options.provider);
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  return request<OpsAdminOverviewResponse>(`/ops/admin/overview?${params.toString()}`, {
     headers: authHeaders(token),
   });
 }

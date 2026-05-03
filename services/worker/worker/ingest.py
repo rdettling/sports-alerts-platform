@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    ApiCallEvent,
     Game,
     GameOddsCurrent,
     IngestRun,
@@ -17,6 +16,7 @@ from app.db.models import (
     UserGameFollow,
     UserTeamFollow,
 )
+from app.services.api_usage import consume_ingest_provider_call_counts
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
@@ -370,18 +370,9 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
         alert_records_created += _evaluate_and_record_alerts_batched(db, touched_games)
 
-        actual_espn_calls = db.scalar(
-            select(func.count(ApiCallEvent.id)).where(
-                ApiCallEvent.ingest_run_id == ingest_run.id,
-                ApiCallEvent.provider == "espn",
-            )
-        ) or 0
-        actual_odds_calls = db.scalar(
-            select(func.count(ApiCallEvent.id)).where(
-                ApiCallEvent.ingest_run_id == ingest_run.id,
-                ApiCallEvent.provider == "odds",
-            )
-        ) or 0
+        call_counts_by_provider = consume_ingest_provider_call_counts(ingest_run.id)
+        actual_espn_calls = call_counts_by_provider.get("espn", 0)
+        actual_odds_calls = call_counts_by_provider.get("odds", 0)
         expected_espn_calls = provider.expected_call_count(plan.espn_requests)
         ingest_run.expected_espn_calls = expected_espn_calls
         ingest_run.expected_odds_calls = plan.expected_odds_calls
