@@ -27,6 +27,25 @@ def _create_game() -> Game:
         db.close()
 
 
+def _create_old_game() -> None:
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        old_game = Game(
+            external_game_id="test-old-game",
+            league="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=datetime.now(timezone.utc) - timedelta(days=10),
+            status="scheduled",
+            is_final=False,
+        )
+        db.add(old_game)
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_games_include_odds_when_available(client):
     game = _create_game()
     db = SessionLocal()
@@ -62,3 +81,13 @@ def test_games_skip_odds_fetch_when_include_odds_is_false(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["odds"] is None
+
+
+def test_games_excludes_rows_outside_retention_window(client):
+    _create_game()
+    _create_old_game()
+    response = client.get("/games")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["external_game_id"] == "test-odds-game"

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import WorkerJob
+from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
 from worker.delivery import count_pending_alerts, process_pending_alerts
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 INGEST_JOB = "ingest"
 DELIVERY_JOB = "delivery"
+CLEANUP_JOB = "cleanup_games"
 
 
 def _utcnow() -> datetime:
@@ -27,7 +29,7 @@ def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
-        for job_type in (INGEST_JOB, DELIVERY_JOB):
+        for job_type in (INGEST_JOB, DELIVERY_JOB, CLEANUP_JOB):
             existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type))
             if existing:
                 if existing.status == "failed":
@@ -167,6 +169,21 @@ def _run_delivery_job() -> int:
         db.close()
 
 
+def _run_cleanup_job() -> int:
+    db = SessionLocal()
+    try:
+        removed = cleanup_games_outside_window(db)
+        db.commit()
+        if removed:
+            logger.info("Cleanup removed games=%s", removed)
+        return max(60, settings.cleanup_interval_seconds)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def run(stop_event: threading.Event) -> None:
     _bootstrap_jobs()
     logger.info("Scheduler loop started max_sleep=%ss", settings.scheduler_max_sleep_seconds)
@@ -184,6 +201,8 @@ def run(stop_event: threading.Event) -> None:
                 next_run = _run_ingest_job()
             elif due_job.job_type == DELIVERY_JOB:
                 next_run = _run_delivery_job()
+            elif due_job.job_type == CLEANUP_JOB:
+                next_run = _run_cleanup_job()
             else:
                 raise RuntimeError(f"unsupported job type: {due_job.job_type}")
             _mark_job_success(due_job.id, next_run, _utcnow())

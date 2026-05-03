@@ -11,6 +11,9 @@ class WorkerSettings(BaseSettings):
     ingest_freshness_target_seconds: int = 60
     delivery_empty_backoff_seconds: int = 300
     delivery_active_backoff_seconds: int = 30
+    cleanup_interval_seconds: int = 1800
+    games_retention_past_hours: int = 36
+    games_retention_future_days: int = 7
     job_max_retries: int = 5
     job_retry_base_seconds: int = 30
     telemetry_raw_events_enabled: bool = False
