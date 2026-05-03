@@ -28,7 +28,7 @@ class WorkerSettings(BaseSettings):
     odds_api_timeout_seconds: int = 6
     odds_api_cache_seconds: int = 60
     odds_enabled: bool = False
-    odds_refresh_seconds: int = 5400
+    odds_refresh_seconds: int = 7200
     delivery_mode: str = "log"
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str

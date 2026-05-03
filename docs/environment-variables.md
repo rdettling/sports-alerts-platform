@@ -2,15 +2,11 @@
 
 This repo uses strict env loading: if a required variable is missing, startup fails.
 
-## Single local `.env` file
+## Minimal required `.env`
 
-Keep one `.env` at repo root with all required variables:
+Keep one `.env` at repo root with only required variables that do not have safe code defaults:
 
 ```env
-APP_NAME=sports-alerts-api
-API_HOST=0.0.0.0
-API_PORT=8000
-
 POSTGRES_USER=sports
 POSTGRES_PASSWORD=sports
 POSTGRES_DB=sports_alerts
@@ -18,44 +14,14 @@ POSTGRES_PORT=5432
 DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts
 
 JWT_SECRET_KEY=replace-with-long-random-string
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=86400
-MAGIC_LINK_TTL_MINUTES=15
-MAGIC_LINK_COOLDOWN_SECONDS=60
-MAGIC_LINK_MAX_REQUESTS_PER_HOUR=5
 WEB_BASE_URL=http://localhost:5173
 CORS_ALLOW_ORIGINS=http://localhost:5173
 
-ODDS_API_KEY=replace-with-the-odds-api-key-or-placeholder
-ODDS_API_BASE_URL=https://api.the-odds-api.com/v4/sports
-ODDS_PROVIDER=the_odds_api
-ODDS_API_SPORT_KEY=basketball_nba
-ODDS_API_REGIONS=us
-ODDS_API_MARKET=h2h
-ODDS_API_FORMAT=american
-ODDS_API_TIMEOUT_SECONDS=6
-ODDS_API_CACHE_SECONDS=60
+ODDS_API_KEY=replace-with-the-odds-api-key
 ODDS_ENABLED=false
-ODDS_REFRESH_SECONDS=5400
 
-NBA_PROVIDER=espn
-DELIVERY_MODE=log
-FROM_EMAIL=alerts@livegamealerts.com
 RESEND_API_KEY=replace-with-resend-api-key
-RESEND_API_URL=https://api.resend.com/emails
-
-INGEST_INTERVAL_ACTIVE_SECONDS=300
-INGEST_INTERVAL_IDLE_SECONDS=3600
-SCHEDULER_MAX_SLEEP_SECONDS=60
-INGEST_FRESHNESS_TARGET_SECONDS=60
-DELIVERY_EMPTY_BACKOFF_SECONDS=300
-DELIVERY_ACTIVE_BACKOFF_SECONDS=30
-CLEANUP_INTERVAL_SECONDS=1800
-GAMES_RETENTION_PAST_HOURS=36
-GAMES_RETENTION_FUTURE_DAYS=7
-JOB_MAX_RETRIES=5
-JOB_RETRY_BASE_SECONDS=30
-TELEMETRY_RAW_EVENTS_ENABLED=false
+DELIVERY_MODE=log
 
 VITE_API_BASE_URL=http://localhost:8000
 ```
@@ -63,6 +29,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ## Notes
 
 - `ODDS_ENABLED=false` disables odds API fetches in worker.
+- `ODDS_REFRESH_SECONDS` defaults to `7200` (2 hours).
 - `TELEMETRY_RAW_EVENTS_ENABLED=false` keeps hourly rollups but skips per-call raw event writes.
 - `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.
 - `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and verified sender (`FROM_EMAIL`).
