@@ -123,20 +123,25 @@ export type OpsTimeseriesResponse = {
   }>;
 };
 
-export type OpsIngestRunsResponse = {
-  items: Array<{
-    ingest_run_id: number;
-    started_at: string;
-    completed_at: string | null;
-    cycle_duration_seconds: number | null;
-    status: string;
-    poll_mode: string | null;
-    games_checked: number;
-    games_updated: number;
-    expected_espn_calls: number;
-    actual_espn_calls: number;
-    expected_odds_calls: number;
-    actual_odds_calls: number;
+export type OpsIngestHealthResponse = {
+  scheduler_mode: "live" | "pregame_hot" | "pregame_cold" | "off";
+  next_run_at: string | null;
+  last_success_at: string | null;
+  states: Array<{
+    source_key: string;
+    mode: string;
+    next_due_at: string | null;
+    last_success_at: string | null;
+    backoff_until: string | null;
+    last_error: string | null;
+  }>;
+  events: Array<{
+    id: number;
+    source_key: string;
+    event_type: string;
+    mode: string | null;
+    message: string | null;
+    occurred_at: string;
   }>;
 };
 
@@ -190,6 +195,20 @@ export type OpsAdminOverviewResponse = {
     last_updated_at: string;
     window: OpsAdminOverviewWindow;
   };
+};
+
+export type OpsNeonUsageResponse = {
+  available: boolean;
+  project_id: string | null;
+  project_name: string | null;
+  dashboard_url: string | null;
+  consumption_period_start: string | null;
+  consumption_period_end: string | null;
+  cpu_used_sec: number | null;
+  active_time_sec: number | null;
+  compute_last_active_at: string | null;
+  avg_cu_while_active: number | null;
+  message: string | null;
 };
 
 function normalizeErrorDetail(detail: unknown): string {
@@ -355,8 +374,8 @@ export function getOpsApiUsageTimeseries(token: string, window: OpsTimeseriesWin
   );
 }
 
-export function getOpsApiUsageIngestRuns(token: string, limit: number = 50): Promise<OpsIngestRunsResponse> {
-  return request<OpsIngestRunsResponse>(`/ops/api-usage/ingest-runs?limit=${encodeURIComponent(String(limit))}`, {
+export function getOpsIngestHealth(token: string, eventLimit: number = 20): Promise<OpsIngestHealthResponse> {
+  return request<OpsIngestHealthResponse>(`/ops/db/ingest-health?event_limit=${encodeURIComponent(String(eventLimit))}`, {
     headers: authHeaders(token),
   });
 }
@@ -375,6 +394,12 @@ export function getOpsAdminOverview(
     params.set("limit", String(options.limit));
   }
   return request<OpsAdminOverviewResponse>(`/ops/admin/overview?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function getOpsNeonUsage(token: string): Promise<OpsNeonUsageResponse> {
+  return request<OpsNeonUsageResponse>("/ops/db/neon-usage", {
     headers: authHeaders(token),
   });
 }

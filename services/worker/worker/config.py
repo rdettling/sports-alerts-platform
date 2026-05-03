@@ -5,10 +5,14 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str
-    ingest_interval_active_seconds: int = 300
-    ingest_interval_idle_seconds: int = 3600
+    ingest_live_interval_seconds: int = 45
+    ingest_pregame_hot_interval_seconds: int = 300
+    ingest_pregame_cold_interval_seconds: int = 1800
+    ingest_off_interval_seconds: int = 14400
+    ingest_pregame_hot_window_minutes: int = 90
+    ingest_pregame_cold_window_hours: int = 24
+    ingest_heartbeat_seconds: int = 3600
     scheduler_max_sleep_seconds: int = 60
-    ingest_freshness_target_seconds: int = 60
     delivery_empty_backoff_seconds: int = 300
     delivery_active_backoff_seconds: int = 30
     cleanup_interval_seconds: int = 1800
@@ -29,7 +33,7 @@ class WorkerSettings(BaseSettings):
     odds_api_cache_seconds: int = 60
     odds_enabled: bool = False
     odds_refresh_seconds: int = 7200
-    delivery_mode: str = "log"
+    delivery_mode: str = "email"
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str
     resend_api_url: str = "https://api.resend.com/emails"

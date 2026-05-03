@@ -144,8 +144,8 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
 def _run_ingest_job() -> int:
     provider = get_provider()
     result = run_ingest_cycle(provider=provider)
-    next_poll = int(result.get("next_poll_seconds", settings.ingest_freshness_target_seconds))
-    return max(1, min(next_poll, settings.ingest_freshness_target_seconds))
+    next_poll = int(result.get("next_poll_seconds", settings.ingest_pregame_cold_interval_seconds))
+    return max(1, next_poll)
 
 
 def _run_delivery_job() -> int:

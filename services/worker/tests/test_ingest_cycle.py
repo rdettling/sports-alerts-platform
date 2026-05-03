@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, IngestRun, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
+from app.db.models import Game, GameOddsCurrent, IngestEvent, IngestState, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
 from worker.ingest import run_ingest_cycle
 from worker.odds import MoneylineOdds
 from worker.planner import FetchPlan
@@ -110,13 +110,10 @@ def test_ingest_run_success(db_session):
     assert result["games_updated"] == 1
     assert result["next_poll_seconds"] >= 30
 
-    runs = db_session.scalars(select(IngestRun)).all()
-    assert len(runs) == 1
-    assert runs[0].status == "success"
-    assert runs[0].expected_espn_calls == 3
-    assert runs[0].expected_odds_calls in {0, 1}
-    assert runs[0].actual_espn_calls == 0
-    assert runs[0].poll_mode in {"live", "active", "idle"}
+    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
+    assert state is not None
+    assert state.mode in {"live", "pregame_hot", "pregame_cold", "off"}
+    assert state.last_success_at is not None
 
     games = db_session.scalars(select(Game)).all()
     assert len(games) == 1
@@ -127,9 +124,11 @@ def test_ingest_run_failure(db_session):
     assert result["status"] == "failed"
     assert result["next_poll_seconds"] > 0
 
-    runs = db_session.scalars(select(IngestRun)).all()
-    assert len(runs) == 1
-    assert runs[0].status == "failed"
+    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
+    assert state is not None
+    assert state.last_error is not None
+    events = db_session.scalars(select(IngestEvent).where(IngestEvent.event_type == "error")).all()
+    assert len(events) >= 1
 
 
 def test_ingest_creates_deduped_live_alerts(db_session):
@@ -345,6 +344,6 @@ def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypa
     result = run_ingest_cycle(SuccessProvider())
     assert result["status"] == "success"
 
-    run = db_session.scalar(select(IngestRun).order_by(IngestRun.id.desc()))
-    assert run is not None
-    assert run.expected_odds_calls == 1
+    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
+    assert state is not None
+    assert state.next_due_at is not None

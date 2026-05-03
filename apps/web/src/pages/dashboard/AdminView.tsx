@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   getOpsAdminOverview,
-  getOpsApiUsageIngestRuns,
+  getOpsIngestHealth,
+  getOpsNeonUsage,
   type OpsAdminOverviewResponse,
   type OpsAdminOverviewWindow,
-  type OpsIngestRunsResponse,
+  type OpsIngestHealthResponse,
+  type OpsNeonUsageResponse,
 } from "../../api";
 import { DevToolsView } from "./DevToolsView";
 
@@ -32,6 +34,17 @@ function numberLabel(value: number | null | undefined): string {
     return "n/a";
   }
   return new Intl.NumberFormat().format(value);
+}
+
+function dateLabel(isoTime: string | null | undefined): string {
+  if (!isoTime) {
+    return "n/a";
+  }
+  const date = new Date(isoTime);
+  if (Number.isNaN(date.getTime())) {
+    return "n/a";
+  }
+  return date.toLocaleString();
 }
 
 function statusLabel(status: "healthy" | "watch" | "at_risk"): string {
@@ -63,7 +76,8 @@ function findProvider(
 
 function useAdminData(token: string, windowValue: OpsAdminOverviewWindow) {
   const [overview, setOverview] = useState<OpsAdminOverviewResponse | null>(null);
-  const [ingestRuns, setIngestRuns] = useState<OpsIngestRunsResponse | null>(null);
+  const [ingestHealth, setIngestHealth] = useState<OpsIngestHealthResponse | null>(null);
+  const [neonUsage, setNeonUsage] = useState<OpsNeonUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,13 +90,15 @@ function useAdminData(token: string, windowValue: OpsAdminOverviewWindow) {
         setError(null);
       }
       try {
-        const [overviewResponse, ingestRunsResponse] = await Promise.all([
+        const [overviewResponse, ingestHealthResponse, neonUsageResponse] = await Promise.all([
           getOpsAdminOverview(token, windowValue, { limit: 30 }),
-          getOpsApiUsageIngestRuns(token, 40),
+          getOpsIngestHealth(token, 40),
+          getOpsNeonUsage(token),
         ]);
         if (active) {
           setOverview(overviewResponse);
-          setIngestRuns(ingestRunsResponse);
+          setIngestHealth(ingestHealthResponse);
+          setNeonUsage(neonUsageResponse);
         }
       } catch (loadError) {
         if (active) {
@@ -103,7 +119,7 @@ function useAdminData(token: string, windowValue: OpsAdminOverviewWindow) {
     };
   }, [token, windowValue]);
 
-  return { overview, ingestRuns, loading, error };
+  return { overview, ingestHealth, neonUsage, loading, error };
 }
 
 function ProviderPanel({
@@ -164,61 +180,82 @@ function ProviderPanel({
   );
 }
 
-function DbStatsPanel({ ingestRuns }: { ingestRuns: OpsIngestRunsResponse | null }) {
-  const runs = ingestRuns?.items ?? [];
-  const latest = runs[0] ?? null;
-  const failures = runs.filter((run) => run.status !== "success");
-  const successCount = runs.filter((run) => run.status === "success").length;
-  const successRate = runs.length > 0 ? Math.round((successCount / runs.length) * 100) : null;
-  const avgDuration =
-    runs.length > 0
-      ? Math.round(
-          runs
-            .map((run) => run.cycle_duration_seconds ?? 0)
-            .reduce((sum, current) => sum + current, 0) / runs.length,
-        )
-      : null;
+function DbStatsPanel({
+  ingestHealth,
+  neonUsage,
+}: {
+  ingestHealth: OpsIngestHealthResponse | null;
+  neonUsage: OpsNeonUsageResponse | null;
+}) {
+  const events = ingestHealth?.events ?? [];
+  const states = ingestHealth?.states ?? [];
+  const latestEvent = events[0] ?? null;
+  const failures = events.filter((event) => event.event_type === "error");
 
   return (
     <div className="admin-simple-stack">
       <section className="card admin-simple-panel">
-        <h3>DB stats (internal)</h3>
-        <p className="muted">This is internal ingest telemetry, not direct Neon billing metrics yet.</p>
+        <h3>DB stats</h3>
+        <p className="muted">Internal ingest telemetry + Neon compute usage for the current billing cycle.</p>
+        <p className="muted">
+          {neonUsage?.dashboard_url ? (
+            <a href={neonUsage.dashboard_url} target="_blank" rel="noreferrer">
+              Open Neon dashboard
+            </a>
+          ) : null}
+        </p>
         <div className="admin-simple-metrics">
           <div>
-            <span className="muted">Latest cycle</span>
-            <strong>{latest ? timeAgoLabel(latest.started_at) : "n/a"}</strong>
+            <span className="muted">Neon CPU used</span>
+            <strong>{neonUsage?.cpu_used_sec === null || neonUsage?.cpu_used_sec === undefined ? "n/a" : `${(neonUsage.cpu_used_sec / 3600).toFixed(2)} CUh`}</strong>
           </div>
           <div>
-            <span className="muted">Success rate</span>
-            <strong>{successRate === null ? "n/a" : `${successRate}%`}</strong>
+            <span className="muted">Neon active time</span>
+            <strong>{neonUsage?.active_time_sec === null || neonUsage?.active_time_sec === undefined ? "n/a" : `${(neonUsage.active_time_sec / 3600).toFixed(2)}h`}</strong>
           </div>
           <div>
-            <span className="muted">Avg cycle duration</span>
-            <strong>{avgDuration === null ? "n/a" : `${avgDuration}s`}</strong>
+            <span className="muted">Avg CU while active</span>
+            <strong>{neonUsage?.avg_cu_while_active === null || neonUsage?.avg_cu_while_active === undefined ? "n/a" : `${neonUsage.avg_cu_while_active.toFixed(3)} CU`}</strong>
           </div>
           <div>
-            <span className="muted">Failure count</span>
+            <span className="muted">Cycle end</span>
+            <strong>{dateLabel(neonUsage?.consumption_period_end)}</strong>
+          </div>
+          <div>
+            <span className="muted">Scheduler mode</span>
+            <strong>{ingestHealth?.scheduler_mode ?? "n/a"}</strong>
+          </div>
+          <div>
+            <span className="muted">Next run</span>
+            <strong>{ingestHealth?.next_run_at ? timeAgoLabel(ingestHealth.next_run_at) : "n/a"}</strong>
+          </div>
+          <div>
+            <span className="muted">Last success</span>
+            <strong>{ingestHealth?.last_success_at ? timeAgoLabel(ingestHealth.last_success_at) : "n/a"}</strong>
+          </div>
+          <div>
+            <span className="muted">Recent errors</span>
             <strong>{failures.length}</strong>
           </div>
         </div>
+        <p className="muted">Tracked sources: {states.length}</p>
+        {!neonUsage?.available && neonUsage?.message ? <p className="muted">{neonUsage.message}</p> : null}
       </section>
 
       <section className="card admin-simple-panel admin-panel-scroll">
-        <h3>Recent ingest runs</h3>
+        <h3>Recent ingest events</h3>
         <div className="admin-scroll-body">
           <ul className="list">
-            {runs.map((run) => (
-              <li key={run.ingest_run_id} className="admin-simple-incident">
-                <strong>Run #{run.ingest_run_id} · {run.status}</strong>
+            {events.map((event) => (
+              <li key={event.id} className="admin-simple-incident">
+                <strong>{event.event_type} · {event.source_key}</strong>
                 <p className="muted">
-                  {timeAgoLabel(run.started_at)} · mode {run.poll_mode ?? "n/a"} · duration {run.cycle_duration_seconds ?? "n/a"}s
+                  {timeAgoLabel(event.occurred_at)} · mode {event.mode ?? "n/a"}
                 </p>
-                <p className="muted">
-                  games {run.games_updated}/{run.games_checked} · espn {run.actual_espn_calls}/{run.expected_espn_calls} · odds {run.actual_odds_calls}/{run.expected_odds_calls}
-                </p>
+                {event.message ? <p className="muted">{event.message}</p> : null}
               </li>
             ))}
+            {!latestEvent ? <li className="admin-simple-incident"><strong>No events yet</strong></li> : null}
           </ul>
         </div>
       </section>
@@ -229,7 +266,7 @@ function DbStatsPanel({ ingestRuns }: { ingestRuns: OpsIngestRunsResponse | null
 export function AdminView({ token }: { token: string }) {
   const [tab, setTab] = useState<AdminTab>("espn");
   const [windowValue, setWindowValue] = useState<OpsAdminOverviewWindow>("24h");
-  const { overview, ingestRuns, loading, error } = useAdminData(token, windowValue);
+  const { overview, ingestHealth, neonUsage, loading, error } = useAdminData(token, windowValue);
 
   const providerTab = normalizeProviderTab(tab);
   const provider = useMemo(() => {
@@ -271,7 +308,7 @@ export function AdminView({ token }: { token: string }) {
       {!loading && !error ? (
         <div className="admin-tab-content">
           {tab === "tools" ? <DevToolsView token={token} /> : null}
-          {tab === "db" ? <DbStatsPanel ingestRuns={ingestRuns} /> : null}
+          {tab === "db" ? <DbStatsPanel ingestHealth={ingestHealth} neonUsage={neonUsage} /> : null}
           {providerTab && overview ? <ProviderPanel provider={provider} /> : null}
         </div>
       ) : null}

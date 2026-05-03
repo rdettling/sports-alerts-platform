@@ -3,28 +3,31 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiCallRollupHourly, IngestRun, User
+from app.db.models import ApiCallRollupHourly, IngestEvent, IngestState, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.ops import (
     ApiUsageSummaryOut,
+    IngestHealthEventOut,
+    IngestHealthOut,
+    IngestHealthResponseOut,
     ApiUsageTimeseriesOut,
     ApiUsageTimeseriesPointOut,
     EndpointUsageOut,
     ExpectedActualOut,
-    IngestRunUsageListOut,
-    IngestRunUsageOut,
     OpsAdminGlobalHealthOut,
     OpsAdminMetaOut,
     OpsAdminOverviewOut,
     OpsAdminProviderOut,
     OpsAdminRiskCardOut,
     OpsAdminRiskThresholdsOut,
+    NeonUsageOut,
     ProviderUsageOut,
 )
 
@@ -33,6 +36,7 @@ router = APIRouter(prefix="/ops", tags=["ops"])
 WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 TIMESERIES_WINDOWS = {"24h": 24, "7d": 24 * 7}
 ADMIN_OVERVIEW_WINDOWS = {"1h", "6h", "24h", "7d"}
+NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
 
 
 def _window_start(window: str) -> datetime:
@@ -45,27 +49,6 @@ def _timeseries_window_start(window: str) -> datetime:
     if window not in TIMESERIES_WINDOWS:
         raise HTTPException(status_code=422, detail="Invalid window")
     return datetime.now(timezone.utc) - timedelta(hours=TIMESERIES_WINDOWS[window])
-
-
-def _to_ingest_usage(row: IngestRun) -> IngestRunUsageOut:
-    return IngestRunUsageOut(
-        ingest_run_id=row.id,
-        started_at=row.started_at,
-        completed_at=row.completed_at,
-        cycle_duration_seconds=(
-            int((row.completed_at - row.started_at).total_seconds())
-            if row.completed_at is not None and row.started_at is not None
-            else None
-        ),
-        status=row.status,
-        poll_mode=row.poll_mode,
-        games_checked=row.games_checked,
-        games_updated=row.games_updated,
-        expected_espn_calls=row.expected_espn_calls,
-        actual_espn_calls=row.actual_espn_calls,
-        expected_odds_calls=row.expected_odds_calls,
-        actual_odds_calls=row.actual_odds_calls,
-    )
 
 
 def _risk_status(
@@ -108,6 +91,12 @@ def _canonical_provider_name(name: str) -> str:
     return normalized
 
 
+def _resolve_neon_dashboard_url(project_id: str) -> str:
+    if settings.neon_dashboard_url.strip():
+        return settings.neon_dashboard_url.strip()
+    return f"https://console.neon.tech/app/projects/{project_id}"
+
+
 @router.get("/api-usage/summary", response_model=ApiUsageSummaryOut)
 def api_usage_summary(
     window: str = Query(default="24h"),
@@ -118,11 +107,6 @@ def api_usage_summary(
     rollups = db.scalars(
         select(ApiCallRollupHourly).where(
             ApiCallRollupHourly.bucket_start >= start,
-        )
-    ).all()
-    ingest_runs = db.scalars(
-        select(IngestRun).where(
-            IngestRun.started_at >= start,
         )
     ).all()
 
@@ -149,12 +133,7 @@ def api_usage_summary(
             endpoint_metrics["error_calls"] += row.call_count
             totals["error_calls"] += row.call_count
 
-    expected_espn = sum(run.expected_espn_calls for run in ingest_runs)
-    expected_odds = sum(run.expected_odds_calls for run in ingest_runs)
-    actual_espn = sum(run.actual_espn_calls for run in ingest_runs)
-    actual_odds = sum(run.actual_odds_calls for run in ingest_runs)
-
-    provider_expected = {"espn": expected_espn, "odds": expected_odds}
+    provider_expected = {"espn": None, "odds": None}
     by_provider = [
         ProviderUsageOut(
             provider=provider,
@@ -182,8 +161,8 @@ def api_usage_summary(
         window=window,
         totals=totals,
         expected_vs_actual={
-            "espn": ExpectedActualOut(expected=expected_espn, actual=actual_espn),
-            "odds": ExpectedActualOut(expected=expected_odds, actual=actual_odds),
+            "espn": ExpectedActualOut(expected=0, actual=0),
+            "odds": ExpectedActualOut(expected=0, actual=0),
         },
         by_provider=by_provider,
         by_endpoint=by_endpoint,
@@ -206,18 +185,6 @@ def api_usage_timeseries(
             ApiCallRollupHourly.bucket_start >= start,
         )
     ).all()
-    ingest_runs = db.scalars(
-        select(IngestRun).where(
-            IngestRun.started_at >= start,
-        )
-    ).all()
-
-    expected_by_bucket_provider: dict[tuple[datetime, str], int] = defaultdict(int)
-    for run in ingest_runs:
-        bucket_start = run.started_at.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        expected_by_bucket_provider[(bucket_start, "espn")] += run.expected_espn_calls
-        expected_by_bucket_provider[(bucket_start, "odds")] += run.expected_odds_calls
-
     points_acc: dict[tuple[datetime, str], dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rollups:
         key = (row.bucket_start, row.provider)
@@ -240,20 +207,59 @@ def api_usage_timeseries(
                 success_calls=metrics.get("success_calls", 0),
                 error_calls=metrics.get("error_calls", 0),
                 rate_limited_calls=metrics.get("rate_limited_calls", 0),
-                expected_calls=expected_by_bucket_provider.get((bucket_start, provider)),
+                expected_calls=None,
             )
         )
     return ApiUsageTimeseriesOut(window=window, bucket=bucket, points=points)
 
 
-@router.get("/api-usage/ingest-runs", response_model=IngestRunUsageListOut)
-def api_usage_ingest_runs(
-    limit: int = Query(default=50, ge=1, le=500),
+@router.get("/db/ingest-health", response_model=IngestHealthResponseOut)
+def ingest_health(
+    event_limit: int = Query(default=20, ge=1, le=200),
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
-) -> IngestRunUsageListOut:
-    rows = db.scalars(select(IngestRun).order_by(desc(IngestRun.started_at)).limit(limit)).all()
-    return IngestRunUsageListOut(items=[_to_ingest_usage(row) for row in rows])
+) -> IngestHealthResponseOut:
+    states = db.scalars(select(IngestState).order_by(IngestState.source_key.asc())).all()
+    events = db.scalars(select(IngestEvent).order_by(IngestEvent.occurred_at.desc()).limit(event_limit)).all()
+    ingest_job = db.scalar(select(WorkerJob).where(WorkerJob.job_type == "ingest"))
+
+    scheduler_mode = "off"
+    if any(state.mode == "live" for state in states):
+        scheduler_mode = "live"
+    elif any(state.mode == "pregame_hot" for state in states):
+        scheduler_mode = "pregame_hot"
+    elif any(state.mode == "pregame_cold" for state in states):
+        scheduler_mode = "pregame_cold"
+
+    next_run_at = ingest_job.next_run_at if ingest_job else None
+    last_success_at = max((state.last_success_at for state in states if state.last_success_at), default=None)
+    return IngestHealthResponseOut(
+        scheduler_mode=scheduler_mode,
+        next_run_at=next_run_at,
+        last_success_at=last_success_at,
+        states=[
+            IngestHealthOut(
+                source_key=state.source_key,
+                mode=state.mode,
+                next_due_at=state.next_due_at,
+                last_success_at=state.last_success_at,
+                backoff_until=state.backoff_until,
+                last_error=state.last_error,
+            )
+            for state in states
+        ],
+        events=[
+            IngestHealthEventOut(
+                id=event.id,
+                source_key=event.source_key,
+                event_type=event.event_type,
+                mode=event.mode,
+                message=event.message,
+                occurred_at=event.occurred_at,
+            )
+            for event in events
+        ],
+    )
 
 
 @router.get("/admin/overview", response_model=OpsAdminOverviewOut)
@@ -271,8 +277,6 @@ def admin_overview(
     now = datetime.now(timezone.utc)
 
     rollups = db.scalars(select(ApiCallRollupHourly).where(ApiCallRollupHourly.bucket_start >= start)).all()
-    ingest_runs = db.scalars(select(IngestRun).where(IngestRun.started_at >= start).order_by(desc(IngestRun.started_at))).all()
-
     by_provider: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     by_provider_hour_bucket: dict[str, dict[datetime, int]] = defaultdict(lambda: defaultdict(int))
 
@@ -388,9 +392,9 @@ def admin_overview(
         ),
         OpsAdminRiskCardOut(
             key="recent_failures",
-            label="Ingest failures",
-            value=sum(1 for run in ingest_runs if run.status != "success"),
-            status="high" if any(run.status != "success" for run in ingest_runs) else "ok",
+            label="Ingest errors",
+            value=db.query(IngestEvent).filter(IngestEvent.event_type == "error", IngestEvent.occurred_at >= start).count(),
+            status="high" if db.query(IngestEvent).filter(IngestEvent.event_type == "error", IngestEvent.occurred_at >= start).count() > 0 else "ok",
         ),
     ]
 
@@ -410,4 +414,46 @@ def admin_overview(
         providers=providers_out,
         incidents=[],
         meta=OpsAdminMetaOut(last_updated_at=now, window=window),
+    )
+
+
+@router.get("/db/neon-usage", response_model=NeonUsageOut)
+def neon_usage(_: User = Depends(require_admin_user)) -> NeonUsageOut:
+    if not settings.neon_api_key.strip():
+        return NeonUsageOut(available=False, message="NEON_API_KEY is not configured.")
+    if not settings.neon_project_id.strip():
+        return NeonUsageOut(available=False, message="NEON_PROJECT_ID is not configured.")
+
+    headers = {"Authorization": f"Bearer {settings.neon_api_key.strip()}"}
+    project_id = settings.neon_project_id.strip()
+    org_id = settings.neon_org_id.strip()
+    params = {"org_id": org_id} if org_id else None
+
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            response = client.get(f"{NEON_API_BASE_URL}/projects/{project_id}", headers=headers, params=params)
+            response.raise_for_status()
+            raw = response.json()
+    except Exception as exc:
+        return NeonUsageOut(available=False, message=f"Failed to load Neon stats: {exc}")
+
+    data = raw.get("project", raw) if isinstance(raw, dict) else {}
+
+    cpu_used_sec = data.get("cpu_used_sec")
+    active_time_sec = data.get("active_time_seconds")
+    avg_cu_while_active: float | None = None
+    if isinstance(cpu_used_sec, int) and isinstance(active_time_sec, int) and active_time_sec > 0:
+        avg_cu_while_active = round(cpu_used_sec / active_time_sec, 3)
+
+    return NeonUsageOut(
+        available=True,
+        project_id=data.get("id"),
+        project_name=data.get("name"),
+        dashboard_url=_resolve_neon_dashboard_url(project_id),
+        consumption_period_start=data.get("consumption_period_start"),
+        consumption_period_end=data.get("consumption_period_end"),
+        cpu_used_sec=cpu_used_sec,
+        active_time_sec=active_time_sec,
+        compute_last_active_at=data.get("compute_last_active_at"),
+        avg_cu_while_active=avg_cu_while_active,
     )

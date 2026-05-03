@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import User, UserAlertPreference
@@ -31,7 +32,13 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
                 updated_at=datetime.now(timezone.utc),
             )
         )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent requests may attempt to seed defaults simultaneously.
+        # If another transaction inserted the same (user_id, alert_type) first,
+        # treat this as success and continue with a clean session state.
+        db.rollback()
 
 
 @router.get("", response_model=list[AlertPreferenceOut])
@@ -84,4 +91,3 @@ def update_alert_preference(
     db.commit()
     db.refresh(preference)
     return AlertPreferenceOut.model_validate(preference)
-

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     magic_link_max_requests_per_hour: int = 5
     web_base_url: str
     cors_allow_origins: str
-    delivery_mode: str = "log"
+    delivery_mode: str = "email"
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str
     resend_api_url: str = "https://api.resend.com/emails"
@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     ops_risk_utilization_risk_pct: float = 85.0
     ops_risk_error_watch_pct: float = 2.0
     ops_risk_error_risk_pct: float = 5.0
+    neon_api_key: str = ""
+    neon_project_id: str = ""
+    neon_org_id: str = ""
+    neon_dashboard_url: str = ""
 
     @property
     def ops_provider_quotas(self) -> dict[str, int]:

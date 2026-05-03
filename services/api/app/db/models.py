@@ -145,38 +145,6 @@ class SentAlert(Base):
 Index("ix_sent_alerts_delivery_status_sent_at", SentAlert.delivery_status, SentAlert.sent_at)
 
 
-class IngestRun(Base):
-    __tablename__ = "ingest_runs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[str] = mapped_column(String(32))
-    games_checked: Mapped[int] = mapped_column(Integer, default=0)
-    games_updated: Mapped[int] = mapped_column(Integer, default=0)
-    expected_espn_calls: Mapped[int] = mapped_column(Integer, default=0)
-    expected_odds_calls: Mapped[int] = mapped_column(Integer, default=0)
-    actual_espn_calls: Mapped[int] = mapped_column(Integer, default=0)
-    actual_odds_calls: Mapped[int] = mapped_column(Integer, default=0)
-    poll_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-class ApiCallEvent(Base):
-    __tablename__ = "api_call_events"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    service: Mapped[str] = mapped_column(String(16), index=True)
-    provider: Mapped[str] = mapped_column(String(32), index=True)
-    endpoint_key: Mapped[str] = mapped_column(String(64), index=True)
-    attempt_status: Mapped[str] = mapped_column(String(32), index=True)
-    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    ingest_run_id: Mapped[int | None] = mapped_column(ForeignKey("ingest_runs.id"), nullable=True, index=True)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-
-
 class ApiCallRollupHourly(Base):
     __tablename__ = "api_call_rollups_hourly"
     __table_args__ = (
@@ -216,3 +184,33 @@ class WorkerJob(Base):
     last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class IngestState(Base):
+    __tablename__ = "ingest_state"
+    __table_args__ = (
+        UniqueConstraint("source_key", name="uq_ingest_state_source_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_key: Mapped[str] = mapped_column(String(128))
+    mode: Mapped[str] = mapped_column(String(16), default="idle")
+    last_payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IngestEvent(Base):
+    __tablename__ = "ingest_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_key: Mapped[str] = mapped_column(String(128), index=True)
+    event_type: Mapped[str] = mapped_column(String(32), index=True)
+    mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

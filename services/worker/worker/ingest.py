@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -9,22 +11,22 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Game,
     GameOddsCurrent,
-    IngestRun,
+    IngestEvent,
+    IngestState,
     SentAlert,
     Team,
     UserAlertPreference,
     UserGameFollow,
     UserTeamFollow,
 )
-from app.services.api_usage import consume_ingest_provider_call_counts
 from worker.db import SessionLocal
-from worker.config import settings
-from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
+from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.planner import build_fetch_plan
 from worker.providers.base import NbaProvider, ProviderGame
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
+INGEST_SOURCE_KEY = "nba:espn"
 
 
 def _team_id_map(db: Session) -> dict[str, int]:
@@ -247,40 +249,45 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
     return True, created.id
 
 
-def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> None:
+def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
+            GameOddsCurrent.provider == "the_odds_api",
+            GameOddsCurrent.market == "h2h",
         )
     )
     if row:
+        before = (row.home_moneyline, row.away_moneyline, row.bookmaker)
+        after = (odds.home_moneyline, odds.away_moneyline, odds.bookmaker)
+        if before == after:
+            return False
         row.home_moneyline = odds.home_moneyline
         row.away_moneyline = odds.away_moneyline
         row.bookmaker = odds.bookmaker
         row.fetched_at = odds.last_update or datetime.now(timezone.utc)
-        return
+        return True
 
     db.add(
         GameOddsCurrent(
             game_id=game_id,
-            provider=settings.odds_provider,
-            market=settings.odds_api_market,
+            provider="the_odds_api",
+            market="h2h",
             home_moneyline=odds.home_moneyline,
             away_moneyline=odds.away_moneyline,
             bookmaker=odds.bookmaker,
             fetched_at=odds.last_update or datetime.now(timezone.utc),
         )
     )
+    return True
 
 
 def _delete_game_odds(db: Session, game_id: int) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
+            GameOddsCurrent.provider == "the_odds_api",
+            GameOddsCurrent.market == "h2h",
         )
     )
     if not row:
@@ -314,21 +321,78 @@ def _select_best_odds_for_game(
     return closest
 
 
+def _serialize_games(games: list[ProviderGame]) -> str:
+    payload = [
+        {
+            "id": game.external_game_id,
+            "status": game.status,
+            "home": game.home_score,
+            "away": game.away_score,
+            "period": game.period,
+            "clock": game.clock,
+            "final": game.is_final,
+            "start": game.scheduled_start_time.isoformat(),
+        }
+        for game in sorted(games, key=lambda item: item.external_game_id)
+    ]
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def _hash_payload(payload: str) -> str:
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _emit_event(db: Session, state: IngestState, event_type: str, message: str | None = None, metadata: dict | None = None) -> None:
+    db.add(
+        IngestEvent(
+            source_key=state.source_key,
+            event_type=event_type,
+            mode=state.mode,
+            message=message,
+            metadata_json=metadata,
+            occurred_at=datetime.now(timezone.utc),
+        )
+    )
+
+
+def _get_or_create_state(db: Session) -> IngestState:
+    state = db.scalar(select(IngestState).where(IngestState.source_key == INGEST_SOURCE_KEY))
+    if state:
+        return state
+    state = IngestState(source_key=INGEST_SOURCE_KEY, mode="off")
+    db.add(state)
+    db.flush()
+    return state
+
+
+def _set_next_due(state: IngestState, seconds: int) -> None:
+    state.next_due_at = datetime.now(timezone.utc) + timedelta(seconds=max(1, seconds))
+
+
 def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
     db = SessionLocal()
+    state = _get_or_create_state(db)
     plan = build_fetch_plan(db)
-    ingest_run = IngestRun(status="running", games_checked=0, games_updated=0, poll_mode=plan.mode)
-    db.add(ingest_run)
-    db.commit()
-    db.refresh(ingest_run)
-    if hasattr(provider, "set_telemetry_context"):
-        provider.set_telemetry_context(db, ingest_run.id)  # type: ignore[attr-defined]
-    set_odds_telemetry_context(db, ingest_run.id)
+    now = datetime.now(timezone.utc)
+
+    if state.mode != plan.mode:
+        state.mode = plan.mode
+        _emit_event(db, state, "mode_changed", f"mode changed to {plan.mode}", {"mode": plan.mode})
 
     try:
         team_map = _team_id_map(db)
         team_names = _team_name_map(db)
         all_games = provider.fetch_games(plan.espn_requests)
+
+        serialized = _serialize_games(all_games)
+        payload_hash = _hash_payload(serialized)
+        if state.last_payload_hash == payload_hash and not plan.odds_refresh:
+            state.last_success_at = now
+            state.last_error = None
+            state.backoff_until = None
+            _set_next_due(state, plan.next_ingest_seconds)
+            db.commit()
+            return {"status": "success", "games_checked": len(all_games), "games_updated": 0, "next_poll_seconds": plan.next_ingest_seconds, "mode": plan.mode}
 
         checked = len(all_games)
         updated = 0
@@ -360,24 +424,33 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
             matchup_odds = odds_by_matchup.get(key)
             odds = _select_best_odds_for_game(matchup_odds, game.scheduled_start_time)
             if not odds:
-                if matchup_odds:
-                    _delete_game_odds(db, game_id)
+                if matchup_odds and _delete_game_odds(db, game_id):
+                    odds_updated += 1
                 continue
-            _upsert_game_odds(db, game_id, odds)
-            odds_updated += 1
+            if _upsert_game_odds(db, game_id, odds):
+                odds_updated += 1
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
         alert_records_created += _evaluate_and_record_alerts_batched(db, touched_games)
 
-        call_counts_by_provider = consume_ingest_provider_call_counts(ingest_run.id)
-        actual_espn_calls = call_counts_by_provider.get("espn", 0)
-        actual_odds_calls = call_counts_by_provider.get("odds", 0)
-        expected_espn_calls = provider.expected_call_count(plan.espn_requests)
-        ingest_run.expected_espn_calls = expected_espn_calls
-        ingest_run.expected_odds_calls = plan.expected_odds_calls
-        ingest_run.actual_espn_calls = int(actual_espn_calls)
-        ingest_run.actual_odds_calls = int(actual_odds_calls)
+        state.last_payload_hash = payload_hash
+        state.last_success_at = now
+        state.last_error = None
+        state.backoff_until = None
+        _set_next_due(state, plan.next_ingest_seconds)
+
+        if updated > 0 or odds_updated > 0:
+            _emit_event(
+                db,
+                state,
+                "state_changed",
+                "game or odds state changed",
+                {"games_updated": updated, "odds_updated": odds_updated, "alerts_created": alert_records_created},
+            )
+        elif state.last_success_at is None or (state.last_success_at and (now - state.last_success_at).total_seconds() >= 3600):
+            _emit_event(db, state, "heartbeat", "periodic ingest heartbeat")
+
         db.commit()
         logger.info(
             "Ingest cycle mode=%s checked=%s updated=%s odds_refresh=%s(%s) odds_updated=%s alerts_created=%s",
@@ -389,12 +462,6 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
             odds_updated,
             alert_records_created,
         )
-
-        ingest_run.status = "success"
-        ingest_run.games_checked = checked
-        ingest_run.games_updated = updated
-        ingest_run.completed_at = datetime.now(timezone.utc)
-        db.commit()
         return {
             "status": "success",
             "games_checked": checked,
@@ -404,19 +471,18 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         }
     except Exception as exc:
         db.rollback()
-        ingest_run.status = "failed"
-        ingest_run.error_message = str(exc)
-        ingest_run.completed_at = datetime.now(timezone.utc)
+        state = _get_or_create_state(db)
+        state.last_error = str(exc)
+        state.backoff_until = now + timedelta(seconds=60)
+        _set_next_due(state, plan.next_ingest_seconds)
+        _emit_event(db, state, "error", str(exc))
         db.commit()
         logger.exception("Ingest cycle failed")
         return {
             "status": "failed",
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": settings.ingest_interval_active_seconds,
+            "next_poll_seconds": plan.next_ingest_seconds,
         }
     finally:
-        if hasattr(provider, "set_telemetry_context"):
-            provider.set_telemetry_context(None, None)  # type: ignore[attr-defined]
-        set_odds_telemetry_context(None, None)
         db.close()

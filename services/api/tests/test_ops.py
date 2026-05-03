@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.db.models import ApiCallRollupHourly, IngestRun, User
+from app.db.models import ApiCallRollupHourly, IngestEvent, IngestState, User
 from app.db.session import SessionLocal
 
 
@@ -29,18 +29,8 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         assert user is not None
         user.role = "admin"
         now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        db.add(
-            IngestRun(
-                status="success",
-                started_at=now,
-                completed_at=now,
-                expected_espn_calls=3,
-                actual_espn_calls=3,
-                expected_odds_calls=1,
-                actual_odds_calls=1,
-                poll_mode="live",
-            )
-        )
+        db.add(IngestState(source_key="nba:espn", mode="active", last_success_at=now, next_due_at=now))
+        db.add(IngestEvent(source_key="nba:espn", event_type="state_changed", mode="active", occurred_at=now))
         db.add(
             ApiCallRollupHourly(
                 bucket_start=now,
@@ -70,15 +60,15 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     assert summary.status_code == 200
     summary_json = summary.json()
     assert summary_json["totals"]["actual_calls"] == 4
-    assert summary_json["expected_vs_actual"]["espn"]["expected"] == 3
+    assert summary_json["expected_vs_actual"]["espn"]["expected"] == 0
 
     timeseries = client.get("/ops/api-usage/timeseries?window=24h&bucket=hour", headers=headers)
     assert timeseries.status_code == 200
     assert len(timeseries.json()["points"]) >= 2
 
-    ingest_runs = client.get("/ops/api-usage/ingest-runs?limit=10", headers=headers)
-    assert ingest_runs.status_code == 200
-    assert len(ingest_runs.json()["items"]) >= 1
+    ingest_health = client.get("/ops/db/ingest-health?event_limit=10", headers=headers)
+    assert ingest_health.status_code == 200
+    assert len(ingest_health.json()["states"]) >= 1
 
     overview = client.get("/ops/admin/overview?window=24h&limit=10", headers=headers)
     assert overview.status_code == 200

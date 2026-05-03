@@ -33,29 +33,33 @@ def _pick_mode(db: Session, now: datetime) -> str:
     if live_count > 0:
         return "live"
 
-    active_count = db.scalar(
-        select(func.count(Game.id)).where(
+    next_scheduled = db.scalar(
+        select(func.min(Game.scheduled_start_time)).where(
             Game.league == "NBA",
             Game.is_final.is_(False),
-            or_(
-                Game.status == "scheduled",
-                Game.scheduled_start_time >= now - timedelta(hours=6),
-            ),
-            Game.scheduled_start_time <= now + timedelta(hours=24),
+            Game.status == "scheduled",
+            Game.scheduled_start_time >= now,
         )
-    ) or 0
-    if active_count > 0:
-        return "active"
+    )
+    if next_scheduled is not None:
+        next_start = next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)
+        delta_seconds = (next_start - now).total_seconds()
+        if delta_seconds <= max(60, settings.ingest_pregame_hot_window_minutes * 60):
+            return "pregame_hot"
+        if delta_seconds <= max(3600, settings.ingest_pregame_cold_window_hours * 3600):
+            return "pregame_cold"
 
-    return "idle"
+    return "off"
 
 
 def _mode_interval_seconds(mode: str) -> int:
     if mode == "live":
-        return max(15, settings.ingest_freshness_target_seconds)
-    if mode == "active":
-        return max(30, settings.ingest_interval_active_seconds)
-    return max(60, settings.ingest_interval_idle_seconds)
+        return max(15, settings.ingest_live_interval_seconds)
+    if mode == "pregame_hot":
+        return max(60, settings.ingest_pregame_hot_interval_seconds)
+    if mode == "pregame_cold":
+        return max(300, settings.ingest_pregame_cold_interval_seconds)
+    return max(900, settings.ingest_off_interval_seconds)
 
 
 def _tracked_dates(db: Session, now: datetime) -> set[str]:

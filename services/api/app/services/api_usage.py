@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ApiCallEvent, ApiCallRollupHourly
+from app.db.models import ApiCallRollupHourly
 
 
 class TelemetrySettings(BaseSettings):
@@ -72,20 +72,6 @@ def record_api_call_event(
         with _INGEST_PROVIDER_CALL_COUNTS_LOCK:
             key = (ingest_run_id, provider)
             _INGEST_PROVIDER_CALL_COUNTS[key] = _INGEST_PROVIDER_CALL_COUNTS.get(key, 0) + 1
-    if telemetry_settings.telemetry_raw_events_enabled:
-        event = ApiCallEvent(
-            service=service,
-            provider=provider,
-            endpoint_key=endpoint_key,
-            attempt_status=attempt_status,
-            http_status=http_status,
-            latency_ms=latency_ms,
-            error_code=error_code,
-            ingest_run_id=ingest_run_id,
-            occurred_at=event_time,
-        )
-        db.add(event)
-
     pending_rollup = _find_pending_rollup(
         db,
         bucket_start=bucket_start,

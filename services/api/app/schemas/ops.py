@@ -52,23 +52,30 @@ class ApiUsageTimeseriesOut(BaseModel):
     points: list[ApiUsageTimeseriesPointOut]
 
 
-class IngestRunUsageOut(BaseModel):
-    ingest_run_id: int
-    started_at: datetime
-    completed_at: datetime | None
-    cycle_duration_seconds: int | None
-    status: str
-    poll_mode: str | None
-    games_checked: int
-    games_updated: int
-    expected_espn_calls: int
-    actual_espn_calls: int
-    expected_odds_calls: int
-    actual_odds_calls: int
+class IngestHealthEventOut(BaseModel):
+    id: int
+    source_key: str
+    event_type: str
+    mode: str | None
+    message: str | None
+    occurred_at: datetime
 
 
-class IngestRunUsageListOut(BaseModel):
-    items: list[IngestRunUsageOut]
+class IngestHealthOut(BaseModel):
+    source_key: str
+    mode: str
+    next_due_at: datetime | None
+    last_success_at: datetime | None
+    backoff_until: datetime | None
+    last_error: str | None
+
+
+class IngestHealthResponseOut(BaseModel):
+    scheduler_mode: str
+    next_run_at: datetime | None
+    last_success_at: datetime | None
+    states: list[IngestHealthOut]
+    events: list[IngestHealthEventOut]
 
 
 class OpsAdminRiskThresholdsOut(BaseModel):
@@ -131,3 +138,17 @@ class OpsAdminOverviewOut(BaseModel):
     providers: list[OpsAdminProviderOut]
     incidents: list[OpsAdminIncidentOut]
     meta: OpsAdminMetaOut
+
+
+class NeonUsageOut(BaseModel):
+    available: bool
+    project_id: str | None = None
+    project_name: str | None = None
+    dashboard_url: str | None = None
+    consumption_period_start: datetime | None = None
+    consumption_period_end: datetime | None = None
+    cpu_used_sec: int | None = None
+    active_time_sec: int | None = None
+    compute_last_active_at: datetime | None = None
+    avg_cu_while_active: float | None = None
+    message: str | None = None
