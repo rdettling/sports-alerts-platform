@@ -16,17 +16,21 @@ type AdminTab = "espn" | "odds" | "resend" | "db" | "tools";
 type ProviderKey = "espn" | "odds" | "resend";
 
 function timeAgoLabel(isoTime: string): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(isoTime).getTime()) / 1000));
-  if (seconds < 60) {
-    return `${seconds}s ago`;
+  const deltaSeconds = Math.floor((Date.now() - new Date(isoTime).getTime()) / 1000);
+  const absSeconds = Math.abs(deltaSeconds);
+  if (absSeconds < 60) {
+    return deltaSeconds <= 0 ? `in ${absSeconds}s` : `${absSeconds}s ago`;
   }
-  if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ago`;
+  if (absSeconds < 3600) {
+    const minutes = Math.floor(absSeconds / 60);
+    return deltaSeconds <= 0 ? `in ${minutes}m` : `${minutes}m ago`;
   }
-  if (seconds < 86400) {
-    return `${Math.floor(seconds / 3600)}h ago`;
+  if (absSeconds < 86400) {
+    const hours = Math.floor(absSeconds / 3600);
+    return deltaSeconds <= 0 ? `in ${hours}h` : `${hours}h ago`;
   }
-  return `${Math.floor(seconds / 86400)}d ago`;
+  const days = Math.floor(absSeconds / 86400);
+  return deltaSeconds <= 0 ? `in ${days}d` : `${days}d ago`;
 }
 
 function numberLabel(value: number | null | undefined): string {
@@ -52,6 +56,10 @@ function titleCaseMode(mode: string | null | undefined): string {
     return "n/a";
   }
   return mode.replace(/_/g, " ");
+}
+
+function compactEventLabel(value: string): string {
+  return value.replace(/_/g, " ");
 }
 
 function eventTrendPoints(events: OpsIngestHealthResponse["events"]): number[] {
@@ -242,7 +250,12 @@ function DbStatsPanel({
 
         <div className="admin-db-grid">
           <section className="admin-db-card">
-            <h4>Neon Compute</h4>
+            <div className="admin-db-card-head">
+              <div>
+                <h4>Neon Compute</h4>
+                <p className="muted">Neon compute usage for the current billing cycle.</p>
+              </div>
+            </div>
             <div className="admin-db-kpis">
               <article>
                 <span className="muted">CPU used</span>
@@ -264,8 +277,13 @@ function DbStatsPanel({
           </section>
 
           <section className="admin-db-card">
-            <h4>Scheduler</h4>
-            <div className="admin-db-status-grid">
+            <div className="admin-db-card-head">
+              <div>
+                <h4>Scheduler</h4>
+                <p className="muted">Ingest scheduler status and cadence.</p>
+              </div>
+            </div>
+            <div className="admin-db-scheduler-list">
               <article>
                 <span className="muted">Mode</span>
                 <strong className={`admin-health-pill ${ingestHealth?.scheduler_mode ?? "off"}`}>{titleCaseMode(ingestHealth?.scheduler_mode ?? "n/a")}</strong>
@@ -282,9 +300,14 @@ function DbStatsPanel({
           </section>
 
           <section className="admin-db-card">
-            <h4>Actions</h4>
+            <div className="admin-db-card-head">
+              <div>
+                <h4>Actions</h4>
+                <p className="muted">Quick actions and links.</p>
+              </div>
+            </div>
             <div className="admin-db-actions">
-              <a className="admin-test-btn" href={neonUsage?.dashboard_url ?? "#"} target="_blank" rel="noreferrer">
+              <a className="admin-test-btn admin-test-btn-primary" href={neonUsage?.dashboard_url ?? "#"} target="_blank" rel="noreferrer">
                 <span>Open Neon Dashboard</span>
                 <span className="admin-test-btn-meta">External</span>
               </a>
@@ -297,25 +320,40 @@ function DbStatsPanel({
           </section>
 
           <section className="admin-db-card admin-db-events-card">
-            <h4>Recent Ingest Events</h4>
+            <div className="admin-db-card-head">
+              <div>
+                <h4>Recent Ingest Events</h4>
+                <p className="muted">Sparse event log for ingest state changes and errors.</p>
+              </div>
+            </div>
             <div className="admin-db-events-scroll">
-              <ul className="list">
+              <div className="admin-db-events-header">
+                <span>Event</span>
+                <span>Time</span>
+                <span>Mode</span>
+                <span>Message</span>
+              </div>
+              <ul className="list admin-db-events-list">
                 {events.map((event) => (
-                  <li key={event.id} className="admin-simple-incident">
-                    <strong>{event.event_type} · {event.source_key}</strong>
-                    <p className="muted">
-                      {timeAgoLabel(event.occurred_at)} · mode {event.mode ?? "n/a"}
-                    </p>
-                    {event.message ? <p className="muted">{event.message}</p> : null}
+                  <li key={event.id} className="admin-db-event-row">
+                    <strong>{compactEventLabel(event.event_type)} · {event.source_key}</strong>
+                    <span className="muted">{timeAgoLabel(event.occurred_at)}</span>
+                    <span className={`admin-health-pill ${event.mode ?? "off"}`}>{titleCaseMode(event.mode ?? "off")}</span>
+                    <span className="muted">{event.message ?? "state updated"}</span>
                   </li>
                 ))}
-                {events.length === 0 ? <li className="admin-simple-incident"><strong>No events yet</strong></li> : null}
+                {events.length === 0 ? <li className="admin-db-event-row"><strong>No events yet</strong><span className="muted">-</span><span className="admin-health-pill off">off</span><span className="muted">waiting for first state change</span></li> : null}
               </ul>
             </div>
           </section>
 
           <section className="admin-db-card admin-db-health-card">
-            <h4>Health &amp; Drift</h4>
+            <div className="admin-db-card-head">
+              <div>
+                <h4>Health &amp; Drift</h4>
+                <p className="muted">System health snapshot.</p>
+              </div>
+            </div>
             <div className="admin-db-health-metrics">
               <article>
                 <span className="muted">Tracked sources</span>
