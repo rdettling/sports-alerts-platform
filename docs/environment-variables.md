@@ -18,7 +18,8 @@ WEB_BASE_URL=http://localhost:5173
 CORS_ALLOW_ORIGINS=http://localhost:5173
 
 ODDS_API_KEY=replace-with-the-odds-api-key
-ODDS_ENABLED=true
+# Local default: keep odds disabled to avoid spending API calls
+ODDS_ENABLED=false
 ODDS_REFRESH_SECONDS=21600
 CATALOG_SYNC_INTERVAL_SECONDS=43200
 LIVE_SYNC_INTERVAL_SECONDS=120
@@ -43,7 +44,7 @@ NEON_DASHBOARD_URL=https://console.neon.tech/app/projects/solitary-resonance-988
 
 ## Notes
 
-- `ODDS_ENABLED=true` keeps odds updates active.
+- `ODDS_ENABLED=false` is recommended for local development to avoid spending odds API calls.
 - `ODDS_REFRESH_SECONDS=21600` (6 hours) keeps odds refresh coarse outside urgent windows.
 - Worker sync defaults: catalog `12h`, live `120s`.
 - Live sync updates scores/status only; odds refresh is handled by catalog sync pregame snapshots.

@@ -421,3 +421,33 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
     result = run_live_sync(LiveProvider())
     assert result["status"] == "success"
     assert result["games_updated"] >= 1
+
+
+def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    class CatalogProvider:
+        def fetch_games(self, requests):
+            return [
+                ProviderGame(
+                    external_game_id="game-no-odds",
+                    home_external_team_id="1610612737",
+                    away_external_team_id="1610612738",
+                    scheduled_start_time=now + timedelta(hours=4),
+                    status="scheduled",
+                )
+            ]
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
+    monkeypatch.setattr(
+        "worker.ingest.fetch_nba_odds_index",
+        lambda: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
+    )
+
+    result = run_catalog_sync(CatalogProvider())
+    assert result["status"] == "success"
+    assert result["odds_candidates"] == 0
+    assert result["odds_snapshots_created"] == 0

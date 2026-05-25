@@ -407,7 +407,7 @@ def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
         all_games = provider.fetch_games(requests)
         updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, all_games, team_map, team_names)
 
-        odds_candidates = _games_missing_pregame_snapshot(db, now)
+        odds_candidates = _games_missing_pregame_snapshot(db, now) if settings.odds_enabled else []
         odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:
