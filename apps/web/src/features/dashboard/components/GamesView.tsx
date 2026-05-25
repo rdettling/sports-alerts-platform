@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
@@ -82,6 +82,16 @@ export function GamesView({ token }: { token: string }) {
     }
     return new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   };
+
+  useEffect(() => {
+    const latestMs = games.reduce((latest, game) => {
+      if (!game.last_ingested_at) return latest;
+      const ts = new Date(game.last_ingested_at).getTime();
+      if (Number.isNaN(ts)) return latest;
+      return Math.max(latest, ts);
+    }, 0);
+    setLastSync(latestMs > 0 ? new Date(latestMs) : null);
+  }, [games, setLastSync]);
 
   return (
     <section className="view-stack games-page">

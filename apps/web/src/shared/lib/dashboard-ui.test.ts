@@ -23,6 +23,7 @@ describe("dashboard utilities", () => {
       period: null,
       clock: null,
       is_final: false,
+      last_ingested_at: null,
       odds: {
         home_moneyline: -110,
         away_moneyline: 100,

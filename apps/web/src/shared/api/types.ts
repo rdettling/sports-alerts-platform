@@ -34,6 +34,7 @@ export type Game = {
   period: number | null;
   clock: string | null;
   is_final: boolean;
+  last_ingested_at: string | null;
   odds: {
     home_moneyline: number | null;
     away_moneyline: number | null;
