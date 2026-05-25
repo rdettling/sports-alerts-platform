@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
-import { TeamLogo, formatGameTime, formatMoneyline, messageFromUnknown, noVigProbabilities } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo, formatGameTime, formatMoneyline, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 import { useGamesData } from "../hooks/useGamesData";
 
@@ -115,14 +115,22 @@ export function GamesView({ token }: { token: string }) {
                         const away = teamMap.get(game.away_team_id);
                         if (!home || !away) return null;
                         const isFollowed = followedGameIds.has(game.id);
-                        const probabilities = noVigProbabilities(game);
-                        const awayPercent = probabilities ? Math.round(probabilities.away * 100) : null;
-                        const homePercent = awayPercent !== null ? 100 - awayPercent : null;
                         const hasScore = game.away_score !== null && game.home_score !== null;
                         const awayWon = Boolean(hasScore && game.is_final && game.away_score! > game.home_score!);
                         const homeWon = Boolean(hasScore && game.is_final && game.home_score! > game.away_score!);
                         const isLive = game.status === "in_progress" || game.status === "live";
                         const isFinal = game.status === "final" || game.is_final;
+                        const showScoreValues = isLive || isFinal;
+                        const awayValueText = showScoreValues
+                          ? String(game.away_score ?? "—")
+                          : game.odds
+                            ? formatMoneyline(game.odds.away_moneyline)
+                            : "—";
+                        const homeValueText = showScoreValues
+                          ? String(game.home_score ?? "—")
+                          : game.odds
+                            ? formatMoneyline(game.odds.home_moneyline)
+                            : "—";
 
                         return (
                           <article key={game.id} className="games-card-row" role="listitem">
@@ -130,40 +138,21 @@ export function GamesView({ token }: { token: string }) {
                               <div className="games-matchup-lines">
                                 <div className={`games-team-line ${awayWon ? "winner" : ""}`.trim()}>
                                   <div className="games-team-ident"><TeamLogo team={away} size={24} /><strong>{away.abbreviation}</strong></div>
-                                  <div className="games-team-score">{game.away_score ?? "—"}{awayWon ? <span className="games-winner-tag">W</span> : null}</div>
                                 </div>
                                 <div className={`games-team-line ${homeWon ? "winner" : ""}`.trim()}>
                                   <div className="games-team-ident"><TeamLogo team={home} size={24} /><strong>{home.abbreviation}</strong></div>
-                                  <div className="games-team-score">{game.home_score ?? "—"}{homeWon ? <span className="games-winner-tag">W</span> : null}</div>
                                 </div>
                               </div>
 
-                              <div className="games-status-cell">
+                              <div className="games-values-lines">
+                                <div className={`games-team-score ${awayWon ? "winner" : ""}`.trim()}>{awayValueText}{awayWon ? <span className="games-winner-tag">W</span> : null}</div>
+                                <div className={`games-team-score ${homeWon ? "winner" : ""}`.trim()}>{homeValueText}{homeWon ? <span className="games-winner-tag">W</span> : null}</div>
+                              </div>
+
+                              <div className="games-meta-rail">
                                 <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>{statusLabel(game)}</span>
+                                <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
                               </div>
-
-                              <div className="games-win-cell">
-                                {probabilities ? (
-                                  <div className="games-win-prob-grid">
-                                    <div className="games-win-line"><span>{away.abbreviation}</span><span>{awayPercent}%</span></div>
-                                    <div className="probability-bar"><div className="probability-away" style={{ width: `${awayPercent}%` }} /><div className="probability-home" style={{ width: `${homePercent}%` }} /></div>
-                                    <div className="games-win-line"><span>{home.abbreviation}</span><span>{homePercent}%</span></div>
-                                  </div>
-                                ) : "—"}
-                              </div>
-
-                              <div className="games-odds-cell">
-                                {game.odds ? (
-                                  <>
-                                    <span className="games-odds-main">{away.abbreviation} {formatMoneyline(game.odds.away_moneyline)} / {home.abbreviation} {formatMoneyline(game.odds.home_moneyline)}</span>
-                                    <span className="games-odds-book muted">{game.odds.bookmaker}</span>
-                                  </>
-                                ) : "—"}
-                              </div>
-                            </div>
-
-                            <div className="games-action-cell-wrap">
-                              <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
                             </div>
                           </article>
                         );

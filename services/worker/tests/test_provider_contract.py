@@ -36,3 +36,33 @@ def test_provider_parses_espn_payload_shape():
     assert game.status == "in_progress"
     assert game.home_score == 102
     assert game.away_score == 98
+
+
+def test_provider_skips_if_necessary_playoff_games():
+    payload = {
+        "events": [
+            {
+                "id": "401705999",
+                "date": "2026-05-25T00:00Z",
+                "competitions": [
+                    {
+                        "notes": [{"headline": "West Finals - Game 7 If Necessary"}],
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"abbreviation": "OKC"}},
+                            {"homeAway": "away", "score": "0", "team": {"abbreviation": "MIN"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = BallDontLieProvider(fetch_json=lambda _: payload)
+    schedule = provider.fetch_games([EspnRequest(date="20260525")])
+
+    assert schedule == []

@@ -82,6 +82,12 @@ class BallDontLieProvider(NbaProvider):
 
     def _parse_event(self, event: dict[str, Any]) -> ProviderGame | None:
         competition = (event.get("competitions") or [{}])[0]
+        notes = competition.get("notes") or []
+        for note in notes:
+            headline = str(note.get("headline") or "").lower()
+            if "if necessary" in headline:
+                return None
+
         competitors = competition.get("competitors") or []
         if len(competitors) < 2:
             return None
