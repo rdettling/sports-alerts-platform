@@ -44,6 +44,8 @@ setup:
 			'ODDS_API_BASE_URL=https://api.the-odds-api.com/v4/sports' \
 			'ODDS_PROVIDER=the_odds_api' \
 			'ODDS_API_SPORT_KEY=basketball_nba' \
+			'ODDS_API_SPORT_KEY_NBA=basketball_nba' \
+			'ODDS_API_SPORT_KEY_MLB=baseball_mlb' \
 			'ODDS_API_REGIONS=us' \
 			'ODDS_API_MARKET=h2h' \
 			'ODDS_API_FORMAT=american' \
@@ -69,6 +71,9 @@ setup:
 			'CLEANUP_INTERVAL_SECONDS=1800' \
 			'JOB_MAX_RETRIES=5' \
 			'JOB_RETRY_BASE_SECONDS=30' \
+			'NBA_LIVE_SYNC_INTERVAL_SECONDS=120' \
+			'MLB_LIVE_SYNC_INTERVAL_SECONDS=300' \
+			'ODDS_PREGAME_WINDOW_HOURS=24' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \

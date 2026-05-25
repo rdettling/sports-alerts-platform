@@ -91,3 +91,30 @@ def test_games_excludes_rows_outside_retention_window(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["external_game_id"] == "test-odds-game"
+
+
+def test_games_supports_league_filter(client):
+    _create_game()
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        db.add(
+            Game(
+                external_game_id="test-mlb-game",
+                league="MLB",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=3),
+                status="scheduled",
+                is_final=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games?league=NBA")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["league"] == "NBA"

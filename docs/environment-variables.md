@@ -21,8 +21,10 @@ ODDS_API_KEY=replace-with-the-odds-api-key
 # Local default: keep odds disabled to avoid spending API calls
 ODDS_ENABLED=false
 ODDS_REFRESH_SECONDS=21600
-CATALOG_SYNC_INTERVAL_SECONDS=43200
-LIVE_SYNC_INTERVAL_SECONDS=120
+NBA_LIVE_SYNC_INTERVAL_SECONDS=120
+MLB_LIVE_SYNC_INTERVAL_SECONDS=300
+ODDS_API_SPORT_KEY_NBA=basketball_nba
+ODDS_API_SPORT_KEY_MLB=baseball_mlb
 ODDS_PREGAME_WINDOW_HOURS=24
 DELIVERY_ACTIVE_BACKOFF_SECONDS=120
 DELIVERY_EMPTY_BACKOFF_SECONDS=900
@@ -46,7 +48,7 @@ NEON_DASHBOARD_URL=https://console.neon.tech/app/projects/solitary-resonance-988
 
 - `ODDS_ENABLED=false` is recommended for local development to avoid spending odds API calls.
 - `ODDS_REFRESH_SECONDS=21600` (6 hours) keeps odds refresh coarse outside urgent windows.
-- Worker sync defaults: catalog `12h`, live `120s`.
+- Worker sync defaults: shared catalog `12h`; NBA live `120s`; MLB live `300s`.
 - Live sync updates scores/status only; odds refresh is handled by catalog sync pregame snapshots.
 - `TELEMETRY_RAW_EVENTS_ENABLED=false` keeps hourly rollups but skips per-call raw event writes.
 - `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.

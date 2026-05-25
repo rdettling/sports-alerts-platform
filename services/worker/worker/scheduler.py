@@ -31,8 +31,15 @@ def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
-        for job_type in (CATALOG_SYNC_JOB, LIVE_SYNC_JOB, DELIVERY_JOB, CLEANUP_JOB):
-            existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type))
+        for job_type, league in (
+            (CATALOG_SYNC_JOB, "NBA"),
+            (CATALOG_SYNC_JOB, "MLB"),
+            (LIVE_SYNC_JOB, "NBA"),
+            (LIVE_SYNC_JOB, "MLB"),
+            (DELIVERY_JOB, None),
+            (CLEANUP_JOB, None),
+        ):
+            existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type, WorkerJob.league == league))
             if existing:
                 if existing.status == "failed":
                     existing.status = "queued"
@@ -42,6 +49,7 @@ def _bootstrap_jobs() -> None:
             db.add(
                 WorkerJob(
                     job_type=job_type,
+                    league=league,
                     status="queued",
                     next_run_at=now,
                     attempt_count=0,
@@ -141,24 +149,28 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
         db.close()
 
 
-def _run_catalog_sync_job() -> int:
+def _run_catalog_sync_job(league: str) -> int:
     provider = get_provider()
-    result = run_catalog_sync(provider=provider)
-    next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))
+    result = run_catalog_sync(provider=provider, league=league)
+    fallback = settings.catalog_sync_interval_seconds
+    next_poll = int(result.get("next_poll_seconds", fallback))
     return max(1, next_poll)
 
 
-def _run_live_sync_job() -> int:
+def _run_live_sync_job(league: str) -> int:
     provider = get_provider()
-    result = run_live_sync(provider=provider)
+    result = run_live_sync(provider=provider, league=league)
     _mark_delivery_fast_window(result)
-    next_poll = int(result.get("next_poll_seconds", settings.live_sync_interval_seconds))
+    fallback = settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds
+    next_poll = int(result.get("next_poll_seconds", fallback))
     return max(1, next_poll)
 
 
 def _mark_delivery_fast_window(result: dict[str, int | str]) -> None:
     global _delivery_fast_until  # noqa: PLW0603
     if str(result.get("job_type", "")) != LIVE_SYNC_JOB:
+        return
+    if str(result.get("league", "")).upper() != "NBA":
         return
     if int(result.get("games_checked", 0)) <= 0:
         return
@@ -220,9 +232,9 @@ def run(stop_event: threading.Event) -> None:
         _mark_job_running(due_job.id, now)
         try:
             if due_job.job_type == CATALOG_SYNC_JOB:
-                next_run = _run_catalog_sync_job()
+                next_run = _run_catalog_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == LIVE_SYNC_JOB:
-                next_run = _run_live_sync_job()
+                next_run = _run_live_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == DELIVERY_JOB:
                 next_run = _run_delivery_job()
             elif due_job.job_type == CLEANUP_JOB:

@@ -19,21 +19,40 @@ from app.db.models import (
 )
 from worker.db import SessionLocal
 from worker.config import settings
-from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
+from worker.odds import MoneylineOdds, fetch_odds_index, game_key
 from worker.planner import build_catalog_requests, build_fetch_plan, build_live_requests
-from worker.providers.base import NbaProvider, ProviderGame
+from worker.providers.base import ProviderGame, SportsProvider
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
+SUPPORTED_LEAGUES = ("NBA", "MLB")
 
 
-def _team_id_map(db: Session) -> dict[str, int]:
-    rows = db.scalars(select(Team)).all()
+def _normalize_league(league: str) -> str:
+    value = league.strip().upper()
+    if value not in SUPPORTED_LEAGUES:
+        raise ValueError(f"Unsupported league: {league}")
+    return value
+
+
+def _catalog_interval_seconds(league: str) -> int:
+    return max(1, settings.catalog_sync_interval_seconds)
+
+
+def _live_interval_seconds(league: str) -> int:
+    return max(
+        1,
+        settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds,
+    )
+
+
+def _team_id_map(db: Session, league: str) -> dict[str, int]:
+    rows = db.scalars(select(Team).where(Team.league == league)).all()
     return {team.external_team_id: team.id for team in rows}
 
 
-def _team_name_map(db: Session) -> dict[int, str]:
-    rows = db.scalars(select(Team)).all()
+def _team_name_map(db: Session, league: str) -> dict[int, str]:
+    rows = db.scalars(select(Team).where(Team.league == league)).all()
     return {team.id: team.name for team in rows}
 
 
@@ -194,14 +213,14 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
     return len(to_insert)
 
 
-def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -> tuple[bool, int | None]:
+def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict[str, int]) -> tuple[bool, int | None]:
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
     if not home_id or not away_id:
         logger.warning("Skipping game %s due to missing teams", payload.external_game_id)
         return False, None
 
-    existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == "NBA"))
+    existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == league))
     if existing:
         before = (
             existing.status,
@@ -230,7 +249,7 @@ def _upsert_game(db: Session, payload: ProviderGame, team_map: dict[str, int]) -
 
     created = Game(
         external_game_id=payload.external_game_id,
-        league="NBA",
+        league=league,
         home_team_id=home_id,
         away_team_id=away_id,
         scheduled_start_time=payload.scheduled_start_time,
@@ -251,8 +270,8 @@ def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == "the_odds_api",
-            GameOddsCurrent.market == "h2h",
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == settings.odds_api_market,
         )
     )
     if row:
@@ -269,8 +288,8 @@ def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> bool:
     db.add(
         GameOddsCurrent(
             game_id=game_id,
-            provider="the_odds_api",
-            market="h2h",
+            provider=settings.odds_provider,
+            market=settings.odds_api_market,
             home_moneyline=odds.home_moneyline,
             away_moneyline=odds.away_moneyline,
             bookmaker=odds.bookmaker,
@@ -284,8 +303,8 @@ def _delete_game_odds(db: Session, game_id: int) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == "the_odds_api",
-            GameOddsCurrent.market == "h2h",
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == settings.odds_api_market,
         )
     )
     if not row:
@@ -342,6 +361,7 @@ def _hash_payload(payload: str) -> str:
 
 def _upsert_games_and_collect(
     db: Session,
+    league: str,
     provider_games: list[ProviderGame],
     team_map: dict[str, int],
     team_names: dict[int, str],
@@ -354,7 +374,7 @@ def _upsert_games_and_collect(
     for provider_game in provider_games:
         if only_external_ids is not None and provider_game.external_game_id not in only_external_ids:
             continue
-        did_update, game_id = _upsert_game(db, provider_game, team_map)
+        did_update, game_id = _upsert_game(db, league, provider_game, team_map)
         if did_update:
             updated += 1
         if game_id:
@@ -368,12 +388,12 @@ def _upsert_games_and_collect(
     return updated, touched_game_ids, game_key_by_id
 
 
-def _games_missing_pregame_snapshot(db: Session, now: datetime) -> list[Game]:
+def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> list[Game]:
     pregame_cutoff = now + timedelta(hours=max(1, settings.odds_pregame_window_hours))
     rows = db.scalars(
         select(Game)
         .where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             Game.status == "scheduled",
             Game.scheduled_start_time >= now,
@@ -397,21 +417,22 @@ def _games_missing_pregame_snapshot(db: Session, now: datetime) -> list[Game]:
     return [game for game in rows if game.id not in existing_ids]
 
 
-def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
+def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
+    league = _normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
-        requests = build_catalog_requests(db, now=now)
-        team_map = _team_id_map(db)
-        team_names = _team_name_map(db)
-        all_games = provider.fetch_games(requests)
-        updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, all_games, team_map, team_names)
+        requests = build_catalog_requests(db, league, now=now)
+        team_map = _team_id_map(db, league)
+        team_names = _team_name_map(db, league)
+        all_games = provider.fetch_games(league, requests)
+        updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
-        odds_candidates = _games_missing_pregame_snapshot(db, now) if settings.odds_enabled else []
+        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled else []
         odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:
-            odds_by_matchup = fetch_nba_odds_index()
+            odds_by_matchup = fetch_odds_index(league)
             odds_calls = 1
             for game in odds_candidates:
                 key = game_key_by_id.get(game.id)
@@ -432,7 +453,8 @@ def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
         db.commit()
 
         logger.info(
-            "Catalog sync checked=%s updated=%s odds_candidates=%s odds_snapshots_created=%s odds_calls=%s alerts_created=%s",
+            "Catalog sync league=%s checked=%s updated=%s odds_candidates=%s odds_snapshots_created=%s odds_calls=%s alerts_created=%s",
+            league,
             len(all_games),
             updated,
             len(odds_candidates),
@@ -443,11 +465,12 @@ def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
         return {
             "status": "success",
             "job_type": "catalog_sync",
+            "league": league,
             "games_checked": len(all_games),
             "games_updated": updated,
             "odds_candidates": len(odds_candidates),
             "odds_snapshots_created": odds_snapshots_created,
-            "next_poll_seconds": max(1, settings.catalog_sync_interval_seconds),
+            "next_poll_seconds": _catalog_interval_seconds(league),
         }
     except Exception:
         db.rollback()
@@ -455,22 +478,24 @@ def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
         return {
             "status": "failed",
             "job_type": "catalog_sync",
+            "league": league,
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": max(1, settings.catalog_sync_interval_seconds),
+            "next_poll_seconds": _catalog_interval_seconds(league),
         }
     finally:
         db.close()
 
 
-def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
+def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
+    league = _normalize_league(league)
     db = SessionLocal()
     try:
         live_game_ids = {
             external_id
             for external_id, in db.execute(
                 select(Game.external_game_id).where(
-                    Game.league == "NBA",
+                    Game.league == league,
                     Game.is_final.is_(False),
                     Game.status.in_(("in_progress", "live")),
                 )
@@ -480,28 +505,31 @@ def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
             return {
                 "status": "success",
                 "job_type": "live_sync",
+                "league": league,
                 "games_checked": 0,
                 "games_updated": 0,
-                "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+                "next_poll_seconds": _live_interval_seconds(league),
                 "mode": "idle",
             }
 
-        requests = build_live_requests(db)
+        requests = build_live_requests(db, league)
         if not requests:
             return {
                 "status": "success",
                 "job_type": "live_sync",
+                "league": league,
                 "games_checked": 0,
                 "games_updated": 0,
-                "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+                "next_poll_seconds": _live_interval_seconds(league),
                 "mode": "idle",
             }
 
-        team_map = _team_id_map(db)
-        team_names = _team_name_map(db)
-        provider_games = provider.fetch_games(requests)
+        team_map = _team_id_map(db, league)
+        team_names = _team_name_map(db, league)
+        provider_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, _ = _upsert_games_and_collect(
             db,
+            league,
             provider_games,
             team_map,
             team_names,
@@ -512,7 +540,8 @@ def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
         alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
         db.commit()
         logger.info(
-            "Live sync checked=%s updated=%s alerts_created=%s",
+            "Live sync league=%s checked=%s updated=%s alerts_created=%s",
+            league,
             len(provider_games),
             updated,
             alerts_created,
@@ -520,9 +549,10 @@ def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
         return {
             "status": "success",
             "job_type": "live_sync",
+            "league": league,
             "games_checked": len(provider_games),
             "games_updated": updated,
-            "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+            "next_poll_seconds": _live_interval_seconds(league),
             "mode": "live",
         }
     except Exception:
@@ -531,15 +561,16 @@ def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
         return {
             "status": "failed",
             "job_type": "live_sync",
+            "league": league,
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+            "next_poll_seconds": _live_interval_seconds(league),
             "mode": "live",
         }
     finally:
         db.close()
 
 
-def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
+def run_ingest_cycle(provider: SportsProvider) -> dict[str, int | str]:
     # Legacy compatibility path used by existing tests and tooling.
-    return run_catalog_sync(provider)
+    return run_catalog_sync(provider, league="NBA")

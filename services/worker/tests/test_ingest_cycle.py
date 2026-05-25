@@ -6,11 +6,11 @@ from app.db.models import Game, GameOddsCurrent, SentAlert, Team, User, UserAler
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import MoneylineOdds
 from worker.planner import FetchPlan
-from worker.providers.base import EspnRequest, ProviderGame
+from worker.providers.base import ProviderGame, ScoreboardRequest
 
 
 class SuccessProvider:
-    def fetch_games(self, requests):
+    def fetch_games(self, league, requests):
         return [
             ProviderGame(
                 external_game_id="game-1",
@@ -26,7 +26,7 @@ class SuccessProvider:
 
 
 class FailingProvider:
-    def fetch_games(self, requests):
+    def fetch_games(self, league, requests):
         raise RuntimeError("boom")
 
     def expected_call_count(self, requests):
@@ -34,7 +34,7 @@ class FailingProvider:
 
 
 class LiveCloseProvider:
-    def fetch_games(self, requests):
+    def fetch_games(self, league, requests):
         return [
             ProviderGame(
                 external_game_id="game-live",
@@ -55,7 +55,7 @@ class LiveCloseProvider:
 
 
 class FinalProvider:
-    def fetch_games(self, requests):
+    def fetch_games(self, league, requests):
         return [
             ProviderGame(
                 external_game_id="game-final",
@@ -80,7 +80,7 @@ class RepeatMatchupProvider:
         self.first_start = first_start
         self.second_start = second_start
 
-    def fetch_games(self, requests):
+    def fetch_games(self, league, requests):
         return [
             ProviderGame(
                 external_game_id="game-repeat-1",
@@ -180,7 +180,7 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
         lambda db: FetchPlan(
             mode="active",
             next_ingest_seconds=300,
-            espn_requests=[EspnRequest(date="20260416")],
+            espn_requests=[ScoreboardRequest(date="20260416")],
             odds_refresh=True,
             odds_refresh_reason="forced_for_test",
             expected_espn_calls=1,
@@ -188,8 +188,8 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "worker.ingest.fetch_nba_odds_index",
-        lambda: {
+        "worker.ingest.fetch_odds_index",
+        lambda league: {
             ("atlanta hawks", "boston celtics"): MoneylineOdds(
                 home_moneyline=-130,
                 away_moneyline=110,
@@ -220,7 +220,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
         lambda db: FetchPlan(
             mode="active",
             next_ingest_seconds=300,
-            espn_requests=[EspnRequest(date="20260416"), EspnRequest(date="20260417")],
+            espn_requests=[ScoreboardRequest(date="20260416"), ScoreboardRequest(date="20260417")],
             odds_refresh=True,
             odds_refresh_reason="forced_for_test",
             expected_espn_calls=2,
@@ -229,8 +229,8 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     )
 
     monkeypatch.setattr(
-        "worker.ingest.fetch_nba_odds_index",
-        lambda: {
+        "worker.ingest.fetch_odds_index",
+        lambda league: {
             ("atlanta hawks", "boston celtics"): [
                 MoneylineOdds(
                     home_moneyline=-140,
@@ -276,7 +276,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
         lambda db: FetchPlan(
             mode="active",
             next_ingest_seconds=300,
-            espn_requests=[EspnRequest(date="20260416"), EspnRequest(date="20260417")],
+            espn_requests=[ScoreboardRequest(date="20260416"), ScoreboardRequest(date="20260417")],
             odds_refresh=True,
             odds_refresh_reason="forced_for_test",
             expected_espn_calls=2,
@@ -285,8 +285,8 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "worker.ingest.fetch_nba_odds_index",
-        lambda: {
+        "worker.ingest.fetch_odds_index",
+        lambda league: {
             ("atlanta hawks", "boston celtics"): [
                 MoneylineOdds(
                     home_moneyline=-145,
@@ -319,14 +319,14 @@ def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypa
         lambda db: FetchPlan(
             mode="active",
             next_ingest_seconds=300,
-            espn_requests=[EspnRequest(date="20260416")],
+            espn_requests=[ScoreboardRequest(date="20260416")],
             odds_refresh=True,
             odds_refresh_reason="forced_for_test",
             expected_espn_calls=1,
             expected_odds_calls=1,
         ),
     )
-    monkeypatch.setattr("worker.ingest.fetch_nba_odds_index", lambda: {})
+    monkeypatch.setattr("worker.ingest.fetch_odds_index", lambda league: {})
 
     result = run_ingest_cycle(SuccessProvider())
     assert result["status"] == "success"
@@ -338,7 +338,7 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
     now = datetime.now(timezone.utc)
 
     class CatalogProvider:
-        def fetch_games(self, requests):
+        def fetch_games(self, league, requests):
             return [
                 ProviderGame(
                     external_game_id="game-catalog",
@@ -354,7 +354,7 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
 
     odds_fetch_count = {"count": 0}
 
-    def _fake_odds_index():
+    def _fake_odds_index(league):
         odds_fetch_count["count"] += 1
         return {
             ("atlanta hawks", "boston celtics"): [
@@ -368,7 +368,7 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
             ]
         }
 
-    monkeypatch.setattr("worker.ingest.fetch_nba_odds_index", _fake_odds_index)
+    monkeypatch.setattr("worker.ingest.fetch_odds_index", _fake_odds_index)
 
     first = run_catalog_sync(CatalogProvider())
     second = run_catalog_sync(CatalogProvider())
@@ -395,7 +395,7 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
     db_session.commit()
 
     class LiveProvider:
-        def fetch_games(self, requests):
+        def fetch_games(self, league, requests):
             return [
                 ProviderGame(
                     external_game_id="game-live-only",
@@ -414,8 +414,8 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
             return len(requests)
 
     monkeypatch.setattr(
-        "worker.ingest.fetch_nba_odds_index",
-        lambda: (_ for _ in ()).throw(AssertionError("odds should not be fetched in live sync")),
+        "worker.ingest.fetch_odds_index",
+        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched in live sync")),
     )
 
     result = run_live_sync(LiveProvider())
@@ -427,7 +427,7 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
 
     class CatalogProvider:
-        def fetch_games(self, requests):
+        def fetch_games(self, league, requests):
             return [
                 ProviderGame(
                     external_game_id="game-no-odds",
@@ -443,8 +443,8 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
 
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
     monkeypatch.setattr(
-        "worker.ingest.fetch_nba_odds_index",
-        lambda: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
+        "worker.ingest.fetch_odds_index",
+        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
     )
 
     result = run_catalog_sync(CatalogProvider())

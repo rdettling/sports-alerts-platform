@@ -219,15 +219,14 @@ def ingest_health(
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> IngestHealthResponseOut:
-    jobs = db.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc())).all()
-    catalog_job = next((job for job in jobs if job.job_type == "catalog_sync"), None)
-    live_job = next((job for job in jobs if job.job_type == "live_sync"), None)
-    next_run_candidates = [job.next_run_at for job in (catalog_job, live_job) if job and job.next_run_at is not None]
+    jobs = db.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
+    sync_jobs = [job for job in jobs if job.job_type in {"catalog_sync", "live_sync"}]
+    next_run_candidates = [job.next_run_at for job in sync_jobs if job.next_run_at is not None]
     next_run_at = min(next_run_candidates) if next_run_candidates else None
     last_success_at = max((job.last_finished_at for job in jobs if job.last_finished_at is not None), default=None)
 
     scheduler_mode = "off"
-    if live_job and live_job.status in {"queued", "running"}:
+    if any(job.job_type == "live_sync" and job.status in {"queued", "running"} for job in sync_jobs):
         scheduler_mode = "live"
     return IngestHealthResponseOut(
         scheduler_mode=scheduler_mode,
@@ -235,7 +234,7 @@ def ingest_health(
         last_success_at=last_success_at,
         states=[
             IngestHealthOut(
-                source_key=f"worker:{job.job_type}",
+                source_key=f"worker:{job.job_type}:{job.league or 'global'}",
                 mode=job.status,
                 next_due_at=job.next_run_at,
                 last_success_at=job.last_finished_at,

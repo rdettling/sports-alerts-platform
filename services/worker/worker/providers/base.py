@@ -6,7 +6,7 @@ from typing import Protocol
 
 
 @dataclass(frozen=True)
-class EspnRequest:
+class ScoreboardRequest:
     date: str
 
 
@@ -24,7 +24,7 @@ class ProviderGame:
     is_final: bool = False
 
 
-class NbaProvider(Protocol):
-    def fetch_games(self, requests: list[EspnRequest]) -> list[ProviderGame]: ...
+class SportsProvider(Protocol):
+    def fetch_games(self, league: str, requests: list[ScoreboardRequest]) -> list[ProviderGame]: ...
 
-    def expected_call_count(self, requests: list[EspnRequest]) -> int: ...
+    def expected_call_count(self, requests: list[ScoreboardRequest]) -> int: ...

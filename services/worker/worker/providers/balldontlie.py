@@ -9,11 +9,14 @@ import httpx
 
 from app.services.api_usage import record_api_call_event
 from sqlalchemy.orm import Session
-from worker.providers.base import EspnRequest, NbaProvider, ProviderGame
+from worker.providers.base import ProviderGame, ScoreboardRequest, SportsProvider
 
 logger = logging.getLogger(__name__)
 
-SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+SCOREBOARD_URLS = {
+    "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+    "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+}
 ABBR_TO_EXTERNAL_TEAM_ID = {
     "ATL": "1610612737",
     "BOS": "1610612738",
@@ -52,8 +55,8 @@ ABBR_TO_EXTERNAL_TEAM_ID = {
 }
 
 
-class BallDontLieProvider(NbaProvider):
-    def __init__(self, fetch_json: Callable[[dict[str, str]], dict[str, Any]] | None = None):
+class BallDontLieProvider(SportsProvider):
+    def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
         self._telemetry_db: Session | None = None
         self._ingest_run_id: int | None = None
@@ -62,9 +65,12 @@ class BallDontLieProvider(NbaProvider):
         self._telemetry_db = db
         self._ingest_run_id = ingest_run_id
 
-    def _default_fetch_json(self, params: dict[str, str]) -> dict[str, Any]:
+    def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
+        scoreboard_url = SCOREBOARD_URLS.get(league.upper())
+        if not scoreboard_url:
+            raise ValueError(f"Unsupported league for ESPN scoreboard: {league}")
         started_at = monotonic()
-        response = httpx.get(SCOREBOARD_URL, params=params, timeout=15.0)
+        response = httpx.get(scoreboard_url, params=params, timeout=15.0)
         status_code = int(response.status_code)
         if self._telemetry_db is not None:
             record_api_call_event(
@@ -80,7 +86,7 @@ class BallDontLieProvider(NbaProvider):
         response.raise_for_status()
         return response.json()
 
-    def _parse_event(self, event: dict[str, Any]) -> ProviderGame | None:
+    def _parse_event(self, league: str, event: dict[str, Any]) -> ProviderGame | None:
         competition = (event.get("competitions") or [{}])[0]
         notes = competition.get("notes") or []
         for note in notes:
@@ -97,10 +103,16 @@ class BallDontLieProvider(NbaProvider):
         if not home or not away:
             return None
 
-        home_abbr = (((home.get("team") or {}).get("abbreviation")) or "").upper()
-        away_abbr = (((away.get("team") or {}).get("abbreviation")) or "").upper()
-        home_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(home_abbr)
-        away_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(away_abbr)
+        home_team = home.get("team") or {}
+        away_team = away.get("team") or {}
+        home_abbr = str(home_team.get("abbreviation") or "").upper()
+        away_abbr = str(away_team.get("abbreviation") or "").upper()
+        if league.upper() == "NBA":
+            home_external_team_id = str(home_team.get("id") or "").strip() or ABBR_TO_EXTERNAL_TEAM_ID.get(home_abbr)
+            away_external_team_id = str(away_team.get("id") or "").strip() or ABBR_TO_EXTERNAL_TEAM_ID.get(away_abbr)
+        else:
+            home_external_team_id = home_abbr
+            away_external_team_id = away_abbr
         if not home_external_team_id or not away_external_team_id:
             return None
 
@@ -137,11 +149,11 @@ class BallDontLieProvider(NbaProvider):
             is_final=status == "final" and completed,
         )
 
-    def _fetch_events_for_dates(self, dates: list[str]) -> list[dict[str, Any]]:
+    def _fetch_events_for_dates(self, league: str, dates: list[str]) -> list[dict[str, Any]]:
         by_id: dict[str, dict[str, Any]] = {}
         for date in dates:
             try:
-                payload = self._fetch_json({"dates": date})
+                payload = self._fetch_json(league, {"dates": date})
             except Exception:  # pragma: no cover - exercised through integration behavior
                 # Keep existing game rows when a targeted request fails; retry next planner tick.
                 # This prevents widening to a broad fallback request in the same cycle.
@@ -153,17 +165,17 @@ class BallDontLieProvider(NbaProvider):
                     by_id[event_id] = event
         return list(by_id.values())
 
-    def fetch_games(self, requests: list[EspnRequest]) -> list[ProviderGame]:
+    def fetch_games(self, league: str, requests: list[ScoreboardRequest]) -> list[ProviderGame]:
         if not requests:
             today = datetime.now(UTC).date().strftime("%Y%m%d")
             request_dates = [today]
         else:
             request_dates = sorted({request.date for request in requests})
-        events = self._fetch_events_for_dates(request_dates)
-        games = [self._parse_event(event) for event in events]
+        events = self._fetch_events_for_dates(league, request_dates)
+        games = [self._parse_event(league, event) for event in events]
         return [game for game in games if game]
 
-    def expected_call_count(self, requests: list[EspnRequest]) -> int:
+    def expected_call_count(self, requests: list[ScoreboardRequest]) -> int:
         if not requests:
             return 1
         return len({request.date for request in requests})

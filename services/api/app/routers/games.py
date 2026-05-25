@@ -15,6 +15,7 @@ router = APIRouter(tags=["games"])
 @router.get("/games", response_model=list[GameOut])
 def list_games(
     status: str | None = Query(default=None, description="Filter by game status"),
+    league: str | None = Query(default=None, description="Filter by league, e.g. NBA or MLB"),
     include_odds: bool = Query(default=True, description="Include moneyline odds when configured"),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -28,6 +29,8 @@ def list_games(
         .order_by(Game.scheduled_start_time.asc())
         .limit(limit)
     )
+    if league:
+        stmt = stmt.where(Game.league == league.strip().upper())
     if status:
         stmt = stmt.where(Game.status == status)
     else:

@@ -36,20 +36,64 @@ NBA_TEAMS = [
     ("1610612764", "Washington Wizards", "WAS"),
 ]
 
+MLB_TEAMS = [
+    ("ARI", "Arizona Diamondbacks", "ARI"),
+    ("ATL", "Atlanta Braves", "ATL"),
+    ("BAL", "Baltimore Orioles", "BAL"),
+    ("BOS", "Boston Red Sox", "BOS"),
+    ("CHC", "Chicago Cubs", "CHC"),
+    ("CWS", "Chicago White Sox", "CWS"),
+    ("CIN", "Cincinnati Reds", "CIN"),
+    ("CLE", "Cleveland Guardians", "CLE"),
+    ("COL", "Colorado Rockies", "COL"),
+    ("DET", "Detroit Tigers", "DET"),
+    ("HOU", "Houston Astros", "HOU"),
+    ("KC", "Kansas City Royals", "KC"),
+    ("LAA", "Los Angeles Angels", "LAA"),
+    ("LAD", "Los Angeles Dodgers", "LAD"),
+    ("MIA", "Miami Marlins", "MIA"),
+    ("MIL", "Milwaukee Brewers", "MIL"),
+    ("MIN", "Minnesota Twins", "MIN"),
+    ("NYM", "New York Mets", "NYM"),
+    ("NYY", "New York Yankees", "NYY"),
+    ("OAK", "Athletics", "OAK"),
+    ("PHI", "Philadelphia Phillies", "PHI"),
+    ("PIT", "Pittsburgh Pirates", "PIT"),
+    ("SD", "San Diego Padres", "SD"),
+    ("SF", "San Francisco Giants", "SF"),
+    ("SEA", "Seattle Mariners", "SEA"),
+    ("STL", "St. Louis Cardinals", "STL"),
+    ("TB", "Tampa Bay Rays", "TB"),
+    ("TEX", "Texas Rangers", "TEX"),
+    ("TOR", "Toronto Blue Jays", "TOR"),
+    ("WSH", "Washington Nationals", "WSH"),
+]
+
 
 def seed_teams_if_empty(db: Session) -> None:
-    existing = db.scalar(select(Team.id).limit(1))
-    if existing:
-        return
-    for external_team_id, name, abbreviation in NBA_TEAMS:
-        db.add(
-            Team(
-                external_team_id=external_team_id,
-                league="NBA",
-                name=name,
-                abbreviation=abbreviation,
+    existing_nba = db.scalar(select(Team.id).where(Team.league == "NBA").limit(1))
+    if not existing_nba:
+        for external_team_id, name, abbreviation in NBA_TEAMS:
+            db.add(
+                Team(
+                    external_team_id=external_team_id,
+                    league="NBA",
+                    name=name,
+                    abbreviation=abbreviation,
+                )
             )
-        )
+
+    existing_mlb = db.scalar(select(Team.id).where(Team.league == "MLB").limit(1))
+    if not existing_mlb:
+        for external_team_id, name, abbreviation in MLB_TEAMS:
+            db.add(
+                Team(
+                    external_team_id=external_team_id,
+                    league="MLB",
+                    name=name,
+                    abbreviation=abbreviation,
+                )
+            )
     db.commit()
 
 

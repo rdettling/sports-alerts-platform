@@ -8,8 +8,15 @@ from worker import scheduler
 
 def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
     scheduler._bootstrap_jobs()
-    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc())).all()
-    assert [job.job_type for job in jobs] == ["catalog_sync", "cleanup_games", "delivery", "live_sync"]
+    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
+    assert [(job.job_type, job.league) for job in jobs] == [
+        ("catalog_sync", "MLB"),
+        ("catalog_sync", "NBA"),
+        ("cleanup_games", None),
+        ("delivery", None),
+        ("live_sync", "MLB"),
+        ("live_sync", "NBA"),
+    ]
     assert all(job.status == "queued" for job in jobs)
 
 
@@ -17,6 +24,7 @@ def test_mark_job_failed_applies_backoff(db_session):
     now = datetime.now(timezone.utc)
     job = WorkerJob(
         job_type="catalog_sync",
+        league="NBA",
         status="queued",
         next_run_at=now,
         attempt_count=0,

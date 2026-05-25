@@ -170,12 +170,13 @@ class ApiCallRollupHourly(Base):
 class WorkerJob(Base):
     __tablename__ = "worker_jobs"
     __table_args__ = (
-        UniqueConstraint("job_type", name="uq_worker_jobs_job_type"),
+        UniqueConstraint("job_type", "league", name="uq_worker_jobs_job_type_league"),
         Index("ix_worker_jobs_status_next_run", "status", "next_run_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     job_type: Mapped[str] = mapped_column(String(32), index=True)
+    league: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)

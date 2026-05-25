@@ -1,5 +1,5 @@
 from worker.providers.balldontlie import BallDontLieProvider
-from worker.providers.base import EspnRequest
+from worker.providers.base import ScoreboardRequest
 
 
 def test_provider_parses_espn_payload_shape():
@@ -25,8 +25,8 @@ def test_provider_parses_espn_payload_shape():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _: payload)
-    schedule = provider.fetch_games([EspnRequest(date="20260406")])
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260406")])
 
     assert len(schedule) == 1
     game = schedule[0]
@@ -62,7 +62,7 @@ def test_provider_skips_if_necessary_playoff_games():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _: payload)
-    schedule = provider.fetch_games([EspnRequest(date="20260525")])
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260525")])
 
     assert schedule == []

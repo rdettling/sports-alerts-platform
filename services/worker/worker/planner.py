@@ -8,24 +8,24 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Game, GameOddsCurrent
 from worker.config import settings
-from worker.providers.base import EspnRequest
+from worker.providers.base import ScoreboardRequest
 
 
 @dataclass(frozen=True)
 class FetchPlan:
     mode: str
     next_ingest_seconds: int
-    espn_requests: list[EspnRequest]
+    espn_requests: list[ScoreboardRequest]
     odds_refresh: bool
     odds_refresh_reason: str
     expected_espn_calls: int
     expected_odds_calls: int
 
 
-def _pick_mode(db: Session, now: datetime) -> str:
+def _pick_mode(db: Session, now: datetime, league: str) -> str:
     live_count = db.scalar(
         select(func.count(Game.id)).where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             Game.status.in_(("in_progress", "live")),
         )
@@ -35,7 +35,7 @@ def _pick_mode(db: Session, now: datetime) -> str:
 
     next_scheduled = db.scalar(
         select(func.min(Game.scheduled_start_time)).where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             Game.status == "scheduled",
             Game.scheduled_start_time >= now,
@@ -62,10 +62,10 @@ def _mode_interval_seconds(mode: str) -> int:
     return max(900, settings.ingest_off_interval_seconds)
 
 
-def _tracked_dates(db: Session, now: datetime) -> set[str]:
+def _tracked_dates(db: Session, now: datetime, league: str) -> set[str]:
     rows = db.execute(
         select(Game.scheduled_start_time, Game.status).where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             or_(
                 Game.status.in_(("in_progress", "live")),
@@ -102,27 +102,27 @@ def _cold_start_dates(now: datetime) -> set[str]:
     }
 
 
-def _is_cold_start(db: Session) -> bool:
-    existing_games = db.scalar(select(func.count(Game.id)).where(Game.league == "NBA")) or 0
+def _is_cold_start(db: Session, league: str) -> bool:
+    existing_games = db.scalar(select(func.count(Game.id)).where(Game.league == league)) or 0
     return existing_games == 0
 
 
-def _build_espn_requests(db: Session, mode: str, now: datetime) -> list[EspnRequest]:
+def _build_espn_requests(db: Session, mode: str, now: datetime, league: str) -> list[ScoreboardRequest]:
     dates = _default_dates_for_mode(mode, now)
-    tracked_dates = _tracked_dates(db, now)
+    tracked_dates = _tracked_dates(db, now, league)
     dates.update(tracked_dates)
-    if not tracked_dates and _is_cold_start(db):
+    if not tracked_dates and _is_cold_start(db, league):
         dates.update(_cold_start_dates(now))
-    return [EspnRequest(date=value) for value in sorted(dates)]
+    return [ScoreboardRequest(date=value) for value in sorted(dates)]
 
 
-def _odds_refresh_decision(db: Session, now: datetime) -> tuple[bool, str]:
+def _odds_refresh_decision(db: Session, now: datetime, league: str) -> tuple[bool, str]:
     if not settings.odds_enabled:
         return False, "disabled"
 
     relevant_games = db.scalar(
         select(func.count(Game.id)).where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             or_(
                 Game.status.in_(("in_progress", "live")),
@@ -153,11 +153,11 @@ def _odds_refresh_decision(db: Session, now: datetime) -> tuple[bool, str]:
     return False, "fresh_cache"
 
 
-def build_fetch_plan(db: Session, now: datetime | None = None) -> FetchPlan:
+def build_fetch_plan(db: Session, league: str, now: datetime | None = None) -> FetchPlan:
     at = now or datetime.now(timezone.utc)
-    mode = _pick_mode(db, at)
-    requests = _build_espn_requests(db, mode, at)
-    odds_refresh, odds_reason = _odds_refresh_decision(db, at)
+    mode = _pick_mode(db, at, league)
+    requests = _build_espn_requests(db, mode, at, league)
+    odds_refresh, odds_reason = _odds_refresh_decision(db, at, league)
     return FetchPlan(
         mode=mode,
         next_ingest_seconds=_mode_interval_seconds(mode),
@@ -169,16 +169,16 @@ def build_fetch_plan(db: Session, now: datetime | None = None) -> FetchPlan:
     )
 
 
-def build_catalog_requests(db: Session, now: datetime | None = None) -> list[EspnRequest]:
+def build_catalog_requests(db: Session, league: str, now: datetime | None = None) -> list[ScoreboardRequest]:
     at = now or datetime.now(timezone.utc)
-    return _build_espn_requests(db, "off", at)
+    return _build_espn_requests(db, "off", at, league)
 
 
-def build_live_requests(db: Session, now: datetime | None = None) -> list[EspnRequest]:
+def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[ScoreboardRequest]:
     at = now or datetime.now(timezone.utc)
     live_rows = db.execute(
         select(Game.scheduled_start_time).where(
-            Game.league == "NBA",
+            Game.league == league,
             Game.is_final.is_(False),
             Game.status.in_(("in_progress", "live")),
         )
@@ -191,4 +191,4 @@ def build_live_requests(db: Session, now: datetime | None = None) -> list[EspnRe
     }
     # Include current day to absorb provider status lag around day boundaries.
     dates.add(at.strftime("%Y%m%d"))
-    return [EspnRequest(date=value) for value in sorted(dates)]
+    return [ScoreboardRequest(date=value) for value in sorted(dates)]

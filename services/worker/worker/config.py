@@ -7,6 +7,8 @@ class WorkerSettings(BaseSettings):
     database_url: str
     catalog_sync_interval_seconds: int = 43200
     live_sync_interval_seconds: int = 120
+    nba_live_sync_interval_seconds: int = 120
+    mlb_live_sync_interval_seconds: int = 300
     odds_pregame_window_hours: int = 24
     ingest_live_interval_seconds: int = 120
     ingest_pregame_hot_interval_seconds: int = 900
@@ -34,6 +36,8 @@ class WorkerSettings(BaseSettings):
     odds_api_key: str
     odds_api_base_url: str = "https://api.the-odds-api.com/v4/sports"
     odds_api_sport_key: str = "basketball_nba"
+    odds_api_sport_key_nba: str = "basketball_nba"
+    odds_api_sport_key_mlb: str = "baseball_mlb"
     odds_api_regions: str = "us"
     odds_api_market: str = "h2h"
     odds_api_format: str = "american"

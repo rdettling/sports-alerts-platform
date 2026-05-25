@@ -21,8 +21,8 @@ TEAM_NAME_ALIASES = {
 }
 
 _CACHE_LOCK = threading.Lock()
-_CACHE_FETCHED_AT = 0.0
-_CACHE_DATA: dict[tuple[str, str], list["MoneylineOdds"]] = {}
+_CACHE_FETCHED_AT_BY_LEAGUE: dict[str, float] = {}
+_CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list["MoneylineOdds"]]] = {}
 _TELEMETRY_DB: Session | None = None
 _TELEMETRY_INGEST_RUN_ID: int | None = None
 
@@ -100,7 +100,13 @@ def _extract_event_moneyline(event: dict) -> MoneylineOdds | None:
     return None
 
 
-def _fetch_from_provider() -> dict[tuple[str, str], list[MoneylineOdds]]:
+def _odds_sport_key_for_league(league: str) -> str:
+    if league == "MLB":
+        return settings.odds_api_sport_key_mlb
+    return settings.odds_api_sport_key_nba
+
+
+def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[MoneylineOdds]]:
     query = urlencode(
         {
             "apiKey": settings.odds_api_key,
@@ -109,7 +115,8 @@ def _fetch_from_provider() -> dict[tuple[str, str], list[MoneylineOdds]]:
             "oddsFormat": settings.odds_api_format,
         }
     )
-    url = f"{settings.odds_api_base_url.rstrip('/')}/{settings.odds_api_sport_key}/odds?{query}"
+    sport_key = _odds_sport_key_for_league(league)
+    url = f"{settings.odds_api_base_url.rstrip('/')}/{sport_key}/odds?{query}"
 
     started_at = monotonic()
     try:
@@ -188,21 +195,25 @@ def _fetch_from_provider() -> dict[tuple[str, str], list[MoneylineOdds]]:
     return odds_index
 
 
-def fetch_nba_odds_index() -> dict[tuple[str, str], list[MoneylineOdds]]:
-    global _CACHE_FETCHED_AT, _CACHE_DATA  # noqa: PLW0603
+def fetch_odds_index(league: str) -> dict[tuple[str, str], list[MoneylineOdds]]:
+    normalized = league.strip().upper()
+    if normalized not in {"NBA", "MLB"}:
+        return {}
 
     now = monotonic()
     with _CACHE_LOCK:
-        if _CACHE_DATA and now - _CACHE_FETCHED_AT < settings.odds_api_cache_seconds:
-            return _CACHE_DATA
+        cached = _CACHE_DATA_BY_LEAGUE.get(normalized)
+        fetched_at = _CACHE_FETCHED_AT_BY_LEAGUE.get(normalized, 0.0)
+        if cached and now - fetched_at < settings.odds_api_cache_seconds:
+            return cached
 
     try:
-        fresh_data = _fetch_from_provider()
+        fresh_data = _fetch_from_provider(normalized)
     except Exception as exc:
         logger.warning("Odds API request failed: %s", exc)
         return {}
 
     with _CACHE_LOCK:
-        _CACHE_DATA = fresh_data
-        _CACHE_FETCHED_AT = monotonic()
-        return _CACHE_DATA
+        _CACHE_DATA_BY_LEAGUE[normalized] = fresh_data
+        _CACHE_FETCHED_AT_BY_LEAGUE[normalized] = monotonic()
+        return _CACHE_DATA_BY_LEAGUE[normalized]
