@@ -20,13 +20,9 @@ CORS_ALLOW_ORIGINS=http://localhost:5173
 ODDS_API_KEY=replace-with-the-odds-api-key
 ODDS_ENABLED=true
 ODDS_REFRESH_SECONDS=21600
-INGEST_LIVE_INTERVAL_SECONDS=120
-INGEST_PREGAME_HOT_INTERVAL_SECONDS=900
-INGEST_PREGAME_COLD_INTERVAL_SECONDS=3600
-INGEST_OFF_INTERVAL_SECONDS=43200
-INGEST_PREGAME_HOT_WINDOW_MINUTES=90
-INGEST_PREGAME_COLD_WINDOW_HOURS=24
-INGEST_HEARTBEAT_SECONDS=3600
+CATALOG_SYNC_INTERVAL_SECONDS=43200
+LIVE_SYNC_INTERVAL_SECONDS=120
+ODDS_PREGAME_WINDOW_HOURS=24
 DELIVERY_ACTIVE_BACKOFF_SECONDS=120
 DELIVERY_EMPTY_BACKOFF_SECONDS=900
 DELIVERY_LIVE_FAST_BACKOFF_SECONDS=60
@@ -49,7 +45,8 @@ NEON_DASHBOARD_URL=https://console.neon.tech/app/projects/solitary-resonance-988
 
 - `ODDS_ENABLED=true` keeps odds updates active.
 - `ODDS_REFRESH_SECONDS=21600` (6 hours) keeps odds refresh coarse outside urgent windows.
-- Worker polling defaults to low-compute cadence: live `120s`, pregame-hot `15m`, pregame-cold `60m`, off `12h`.
+- Worker sync defaults: catalog `12h`, live `120s`.
+- Live sync updates scores/status only; odds refresh is handled by catalog sync pregame snapshots.
 - `TELEMETRY_RAW_EVENTS_ENABLED=false` keeps hourly rollups but skips per-call raw event writes.
 - `ODDS_API_KEY` is still required by strict settings even when odds are disabled. Use a placeholder value if disabled.
 - `DELIVERY_MODE=email` requires valid `RESEND_API_KEY` and verified sender (`FROM_EMAIL`).

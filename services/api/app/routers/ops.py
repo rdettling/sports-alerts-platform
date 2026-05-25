@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiCallRollupHourly, IngestEvent, IngestState, User, WorkerJob
+from app.db.models import ApiCallRollupHourly, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.ops import (
@@ -219,46 +219,32 @@ def ingest_health(
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> IngestHealthResponseOut:
-    states = db.scalars(select(IngestState).order_by(IngestState.source_key.asc())).all()
-    events = db.scalars(select(IngestEvent).order_by(IngestEvent.occurred_at.desc()).limit(event_limit)).all()
-    ingest_job = db.scalar(select(WorkerJob).where(WorkerJob.job_type == "ingest"))
+    jobs = db.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc())).all()
+    catalog_job = next((job for job in jobs if job.job_type == "catalog_sync"), None)
+    live_job = next((job for job in jobs if job.job_type == "live_sync"), None)
+    next_run_candidates = [job.next_run_at for job in (catalog_job, live_job) if job and job.next_run_at is not None]
+    next_run_at = min(next_run_candidates) if next_run_candidates else None
+    last_success_at = max((job.last_finished_at for job in jobs if job.last_finished_at is not None), default=None)
 
     scheduler_mode = "off"
-    if any(state.mode == "live" for state in states):
+    if live_job and live_job.status in {"queued", "running"}:
         scheduler_mode = "live"
-    elif any(state.mode == "pregame_hot" for state in states):
-        scheduler_mode = "pregame_hot"
-    elif any(state.mode == "pregame_cold" for state in states):
-        scheduler_mode = "pregame_cold"
-
-    next_run_at = ingest_job.next_run_at if ingest_job else None
-    last_success_at = max((state.last_success_at for state in states if state.last_success_at), default=None)
     return IngestHealthResponseOut(
         scheduler_mode=scheduler_mode,
         next_run_at=next_run_at,
         last_success_at=last_success_at,
         states=[
             IngestHealthOut(
-                source_key=state.source_key,
-                mode=state.mode,
-                next_due_at=state.next_due_at,
-                last_success_at=state.last_success_at,
-                backoff_until=state.backoff_until,
-                last_error=state.last_error,
+                source_key=f"worker:{job.job_type}",
+                mode=job.status,
+                next_due_at=job.next_run_at,
+                last_success_at=job.last_finished_at,
+                backoff_until=job.backoff_until,
+                last_error=job.last_error,
             )
-            for state in states
+            for job in jobs
         ],
-        events=[
-            IngestHealthEventOut(
-                id=event.id,
-                source_key=event.source_key,
-                event_type=event.event_type,
-                mode=event.mode,
-                message=event.message,
-                occurred_at=event.occurred_at,
-            )
-            for event in events
-        ],
+        events=[],
     )
 
 
@@ -371,6 +357,7 @@ def admin_overview(
     providers_on_watch = sum(1 for row in providers_out if row.status == "watch")
     global_status = "at_risk" if providers_at_risk > 0 else "watch" if providers_on_watch > 0 else "healthy"
 
+    recent_failures = db.query(WorkerJob).filter(WorkerJob.last_error.is_not(None)).count()
     risk_cards = [
         OpsAdminRiskCardOut(
             key="providers_at_risk",
@@ -392,9 +379,9 @@ def admin_overview(
         ),
         OpsAdminRiskCardOut(
             key="recent_failures",
-            label="Ingest errors",
-            value=db.query(IngestEvent).filter(IngestEvent.event_type == "error", IngestEvent.occurred_at >= start).count(),
-            status="high" if db.query(IngestEvent).filter(IngestEvent.event_type == "error", IngestEvent.occurred_at >= start).count() > 0 else "ok",
+            label="Worker job failures",
+            value=recent_failures,
+            status="high" if recent_failures > 0 else "ok",
         ),
     ]
 

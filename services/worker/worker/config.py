@@ -5,6 +5,9 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str
+    catalog_sync_interval_seconds: int = 43200
+    live_sync_interval_seconds: int = 120
+    odds_pregame_window_hours: int = 24
     ingest_live_interval_seconds: int = 120
     ingest_pregame_hot_interval_seconds: int = 900
     ingest_pregame_cold_interval_seconds: int = 3600

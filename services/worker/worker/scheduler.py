@@ -11,12 +11,13 @@ from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
 from worker.delivery import count_pending_alerts, process_pending_alerts
-from worker.ingest import run_ingest_cycle
+from worker.ingest import run_catalog_sync, run_live_sync
 from worker.providers.factory import get_provider
 
 logger = logging.getLogger(__name__)
 
-INGEST_JOB = "ingest"
+CATALOG_SYNC_JOB = "catalog_sync"
+LIVE_SYNC_JOB = "live_sync"
 DELIVERY_JOB = "delivery"
 CLEANUP_JOB = "cleanup_games"
 _delivery_fast_until: datetime | None = None
@@ -30,7 +31,7 @@ def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
-        for job_type in (INGEST_JOB, DELIVERY_JOB, CLEANUP_JOB):
+        for job_type in (CATALOG_SYNC_JOB, LIVE_SYNC_JOB, DELIVERY_JOB, CLEANUP_JOB):
             existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type))
             if existing:
                 if existing.status == "failed":
@@ -140,17 +141,26 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
         db.close()
 
 
-def _run_ingest_job() -> int:
+def _run_catalog_sync_job() -> int:
     provider = get_provider()
-    result = run_ingest_cycle(provider=provider)
+    result = run_catalog_sync(provider=provider)
+    next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))
+    return max(1, next_poll)
+
+
+def _run_live_sync_job() -> int:
+    provider = get_provider()
+    result = run_live_sync(provider=provider)
     _mark_delivery_fast_window(result)
-    next_poll = int(result.get("next_poll_seconds", settings.ingest_pregame_cold_interval_seconds))
+    next_poll = int(result.get("next_poll_seconds", settings.live_sync_interval_seconds))
     return max(1, next_poll)
 
 
 def _mark_delivery_fast_window(result: dict[str, int | str]) -> None:
     global _delivery_fast_until  # noqa: PLW0603
-    if str(result.get("mode", "")) != "live":
+    if str(result.get("job_type", "")) != LIVE_SYNC_JOB:
+        return
+    if int(result.get("games_checked", 0)) <= 0:
         return
     fast_window_seconds = max(1, settings.delivery_live_fast_window_seconds)
     _delivery_fast_until = _utcnow() + timedelta(seconds=fast_window_seconds)
@@ -209,8 +219,10 @@ def run(stop_event: threading.Event) -> None:
 
         _mark_job_running(due_job.id, now)
         try:
-            if due_job.job_type == INGEST_JOB:
-                next_run = _run_ingest_job()
+            if due_job.job_type == CATALOG_SYNC_JOB:
+                next_run = _run_catalog_sync_job()
+            elif due_job.job_type == LIVE_SYNC_JOB:
+                next_run = _run_live_sync_job()
             elif due_job.job_type == DELIVERY_JOB:
                 next_run = _run_delivery_job()
             elif due_job.job_type == CLEANUP_JOB:

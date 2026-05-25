@@ -21,13 +21,11 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop_worker)
 
     logger.info(
-        "Worker started provider=%s scheduler_max_sleep=%ss intervals(live=%ss hot=%ss cold=%ss off=%ss)",
+        "Worker started provider=%s scheduler_max_sleep=%ss intervals(catalog=%ss live=%ss)",
         settings.nba_provider,
         settings.scheduler_max_sleep_seconds,
-        settings.ingest_live_interval_seconds,
-        settings.ingest_pregame_hot_interval_seconds,
-        settings.ingest_pregame_cold_interval_seconds,
-        settings.ingest_off_interval_seconds,
+        settings.catalog_sync_interval_seconds,
+        settings.live_sync_interval_seconds,
     )
     scheduler.run(_stop_event)
     logger.info("Worker stopped")

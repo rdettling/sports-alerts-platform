@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.db.models import ApiCallRollupHourly, IngestEvent, IngestState, User
+from app.db.models import ApiCallRollupHourly, User, WorkerJob
 from app.db.session import SessionLocal
 
 
@@ -29,8 +29,8 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         assert user is not None
         user.role = "admin"
         now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        db.add(IngestState(source_key="nba:espn", mode="active", last_success_at=now, next_due_at=now))
-        db.add(IngestEvent(source_key="nba:espn", event_type="state_changed", mode="active", occurred_at=now))
+        db.add(WorkerJob(job_type="catalog_sync", status="queued", next_run_at=now, max_attempts=5))
+        db.add(WorkerJob(job_type="live_sync", status="queued", next_run_at=now, max_attempts=5))
         db.add(
             ApiCallRollupHourly(
                 bucket_start=now,

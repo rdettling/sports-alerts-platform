@@ -11,8 +11,6 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Game,
     GameOddsCurrent,
-    IngestEvent,
-    IngestState,
     SentAlert,
     Team,
     UserAlertPreference,
@@ -22,12 +20,11 @@ from app.db.models import (
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
-from worker.planner import build_fetch_plan
+from worker.planner import build_catalog_requests, build_fetch_plan, build_live_requests
 from worker.providers.base import NbaProvider, ProviderGame
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
-INGEST_SOURCE_KEY = "nba:espn"
 
 
 def _team_id_map(db: Session) -> dict[str, int]:
@@ -343,149 +340,206 @@ def _hash_payload(payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _emit_event(db: Session, state: IngestState, event_type: str, message: str | None = None, metadata: dict | None = None) -> None:
-    db.add(
-        IngestEvent(
-            source_key=state.source_key,
-            event_type=event_type,
-            mode=state.mode,
-            message=message,
-            metadata_json=metadata,
-            occurred_at=datetime.now(timezone.utc),
+def _upsert_games_and_collect(
+    db: Session,
+    provider_games: list[ProviderGame],
+    team_map: dict[str, int],
+    team_names: dict[int, str],
+    *,
+    only_external_ids: set[str] | None = None,
+) -> tuple[int, list[int], dict[int, tuple[str, str]]]:
+    updated = 0
+    touched_game_ids: list[int] = []
+    game_key_by_id: dict[int, tuple[str, str]] = {}
+    for provider_game in provider_games:
+        if only_external_ids is not None and provider_game.external_game_id not in only_external_ids:
+            continue
+        did_update, game_id = _upsert_game(db, provider_game, team_map)
+        if did_update:
+            updated += 1
+        if game_id:
+            touched_game_ids.append(game_id)
+            home_id = team_map.get(provider_game.home_external_team_id)
+            away_id = team_map.get(provider_game.away_external_team_id)
+            home_name = team_names.get(home_id) if home_id else None
+            away_name = team_names.get(away_id) if away_id else None
+            if home_name and away_name:
+                game_key_by_id[game_id] = game_key(home_name, away_name)
+    return updated, touched_game_ids, game_key_by_id
+
+
+def _games_missing_pregame_snapshot(db: Session, now: datetime) -> list[Game]:
+    pregame_cutoff = now + timedelta(hours=max(1, settings.odds_pregame_window_hours))
+    rows = db.scalars(
+        select(Game)
+        .where(
+            Game.league == "NBA",
+            Game.is_final.is_(False),
+            Game.status == "scheduled",
+            Game.scheduled_start_time >= now,
+            Game.scheduled_start_time <= pregame_cutoff,
         )
-    )
+        .order_by(Game.scheduled_start_time.asc())
+    ).all()
+    if not rows:
+        return []
+    game_ids = [game.id for game in rows]
+    existing_ids = {
+        game_id
+        for game_id, in db.execute(
+            select(GameOddsCurrent.game_id).where(
+                GameOddsCurrent.game_id.in_(game_ids),
+                GameOddsCurrent.provider == settings.odds_provider,
+                GameOddsCurrent.market == settings.odds_api_market,
+            )
+        ).all()
+    }
+    return [game for game in rows if game.id not in existing_ids]
 
 
-def _get_or_create_state(db: Session) -> IngestState:
-    state = db.scalar(select(IngestState).where(IngestState.source_key == INGEST_SOURCE_KEY))
-    if state:
-        return state
-    state = IngestState(source_key=INGEST_SOURCE_KEY, mode="off")
-    db.add(state)
-    db.flush()
-    return state
-
-
-def _set_next_due(state: IngestState, seconds: int) -> None:
-    state.next_due_at = datetime.now(timezone.utc) + timedelta(seconds=max(1, seconds))
-
-
-def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
+def run_catalog_sync(provider: NbaProvider) -> dict[str, int | str]:
     db = SessionLocal()
-    state = _get_or_create_state(db)
-    plan = build_fetch_plan(db)
     now = datetime.now(timezone.utc)
-
-    if state.mode != plan.mode:
-        state.mode = plan.mode
-        if settings.telemetry_raw_events_enabled:
-            _emit_event(db, state, "mode_changed", f"mode changed to {plan.mode}", {"mode": plan.mode})
-
     try:
+        requests = build_catalog_requests(db, now=now)
         team_map = _team_id_map(db)
         team_names = _team_name_map(db)
-        all_games = provider.fetch_games(plan.espn_requests)
+        all_games = provider.fetch_games(requests)
+        updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, all_games, team_map, team_names)
 
-        serialized = _serialize_games(all_games)
-        payload_hash = _hash_payload(serialized)
-        if state.last_payload_hash == payload_hash and not plan.odds_refresh:
-            state.last_success_at = now
-            state.last_error = None
-            state.backoff_until = None
-            _set_next_due(state, plan.next_ingest_seconds)
-            db.commit()
-            return {"status": "success", "games_checked": len(all_games), "games_updated": 0, "next_poll_seconds": plan.next_ingest_seconds, "mode": plan.mode}
-
-        checked = len(all_games)
-        updated = 0
-        alert_records_created = 0
-        odds_updated = 0
-        touched_game_ids: list[int] = []
-        game_key_by_id: dict[int, tuple[str, str]] = {}
-        for provider_game in all_games:
-            did_update, game_id = _upsert_game(db, provider_game, team_map)
-            if did_update:
-                updated += 1
-            if game_id:
-                touched_game_ids.append(game_id)
-                home_id = team_map.get(provider_game.home_external_team_id)
-                away_id = team_map.get(provider_game.away_external_team_id)
-                home_name = team_names.get(home_id) if home_id else None
-                away_name = team_names.get(away_id) if away_id else None
-                if home_name and away_name:
-                    game_key_by_id[game_id] = game_key(home_name, away_name)
-
-        odds_by_matchup: dict[tuple[str, str], list[MoneylineOdds]] = {}
-        if plan.odds_refresh:
+        odds_candidates = _games_missing_pregame_snapshot(db, now)
+        odds_calls = 0
+        odds_snapshots_created = 0
+        if odds_candidates:
             odds_by_matchup = fetch_nba_odds_index()
-
-        for game_id, key in game_key_by_id.items():
-            game = db.get(Game, game_id)
-            if not game:
-                continue
-            matchup_odds = odds_by_matchup.get(key)
-            odds = _select_best_odds_for_game(matchup_odds, game.scheduled_start_time)
-            if not odds:
-                if matchup_odds and _delete_game_odds(db, game_id):
-                    odds_updated += 1
-                continue
-            if _upsert_game_odds(db, game_id, odds):
-                odds_updated += 1
+            odds_calls = 1
+            for game in odds_candidates:
+                key = game_key_by_id.get(game.id)
+                if key is None:
+                    home_name = team_names.get(game.home_team_id)
+                    away_name = team_names.get(game.away_team_id)
+                    if not home_name or not away_name:
+                        continue
+                    key = game_key(home_name, away_name)
+                matchup_odds = odds_by_matchup.get(key)
+                odds = _select_best_odds_for_game(matchup_odds, game.scheduled_start_time)
+                if odds and _upsert_game_odds(db, game.id, odds):
+                    odds_snapshots_created += 1
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alert_records_created += _evaluate_and_record_alerts_batched(db, touched_games)
-
-        state.last_payload_hash = payload_hash
-        state.last_success_at = now
-        state.last_error = None
-        state.backoff_until = None
-        _set_next_due(state, plan.next_ingest_seconds)
-
-        if settings.telemetry_raw_events_enabled:
-            if updated > 0 or odds_updated > 0:
-                _emit_event(
-                    db,
-                    state,
-                    "state_changed",
-                    "game or odds state changed",
-                    {"games_updated": updated, "odds_updated": odds_updated, "alerts_created": alert_records_created},
-                )
-            elif state.last_success_at is None or (state.last_success_at and (now - state.last_success_at).total_seconds() >= 3600):
-                _emit_event(db, state, "heartbeat", "periodic ingest heartbeat")
-
+        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
         db.commit()
+
         logger.info(
-            "Ingest cycle mode=%s checked=%s updated=%s odds_refresh=%s(%s) odds_updated=%s alerts_created=%s",
-            plan.mode,
-            checked,
+            "Catalog sync checked=%s updated=%s odds_candidates=%s odds_snapshots_created=%s odds_calls=%s alerts_created=%s",
+            len(all_games),
             updated,
-            plan.odds_refresh,
-            plan.odds_refresh_reason,
-            odds_updated,
-            alert_records_created,
+            len(odds_candidates),
+            odds_snapshots_created,
+            odds_calls,
+            alerts_created,
         )
         return {
             "status": "success",
-            "games_checked": checked,
+            "job_type": "catalog_sync",
+            "games_checked": len(all_games),
             "games_updated": updated,
-            "next_poll_seconds": plan.next_ingest_seconds,
-            "mode": plan.mode,
+            "odds_candidates": len(odds_candidates),
+            "odds_snapshots_created": odds_snapshots_created,
+            "next_poll_seconds": max(1, settings.catalog_sync_interval_seconds),
         }
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        state = _get_or_create_state(db)
-        state.last_error = str(exc)
-        state.backoff_until = now + timedelta(seconds=60)
-        _set_next_due(state, plan.next_ingest_seconds)
-        _emit_event(db, state, "error", str(exc))
-        db.commit()
-        logger.exception("Ingest cycle failed")
+        logger.exception("Catalog sync failed")
         return {
             "status": "failed",
+            "job_type": "catalog_sync",
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": plan.next_ingest_seconds,
+            "next_poll_seconds": max(1, settings.catalog_sync_interval_seconds),
         }
     finally:
         db.close()
+
+
+def run_live_sync(provider: NbaProvider) -> dict[str, int | str]:
+    db = SessionLocal()
+    try:
+        live_game_ids = {
+            external_id
+            for external_id, in db.execute(
+                select(Game.external_game_id).where(
+                    Game.league == "NBA",
+                    Game.is_final.is_(False),
+                    Game.status.in_(("in_progress", "live")),
+                )
+            ).all()
+        }
+        if not live_game_ids:
+            return {
+                "status": "success",
+                "job_type": "live_sync",
+                "games_checked": 0,
+                "games_updated": 0,
+                "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+                "mode": "idle",
+            }
+
+        requests = build_live_requests(db)
+        if not requests:
+            return {
+                "status": "success",
+                "job_type": "live_sync",
+                "games_checked": 0,
+                "games_updated": 0,
+                "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+                "mode": "idle",
+            }
+
+        team_map = _team_id_map(db)
+        team_names = _team_name_map(db)
+        provider_games = provider.fetch_games(requests)
+        updated, touched_game_ids, _ = _upsert_games_and_collect(
+            db,
+            provider_games,
+            team_map,
+            team_names,
+            only_external_ids=live_game_ids,
+        )
+        db.flush()
+        touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
+        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
+        db.commit()
+        logger.info(
+            "Live sync checked=%s updated=%s alerts_created=%s",
+            len(provider_games),
+            updated,
+            alerts_created,
+        )
+        return {
+            "status": "success",
+            "job_type": "live_sync",
+            "games_checked": len(provider_games),
+            "games_updated": updated,
+            "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+            "mode": "live",
+        }
+    except Exception:
+        db.rollback()
+        logger.exception("Live sync failed")
+        return {
+            "status": "failed",
+            "job_type": "live_sync",
+            "games_checked": 0,
+            "games_updated": 0,
+            "next_poll_seconds": max(1, settings.live_sync_interval_seconds),
+            "mode": "live",
+        }
+    finally:
+        db.close()
+
+
+def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
+    # Legacy compatibility path used by existing tests and tooling.
+    return run_catalog_sync(provider)

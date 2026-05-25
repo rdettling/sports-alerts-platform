@@ -167,3 +167,28 @@ def build_fetch_plan(db: Session, now: datetime | None = None) -> FetchPlan:
         expected_espn_calls=len(requests),
         expected_odds_calls=1 if odds_refresh else 0,
     )
+
+
+def build_catalog_requests(db: Session, now: datetime | None = None) -> list[EspnRequest]:
+    at = now or datetime.now(timezone.utc)
+    return _build_espn_requests(db, "off", at)
+
+
+def build_live_requests(db: Session, now: datetime | None = None) -> list[EspnRequest]:
+    at = now or datetime.now(timezone.utc)
+    live_rows = db.execute(
+        select(Game.scheduled_start_time).where(
+            Game.league == "NBA",
+            Game.is_final.is_(False),
+            Game.status.in_(("in_progress", "live")),
+        )
+    ).all()
+    if not live_rows:
+        return []
+    dates = {
+        (start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)).strftime("%Y%m%d")
+        for start_time, in live_rows
+    }
+    # Include current day to absorb provider status lag around day boundaries.
+    dates.add(at.strftime("%Y%m%d"))
+    return [EspnRequest(date=value) for value in sorted(dates)]

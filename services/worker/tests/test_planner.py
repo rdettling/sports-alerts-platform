@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import Game, GameOddsCurrent, Team
-from worker.planner import build_fetch_plan
+from worker.planner import build_catalog_requests, build_fetch_plan, build_live_requests
 
 
 def _seed_game(db_session, *, external_id: str, status: str, scheduled_start: datetime, is_final: bool = False) -> None:
@@ -120,3 +120,21 @@ def test_planner_odds_refresh_stale_cache(db_session, monkeypatch):
     plan = build_fetch_plan(db_session, now=now)
     assert plan.odds_refresh is True
     assert plan.expected_odds_calls == 1
+
+
+def test_build_catalog_requests_returns_wide_window_for_cold_start(db_session):
+    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
+    requests = build_catalog_requests(db_session, now=now)
+    dates = [request.date for request in requests]
+    assert "20260501" in dates
+    assert "20260510" in dates
+
+
+def test_build_live_requests_tracks_only_live_games(db_session):
+    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
+    _seed_game(db_session, external_id="g-live-sync", status="live", scheduled_start=now + timedelta(hours=1))
+    _seed_game(db_session, external_id="g-not-live", status="scheduled", scheduled_start=now + timedelta(hours=2))
+    requests = build_live_requests(db_session, now=now)
+    dates = [request.date for request in requests]
+    assert len(dates) >= 1
+    assert (now + timedelta(hours=1)).strftime("%Y%m%d") in dates

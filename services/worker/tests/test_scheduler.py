@@ -6,17 +6,17 @@ from app.db.models import WorkerJob
 from worker import scheduler
 
 
-def test_bootstrap_jobs_creates_ingest_and_delivery(db_session):
+def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
     scheduler._bootstrap_jobs()
     jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc())).all()
-    assert [job.job_type for job in jobs] == ["cleanup_games", "delivery", "ingest"]
+    assert [job.job_type for job in jobs] == ["catalog_sync", "cleanup_games", "delivery", "live_sync"]
     assert all(job.status == "queued" for job in jobs)
 
 
 def test_mark_job_failed_applies_backoff(db_session):
     now = datetime.now(timezone.utc)
     job = WorkerJob(
-        job_type="ingest",
+        job_type="catalog_sync",
         status="queued",
         next_run_at=now,
         attempt_count=0,

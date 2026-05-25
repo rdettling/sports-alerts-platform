@@ -184,33 +184,3 @@ class WorkerJob(Base):
     last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-class IngestState(Base):
-    __tablename__ = "ingest_state"
-    __table_args__ = (
-        UniqueConstraint("source_key", name="uq_ingest_state_source_key"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    source_key: Mapped[str] = mapped_column(String(128))
-    mode: Mapped[str] = mapped_column(String(16), default="idle")
-    last_payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
-class IngestEvent(Base):
-    __tablename__ = "ingest_events"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    source_key: Mapped[str] = mapped_column(String(128), index=True)
-    event_type: Mapped[str] = mapped_column(String(32), index=True)
-    mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

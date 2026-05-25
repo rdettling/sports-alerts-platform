@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, IngestEvent, IngestState, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
-from worker.ingest import run_ingest_cycle
+from app.db.models import Game, GameOddsCurrent, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
+from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import MoneylineOdds
 from worker.planner import FetchPlan
 from worker.providers.base import EspnRequest, ProviderGame
@@ -110,11 +110,6 @@ def test_ingest_run_success(db_session):
     assert result["games_updated"] == 1
     assert result["next_poll_seconds"] >= 30
 
-    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
-    assert state is not None
-    assert state.mode in {"live", "pregame_hot", "pregame_cold", "off"}
-    assert state.last_success_at is not None
-
     games = db_session.scalars(select(Game)).all()
     assert len(games) == 1
 
@@ -123,12 +118,6 @@ def test_ingest_run_failure(db_session):
     result = run_ingest_cycle(FailingProvider())
     assert result["status"] == "failed"
     assert result["next_poll_seconds"] > 0
-
-    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
-    assert state is not None
-    assert state.last_error is not None
-    events = db_session.scalars(select(IngestEvent).where(IngestEvent.event_type == "error")).all()
-    assert len(events) >= 1
 
 
 def test_ingest_creates_deduped_live_alerts(db_session):
@@ -272,11 +261,9 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     first_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == first_game.id))
     second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
     assert first_odds is not None
-    assert second_odds is not None
+    assert second_odds is None
     assert first_odds.home_moneyline == -140
     assert first_odds.away_moneyline == 120
-    assert second_odds.home_moneyline == -210
-    assert second_odds.away_moneyline == 175
 
 
 def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
@@ -344,6 +331,93 @@ def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypa
     result = run_ingest_cycle(SuccessProvider())
     assert result["status"] == "success"
 
-    state = db_session.scalar(select(IngestState).where(IngestState.source_key == "nba:espn"))
-    assert state is not None
-    assert state.next_due_at is not None
+    assert result["next_poll_seconds"] > 0
+
+
+def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    class CatalogProvider:
+        def fetch_games(self, requests):
+            return [
+                ProviderGame(
+                    external_game_id="game-catalog",
+                    home_external_team_id="1610612737",
+                    away_external_team_id="1610612738",
+                    scheduled_start_time=now + timedelta(hours=4),
+                    status="scheduled",
+                )
+            ]
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    odds_fetch_count = {"count": 0}
+
+    def _fake_odds_index():
+        odds_fetch_count["count"] += 1
+        return {
+            ("atlanta hawks", "boston celtics"): [
+                MoneylineOdds(
+                    home_moneyline=-130,
+                    away_moneyline=110,
+                    bookmaker="DraftKings",
+                    last_update=now,
+                    commence_time=now + timedelta(hours=4),
+                )
+            ]
+        }
+
+    monkeypatch.setattr("worker.ingest.fetch_nba_odds_index", _fake_odds_index)
+
+    first = run_catalog_sync(CatalogProvider())
+    second = run_catalog_sync(CatalogProvider())
+
+    assert first["status"] == "success"
+    assert second["status"] == "success"
+    assert odds_fetch_count["count"] == 1
+
+
+def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
+    db_session.add(
+        Game(
+            external_game_id="game-live-only",
+            league="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now,
+            status="live",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    class LiveProvider:
+        def fetch_games(self, requests):
+            return [
+                ProviderGame(
+                    external_game_id="game-live-only",
+                    home_external_team_id="1610612737",
+                    away_external_team_id="1610612738",
+                    scheduled_start_time=now,
+                    status="in_progress",
+                    home_score=101,
+                    away_score=99,
+                    period=4,
+                    clock="01:15",
+                )
+            ]
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    monkeypatch.setattr(
+        "worker.ingest.fetch_nba_odds_index",
+        lambda: (_ for _ in ()).throw(AssertionError("odds should not be fetched in live sync")),
+    )
+
+    result = run_live_sync(LiveProvider())
+    assert result["status"] == "success"
+    assert result["games_updated"] >= 1
