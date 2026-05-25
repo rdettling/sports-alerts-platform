@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Team
+from app.db.models import Team, User
 
 NBA_TEAMS = [
     ("1610612737", "Atlanta Hawks", "ATL"),
@@ -51,3 +51,17 @@ def seed_teams_if_empty(db: Session) -> None:
             )
         )
     db.commit()
+
+
+def ensure_bootstrap_admin(db: Session, email: str) -> None:
+    normalized_email = email.strip().lower()
+    if not normalized_email:
+        return
+    user = db.scalar(select(User).where(User.email == normalized_email))
+    if user is None:
+        db.add(User(email=normalized_email, role="admin"))
+        db.commit()
+        return
+    if user.role != "admin":
+        user.role = "admin"
+        db.commit()

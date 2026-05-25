@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     telemetry_raw_events_enabled: bool = False
     games_retention_past_hours: int = 36
     games_retention_future_days: int = 7
+    bootstrap_admin_email: str = "ryandettling1@gmail.com"
 
     ops_provider_quotas_json: str = '{"espn": 5000, "odds": 1000}'
     ops_risk_utilization_watch_pct: float = 70.0

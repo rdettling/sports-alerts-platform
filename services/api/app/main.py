@@ -16,7 +16,7 @@ from app.routers.health import router as health_router
 from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
 from app.routers.ops import router as ops_router
-from app.services.seed import seed_teams_if_empty
+from app.services.seed import ensure_bootstrap_admin, seed_teams_if_empty
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ async def lifespan(_: FastAPI):
     db = SessionLocal()
     try:
         seed_teams_if_empty(db)
+        ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
         logger.info("Startup seed complete")
     finally:
         db.close()
