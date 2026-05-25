@@ -92,9 +92,27 @@ def _default_dates_for_mode(_mode: str, now: datetime) -> set[str]:
     }
 
 
+def _cold_start_dates(now: datetime) -> set[str]:
+    today = now.date()
+    lookback = max(0, settings.ingest_cold_start_lookback_days)
+    lookahead = max(0, settings.ingest_cold_start_lookahead_days)
+    return {
+        (today + timedelta(days=offset)).strftime("%Y%m%d")
+        for offset in range(-lookback, lookahead + 1)
+    }
+
+
+def _is_cold_start(db: Session) -> bool:
+    existing_games = db.scalar(select(func.count(Game.id)).where(Game.league == "NBA")) or 0
+    return existing_games == 0
+
+
 def _build_espn_requests(db: Session, mode: str, now: datetime) -> list[EspnRequest]:
     dates = _default_dates_for_mode(mode, now)
-    dates.update(_tracked_dates(db, now))
+    tracked_dates = _tracked_dates(db, now)
+    dates.update(tracked_dates)
+    if not tracked_dates and _is_cold_start(db):
+        dates.update(_cold_start_dates(now))
     return [EspnRequest(date=value) for value in sorted(dates)]
 
 

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 INGEST_JOB = "ingest"
 DELIVERY_JOB = "delivery"
 CLEANUP_JOB = "cleanup_games"
+_delivery_fast_until: datetime | None = None
 
 
 def _utcnow() -> datetime:
@@ -128,14 +129,12 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
         row.last_error = error_message[:2000]
         row.last_finished_at = now
 
-        if row.attempt_count >= max(1, row.max_attempts):
-            row.status = "failed"
-            row.backoff_until = None
-        else:
-            backoff_seconds = max(1, settings.job_retry_base_seconds) * (2 ** max(0, row.attempt_count - 1))
-            row.status = "queued"
-            row.backoff_until = now + timedelta(seconds=backoff_seconds)
-            row.next_run_at = row.backoff_until
+        retry_power = max(0, row.attempt_count - 1)
+        uncapped_backoff = max(1, settings.job_retry_base_seconds) * (2 ** retry_power)
+        backoff_seconds = min(max(1, settings.job_retry_max_backoff_seconds), uncapped_backoff)
+        row.status = "queued"
+        row.backoff_until = now + timedelta(seconds=backoff_seconds)
+        row.next_run_at = row.backoff_until
         db.commit()
     finally:
         db.close()
@@ -144,8 +143,17 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
 def _run_ingest_job() -> int:
     provider = get_provider()
     result = run_ingest_cycle(provider=provider)
+    _mark_delivery_fast_window(result)
     next_poll = int(result.get("next_poll_seconds", settings.ingest_pregame_cold_interval_seconds))
     return max(1, next_poll)
+
+
+def _mark_delivery_fast_window(result: dict[str, int | str]) -> None:
+    global _delivery_fast_until  # noqa: PLW0603
+    if str(result.get("mode", "")) != "live":
+        return
+    fast_window_seconds = max(1, settings.delivery_live_fast_window_seconds)
+    _delivery_fast_until = _utcnow() + timedelta(seconds=fast_window_seconds)
 
 
 def _run_delivery_job() -> int:
@@ -156,6 +164,10 @@ def _run_delivery_job() -> int:
         has_activity = (sent_count + failed_count) > 0
         if has_activity:
             return max(1, settings.delivery_active_backoff_seconds)
+
+        fast_until = _delivery_fast_until
+        if fast_until is not None and _utcnow() <= fast_until:
+            return max(1, settings.delivery_live_fast_backoff_seconds)
 
         # If queue is empty, sleep longer; if queue has pending, keep short cadence.
         pending_count = count_pending_alerts(db)

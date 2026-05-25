@@ -28,7 +28,7 @@ def test_planner_live_mode_and_interval(db_session):
     plan = build_fetch_plan(db_session, now=now)
 
     assert plan.mode == "live"
-    assert plan.next_ingest_seconds == 45
+    assert plan.next_ingest_seconds == 120
     assert plan.expected_espn_calls == len(plan.espn_requests)
     assert len(plan.espn_requests) >= 1
 
@@ -39,7 +39,7 @@ def test_planner_pregame_hot_mode_and_interval(db_session):
     plan = build_fetch_plan(db_session, now=now)
 
     assert plan.mode == "pregame_hot"
-    assert plan.next_ingest_seconds == 300
+    assert plan.next_ingest_seconds == 900
     assert len(plan.espn_requests) >= 1
 
 
@@ -48,15 +48,22 @@ def test_planner_pregame_cold_mode_and_interval(db_session):
     _seed_game(db_session, external_id="g-cold", status="scheduled", scheduled_start=now + timedelta(hours=12))
     plan = build_fetch_plan(db_session, now=now)
     assert plan.mode == "pregame_cold"
-    assert plan.next_ingest_seconds == 1800
+    assert plan.next_ingest_seconds == 3600
     assert len(plan.espn_requests) >= 1
 
 
 def test_planner_off_mode_and_interval(db_session):
     now = datetime.now(timezone.utc)
+    _seed_game(
+        db_session,
+        external_id="g-final",
+        status="final",
+        scheduled_start=now - timedelta(days=1),
+        is_final=True,
+    )
     plan = build_fetch_plan(db_session, now=now)
     assert plan.mode == "off"
-    assert plan.next_ingest_seconds == 14400
+    assert plan.next_ingest_seconds == 43200
     assert len(plan.espn_requests) == 3
 
 
@@ -67,6 +74,24 @@ def test_planner_always_includes_yesterday_today_tomorrow(db_session):
     assert "20260502" in dates
     assert "20260503" in dates
     assert "20260504" in dates
+
+
+def test_planner_cold_start_extends_date_window(db_session):
+    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
+    plan = build_fetch_plan(db_session, now=now)
+    dates = [request.date for request in plan.espn_requests]
+    assert "20260501" in dates
+    assert "20260510" in dates
+    assert len(dates) == 10
+
+
+def test_planner_does_not_use_cold_start_window_when_games_exist(db_session):
+    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
+    _seed_game(db_session, external_id="g-existing", status="scheduled", scheduled_start=now + timedelta(days=4))
+    plan = build_fetch_plan(db_session, now=now)
+    dates = [request.date for request in plan.espn_requests]
+    assert "20260501" not in dates
+    assert "20260510" not in dates
 
 
 def test_planner_odds_refresh_disabled(db_session):

@@ -20,6 +20,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from worker.db import SessionLocal
+from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_nba_odds_index, game_key
 from worker.planner import build_fetch_plan
 from worker.providers.base import NbaProvider, ProviderGame
@@ -377,7 +378,8 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
 
     if state.mode != plan.mode:
         state.mode = plan.mode
-        _emit_event(db, state, "mode_changed", f"mode changed to {plan.mode}", {"mode": plan.mode})
+        if settings.telemetry_raw_events_enabled:
+            _emit_event(db, state, "mode_changed", f"mode changed to {plan.mode}", {"mode": plan.mode})
 
     try:
         team_map = _team_id_map(db)
@@ -440,16 +442,17 @@ def run_ingest_cycle(provider: NbaProvider) -> dict[str, int | str]:
         state.backoff_until = None
         _set_next_due(state, plan.next_ingest_seconds)
 
-        if updated > 0 or odds_updated > 0:
-            _emit_event(
-                db,
-                state,
-                "state_changed",
-                "game or odds state changed",
-                {"games_updated": updated, "odds_updated": odds_updated, "alerts_created": alert_records_created},
-            )
-        elif state.last_success_at is None or (state.last_success_at and (now - state.last_success_at).total_seconds() >= 3600):
-            _emit_event(db, state, "heartbeat", "periodic ingest heartbeat")
+        if settings.telemetry_raw_events_enabled:
+            if updated > 0 or odds_updated > 0:
+                _emit_event(
+                    db,
+                    state,
+                    "state_changed",
+                    "game or odds state changed",
+                    {"games_updated": updated, "odds_updated": odds_updated, "alerts_created": alert_records_created},
+                )
+            elif state.last_success_at is None or (state.last_success_at and (now - state.last_success_at).total_seconds() >= 3600):
+                _emit_event(db, state, "heartbeat", "periodic ingest heartbeat")
 
         db.commit()
         logger.info(
