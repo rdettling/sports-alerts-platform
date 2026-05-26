@@ -29,8 +29,7 @@ Checks:
 
 1. Confirm `ODDS_ENABLED=true`.
 2. Confirm `ODDS_API_KEY` is valid (no 401s in worker logs).
-3. Confirm refresh interval: `ODDS_REFRESH_SECONDS` may delay updates.
-4. Check worker logs for odds fetch failures.
+3. Check worker logs for odds fetch failures during catalog sync.
 
 If intentionally disabled:
 

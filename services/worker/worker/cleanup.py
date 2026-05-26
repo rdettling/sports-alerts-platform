@@ -6,13 +6,15 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, GameOddsCurrent, SentAlert, UserGameFollow
-from worker.config import settings
+
+GAMES_RETENTION_PAST_HOURS = 36
+GAMES_RETENTION_FUTURE_DAYS = 7
 
 
 def retention_window(now: datetime | None = None) -> tuple[datetime, datetime]:
     at = now or datetime.now(timezone.utc)
-    lower = at - timedelta(hours=max(1, settings.games_retention_past_hours))
-    upper = at + timedelta(days=max(1, settings.games_retention_future_days))
+    lower = at - timedelta(hours=max(1, GAMES_RETENTION_PAST_HOURS))
+    upper = at + timedelta(days=max(1, GAMES_RETENTION_FUTURE_DAYS))
     return lower, upper
 
 

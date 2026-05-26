@@ -10,6 +10,8 @@ from app.db.session import get_db
 from app.schemas.game import GameOddsOut, GameOut
 
 router = APIRouter(tags=["games"])
+GAMES_RETENTION_PAST_HOURS = 36
+GAMES_RETENTION_FUTURE_DAYS = 7
 
 
 @router.get("/games", response_model=list[GameOut])
@@ -22,8 +24,8 @@ def list_games(
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
     now = datetime.now(timezone.utc)
-    lower = now - timedelta(hours=max(1, settings.games_retention_past_hours))
-    upper = now + timedelta(days=max(1, settings.games_retention_future_days))
+    lower = now - timedelta(hours=max(1, GAMES_RETENTION_PAST_HOURS))
+    upper = now + timedelta(days=max(1, GAMES_RETENTION_FUTURE_DAYS))
     stmt = (
         select(Game)
         .where(Game.scheduled_start_time >= lower, Game.scheduled_start_time <= upper)

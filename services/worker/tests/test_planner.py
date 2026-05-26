@@ -99,7 +99,7 @@ def test_planner_odds_refresh_disabled(db_session):
     assert plan.expected_odds_calls in {0, 1}
 
 
-def test_planner_odds_refresh_stale_cache(db_session, monkeypatch):
+def test_planner_odds_refresh_when_snapshot_missing(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
     _seed_game(db_session, external_id="g-odds", status="scheduled", scheduled_start=now + timedelta(hours=1))
     db_session.add(
@@ -113,13 +113,13 @@ def test_planner_odds_refresh_stale_cache(db_session, monkeypatch):
     db_session.commit()
 
     monkeypatch.setattr("worker.planner.settings.odds_enabled", True)
-    monkeypatch.setattr("worker.planner.settings.odds_refresh_seconds", 120)
     monkeypatch.setattr("worker.planner.settings.odds_provider", "the_odds_api")
     monkeypatch.setattr("worker.planner.settings.odds_api_market", "h2h")
+    monkeypatch.setattr("worker.planner.settings.odds_pregame_window_hours", 24)
 
     plan = build_fetch_plan(db_session, "NBA", now=now)
-    assert plan.odds_refresh is True
-    assert plan.expected_odds_calls == 1
+    assert plan.odds_refresh is False
+    assert plan.expected_odds_calls == 0
 
 
 def test_build_catalog_requests_returns_wide_window_for_cold_start(db_session):

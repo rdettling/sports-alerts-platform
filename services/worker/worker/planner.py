@@ -10,6 +10,15 @@ from app.db.models import Game, GameOddsCurrent
 from worker.config import settings
 from worker.providers.base import ScoreboardRequest
 
+INGEST_LIVE_INTERVAL_SECONDS = 120
+INGEST_PREGAME_HOT_INTERVAL_SECONDS = 900
+INGEST_PREGAME_COLD_INTERVAL_SECONDS = 3600
+INGEST_OFF_INTERVAL_SECONDS = 43200
+INGEST_PREGAME_HOT_WINDOW_MINUTES = 90
+INGEST_PREGAME_COLD_WINDOW_HOURS = 24
+INGEST_COLD_START_LOOKBACK_DAYS = 2
+INGEST_COLD_START_LOOKAHEAD_DAYS = 7
+
 
 @dataclass(frozen=True)
 class FetchPlan:
@@ -44,9 +53,9 @@ def _pick_mode(db: Session, now: datetime, league: str) -> str:
     if next_scheduled is not None:
         next_start = next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)
         delta_seconds = (next_start - now).total_seconds()
-        if delta_seconds <= max(60, settings.ingest_pregame_hot_window_minutes * 60):
+        if delta_seconds <= max(60, INGEST_PREGAME_HOT_WINDOW_MINUTES * 60):
             return "pregame_hot"
-        if delta_seconds <= max(3600, settings.ingest_pregame_cold_window_hours * 3600):
+        if delta_seconds <= max(3600, INGEST_PREGAME_COLD_WINDOW_HOURS * 3600):
             return "pregame_cold"
 
     return "off"
@@ -54,12 +63,12 @@ def _pick_mode(db: Session, now: datetime, league: str) -> str:
 
 def _mode_interval_seconds(mode: str) -> int:
     if mode == "live":
-        return max(15, settings.ingest_live_interval_seconds)
+        return max(15, INGEST_LIVE_INTERVAL_SECONDS)
     if mode == "pregame_hot":
-        return max(60, settings.ingest_pregame_hot_interval_seconds)
+        return max(60, INGEST_PREGAME_HOT_INTERVAL_SECONDS)
     if mode == "pregame_cold":
-        return max(300, settings.ingest_pregame_cold_interval_seconds)
-    return max(900, settings.ingest_off_interval_seconds)
+        return max(300, INGEST_PREGAME_COLD_INTERVAL_SECONDS)
+    return max(900, INGEST_OFF_INTERVAL_SECONDS)
 
 
 def _tracked_dates(db: Session, now: datetime, league: str) -> set[str]:
@@ -94,8 +103,8 @@ def _default_dates_for_mode(_mode: str, now: datetime) -> set[str]:
 
 def _cold_start_dates(now: datetime) -> set[str]:
     today = now.date()
-    lookback = max(0, settings.ingest_cold_start_lookback_days)
-    lookahead = max(0, settings.ingest_cold_start_lookahead_days)
+    lookback = max(0, INGEST_COLD_START_LOOKBACK_DAYS)
+    lookahead = max(0, INGEST_COLD_START_LOOKAHEAD_DAYS)
     return {
         (today + timedelta(days=offset)).strftime("%Y%m%d")
         for offset in range(-lookback, lookahead + 1)
@@ -137,20 +146,29 @@ def _odds_refresh_decision(db: Session, now: datetime, league: str) -> tuple[boo
     if relevant_games == 0:
         return False, "no_relevant_games"
 
-    last_fetched = db.scalar(
-        select(func.max(GameOddsCurrent.fetched_at)).where(
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
+    # Snapshot-only policy: only fetch when at least one relevant game has no stored snapshot.
+    missing_snapshot_count = db.scalar(
+        select(func.count(Game.id))
+        .outerjoin(
+            GameOddsCurrent,
+            and_(
+                GameOddsCurrent.game_id == Game.id,
+                GameOddsCurrent.provider == settings.odds_provider,
+                GameOddsCurrent.market == settings.odds_api_market,
+            ),
         )
-    )
-    if last_fetched is None:
-        return True, "never_fetched"
-
-    fetched_at = last_fetched if last_fetched.tzinfo else last_fetched.replace(tzinfo=timezone.utc)
-    age_seconds = (now - fetched_at).total_seconds()
-    if age_seconds >= settings.odds_refresh_seconds:
-        return True, "stale_cache"
-    return False, "fresh_cache"
+        .where(
+            Game.league == league,
+            Game.is_final.is_(False),
+            Game.status == "scheduled",
+            Game.scheduled_start_time >= now,
+            Game.scheduled_start_time <= now + timedelta(hours=max(1, settings.odds_pregame_window_hours)),
+            GameOddsCurrent.id.is_(None),
+        )
+    ) or 0
+    if missing_snapshot_count > 0:
+        return True, "missing_snapshots"
+    return False, "snapshots_present"
 
 
 def build_fetch_plan(db: Session, league: str, now: datetime | None = None) -> FetchPlan:

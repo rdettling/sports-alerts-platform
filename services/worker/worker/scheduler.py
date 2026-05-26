@@ -15,6 +15,15 @@ from worker.ingest import run_catalog_sync, run_live_sync
 from worker.providers.factory import get_provider
 
 logger = logging.getLogger(__name__)
+SCHEDULER_MAX_SLEEP_SECONDS = 300
+JOB_MAX_RETRIES = 5
+JOB_RETRY_BASE_SECONDS = 30
+JOB_RETRY_MAX_BACKOFF_SECONDS = 3600
+DELIVERY_EMPTY_BACKOFF_SECONDS = 900
+DELIVERY_ACTIVE_BACKOFF_SECONDS = 120
+DELIVERY_LIVE_FAST_BACKOFF_SECONDS = 60
+DELIVERY_LIVE_FAST_WINDOW_SECONDS = 600
+CLEANUP_INTERVAL_SECONDS = 21600
 
 CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
@@ -53,7 +62,7 @@ def _bootstrap_jobs() -> None:
                     status="queued",
                     next_run_at=now,
                     attempt_count=0,
-                    max_attempts=settings.job_max_retries,
+                    max_attempts=JOB_MAX_RETRIES,
                 )
             )
         db.commit()
@@ -91,9 +100,9 @@ def _next_due_seconds(now: datetime) -> float:
             .limit(1)
         )
         if not row:
-            return float(settings.scheduler_max_sleep_seconds)
+            return float(SCHEDULER_MAX_SLEEP_SECONDS)
         delta = (row.next_run_at - now).total_seconds()
-        return max(0.0, min(float(settings.scheduler_max_sleep_seconds), delta))
+        return max(0.0, min(float(SCHEDULER_MAX_SLEEP_SECONDS), delta))
     finally:
         db.close()
 
@@ -139,8 +148,8 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
         row.last_finished_at = now
 
         retry_power = max(0, row.attempt_count - 1)
-        uncapped_backoff = max(1, settings.job_retry_base_seconds) * (2 ** retry_power)
-        backoff_seconds = min(max(1, settings.job_retry_max_backoff_seconds), uncapped_backoff)
+        uncapped_backoff = max(1, JOB_RETRY_BASE_SECONDS) * (2 ** retry_power)
+        backoff_seconds = min(max(1, JOB_RETRY_MAX_BACKOFF_SECONDS), uncapped_backoff)
         row.status = "queued"
         row.backoff_until = now + timedelta(seconds=backoff_seconds)
         row.next_run_at = row.backoff_until
@@ -161,8 +170,28 @@ def _run_live_sync_job(league: str) -> int:
     provider = get_provider()
     result = run_live_sync(provider=provider, league=league)
     _mark_delivery_fast_window(result)
-    fallback = settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds
-    next_poll = int(result.get("next_poll_seconds", fallback))
+    has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
+    if has_live_games:
+        fallback = settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds
+        next_poll = int(result.get("next_poll_seconds", fallback))
+        return max(1, next_poll)
+
+    mode = str(result.get("mode", "no_upcoming"))
+    if mode == "waiting_for_start":
+        next_scheduled_raw = result.get("next_scheduled_start_at")
+        if isinstance(next_scheduled_raw, str) and next_scheduled_raw:
+            try:
+                next_scheduled = datetime.fromisoformat(next_scheduled_raw.replace("Z", "+00:00"))
+                if next_scheduled.tzinfo is None:
+                    next_scheduled = next_scheduled.replace(tzinfo=timezone.utc)
+                seconds_until_start = int((next_scheduled - _utcnow()).total_seconds())
+                return max(1, seconds_until_start)
+            except ValueError:
+                pass
+        return max(1, settings.live_sync_pregame_retry_seconds)
+
+    # no_upcoming or unknown
+    next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))
     return max(1, next_poll)
 
 
@@ -174,7 +203,7 @@ def _mark_delivery_fast_window(result: dict[str, int | str]) -> None:
         return
     if int(result.get("games_checked", 0)) <= 0:
         return
-    fast_window_seconds = max(1, settings.delivery_live_fast_window_seconds)
+    fast_window_seconds = max(1, DELIVERY_LIVE_FAST_WINDOW_SECONDS)
     _delivery_fast_until = _utcnow() + timedelta(seconds=fast_window_seconds)
 
 
@@ -185,17 +214,17 @@ def _run_delivery_job() -> int:
         db.commit()
         has_activity = (sent_count + failed_count) > 0
         if has_activity:
-            return max(1, settings.delivery_active_backoff_seconds)
+            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
 
         fast_until = _delivery_fast_until
         if fast_until is not None and _utcnow() <= fast_until:
-            return max(1, settings.delivery_live_fast_backoff_seconds)
+            return max(1, DELIVERY_LIVE_FAST_BACKOFF_SECONDS)
 
         # If queue is empty, sleep longer; if queue has pending, keep short cadence.
         pending_count = count_pending_alerts(db)
         if pending_count > 0:
-            return max(1, settings.delivery_active_backoff_seconds)
-        return max(1, settings.delivery_empty_backoff_seconds)
+            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
+        return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS)
     except Exception:
         db.rollback()
         raise
@@ -210,7 +239,7 @@ def _run_cleanup_job() -> int:
         db.commit()
         if removed:
             logger.info("Cleanup removed games=%s", removed)
-        return max(60, settings.cleanup_interval_seconds)
+        return max(60, CLEANUP_INTERVAL_SECONDS)
     except Exception:
         db.rollback()
         raise
@@ -220,7 +249,7 @@ def _run_cleanup_job() -> int:
 
 def run(stop_event: threading.Event) -> None:
     _bootstrap_jobs()
-    logger.info("Scheduler loop started max_sleep=%ss", settings.scheduler_max_sleep_seconds)
+    logger.info("Scheduler loop started max_sleep=%ss", SCHEDULER_MAX_SLEEP_SECONDS)
 
     while not stop_event.is_set():
         now = _utcnow()

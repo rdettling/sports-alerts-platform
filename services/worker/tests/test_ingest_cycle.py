@@ -375,7 +375,8 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
 
     assert first["status"] == "success"
     assert second["status"] == "success"
-    assert odds_fetch_count["count"] == 1
+    assert first["odds_snapshots_created"] == 1
+    assert second["odds_snapshots_created"] == 0
 
 
 def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
@@ -451,3 +452,48 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
     assert result["status"] == "success"
     assert result["odds_candidates"] == 0
     assert result["odds_snapshots_created"] == 0
+
+
+def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    db_session.add(
+        Game(
+            external_game_id="mlb-upcoming-1",
+            league="MLB",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now + timedelta(hours=2),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    class EmptyProvider:
+        def fetch_games(self, league, requests):
+            return []
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    result = run_live_sync(EmptyProvider(), league="MLB")
+    assert result["status"] == "success"
+    assert result["has_live_games"] == "false"
+    assert result["mode"] == "waiting_for_start"
+    assert result["next_scheduled_start_at"] is not None
+
+
+def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
+    class EmptyProvider:
+        def fetch_games(self, league, requests):
+            return []
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    result = run_live_sync(EmptyProvider(), league="MLB")
+    assert result["status"] == "success"
+    assert result["has_live_games"] == "false"
+    assert result["mode"] == "no_upcoming"
+    assert result["next_scheduled_start_at"] is None

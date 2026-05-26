@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -43,6 +43,17 @@ def _live_interval_seconds(league: str) -> int:
     return max(
         1,
         settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds,
+    )
+
+
+def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
+    return db.scalar(
+        select(func.min(Game.scheduled_start_time)).where(
+            Game.league == league,
+            Game.is_final.is_(False),
+            Game.status == "scheduled",
+            Game.scheduled_start_time >= now,
+        )
     )
 
 
@@ -490,6 +501,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
 def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
     league = _normalize_league(league)
     db = SessionLocal()
+    now = datetime.now(timezone.utc)
     try:
         live_game_ids = {
             external_id
@@ -502,14 +514,23 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
             ).all()
         }
         if not live_game_ids:
+            next_scheduled = _next_scheduled_start(db, league, now)
+            if next_scheduled is None:
+                mode = "no_upcoming"
+                next_scheduled_iso: str | None = None
+            else:
+                mode = "waiting_for_start"
+                next_scheduled_iso = (next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)).isoformat()
             return {
                 "status": "success",
                 "job_type": "live_sync",
                 "league": league,
+                "has_live_games": "false",
+                "next_scheduled_start_at": next_scheduled_iso,
                 "games_checked": 0,
                 "games_updated": 0,
-                "next_poll_seconds": _live_interval_seconds(league),
-                "mode": "idle",
+                "next_poll_seconds": _catalog_interval_seconds(league),
+                "mode": mode,
             }
 
         requests = build_live_requests(db, league)
@@ -518,10 +539,12 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
                 "status": "success",
                 "job_type": "live_sync",
                 "league": league,
+                "has_live_games": "false",
+                "next_scheduled_start_at": None,
                 "games_checked": 0,
                 "games_updated": 0,
-                "next_poll_seconds": _live_interval_seconds(league),
-                "mode": "idle",
+                "next_poll_seconds": max(1, settings.live_sync_pregame_retry_seconds),
+                "mode": "waiting_for_start",
             }
 
         team_map = _team_id_map(db, league)
@@ -550,6 +573,8 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
             "status": "success",
             "job_type": "live_sync",
             "league": league,
+            "has_live_games": "true",
+            "next_scheduled_start_at": None,
             "games_checked": len(provider_games),
             "games_updated": updated,
             "next_poll_seconds": _live_interval_seconds(league),
@@ -562,6 +587,8 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
             "status": "failed",
             "job_type": "live_sync",
             "league": league,
+            "has_live_games": "false",
+            "next_scheduled_start_at": None,
             "games_checked": 0,
             "games_updated": 0,
             "next_poll_seconds": _live_interval_seconds(league),

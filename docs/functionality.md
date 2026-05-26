@@ -82,7 +82,6 @@ This document describes what the app currently does in production code.
 
 - Odds ingestion can be controlled via:
   - `ODDS_ENABLED`
-  - `ODDS_REFRESH_SECONDS`
-- Worker only fetches odds when relevant games exist and refresh window has elapsed.
+- Worker fetches pregame odds snapshots only for eligible games without an existing snapshot.
 - Odds mapping protects against repeated-matchup collisions by matching event start times.
 - If only far-away matchup odds exist, stale odds are not reused.

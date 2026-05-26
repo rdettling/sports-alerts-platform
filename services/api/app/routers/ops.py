@@ -37,6 +37,11 @@ WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 TIMESERIES_WINDOWS = {"24h": 24, "7d": 24 * 7}
 ADMIN_OVERVIEW_WINDOWS = {"1h", "6h", "24h", "7d"}
 NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
+OPS_PROVIDER_QUOTAS = {"espn": 5000, "odds": 1000}
+OPS_RISK_UTILIZATION_WATCH_PCT = 70.0
+OPS_RISK_UTILIZATION_RISK_PCT = 85.0
+OPS_RISK_ERROR_WATCH_PCT = 2.0
+OPS_RISK_ERROR_RISK_PCT = 5.0
 
 
 def _window_start(window: str) -> datetime:
@@ -60,19 +65,19 @@ def _risk_status(
     reasons: list[str] = []
     status = "healthy"
 
-    if utilization_pct is not None and utilization_pct >= settings.ops_risk_utilization_risk_pct:
+    if utilization_pct is not None and utilization_pct >= OPS_RISK_UTILIZATION_RISK_PCT:
         status = "at_risk"
-        reasons.append(f"Utilization {utilization_pct:.1f}% ≥ {settings.ops_risk_utilization_risk_pct:.0f}%")
-    elif utilization_pct is not None and utilization_pct >= settings.ops_risk_utilization_watch_pct:
+        reasons.append(f"Utilization {utilization_pct:.1f}% ≥ {OPS_RISK_UTILIZATION_RISK_PCT:.0f}%")
+    elif utilization_pct is not None and utilization_pct >= OPS_RISK_UTILIZATION_WATCH_PCT:
         status = "watch"
-        reasons.append(f"Utilization {utilization_pct:.1f}% ≥ {settings.ops_risk_utilization_watch_pct:.0f}%")
+        reasons.append(f"Utilization {utilization_pct:.1f}% ≥ {OPS_RISK_UTILIZATION_WATCH_PCT:.0f}%")
 
-    if error_pct >= settings.ops_risk_error_risk_pct:
+    if error_pct >= OPS_RISK_ERROR_RISK_PCT:
         status = "at_risk"
-        reasons.append(f"Error rate {error_pct:.1f}% ≥ {settings.ops_risk_error_risk_pct:.0f}%")
-    elif error_pct >= settings.ops_risk_error_watch_pct and status != "at_risk":
+        reasons.append(f"Error rate {error_pct:.1f}% ≥ {OPS_RISK_ERROR_RISK_PCT:.0f}%")
+    elif error_pct >= OPS_RISK_ERROR_WATCH_PCT and status != "at_risk":
         status = "watch"
-        reasons.append(f"Error rate {error_pct:.1f}% ≥ {settings.ops_risk_error_watch_pct:.0f}%")
+        reasons.append(f"Error rate {error_pct:.1f}% ≥ {OPS_RISK_ERROR_WATCH_PCT:.0f}%")
 
     if rate_limited_calls > 0:
         status = "at_risk"
@@ -291,7 +296,7 @@ def admin_overview(
         success_calls = metrics.get("success_calls", 0)
 
         hours = max(WINDOW_TO_HOURS[window], 1)
-        quota_limit_24h = settings.ops_provider_quotas.get(name)
+        quota_limit_24h = OPS_PROVIDER_QUOTAS.get(name)
         quota_limit_window = (
             int(round(quota_limit_24h * (hours / 24.0)))
             if quota_limit_24h is not None and quota_limit_24h > 0
@@ -391,10 +396,10 @@ def admin_overview(
             providers_on_watch=providers_on_watch,
         ),
         thresholds=OpsAdminRiskThresholdsOut(
-            utilization_watch_pct=settings.ops_risk_utilization_watch_pct,
-            utilization_risk_pct=settings.ops_risk_utilization_risk_pct,
-            error_watch_pct=settings.ops_risk_error_watch_pct,
-            error_risk_pct=settings.ops_risk_error_risk_pct,
+            utilization_watch_pct=OPS_RISK_UTILIZATION_WATCH_PCT,
+            utilization_risk_pct=OPS_RISK_UTILIZATION_RISK_PCT,
+            error_watch_pct=OPS_RISK_ERROR_WATCH_PCT,
+            error_risk_pct=OPS_RISK_ERROR_RISK_PCT,
         ),
         risk_cards=risk_cards,
         providers=providers_out,

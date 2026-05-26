@@ -30,41 +30,11 @@ class Settings(BaseSettings):
     odds_api_timeout_seconds: int = 6
     odds_api_cache_seconds: int = 60
     odds_enabled: bool = False
-    odds_refresh_seconds: int = 7200
-    telemetry_raw_events_enabled: bool = False
-    games_retention_past_hours: int = 36
-    games_retention_future_days: int = 7
     bootstrap_admin_email: str = "ryandettling1@gmail.com"
-
-    ops_provider_quotas_json: str = '{"espn": 5000, "odds": 1000}'
-    ops_risk_utilization_watch_pct: float = 70.0
-    ops_risk_utilization_risk_pct: float = 85.0
-    ops_risk_error_watch_pct: float = 2.0
-    ops_risk_error_risk_pct: float = 5.0
     neon_api_key: str = ""
     neon_project_id: str = ""
     neon_org_id: str = ""
     neon_dashboard_url: str = ""
-
-    @property
-    def ops_provider_quotas(self) -> dict[str, int]:
-        import json
-
-        try:
-            raw = json.loads(self.ops_provider_quotas_json)
-        except Exception:
-            return {}
-        if not isinstance(raw, dict):
-            return {}
-        parsed: dict[str, int] = {}
-        for key, value in raw.items():
-            if not isinstance(key, str):
-                continue
-            try:
-                parsed[key.lower()] = int(value)
-            except Exception:
-                continue
-        return parsed
 
 
 settings = Settings()

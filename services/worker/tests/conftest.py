@@ -37,6 +37,7 @@ os.environ.update(
         "LIVE_SYNC_INTERVAL_SECONDS": "120",
         "NBA_LIVE_SYNC_INTERVAL_SECONDS": "120",
         "MLB_LIVE_SYNC_INTERVAL_SECONDS": "300",
+        "LIVE_SYNC_PREGAME_RETRY_SECONDS": "600",
         "ODDS_PREGAME_WINDOW_HOURS": "24",
         "TELEMETRY_RAW_EVENTS_ENABLED": "true",
         "DEV_MODE": "false",
@@ -72,8 +73,9 @@ from worker.ingest import SessionLocal  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    if TEST_DB_PATH.exists():
+        TEST_DB_PATH.unlink()
     engine = create_engine(os.environ["DATABASE_URL"])
-    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     local_session = sessionmaker(bind=engine)
     db = local_session()
@@ -81,6 +83,8 @@ def reset_db():
         [
             Team(external_team_id="1610612737", league="NBA", name="Atlanta Hawks", abbreviation="ATL"),
             Team(external_team_id="1610612738", league="NBA", name="Boston Celtics", abbreviation="BOS"),
+            Team(external_team_id="NYY", league="MLB", name="New York Yankees", abbreviation="NYY"),
+            Team(external_team_id="BOS", league="MLB", name="Boston Red Sox", abbreviation="BOS"),
         ]
     )
     db.commit()

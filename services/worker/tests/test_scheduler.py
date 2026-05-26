@@ -71,8 +71,8 @@ def test_mark_job_failed_requeues_after_max_attempts(db_session):
 
 
 def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
-    monkeypatch.setattr(scheduler.settings, "job_retry_base_seconds", 60)
-    monkeypatch.setattr(scheduler.settings, "job_retry_max_backoff_seconds", 120)
+    monkeypatch.setattr(scheduler, "JOB_RETRY_BASE_SECONDS", 60)
+    monkeypatch.setattr(scheduler, "JOB_RETRY_MAX_BACKOFF_SECONDS", 120)
     now = datetime.now(timezone.utc)
     job = WorkerJob(
         job_type="delivery",
@@ -99,14 +99,14 @@ def test_run_delivery_job_uses_empty_backoff(db_session, monkeypatch):
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
     next_seconds = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.settings.delivery_empty_backoff_seconds
+    assert next_seconds == scheduler.DELIVERY_EMPTY_BACKOFF_SECONDS
 
 
 def test_run_delivery_job_uses_active_backoff_when_pending(db_session, monkeypatch):
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 5)
     next_seconds = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.settings.delivery_active_backoff_seconds
+    assert next_seconds == scheduler.DELIVERY_ACTIVE_BACKOFF_SECONDS
 
 
 def test_run_delivery_job_uses_live_fast_backoff_within_window(db_session, monkeypatch):
@@ -114,4 +114,54 @@ def test_run_delivery_job_uses_live_fast_backoff_within_window(db_session, monke
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
     scheduler._delivery_fast_until = datetime.now(timezone.utc) + timedelta(minutes=5)
     next_seconds = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.settings.delivery_live_fast_backoff_seconds
+    assert next_seconds == scheduler.DELIVERY_LIVE_FAST_BACKOFF_SECONDS
+
+
+def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
+    target = datetime.now(timezone.utc) + timedelta(minutes=42)
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "false",
+            "mode": "waiting_for_start",
+            "next_scheduled_start_at": target.isoformat(),
+            "next_poll_seconds": 1,
+        },
+    )
+    next_seconds = scheduler._run_live_sync_job("MLB")
+    assert 41 * 60 <= next_seconds <= 42 * 60
+
+
+def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "false",
+            "mode": "waiting_for_start",
+            "next_scheduled_start_at": None,
+        },
+    )
+    next_seconds = scheduler._run_live_sync_job("MLB")
+    assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+
+
+def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "false",
+            "mode": "no_upcoming",
+            "next_poll_seconds": scheduler.settings.catalog_sync_interval_seconds,
+        },
+    )
+    next_seconds = scheduler._run_live_sync_job("MLB")
+    assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
