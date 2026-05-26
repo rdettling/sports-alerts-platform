@@ -22,6 +22,7 @@ export function updateAlertPreference(
     is_enabled?: boolean;
     close_game_margin_threshold?: number;
     close_game_time_threshold_seconds?: number;
+    inning_start_threshold?: number;
   },
 ): Promise<AlertPreference> {
   return apiRequest<AlertPreference>(`/alert-preferences/leagues/${league}/${alertType}`, {
@@ -43,6 +44,7 @@ export function updateGameAlertOverride(
     is_enabled_override?: boolean | null;
     close_game_margin_threshold_override?: number | null;
     close_game_time_threshold_seconds_override?: number | null;
+    inning_start_threshold_override?: number | null;
   },
 ): Promise<GameAlertPreferenceItem> {
   return apiRequest<GameAlertPreferenceItem>(`/alert-preferences/games/${gameId}/${alertType}`, {

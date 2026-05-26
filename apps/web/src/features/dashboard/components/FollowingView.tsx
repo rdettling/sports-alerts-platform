@@ -111,6 +111,7 @@ export function FollowingView({ token }: { token: string }) {
       is_enabled_override?: boolean | null;
       close_game_margin_threshold_override?: number | null;
       close_game_time_threshold_seconds_override?: number | null;
+      inning_start_threshold_override?: number | null;
     },
   ) => {
     setAlertsBusy(true);
@@ -300,6 +301,7 @@ export function FollowingView({ token }: { token: string }) {
                                 is_enabled_override: item.is_enabled,
                                 close_game_margin_threshold_override: item.alert_type === "close_game_late" ? item.close_game_margin_threshold : null,
                                 close_game_time_threshold_seconds_override: item.alert_type === "close_game_late" ? item.close_game_time_threshold_seconds : null,
+                                inning_start_threshold_override: item.alert_type === "inning_start" ? item.inning_start_threshold : null,
                               }).catch(() => undefined);
                             }
                           }}
@@ -312,13 +314,14 @@ export function FollowingView({ token }: { token: string }) {
                         <select
                           value={item.is_enabled ? "on" : "off"}
                           disabled={alertsBusy || item.use_league_default}
-                          onChange={(event) => {
-                            applyAlertOverride(gameAlertState.game_id, item.alert_type, {
-                              is_enabled_override: event.target.value === "on",
-                              close_game_margin_threshold_override: item.override?.close_game_margin_threshold_override ?? null,
-                              close_game_time_threshold_seconds_override: item.override?.close_game_time_threshold_seconds_override ?? null,
-                            }).catch(() => undefined);
-                          }}
+                              onChange={(event) => {
+                                applyAlertOverride(gameAlertState.game_id, item.alert_type, {
+                                  is_enabled_override: event.target.value === "on",
+                                  close_game_margin_threshold_override: item.override?.close_game_margin_threshold_override ?? null,
+                                  close_game_time_threshold_seconds_override: item.override?.close_game_time_threshold_seconds_override ?? null,
+                                  inning_start_threshold_override: item.override?.inning_start_threshold_override ?? null,
+                                }).catch(() => undefined);
+                              }}
                         >
                           <option value="on">On</option>
                           <option value="off">Off</option>
@@ -357,6 +360,24 @@ export function FollowingView({ token }: { token: string }) {
                             </select>
                           </label>
                         </>
+                      ) : null}
+                      {item.alert_type === "inning_start" ? (
+                        <label>Inning
+                          <select
+                            value={item.inning_start_threshold ?? 7}
+                            disabled={alertsBusy || item.use_league_default}
+                            onChange={(event) => {
+                              applyAlertOverride(gameAlertState.game_id, item.alert_type, {
+                                is_enabled_override: item.override?.is_enabled_override ?? item.is_enabled,
+                                inning_start_threshold_override: Number(event.target.value),
+                                close_game_margin_threshold_override: null,
+                                close_game_time_threshold_seconds_override: null,
+                              }).catch(() => undefined);
+                            }}
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => <option key={value} value={value}>{value}</option>)}
+                          </select>
+                        </label>
                       ) : null}
                     </div>
                   </li>

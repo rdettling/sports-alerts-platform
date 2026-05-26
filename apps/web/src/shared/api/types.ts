@@ -53,6 +53,7 @@ export type AlertPreference = {
   is_enabled: boolean;
   close_game_margin_threshold: number | null;
   close_game_time_threshold_seconds: number | null;
+  inning_start_threshold: number | null;
 };
 
 export type AlertPreferenceGroup = {
@@ -67,10 +68,12 @@ export type GameAlertPreferenceItem = {
   is_enabled: boolean;
   close_game_margin_threshold: number | null;
   close_game_time_threshold_seconds: number | null;
+  inning_start_threshold: number | null;
   override: {
     is_enabled_override: boolean | null;
     close_game_margin_threshold_override: number | null;
     close_game_time_threshold_seconds_override: number | null;
+    inning_start_threshold_override: number | null;
   } | null;
 };
 
@@ -94,7 +97,7 @@ export type AlertHistoryItem = {
   away_team_abbreviation: string;
 };
 
-export type AlertType = "game_start" | "close_game_late" | "final_result";
+export type AlertType = "game_start" | "close_game_late" | "inning_start" | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
 
 export type OpsWindow = "24h" | "7d" | "30d";

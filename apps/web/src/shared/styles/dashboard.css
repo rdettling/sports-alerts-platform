@@ -362,11 +362,17 @@ button:disabled {
   gap: var(--space-3);
 }
 
-.two-panel-grid,
-.alerts-layout {
+.two-panel-grid {
   display: grid;
   grid-template-columns: minmax(340px, 1fr) minmax(420px, 1.35fr);
   gap: var(--space-4);
+}
+
+.alerts-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
 }
 
 .subpanel {
@@ -806,6 +812,10 @@ button:disabled {
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+.alerts-history-simple-row {
+  font-size: 0.92rem;
 }
 
 .following-page {

@@ -78,7 +78,7 @@ def create_admin_test_alert(
     current_user: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> DevTestAlertResponse:
-    allowed_alert_types = {"game_start", "close_game_late", "final_result"}
+    allowed_alert_types = {"game_start", "close_game_late", "inning_start", "final_result"}
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert type")
 

@@ -86,6 +86,27 @@ class FinalProvider:
         return len(requests)
 
 
+class MlbInningProvider:
+    def fetch_games(self, league, requests):
+        return [
+            ProviderGame(
+                external_game_id="game-mlb-live",
+                home_external_team_id="BOS",
+                away_external_team_id="NYY",
+                scheduled_start_time=datetime.now(timezone.utc),
+                status="in_progress",
+                home_score=2,
+                away_score=1,
+                period=7,
+                clock="Top 7th",
+                is_final=False,
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
 class RepeatMatchupProvider:
     def __init__(self, first_start: datetime, second_start: datetime):
         self.first_start = first_start
@@ -243,6 +264,33 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     run_ingest_cycle(LiveCloseProvider())
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 0
+
+
+def test_ingest_creates_mlb_inning_start_alert(db_session):
+    user = User(email="mlb-inning@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    mlb_team = db_session.scalar(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()))
+    assert mlb_team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=mlb_team.id))
+    db_session.add(
+        UserAlertDefault(
+            user_id=user.id,
+            league="MLB",
+            alert_type="inning_start",
+            is_enabled=True,
+            inning_start_threshold=7,
+        )
+    )
+    db_session.commit()
+
+    result = run_catalog_sync(MlbInningProvider(), league="MLB")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert any(row.alert_type == "inning_start" for row in sent)
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):

@@ -9,7 +9,7 @@ from app.db.models import Game, User, UserAlertDefault, UserGameAlertOverride
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.schemas.preference import (
-    ALERT_TYPES,
+    ALERT_TYPES_BY_LEAGUE,
     SUPPORTED_LEAGUES,
     AlertPreferenceGroupOut,
     AlertPreferenceOut,
@@ -43,11 +43,12 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
 
     now = datetime.now(timezone.utc)
     for league in SUPPORTED_LEAGUES:
-        for alert_type in ALERT_TYPES:
+        for alert_type in ALERT_TYPES_BY_LEAGUE[league]:
             key = (league, alert_type)
             if key in existing:
                 continue
             is_enabled, margin, seconds = _default_values(alert_type)
+            inning = 7 if alert_type == "inning_start" else None
             db.add(
                 UserAlertDefault(
                     user_id=user_id,
@@ -56,6 +57,7 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
                     is_enabled=is_enabled,
                     close_game_margin_threshold=margin,
                     close_game_time_threshold_seconds=seconds,
+                    inning_start_threshold=inning,
                     created_at=now,
                     updated_at=now,
                 )
@@ -84,7 +86,7 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
     }
 
     items: list[GameAlertPreferenceItemOut] = []
-    for alert_type in ALERT_TYPES:
+    for alert_type in ALERT_TYPES_BY_LEAGUE[game.league]:
         default = defaults.get(alert_type)
         if not default:
             continue
@@ -93,6 +95,7 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
         is_enabled = default.is_enabled
         margin = default.close_game_margin_threshold
         seconds = default.close_game_time_threshold_seconds
+        inning = default.inning_start_threshold
         use_league_default = override is None
 
         if override is not None:
@@ -103,10 +106,14 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
                     margin = override.close_game_margin_threshold_override
                 if override.close_game_time_threshold_seconds_override is not None:
                     seconds = override.close_game_time_threshold_seconds_override
+            if alert_type == "inning_start" and override.inning_start_threshold_override is not None:
+                inning = override.inning_start_threshold_override
 
         if alert_type != "close_game_late":
             margin = None
             seconds = None
+        if alert_type != "inning_start":
+            inning = None
 
         payload: dict[str, int | bool | None] | None = None
         if override is not None:
@@ -114,6 +121,7 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
                 "is_enabled_override": override.is_enabled_override,
                 "close_game_margin_threshold_override": override.close_game_margin_threshold_override,
                 "close_game_time_threshold_seconds_override": override.close_game_time_threshold_seconds_override,
+                "inning_start_threshold_override": override.inning_start_threshold_override,
             }
 
         items.append(
@@ -124,6 +132,7 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
                 is_enabled=is_enabled,
                 close_game_margin_threshold=margin,
                 close_game_time_threshold_seconds=seconds,
+                inning_start_threshold=inning,
                 override=payload,
             )
         )
@@ -159,7 +168,7 @@ def update_alert_preference(
     db: Session = Depends(get_db),
 ) -> AlertPreferenceOut:
     normalized_league = _validate_league(league)
-    if alert_type not in ALERT_TYPES:
+    if alert_type not in ALERT_TYPES_BY_LEAGUE[normalized_league]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     _ensure_default_preferences(db, current_user.id)
@@ -181,9 +190,16 @@ def update_alert_preference(
             preference.close_game_margin_threshold = payload.close_game_margin_threshold
         if payload.close_game_time_threshold_seconds is not None:
             preference.close_game_time_threshold_seconds = payload.close_game_time_threshold_seconds
+        preference.inning_start_threshold = None
+    elif alert_type == "inning_start":
+        if payload.inning_start_threshold is not None:
+            preference.inning_start_threshold = payload.inning_start_threshold
+        preference.close_game_margin_threshold = None
+        preference.close_game_time_threshold_seconds = None
     else:
         preference.close_game_margin_threshold = None
         preference.close_game_time_threshold_seconds = None
+        preference.inning_start_threshold = None
 
     preference.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -212,12 +228,11 @@ def update_game_alert_override(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GameAlertPreferenceItemOut:
-    if alert_type not in ALERT_TYPES:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
-
     game = db.get(Game, game_id)
     if not game:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+    if alert_type not in ALERT_TYPES_BY_LEAGUE[game.league]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     row = db.scalar(
         select(UserGameAlertOverride).where(
@@ -241,9 +256,15 @@ def update_game_alert_override(
     if alert_type == "close_game_late":
         row.close_game_margin_threshold_override = payload.close_game_margin_threshold_override
         row.close_game_time_threshold_seconds_override = payload.close_game_time_threshold_seconds_override
+        row.inning_start_threshold_override = None
+    elif alert_type == "inning_start":
+        row.inning_start_threshold_override = payload.inning_start_threshold_override
+        row.close_game_margin_threshold_override = None
+        row.close_game_time_threshold_seconds_override = None
     else:
         row.close_game_margin_threshold_override = None
         row.close_game_time_threshold_seconds_override = None
+        row.inning_start_threshold_override = None
     row.updated_at = now
 
     db.commit()
@@ -262,12 +283,11 @@ def clear_game_alert_override(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GameAlertPreferenceItemOut:
-    if alert_type not in ALERT_TYPES:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
-
     game = db.get(Game, game_id)
     if not game:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+    if alert_type not in ALERT_TYPES_BY_LEAGUE[game.league]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     row = db.scalar(
         select(UserGameAlertOverride).where(

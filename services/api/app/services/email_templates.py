@@ -9,6 +9,7 @@ from app.services.email_branding import APP_BRAND_NAME
 ALERT_LABELS = {
     "game_start": "Game start",
     "close_game_late": "Close game late",
+    "inning_start": "Inning start",
     "final_result": "Final result",
 }
 
@@ -122,6 +123,9 @@ def _primary_status_line(alert: SentAlert, game: Game, away_abbr: str, home_abbr
         if clock:
             details.append(f"{clock} left")
         return " \u2022 ".join(details)
+    if alert.alert_type == "inning_start":
+        inning = game.period or 0
+        return f"Inning {inning} started · {away_abbr} {_scoreline(game)} {home_abbr}"
     return f"Status: {game.status}"
 
 
@@ -134,6 +138,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
         return f"Tip-off · {away_abbr} @ {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
+    if alert.alert_type == "inning_start":
+        return f"Inning start · {away_abbr} @ {home_abbr}"
     return f"{ALERT_LABELS.get(alert.alert_type, 'Alert')} · {away_abbr} @ {home_abbr}"
 
 

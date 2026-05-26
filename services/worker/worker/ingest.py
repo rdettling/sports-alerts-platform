@@ -28,7 +28,10 @@ from worker.providers.base import ProviderGame, SportsProvider
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 SUPPORTED_LEAGUES = ("NBA", "MLB")
-ALERT_TYPES = ("game_start", "close_game_late", "final_result")
+ALERT_TYPES_BY_LEAGUE = {
+    "NBA": ("game_start", "close_game_late", "final_result"),
+    "MLB": ("game_start", "inning_start", "final_result"),
+}
 
 
 def _normalize_league(league: str) -> str:
@@ -154,12 +157,13 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
     created = False
     for user_id in sorted(user_ids):
         for league in sorted(leagues):
-            for alert_type in ALERT_TYPES:
+            for alert_type in ALERT_TYPES_BY_LEAGUE.get(league, ()):
                 key = (user_id, league, alert_type)
                 if key in existing:
                     continue
                 margin = 5 if alert_type == "close_game_late" else None
                 seconds = 120 if alert_type == "close_game_late" else None
+                inning = 7 if alert_type == "inning_start" else None
                 db.add(
                     UserAlertDefault(
                         user_id=user_id,
@@ -168,6 +172,7 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
                         is_enabled=True,
                         close_game_margin_threshold=margin,
                         close_game_time_threshold_seconds=seconds,
+                        inning_start_threshold=inning,
                         created_at=now,
                         updated_at=now,
                     )
@@ -192,10 +197,11 @@ def _load_overrides_by_user_game(db: Session, user_ids: set[int], game_ids: list
 def _effective_alert_settings(
     default_pref: UserAlertDefault | None,
     override: UserGameAlertOverride | None,
-) -> tuple[bool, int | None, int | None]:
+) -> tuple[bool, int | None, int | None, int | None]:
     enabled = default_pref.is_enabled if default_pref else False
     margin = default_pref.close_game_margin_threshold if default_pref else None
     seconds = default_pref.close_game_time_threshold_seconds if default_pref else None
+    inning = default_pref.inning_start_threshold if default_pref else None
     if override is not None:
         if override.is_enabled_override is not None:
             enabled = override.is_enabled_override
@@ -203,7 +209,9 @@ def _effective_alert_settings(
             margin = override.close_game_margin_threshold_override
         if override.close_game_time_threshold_seconds_override is not None:
             seconds = override.close_game_time_threshold_seconds_override
-    return enabled, margin, seconds
+        if override.inning_start_threshold_override is not None:
+            inning = override.inning_start_threshold_override
+    return enabled, margin, seconds, inning
 
 
 def _should_trigger_close_game_late(game: Game, is_enabled: bool, margin_threshold: int | None, time_threshold: int | None) -> bool:
@@ -227,6 +235,16 @@ def _should_trigger_close_game_late(game: Game, is_enabled: bool, margin_thresho
     return seconds_left <= resolved_seconds
 
 
+def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold: int | None) -> bool:
+    if not is_enabled:
+        return False
+    if game.is_final or game.status not in {"in_progress", "live"}:
+        return False
+    if game.period is None:
+        return False
+    return game.period >= (inning_threshold or 7)
+
+
 def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
     if not games:
         return 0
@@ -244,7 +262,7 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
         for user_id in user_ids:
             default_game_start = defaults_by_key.get((user_id, game.league, "game_start"))
             override_game_start = overrides_by_key.get((user_id, game.id, "game_start"))
-            game_start_enabled, _, _ = _effective_alert_settings(default_game_start, override_game_start)
+            game_start_enabled, _, _, _ = _effective_alert_settings(default_game_start, override_game_start)
             if game_start_enabled and game.status in {"in_progress", "live"}:
                 key = f"{user_id}:{game.id}:game_start"
                 if key not in candidate_dedupe_keys:
@@ -263,7 +281,7 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
 
             default_final = defaults_by_key.get((user_id, game.league, "final_result"))
             override_final = overrides_by_key.get((user_id, game.id, "final_result"))
-            final_enabled, _, _ = _effective_alert_settings(default_final, override_final)
+            final_enabled, _, _, _ = _effective_alert_settings(default_final, override_final)
             if final_enabled and (game.is_final or game.status == "final"):
                 key = f"{user_id}:{game.id}:final_result"
                 if key not in candidate_dedupe_keys:
@@ -282,7 +300,7 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
 
             default_close = defaults_by_key.get((user_id, game.league, "close_game_late"))
             override_close = overrides_by_key.get((user_id, game.id, "close_game_late"))
-            close_enabled, close_margin, close_seconds = _effective_alert_settings(default_close, override_close)
+            close_enabled, close_margin, close_seconds, _ = _effective_alert_settings(default_close, override_close)
             if _should_trigger_close_game_late(game, close_enabled, close_margin, close_seconds):
                 key = f"{user_id}:{game.id}:close_game_late"
                 if key not in candidate_dedupe_keys:
@@ -296,6 +314,25 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
                             delivery_status="pending",
                             dedupe_key=key,
                             metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
+                        )
+                    )
+
+            default_inning = defaults_by_key.get((user_id, game.league, "inning_start"))
+            override_inning = overrides_by_key.get((user_id, game.id, "inning_start"))
+            inning_enabled, _, _, inning_threshold = _effective_alert_settings(default_inning, override_inning)
+            if _should_trigger_inning_start(game, inning_enabled, inning_threshold):
+                key = f"{user_id}:{game.id}:inning_start"
+                if key not in candidate_dedupe_keys:
+                    candidate_dedupe_keys.add(key)
+                    candidate_alerts.append(
+                        SentAlert(
+                            user_id=user_id,
+                            game_id=game.id,
+                            alert_type="inning_start",
+                            delivery_channel="email",
+                            delivery_status="pending",
+                            dedupe_key=key,
+                            metadata_json={"period": game.period or 0, "status": game.status},
                         )
                     )
 
