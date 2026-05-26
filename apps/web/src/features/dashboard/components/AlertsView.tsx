@@ -11,6 +11,11 @@ import {
 import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 
+const ALERT_TYPES_BY_LEAGUE: Record<"NBA" | "MLB", string[]> = {
+  NBA: ["game_start", "close_game_late", "final_result"],
+  MLB: ["game_start", "inning_start", "final_result"],
+};
+
 export function AlertsView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
 
@@ -101,10 +106,15 @@ export function AlertsView({ token }: { token: string }) {
     }
   };
 
-  const activeGroup = useMemo(
-    () => preferenceGroups.find((group) => group.league === activeLeague) ?? null,
-    [preferenceGroups, activeLeague],
-  );
+  const activeGroup = useMemo(() => {
+    const raw = preferenceGroups.find((group) => group.league === activeLeague) ?? null;
+    if (!raw) return null;
+    const allowed = new Set(ALERT_TYPES_BY_LEAGUE[activeLeague]);
+    return {
+      ...raw,
+      preferences: raw.preferences.filter((preference) => allowed.has(preference.alert_type)),
+    };
+  }, [preferenceGroups, activeLeague]);
 
   return (
     <section className="view-stack alerts-skeleton-page">
@@ -165,7 +175,6 @@ export function AlertsView({ token }: { token: string }) {
           <section className="panel alerts-history-panel">
             <div className="section-header">
               <h3>Alert History</h3>
-              <p>Recent events</p>
             </div>
             {historyItems.length === 0 ? <p className="muted">No alert history yet.</p> : null}
             <ul className="list">
