@@ -43,6 +43,27 @@ def _create_game() -> int:
         db.close()
 
 
+def _create_game_for_team(team_id: int) -> int:
+    db = SessionLocal()
+    try:
+        opponent = db.scalar(select(Team).where(Team.id != team_id).order_by(Team.id.asc()))
+        assert opponent is not None
+        game = Game(
+            external_game_id=f"test-team-game-{team_id}-{datetime.now(timezone.utc).timestamp()}",
+            league="NBA",
+            home_team_id=team_id,
+            away_team_id=opponent.id,
+            scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=4),
+            status="scheduled",
+        )
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+        return game.id
+    finally:
+        db.close()
+
+
 def test_team_follow_flow(client):
     headers = _auth_headers(client)
     teams_response = client.get("/teams")
@@ -83,6 +104,41 @@ def test_game_follow_flow(client):
     unfollow_response = client.delete(f"/follows/games/{game_id}", headers=headers)
     assert unfollow_response.status_code == 200
     assert unfollow_response.json()["status"] == "unfollowed"
+
+
+def test_team_follow_includes_team_games_with_per_game_override(client):
+    headers = _auth_headers(client, email="m2-team-games@example.com")
+    teams_response = client.get("/teams")
+    assert teams_response.status_code == 200
+    team_id = teams_response.json()[0]["id"]
+
+    game_id = _create_game_for_team(team_id)
+
+    follow_team_response = client.post(f"/follows/teams/{team_id}", headers=headers)
+    assert follow_team_response.status_code == 201
+
+    follows_response = client.get("/follows", headers=headers)
+    assert follows_response.status_code == 200
+    game_ids = [game["id"] for game in follows_response.json()["games"]]
+    assert game_id in game_ids
+
+    unfollow_game_response = client.delete(f"/follows/games/{game_id}", headers=headers)
+    assert unfollow_game_response.status_code == 200
+    assert unfollow_game_response.json()["status"] == "unfollowed"
+
+    follows_response_after_game_unfollow = client.get("/follows", headers=headers)
+    assert follows_response_after_game_unfollow.status_code == 200
+    game_ids_after_unfollow = [game["id"] for game in follows_response_after_game_unfollow.json()["games"]]
+    assert game_id not in game_ids_after_unfollow
+
+    follow_game_response = client.post(f"/follows/games/{game_id}", headers=headers)
+    assert follow_game_response.status_code == 201
+    assert follow_game_response.json()["status"] in {"followed", "already_following"}
+
+    follows_response_after_refollow = client.get("/follows", headers=headers)
+    assert follows_response_after_refollow.status_code == 200
+    game_ids_after_refollow = [game["id"] for game in follows_response_after_refollow.json()["games"]]
+    assert game_id in game_ids_after_refollow
 
 
 def test_alert_preferences_get_and_update(client):

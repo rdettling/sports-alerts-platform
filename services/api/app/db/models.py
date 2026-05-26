@@ -21,6 +21,7 @@ class User(Base):
 
     team_follows = relationship("UserTeamFollow", back_populates="user")
     game_follows = relationship("UserGameFollow", back_populates="user")
+    game_unfollows = relationship("UserGameUnfollow", back_populates="user")
 
 
 class EmailLoginToken(Base):
@@ -110,6 +111,19 @@ class UserGameFollow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="game_follows")
+    game = relationship("Game")
+
+
+class UserGameUnfollow(Base):
+    __tablename__ = "user_game_unfollows"
+    __table_args__ = (UniqueConstraint("user_id", "game_id", name="uq_user_game_unfollows_user_game"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="game_unfollows")
     game = relationship("Game")
 
 
