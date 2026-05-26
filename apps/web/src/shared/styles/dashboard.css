@@ -420,6 +420,12 @@ button:disabled {
   gap: 0.3rem;
 }
 
+.games-league-filter {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+
 .games-day-filter-btn {
   border: 1px solid transparent;
   border-radius: 10px;
@@ -629,6 +635,19 @@ button:disabled {
   align-items: center;
   gap: 0.55rem;
   justify-self: end;
+}
+
+.games-league-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 0.16rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #29456f;
+  background: #eaf1ff;
+  border: 1px solid #c9d8f2;
 }
 
 .games-action-cell {

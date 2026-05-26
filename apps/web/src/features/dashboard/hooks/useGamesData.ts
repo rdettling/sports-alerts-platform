@@ -7,7 +7,7 @@ export function useGamesData(token: string) {
     queryKey: ["games-page", token],
     queryFn: async () => {
       const [availableGames, follows, teams, alerts24h] = await Promise.all([
-        listGames(),
+        listGames({ includeFinals: true, limit: 200 }),
         listFollows(token),
         listTeams(),
         listAlertHistory(token, { sinceHours: 24, limit: 200 }),

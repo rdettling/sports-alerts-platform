@@ -16,6 +16,7 @@ router = APIRouter(tags=["games"])
 def list_games(
     status: str | None = Query(default=None, description="Filter by game status"),
     league: str | None = Query(default=None, description="Filter by league, e.g. NBA or MLB"),
+    include_finals: bool = Query(default=False, description="Include final games in results"),
     include_odds: bool = Query(default=True, description="Include moneyline odds when configured"),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -33,7 +34,7 @@ def list_games(
         stmt = stmt.where(Game.league == league.strip().upper())
     if status:
         stmt = stmt.where(Game.status == status)
-    else:
+    elif not include_finals:
         stmt = stmt.where(Game.is_final.is_(False))
     games = db.scalars(stmt).all()
     game_views = [GameOut.model_validate(game) for game in games]

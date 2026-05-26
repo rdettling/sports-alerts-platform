@@ -118,3 +118,33 @@ def test_games_supports_league_filter(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["league"] == "NBA"
+
+
+def test_games_include_finals_when_requested(client):
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        db.add(
+            Game(
+                external_game_id="test-final-game",
+                league="MLB",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=datetime.now(timezone.utc) - timedelta(hours=1),
+                status="final",
+                is_final=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    default_response = client.get("/games?league=MLB")
+    assert default_response.status_code == 200
+    default_ids = {row["external_game_id"] for row in default_response.json()}
+    assert "test-final-game" not in default_ids
+
+    include_response = client.get("/games?league=MLB&include_finals=true&limit=200")
+    assert include_response.status_code == 200
+    include_ids = {row["external_game_id"] for row in include_response.json()}
+    assert "test-final-game" in include_ids

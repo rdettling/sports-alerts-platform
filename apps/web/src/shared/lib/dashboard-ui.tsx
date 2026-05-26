@@ -36,6 +36,9 @@ export function scoreSnippet(game: Game): string {
 }
 
 function teamLogoUrl(team: Team): string {
+  if ((team.league || "").toUpperCase() === "MLB") {
+    return `https://a.espncdn.com/i/teamlogos/mlb/500/${team.abbreviation.toLowerCase()}.png`;
+  }
   return `https://cdn.nba.com/logos/nba/${team.external_team_id}/global/L/logo.svg`;
 }
 
@@ -80,16 +83,30 @@ function formatPeriod(period: number | null): string {
   return `OT${period - 4}`;
 }
 
+function formatBaseballPeriod(period: number | null): string {
+  if (period === null || period <= 0) {
+    return "";
+  }
+  return `Inning ${period}`;
+}
+
 function isClockAtZero(clock: string): boolean {
   return clock === "0" || clock === "0.0" || clock === "00:00" || clock === "0:00";
 }
 
 export function formatGameTime(game: Game): string {
   if (game.status === "in_progress" || game.status === "live") {
-    const period = formatPeriod(game.period);
+    const league = (game.league || "").toUpperCase();
+    const period = league === "MLB" ? formatBaseballPeriod(game.period) : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
-    if (game.period === 2 && isClockAtZero(clock)) {
+    if (league !== "MLB" && game.period === 2 && isClockAtZero(clock)) {
       return "Halftime";
+    }
+    if (league === "MLB" && clock && !isClockAtZero(clock)) {
+      return clock;
+    }
+    if (league === "MLB" && period && isClockAtZero(clock)) {
+      return period;
     }
     if (period && clock) {
       return `${period} ${clock}`;

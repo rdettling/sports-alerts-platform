@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMoneyline, noVigProbabilities } from "./dashboard-ui";
+import { formatGameTime, formatMoneyline, noVigProbabilities } from "./dashboard-ui";
 
 describe("dashboard utilities", () => {
   it("formats moneyline", () => {
@@ -34,5 +34,28 @@ describe("dashboard utilities", () => {
 
     expect(result).not.toBeNull();
     expect((result!.home + result!.away).toFixed(5)).toBe("1.00000");
+  });
+
+  it("formats MLB live game time without NBA OT labels", () => {
+    const label = formatGameTime({
+      id: 2,
+      external_game_id: "b",
+      league: "MLB",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: new Date().toISOString(),
+      status: "live",
+      home_score: 2,
+      away_score: 7,
+      period: 8,
+      clock: "0:00",
+      is_final: false,
+      last_ingested_at: null,
+      odds: null,
+    });
+
+    expect(label).toBe("Inning 8");
+    expect(label.includes("OT")).toBe(false);
+    expect(label).not.toBe("Halftime");
   });
 });

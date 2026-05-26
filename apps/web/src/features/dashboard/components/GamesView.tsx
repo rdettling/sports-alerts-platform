@@ -8,12 +8,21 @@ import { useGamesData } from "../hooks/useGamesData";
 
 type GameDayGroup = { label: string; items: Game[] };
 
+function localDateKey(dateIso: string): string {
+  const value = new Date(dateIso);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function GamesView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
+  const [leagueFilter, setLeagueFilter] = useState<"all" | "NBA" | "MLB">("all");
   const [error, setError] = useState<string | null>(null);
 
   const toggleMutation = useMutation({
@@ -43,11 +52,16 @@ export function GamesView({ token }: { token: string }) {
     [games],
   );
 
-  const gameDateKey = (game: Game): string => new Date(game.scheduled_start_time).toISOString().slice(0, 10);
+  const gameDateKey = (game: Game): string => localDateKey(game.scheduled_start_time);
+
+  const leagueFilteredGames = useMemo(() => {
+    if (leagueFilter === "all") return sortedGames;
+    return sortedGames.filter((game) => (game.league || "").toUpperCase() === leagueFilter);
+  }, [sortedGames, leagueFilter]);
 
   const dayOptions = useMemo(() => {
     const map = new Map<string, { key: string; label: string; count: number }>();
-    sortedGames.forEach((game) => {
+    leagueFilteredGames.forEach((game) => {
       const key = gameDateKey(game);
       const label = new Date(game.scheduled_start_time).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
       const current = map.get(key);
@@ -55,12 +69,12 @@ export function GamesView({ token }: { token: string }) {
       else map.set(key, { key, label, count: 1 });
     });
     return Array.from(map.values());
-  }, [sortedGames]);
+  }, [leagueFilteredGames]);
 
   const visibleGames = useMemo(() => {
-    if (dayFilter === "all") return sortedGames;
-    return sortedGames.filter((game) => gameDateKey(game) === dayFilter);
-  }, [sortedGames, dayFilter]);
+    if (dayFilter === "all") return leagueFilteredGames;
+    return leagueFilteredGames.filter((game) => gameDateKey(game) === dayFilter);
+  }, [leagueFilteredGames, dayFilter]);
 
   const groupedVisibleGames: GameDayGroup[] = useMemo(() => {
     const groups = new Map<string, Game[]>();
@@ -93,6 +107,12 @@ export function GamesView({ token }: { token: string }) {
     setLastSync(latestMs > 0 ? new Date(latestMs) : null);
   }, [games, setLastSync]);
 
+  useEffect(() => {
+    if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
+      setDayFilter("all");
+    }
+  }, [dayFilter, dayOptions]);
+
   return (
     <section className="view-stack games-page">
       <section className="panel games-panel">
@@ -102,9 +122,14 @@ export function GamesView({ token }: { token: string }) {
         {!isLoading ? (
           <div className="games-feed-grid">
             <aside className="games-day-filter">
+              <div className="games-league-filter" role="tablist" aria-label="League filter">
+                <button className={`chip-btn ${leagueFilter === "all" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("all")} disabled={isLoading}>All</button>
+                <button className={`chip-btn ${leagueFilter === "NBA" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("NBA")} disabled={isLoading}>NBA</button>
+                <button className={`chip-btn ${leagueFilter === "MLB" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("MLB")} disabled={isLoading}>MLB</button>
+              </div>
               <button className={`games-day-filter-btn ${dayFilter === "all" ? "active" : ""}`.trim()} onClick={() => setDayFilter("all")} disabled={isLoading}>
                 <span>All</span>
-                <span className="muted">{sortedGames.length}</span>
+                <span className="muted">{leagueFilteredGames.length}</span>
               </button>
               {dayOptions.map((day) => (
                 <button key={day.key} className={`games-day-filter-btn ${dayFilter === day.key ? "active" : ""}`.trim()} onClick={() => setDayFilter(day.key)} disabled={isLoading}>
@@ -160,6 +185,7 @@ export function GamesView({ token }: { token: string }) {
                               </div>
 
                               <div className="games-meta-rail">
+                                <span className="games-league-pill">{(game.league || "N/A").toUpperCase()}</span>
                                 <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>{statusLabel(game)}</span>
                                 <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
                               </div>
