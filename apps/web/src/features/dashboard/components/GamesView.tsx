@@ -16,6 +16,13 @@ function localDateKey(dateIso: string): string {
   return `${year}-${month}-${day}`;
 }
 
+function leagueLogoUrl(league: string | null | undefined): string | null {
+  const normalized = (league || "").toUpperCase();
+  if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
+  if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
+  return null;
+}
+
 export function GamesView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
   const queryClient = useQueryClient();
@@ -170,24 +177,35 @@ export function GamesView({ token }: { token: string }) {
                         return (
                           <article key={game.id} className="games-card-row" role="listitem">
                             <div className="games-card-main">
-                              <div className="games-matchup-lines">
-                                <div className={`games-team-line ${awayWon ? "winner" : ""}`.trim()}>
+                              <div className="games-lines">
+                                <div className={`games-team-row ${awayWon ? "winner" : ""}`.trim()}>
                                   <div className="games-team-ident"><TeamLogo team={away} size={24} /><strong>{away.abbreviation}</strong></div>
+                                  <div className="games-team-score">{awayValueText}</div>
                                 </div>
-                                <div className={`games-team-line ${homeWon ? "winner" : ""}`.trim()}>
+                                <div className={`games-team-row ${homeWon ? "winner" : ""}`.trim()}>
                                   <div className="games-team-ident"><TeamLogo team={home} size={24} /><strong>{home.abbreviation}</strong></div>
+                                  <div className="games-team-score">{homeValueText}</div>
                                 </div>
-                              </div>
-
-                              <div className="games-values-lines">
-                                <div className={`games-team-score ${awayWon ? "winner" : ""}`.trim()}>{awayValueText}{awayWon ? <span className="games-winner-tag">W</span> : null}</div>
-                                <div className={`games-team-score ${homeWon ? "winner" : ""}`.trim()}>{homeValueText}{homeWon ? <span className="games-winner-tag">W</span> : null}</div>
                               </div>
 
                               <div className="games-meta-rail">
-                                <span className="games-league-pill">{(game.league || "N/A").toUpperCase()}</span>
-                                <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>{statusLabel(game)}</span>
-                                <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
+                                {leagueLogoUrl(game.league) ? (
+                                  <span className="games-league-logo-wrap" aria-label={`${(game.league || "N/A").toUpperCase()} league`}>
+                                    <img
+                                      src={leagueLogoUrl(game.league) ?? ""}
+                                      alt={`${(game.league || "N/A").toUpperCase()} logo`}
+                                      className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()}
+                                    />
+                                  </span>
+                                ) : (
+                                  <span className="games-league-logo-fallback">{(game.league || "N/A").toUpperCase()}</span>
+                                )}
+                                {!isFinal ? <span className={`games-status-pill ${isLive ? "live" : "scheduled"}`.trim()}>{statusLabel(game)}</span> : null}
+                                {isFinal ? (
+                                  <span className="games-outcome-pill final">Final</span>
+                                ) : (
+                                  <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
+                                )}
                               </div>
                             </div>
                           </article>

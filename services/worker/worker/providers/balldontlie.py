@@ -108,8 +108,10 @@ class BallDontLieProvider(SportsProvider):
         home_abbr = str(home_team.get("abbreviation") or "").upper()
         away_abbr = str(away_team.get("abbreviation") or "").upper()
         if league.upper() == "NBA":
-            home_external_team_id = str(home_team.get("id") or "").strip() or ABBR_TO_EXTERNAL_TEAM_ID.get(home_abbr)
-            away_external_team_id = str(away_team.get("id") or "").strip() or ABBR_TO_EXTERNAL_TEAM_ID.get(away_abbr)
+            # ESPN's team.id values are provider-internal and do not match our canonical NBA ids.
+            # Always map NBA teams by abbreviation first to align with seeded Team.external_team_id.
+            home_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(home_abbr) or str(home_team.get("id") or "").strip()
+            away_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(away_abbr) or str(away_team.get("id") or "").strip()
         else:
             home_external_team_id = home_abbr
             away_external_team_id = away_abbr

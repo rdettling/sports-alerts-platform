@@ -500,8 +500,8 @@ button:disabled {
 }
 
 .games-card-main {
-  display: grid;
-  grid-template-columns: max-content max-content auto;
+  display: flex;
+  justify-content: space-between;
   gap: 0.7rem;
   align-items: center;
   min-width: 0;
@@ -530,42 +530,38 @@ button:disabled {
   letter-spacing: 0.01em;
 }
 
-.games-values-lines {
+.games-lines {
   display: grid;
-  gap: 0.38rem;
-  justify-items: end;
-  min-width: 5ch;
+  gap: 0.28rem;
+  width: max-content;
+  min-width: 0;
+}
+
+.games-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.1rem;
+  min-width: 13.5rem;
+  padding: 0.1rem 0.24rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
 }
 
 .games-team-score {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-width: 2.6ch;
   font-variant-numeric: tabular-nums;
   font-size: 1rem;
   font-weight: 650;
+  color: #172445;
 }
 
-.games-team-line.winner .games-team-score {
-  color: #166534;
-  font-weight: 800;
-}
-
-.games-team-score.winner {
-  color: #166534;
-  font-weight: 800;
-}
-
-.games-winner-tag {
-  font-size: 0.66rem;
-  font-weight: 800;
-  line-height: 1;
-  padding: 0.16rem 0.32rem;
-  border-radius: var(--radius-pill);
-  color: #14532d;
-  background: #dcfce7;
+.games-team-row.winner {
+  background: #eaf8ee;
+  border-color: #8ecf9f;
 }
 
 .games-status-pill {
@@ -633,11 +629,39 @@ button:disabled {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.55rem;
   justify-self: end;
 }
 
-.games-league-pill {
+.games-league-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  padding: 0.16rem 0.38rem;
+  background: #eaf1ff;
+  border: 1px solid #c9d8f2;
+  width: 4.25rem;
+  min-height: 2.1rem;
+}
+
+.games-league-logo {
+  max-width: 100%;
+  height: auto;
+  width: auto;
+  display: block;
+}
+
+.games-league-logo.league-nba {
+  width: 1.05rem;
+}
+
+.games-league-logo.league-mlb {
+  width: 3.2rem;
+}
+
+.games-league-logo-fallback {
   display: inline-flex;
   align-items: center;
   border-radius: var(--radius-pill);
@@ -654,6 +678,24 @@ button:disabled {
   width: 102px;
   text-align: center;
   padding: 0.46rem 0.62rem;
+}
+
+.games-outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  width: 102px;
+  justify-content: center;
+  text-align: center;
+}
+
+.games-outcome-pill.final {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #b7dfc0;
+  border-radius: var(--radius-pill);
+  padding: 0.46rem 0.62rem;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .sticky-toolbar {
