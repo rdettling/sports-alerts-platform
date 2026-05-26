@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field
 
 ALERT_TYPES = ["game_start", "close_game_late", "final_result"]
+SUPPORTED_LEAGUES = ["NBA", "MLB"]
 
 
 class AlertPreferenceOut(BaseModel):
+    league: str
     alert_type: str
     is_enabled: bool
     close_game_margin_threshold: int | None = None
@@ -17,3 +19,29 @@ class UpdateAlertPreferenceRequest(BaseModel):
     close_game_margin_threshold: int | None = Field(default=None, ge=0, le=50)
     close_game_time_threshold_seconds: int | None = Field(default=None, ge=0, le=3600)
 
+
+class AlertPreferenceGroupOut(BaseModel):
+    league: str
+    preferences: list[AlertPreferenceOut]
+
+
+class UpdateGameAlertOverrideRequest(BaseModel):
+    is_enabled_override: bool | None = None
+    close_game_margin_threshold_override: int | None = Field(default=None, ge=0, le=50)
+    close_game_time_threshold_seconds_override: int | None = Field(default=None, ge=0, le=3600)
+
+
+class GameAlertPreferenceItemOut(BaseModel):
+    league: str
+    alert_type: str
+    use_league_default: bool
+    is_enabled: bool
+    close_game_margin_threshold: int | None = None
+    close_game_time_threshold_seconds: int | None = None
+    override: dict[str, int | bool | None] | None = None
+
+
+class GameAlertPreferencesOut(BaseModel):
+    game_id: int
+    league: str
+    items: list[GameAlertPreferenceItemOut]

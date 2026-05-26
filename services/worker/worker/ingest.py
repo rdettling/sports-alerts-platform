@@ -13,8 +13,10 @@ from app.db.models import (
     GameOddsCurrent,
     SentAlert,
     Team,
-    UserAlertPreference,
+    UserAlertDefault,
+    UserGameAlertOverride,
     UserGameFollow,
+    UserGameUnfollow,
     UserTeamFollow,
 )
 from worker.db import SessionLocal
@@ -26,6 +28,7 @@ from worker.providers.base import ProviderGame, SportsProvider
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 SUPPORTED_LEAGUES = ("NBA", "MLB")
+ALERT_TYPES = ("game_start", "close_game_late", "final_result")
 
 
 def _normalize_league(league: str) -> str:
@@ -113,32 +116,107 @@ def _load_game_watchers(db: Session, games: list[Game]) -> dict[int, set[int]]:
         for game_id, game in game_map.items():
             by_game.setdefault(game_id, set()).update(watchers_by_team.get(game.home_team_id, set()))
             by_game.setdefault(game_id, set()).update(watchers_by_team.get(game.away_team_id, set()))
+
+    unfollow_rows = db.execute(
+        select(UserGameUnfollow.game_id, UserGameUnfollow.user_id).where(UserGameUnfollow.game_id.in_(game_ids))
+    ).all()
+    for game_id, user_id in unfollow_rows:
+        if game_id in by_game:
+            by_game[game_id].discard(user_id)
     return by_game
 
 
-def _load_enabled_preferences(db: Session, user_ids: set[int]) -> dict[tuple[int, str], UserAlertPreference]:
-    if not user_ids:
+def _load_defaults_by_user_league(db: Session, user_ids: set[int], leagues: set[str]) -> dict[tuple[int, str, str], UserAlertDefault]:
+    if not user_ids or not leagues:
         return {}
     rows = db.scalars(
-        select(UserAlertPreference).where(
-            UserAlertPreference.user_id.in_(sorted(user_ids)),
-            UserAlertPreference.is_enabled.is_(True),
+        select(UserAlertDefault).where(
+            UserAlertDefault.user_id.in_(sorted(user_ids)),
+            UserAlertDefault.league.in_(sorted(leagues)),
         )
     ).all()
-    return {(row.user_id, row.alert_type): row for row in rows}
+    return {(row.user_id, row.league, row.alert_type): row for row in rows}
 
 
-def _should_trigger_close_game_late(game: Game, preference: UserAlertPreference | None) -> bool:
-    if not preference:
+def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: set[str]) -> None:
+    if not user_ids or not leagues:
+        return
+    existing = {
+        (row.user_id, row.league, row.alert_type)
+        for row in db.scalars(
+            select(UserAlertDefault).where(
+                UserAlertDefault.user_id.in_(sorted(user_ids)),
+                UserAlertDefault.league.in_(sorted(leagues)),
+            )
+        ).all()
+    }
+    now = datetime.now(timezone.utc)
+    created = False
+    for user_id in sorted(user_ids):
+        for league in sorted(leagues):
+            for alert_type in ALERT_TYPES:
+                key = (user_id, league, alert_type)
+                if key in existing:
+                    continue
+                margin = 5 if alert_type == "close_game_late" else None
+                seconds = 120 if alert_type == "close_game_late" else None
+                db.add(
+                    UserAlertDefault(
+                        user_id=user_id,
+                        league=league,
+                        alert_type=alert_type,
+                        is_enabled=True,
+                        close_game_margin_threshold=margin,
+                        close_game_time_threshold_seconds=seconds,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                created = True
+    if created:
+        db.flush()
+
+
+def _load_overrides_by_user_game(db: Session, user_ids: set[int], game_ids: list[int]) -> dict[tuple[int, int, str], UserGameAlertOverride]:
+    if not user_ids or not game_ids:
+        return {}
+    rows = db.scalars(
+        select(UserGameAlertOverride).where(
+            UserGameAlertOverride.user_id.in_(sorted(user_ids)),
+            UserGameAlertOverride.game_id.in_(game_ids),
+        )
+    ).all()
+    return {(row.user_id, row.game_id, row.alert_type): row for row in rows}
+
+
+def _effective_alert_settings(
+    default_pref: UserAlertDefault | None,
+    override: UserGameAlertOverride | None,
+) -> tuple[bool, int | None, int | None]:
+    enabled = default_pref.is_enabled if default_pref else False
+    margin = default_pref.close_game_margin_threshold if default_pref else None
+    seconds = default_pref.close_game_time_threshold_seconds if default_pref else None
+    if override is not None:
+        if override.is_enabled_override is not None:
+            enabled = override.is_enabled_override
+        if override.close_game_margin_threshold_override is not None:
+            margin = override.close_game_margin_threshold_override
+        if override.close_game_time_threshold_seconds_override is not None:
+            seconds = override.close_game_time_threshold_seconds_override
+    return enabled, margin, seconds
+
+
+def _should_trigger_close_game_late(game: Game, is_enabled: bool, margin_threshold: int | None, time_threshold: int | None) -> bool:
+    if not is_enabled:
         return False
     if game.is_final or game.status not in {"in_progress", "live"}:
         return False
     if game.home_score is None or game.away_score is None:
         return False
-    margin_threshold = preference.close_game_margin_threshold or 5
-    time_threshold = preference.close_game_time_threshold_seconds or 120
+    resolved_margin = margin_threshold or 5
+    resolved_seconds = time_threshold or 120
     margin = abs(game.home_score - game.away_score)
-    if margin > margin_threshold:
+    if margin > resolved_margin:
         return False
     period = game.period or 0
     if period < 4:
@@ -146,7 +224,7 @@ def _should_trigger_close_game_late(game: Game, preference: UserAlertPreference 
     seconds_left = _parse_clock_seconds(game.clock)
     if seconds_left is None:
         return False
-    return seconds_left <= time_threshold
+    return seconds_left <= resolved_seconds
 
 
 def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
@@ -154,14 +232,20 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
         return 0
     watchers_by_game = _load_game_watchers(db, games)
     all_user_ids = {user_id for users in watchers_by_game.values() for user_id in users}
-    prefs_by_user_type = _load_enabled_preferences(db, all_user_ids)
+    leagues = {game.league for game in games}
+    _ensure_alert_defaults_for_users(db, all_user_ids, leagues)
+    defaults_by_key = _load_defaults_by_user_league(db, all_user_ids, leagues)
+    overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, [game.id for game in games])
 
     candidate_alerts: list[SentAlert] = []
     candidate_dedupe_keys: set[str] = set()
     for game in games:
         user_ids = watchers_by_game.get(game.id, set())
         for user_id in user_ids:
-            if prefs_by_user_type.get((user_id, "game_start")) and game.status in {"in_progress", "live"}:
+            default_game_start = defaults_by_key.get((user_id, game.league, "game_start"))
+            override_game_start = overrides_by_key.get((user_id, game.id, "game_start"))
+            game_start_enabled, _, _ = _effective_alert_settings(default_game_start, override_game_start)
+            if game_start_enabled and game.status in {"in_progress", "live"}:
                 key = f"{user_id}:{game.id}:game_start"
                 if key not in candidate_dedupe_keys:
                     candidate_dedupe_keys.add(key)
@@ -177,7 +261,10 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
                         )
                     )
 
-            if prefs_by_user_type.get((user_id, "final_result")) and (game.is_final or game.status == "final"):
+            default_final = defaults_by_key.get((user_id, game.league, "final_result"))
+            override_final = overrides_by_key.get((user_id, game.id, "final_result"))
+            final_enabled, _, _ = _effective_alert_settings(default_final, override_final)
+            if final_enabled and (game.is_final or game.status == "final"):
                 key = f"{user_id}:{game.id}:final_result"
                 if key not in candidate_dedupe_keys:
                     candidate_dedupe_keys.add(key)
@@ -193,8 +280,10 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
                         )
                     )
 
-            close_pref = prefs_by_user_type.get((user_id, "close_game_late"))
-            if _should_trigger_close_game_late(game, close_pref):
+            default_close = defaults_by_key.get((user_id, game.league, "close_game_late"))
+            override_close = overrides_by_key.get((user_id, game.id, "close_game_late"))
+            close_enabled, close_margin, close_seconds = _effective_alert_settings(default_close, override_close)
+            if _should_trigger_close_game_late(game, close_enabled, close_margin, close_seconds):
                 key = f"{user_id}:{game.id}:close_game_late"
                 if key not in candidate_dedupe_keys:
                     candidate_dedupe_keys.add(key)

@@ -2,7 +2,18 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, SentAlert, Team, User, UserAlertPreference, UserGameFollow, UserTeamFollow
+from app.db.models import (
+    Game,
+    GameOddsCurrent,
+    SentAlert,
+    Team,
+    User,
+    UserAlertDefault,
+    UserGameAlertOverride,
+    UserGameFollow,
+    UserGameUnfollow,
+    UserTeamFollow,
+)
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import MoneylineOdds
 from worker.planner import FetchPlan
@@ -128,10 +139,11 @@ def test_ingest_creates_deduped_live_alerts(db_session):
 
     teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
     db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
-    db_session.add(UserAlertPreference(user_id=user.id, alert_type="game_start", is_enabled=True))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.add(
-        UserAlertPreference(
+        UserAlertDefault(
             user_id=user.id,
+            league="NBA",
             alert_type="close_game_late",
             is_enabled=True,
             close_game_margin_threshold=5,
@@ -162,7 +174,7 @@ def test_ingest_creates_final_result_alert(db_session):
     assert game is not None
 
     db_session.add(UserGameFollow(user_id=user.id, game_id=game.id))
-    db_session.add(UserAlertPreference(user_id=user.id, alert_type="final_result", is_enabled=True))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="final_result", is_enabled=True))
     db_session.commit()
 
     result = run_ingest_cycle(FinalProvider())
@@ -172,6 +184,65 @@ def test_ingest_creates_final_result_alert(db_session):
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
     assert sent[0].delivery_status == "pending"
+
+
+def test_ingest_respects_game_override_over_league_default(db_session):
+    user = User(email="override@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
+    db_session.commit()
+
+    run_ingest_cycle(LiveCloseProvider())
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
+    assert game is not None
+
+    db_session.add(
+        UserGameAlertOverride(
+            user_id=user.id,
+            game_id=game.id,
+            alert_type="game_start",
+            is_enabled_override=False,
+        )
+    )
+    db_session.commit()
+
+    db_session.query(SentAlert).delete()
+    db_session.commit()
+
+    run_ingest_cycle(LiveCloseProvider())
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert all(row.alert_type != "game_start" for row in sent)
+
+
+def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
+    user = User(email="unfollow-override@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
+    db_session.commit()
+
+    run_ingest_cycle(LiveCloseProvider())
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
+    assert game is not None
+
+    db_session.add(UserGameUnfollow(user_id=user.id, game_id=game.id))
+    db_session.commit()
+
+    db_session.query(SentAlert).delete()
+    db_session.commit()
+
+    run_ingest_cycle(LiveCloseProvider())
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert len(sent) == 0
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):

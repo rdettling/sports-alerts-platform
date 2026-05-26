@@ -1,12 +1,22 @@
 import { apiRequest } from "../client";
-import type { AlertHistoryItem, AlertPreference, AlertType, DeliveryStatus } from "../types";
+import type {
+  AlertHistoryItem,
+  AlertPreference,
+  AlertPreferenceGroup,
+  AlertType,
+  DeliveryStatus,
+  GameAlertPreferenceItem,
+  GameAlertPreferences,
+  League,
+} from "../types";
 
-export function listAlertPreferences(token: string): Promise<AlertPreference[]> {
-  return apiRequest<AlertPreference[]>("/alert-preferences", { token });
+export function listAlertPreferences(token: string): Promise<AlertPreferenceGroup[]> {
+  return apiRequest<AlertPreferenceGroup[]>("/alert-preferences", { token });
 }
 
 export function updateAlertPreference(
   token: string,
+  league: League,
   alertType: string,
   payload: {
     is_enabled?: boolean;
@@ -14,10 +24,38 @@ export function updateAlertPreference(
     close_game_time_threshold_seconds?: number;
   },
 ): Promise<AlertPreference> {
-  return apiRequest<AlertPreference>(`/alert-preferences/${alertType}`, {
+  return apiRequest<AlertPreference>(`/alert-preferences/leagues/${league}/${alertType}`, {
     method: "PUT",
     token,
     body: JSON.stringify(payload),
+  });
+}
+
+export function getGameAlertPreferences(token: string, gameId: number): Promise<GameAlertPreferences> {
+  return apiRequest<GameAlertPreferences>(`/alert-preferences/games/${gameId}`, { token });
+}
+
+export function updateGameAlertOverride(
+  token: string,
+  gameId: number,
+  alertType: string,
+  payload: {
+    is_enabled_override?: boolean | null;
+    close_game_margin_threshold_override?: number | null;
+    close_game_time_threshold_seconds_override?: number | null;
+  },
+): Promise<GameAlertPreferenceItem> {
+  return apiRequest<GameAlertPreferenceItem>(`/alert-preferences/games/${gameId}/${alertType}`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function clearGameAlertOverride(token: string, gameId: number, alertType: string): Promise<GameAlertPreferenceItem> {
+  return apiRequest<GameAlertPreferenceItem>(`/alert-preferences/games/${gameId}/${alertType}`, {
+    method: "DELETE",
+    token,
   });
 }
 

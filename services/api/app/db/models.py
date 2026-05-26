@@ -22,6 +22,8 @@ class User(Base):
     team_follows = relationship("UserTeamFollow", back_populates="user")
     game_follows = relationship("UserGameFollow", back_populates="user")
     game_unfollows = relationship("UserGameUnfollow", back_populates="user")
+    alert_defaults = relationship("UserAlertDefault", back_populates="user")
+    game_alert_overrides = relationship("UserGameAlertOverride", back_populates="user")
 
 
 class EmailLoginToken(Base):
@@ -127,18 +129,42 @@ class UserGameUnfollow(Base):
     game = relationship("Game")
 
 
-class UserAlertPreference(Base):
-    __tablename__ = "user_alert_preferences"
-    __table_args__ = (UniqueConstraint("user_id", "alert_type", name="uq_user_alert_preferences_user_type"),)
+class UserAlertDefault(Base):
+    __tablename__ = "user_alert_defaults"
+    __table_args__ = (UniqueConstraint("user_id", "league", "alert_type", name="uq_user_alert_defaults_user_league_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    league: Mapped[str] = mapped_column(String(16))
     alert_type: Mapped[str] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     close_game_margin_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_game_time_threshold_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="alert_defaults")
+
+
+class UserGameAlertOverride(Base):
+    __tablename__ = "user_game_alert_overrides"
+    __table_args__ = (
+        UniqueConstraint("user_id", "game_id", "alert_type", name="uq_user_game_alert_overrides_user_game_type"),
+        Index("ix_user_game_alert_overrides_user_game", "user_id", "game_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
+    alert_type: Mapped[str] = mapped_column(String(32))
+    is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="game_alert_overrides")
+    game = relationship("Game")
 
 
 class SentAlert(Base):

@@ -1549,6 +1549,16 @@ button:disabled {
   letter-spacing: 0.01em;
 }
 
+.alert-league-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.alert-league-section h4 {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+}
+
 @media (max-width: 1024px) {
   .following-simple-add-row {
     grid-template-columns: 1fr;
@@ -1578,4 +1588,77 @@ button:disabled {
   .following-two-col-panels {
     grid-template-columns: 1fr;
   }
+}
+
+.following-game-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.overlay-sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 25, 48, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+  padding: 1rem;
+}
+
+.overlay-card {
+  width: min(760px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-5);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.overlay-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.overlay-card-header h4 {
+  margin: 0;
+}
+
+.following-alert-rule-row {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.following-alert-rule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.following-alert-default-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.following-alert-rule-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.following-alert-rule-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }

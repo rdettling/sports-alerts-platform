@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { listAlertHistory, listAlertPreferences, listTeams, updateAlertPreference, type AlertHistoryItem, type AlertPreference, type AlertType, type Team } from "../../../shared/api";
+import {
+  listAlertHistory,
+  listAlertPreferences,
+  listTeams,
+  updateAlertPreference,
+  type AlertHistoryItem,
+  type AlertPreference,
+  type AlertPreferenceGroup,
+  type AlertType,
+  type Team,
+} from "../../../shared/api";
 import { ALERT_TYPE_LABELS, PREFERENCE_LABELS, TeamLogo, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 
@@ -10,12 +20,10 @@ export function AlertsView({ token }: { token: string }) {
   const [alertTypeFilter, setAlertTypeFilter] = useState<"all" | AlertType>("all");
   const [timeFilter, setTimeFilter] = useState<"24h" | "7d" | "all">("24h");
   const [statusFilter, setStatusFilter] = useState<"all" | "sent" | "failed" | "pending">("all");
-  const [closeGameMarginInput, setCloseGameMarginInput] = useState(5);
-  const [closeGameMinutesInput, setCloseGameMinutesInput] = useState(2);
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState<AlertPreference[]>([]);
+  const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [items, setItems] = useState<AlertHistoryItem[]>([]);
   const [last24hItems, setLast24hItems] = useState<AlertHistoryItem[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -35,15 +43,10 @@ export function AlertsView({ token }: { token: string }) {
         listAlertHistory(token, { sinceHours: 24, limit: 200 }),
         listTeams(),
       ]);
-      setPreferences(preferenceResponse);
+      setPreferenceGroups(preferenceResponse);
       setItems(historyResponse.items);
       setLast24hItems(history24Response.items);
       setTeams(teamsResponse);
-      const closePref = preferenceResponse.find((preference) => preference.alert_type === "close_game_late");
-      if (closePref) {
-        setCloseGameMarginInput(closePref.close_game_margin_threshold ?? 5);
-        setCloseGameMinutesInput(Math.max(1, Math.round((closePref.close_game_time_threshold_seconds ?? 120) / 60)));
-      }
       const now = new Date();
       setUpdatedAt(now);
       setLastSync(now);
@@ -69,9 +72,9 @@ export function AlertsView({ token }: { token: string }) {
 
   const onToggle = async (preference: AlertPreference) => {
     setError(null);
-    setBusyAlertType(preference.alert_type);
+    setBusyAlertType(`${preference.league}:${preference.alert_type}`);
     try {
-      await updateAlertPreference(token, preference.alert_type, {
+      await updateAlertPreference(token, preference.league, preference.alert_type, {
         is_enabled: !preference.is_enabled,
       });
       await load();
@@ -82,14 +85,12 @@ export function AlertsView({ token }: { token: string }) {
     }
   };
 
-  const onCloseGameSettingChange = async (nextMargin: number, nextMinutes: number) => {
-    const closePref = preferences.find((preference) => preference.alert_type === "close_game_late");
-    if (!closePref) return;
+  const onCloseGameSettingChange = async (preference: AlertPreference, nextMargin: number, nextMinutes: number) => {
     setError(null);
-    setBusyAlertType("close_game_late");
+    setBusyAlertType(`${preference.league}:${preference.alert_type}`);
     try {
-      await updateAlertPreference(token, "close_game_late", {
-        is_enabled: closePref.is_enabled,
+      await updateAlertPreference(token, preference.league as "NBA" | "MLB", preference.alert_type, {
+        is_enabled: preference.is_enabled,
         close_game_margin_threshold: nextMargin,
         close_game_time_threshold_seconds: nextMinutes * 60,
       });
@@ -129,24 +130,29 @@ export function AlertsView({ token }: { token: string }) {
         <div className="alerts-layout">
           <section className="panel">
             <div className="section-header"><h3>Alert Rules</h3><p>Enable delivery rules and tune close-game sensitivity.</p></div>
-            <ul className="list">
-              {preferences.map((preference) => (
-                <li key={preference.alert_type} className={`row-card alert-rule-row ${preference.is_enabled ? "" : "alert-rule-disabled"}`.trim()}>
-                  <div className="alert-rule-content">
-                    <div className="alert-rule-header">
-                      <div className="alert-rule-title-wrap"><strong>{PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type}</strong></div>
-                      <button className={`alert-toggle ${preference.is_enabled ? "on" : "off"}`} type="button" role="switch" aria-checked={preference.is_enabled} disabled={busyAlertType === preference.alert_type} onClick={() => onToggle(preference)}><span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span></button>
-                    </div>
-                    {preference.alert_type === "close_game_late" && preference.is_enabled ? (
-                      <div className="alert-rule-controls">
-                        <label>Margin<select className="alert-rule-select" value={closeGameMarginInput} onChange={(event) => { const nextMargin = Number(event.target.value); setCloseGameMarginInput(nextMargin); onCloseGameSettingChange(nextMargin, closeGameMinutesInput).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === "close_game_late"}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-                        <label>Minutes<select className="alert-rule-select" value={closeGameMinutesInput} onChange={(event) => { const nextMinutes = Number(event.target.value); setCloseGameMinutesInput(nextMinutes); onCloseGameSettingChange(closeGameMarginInput, nextMinutes).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === "close_game_late"}>{[1, 2, 3, 4, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            {preferenceGroups.map((group) => (
+              <div key={group.league} className="alert-league-section">
+                <h4>{group.league} Defaults</h4>
+                <ul className="list">
+                  {group.preferences.map((preference) => (
+                    <li key={`${group.league}:${preference.alert_type}`} className={`row-card alert-rule-row ${preference.is_enabled ? "" : "alert-rule-disabled"}`.trim()}>
+                      <div className="alert-rule-content">
+                        <div className="alert-rule-header">
+                          <div className="alert-rule-title-wrap"><strong>{PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type}</strong></div>
+                          <button className={`alert-toggle ${preference.is_enabled ? "on" : "off"}`} type="button" role="switch" aria-checked={preference.is_enabled} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`} onClick={() => onToggle(preference)}><span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span></button>
+                        </div>
+                        {preference.alert_type === "close_game_late" && preference.is_enabled ? (
+                          <div className="alert-rule-controls">
+                            <label>Margin<select className="alert-rule-select" value={preference.close_game_margin_threshold ?? 5} onChange={(event) => { const nextMargin = Number(event.target.value); onCloseGameSettingChange(preference, nextMargin, Math.max(1, Math.round((preference.close_game_time_threshold_seconds ?? 120) / 60))).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+                            <label>Minutes<select className="alert-rule-select" value={Math.max(1, Math.round((preference.close_game_time_threshold_seconds ?? 120) / 60))} onChange={(event) => { const nextMinutes = Number(event.target.value); onCloseGameSettingChange(preference, preference.close_game_margin_threshold ?? 5, nextMinutes).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}>{[1, 2, 3, 4, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </section>
 
           <section className="panel">

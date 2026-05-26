@@ -45,11 +45,39 @@ export type Game = {
 
 export type CurrentFollows = { teams: Team[]; games: Game[] };
 
+export type League = "NBA" | "MLB";
+
 export type AlertPreference = {
+  league: League;
   alert_type: string;
   is_enabled: boolean;
   close_game_margin_threshold: number | null;
   close_game_time_threshold_seconds: number | null;
+};
+
+export type AlertPreferenceGroup = {
+  league: League;
+  preferences: AlertPreference[];
+};
+
+export type GameAlertPreferenceItem = {
+  league: League;
+  alert_type: string;
+  use_league_default: boolean;
+  is_enabled: boolean;
+  close_game_margin_threshold: number | null;
+  close_game_time_threshold_seconds: number | null;
+  override: {
+    is_enabled_override: boolean | null;
+    close_game_margin_threshold_override: number | null;
+    close_game_time_threshold_seconds_override: number | null;
+  } | null;
+};
+
+export type GameAlertPreferences = {
+  game_id: number;
+  league: League;
+  items: GameAlertPreferenceItem[];
 };
 
 export type AlertHistoryItem = {

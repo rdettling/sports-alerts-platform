@@ -5,71 +5,169 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import User, UserAlertPreference
+from app.db.models import Game, User, UserAlertDefault, UserGameAlertOverride
 from app.db.session import get_db
 from app.deps import get_current_user
-from app.schemas.preference import ALERT_TYPES, AlertPreferenceOut, UpdateAlertPreferenceRequest
+from app.schemas.preference import (
+    ALERT_TYPES,
+    SUPPORTED_LEAGUES,
+    AlertPreferenceGroupOut,
+    AlertPreferenceOut,
+    GameAlertPreferenceItemOut,
+    GameAlertPreferencesOut,
+    UpdateAlertPreferenceRequest,
+    UpdateGameAlertOverrideRequest,
+)
 
 router = APIRouter(prefix="/alert-preferences", tags=["alert-preferences"])
 
 
+def _default_values(alert_type: str) -> tuple[bool, int | None, int | None]:
+    if alert_type == "close_game_late":
+        return True, 5, 120
+    return True, None, None
+
+
+def _validate_league(league: str) -> str:
+    normalized = league.upper()
+    if normalized not in SUPPORTED_LEAGUES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
+    return normalized
+
+
 def _ensure_default_preferences(db: Session, user_id: int) -> None:
     existing = {
-        row.alert_type
-        for row in db.scalars(select(UserAlertPreference).where(UserAlertPreference.user_id == user_id)).all()
+        (row.league, row.alert_type)
+        for row in db.scalars(select(UserAlertDefault).where(UserAlertDefault.user_id == user_id)).all()
     }
-    for alert_type in ALERT_TYPES:
-        if alert_type in existing:
-            continue
-        db.add(
-            UserAlertPreference(
-                user_id=user_id,
-                alert_type=alert_type,
-                is_enabled=True,
-                close_game_margin_threshold=5 if alert_type == "close_game_late" else None,
-                close_game_time_threshold_seconds=120 if alert_type == "close_game_late" else None,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+
+    now = datetime.now(timezone.utc)
+    for league in SUPPORTED_LEAGUES:
+        for alert_type in ALERT_TYPES:
+            key = (league, alert_type)
+            if key in existing:
+                continue
+            is_enabled, margin, seconds = _default_values(alert_type)
+            db.add(
+                UserAlertDefault(
+                    user_id=user_id,
+                    league=league,
+                    alert_type=alert_type,
+                    is_enabled=is_enabled,
+                    close_game_margin_threshold=margin,
+                    close_game_time_threshold_seconds=seconds,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
-        )
+
     try:
         db.commit()
     except IntegrityError:
-        # Concurrent requests may attempt to seed defaults simultaneously.
-        # If another transaction inserted the same (user_id, alert_type) first,
-        # treat this as success and continue with a clean session state.
         db.rollback()
 
 
-@router.get("", response_model=list[AlertPreferenceOut])
+def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[GameAlertPreferenceItemOut]:
+    _ensure_default_preferences(db, user_id)
+
+    defaults = {
+        row.alert_type: row
+        for row in db.scalars(
+            select(UserAlertDefault).where(UserAlertDefault.user_id == user_id, UserAlertDefault.league == game.league)
+        ).all()
+    }
+    overrides = {
+        row.alert_type: row
+        for row in db.scalars(
+            select(UserGameAlertOverride).where(UserGameAlertOverride.user_id == user_id, UserGameAlertOverride.game_id == game.id)
+        ).all()
+    }
+
+    items: list[GameAlertPreferenceItemOut] = []
+    for alert_type in ALERT_TYPES:
+        default = defaults.get(alert_type)
+        if not default:
+            continue
+        override = overrides.get(alert_type)
+
+        is_enabled = default.is_enabled
+        margin = default.close_game_margin_threshold
+        seconds = default.close_game_time_threshold_seconds
+        use_league_default = override is None
+
+        if override is not None:
+            if override.is_enabled_override is not None:
+                is_enabled = override.is_enabled_override
+            if alert_type == "close_game_late":
+                if override.close_game_margin_threshold_override is not None:
+                    margin = override.close_game_margin_threshold_override
+                if override.close_game_time_threshold_seconds_override is not None:
+                    seconds = override.close_game_time_threshold_seconds_override
+
+        if alert_type != "close_game_late":
+            margin = None
+            seconds = None
+
+        payload: dict[str, int | bool | None] | None = None
+        if override is not None:
+            payload = {
+                "is_enabled_override": override.is_enabled_override,
+                "close_game_margin_threshold_override": override.close_game_margin_threshold_override,
+                "close_game_time_threshold_seconds_override": override.close_game_time_threshold_seconds_override,
+            }
+
+        items.append(
+            GameAlertPreferenceItemOut(
+                league=game.league,
+                alert_type=alert_type,
+                use_league_default=use_league_default,
+                is_enabled=is_enabled,
+                close_game_margin_threshold=margin,
+                close_game_time_threshold_seconds=seconds,
+                override=payload,
+            )
+        )
+
+    return items
+
+
+@router.get("", response_model=list[AlertPreferenceGroupOut])
 def list_alert_preferences(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[AlertPreferenceOut]:
+) -> list[AlertPreferenceGroupOut]:
     _ensure_default_preferences(db, current_user.id)
-    preferences = db.scalars(
-        select(UserAlertPreference)
-        .where(UserAlertPreference.user_id == current_user.id)
-        .order_by(UserAlertPreference.alert_type.asc())
+    rows = db.scalars(
+        select(UserAlertDefault)
+        .where(UserAlertDefault.user_id == current_user.id)
+        .order_by(UserAlertDefault.league.asc(), UserAlertDefault.alert_type.asc())
     ).all()
-    return [AlertPreferenceOut.model_validate(preference) for preference in preferences]
+
+    by_league: dict[str, list[AlertPreferenceOut]] = {league: [] for league in SUPPORTED_LEAGUES}
+    for row in rows:
+        by_league.setdefault(row.league, []).append(AlertPreferenceOut.model_validate(row))
+
+    return [AlertPreferenceGroupOut(league=league, preferences=by_league.get(league, [])) for league in SUPPORTED_LEAGUES]
 
 
-@router.put("/{alert_type}", response_model=AlertPreferenceOut)
+@router.put("/leagues/{league}/{alert_type}", response_model=AlertPreferenceOut)
 def update_alert_preference(
+    league: str,
     alert_type: str,
     payload: UpdateAlertPreferenceRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AlertPreferenceOut:
+    normalized_league = _validate_league(league)
     if alert_type not in ALERT_TYPES:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     _ensure_default_preferences(db, current_user.id)
     preference = db.scalar(
-        select(UserAlertPreference).where(
-            UserAlertPreference.user_id == current_user.id,
-            UserAlertPreference.alert_type == alert_type,
+        select(UserAlertDefault).where(
+            UserAlertDefault.user_id == current_user.id,
+            UserAlertDefault.league == normalized_league,
+            UserAlertDefault.alert_type == alert_type,
         )
     )
     if not preference:
@@ -91,3 +189,99 @@ def update_alert_preference(
     db.commit()
     db.refresh(preference)
     return AlertPreferenceOut.model_validate(preference)
+
+
+@router.get("/games/{game_id}", response_model=GameAlertPreferencesOut)
+def get_game_alert_preferences(
+    game_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GameAlertPreferencesOut:
+    game = db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+
+    return GameAlertPreferencesOut(game_id=game.id, league=game.league, items=_resolve_game_alert_items(db, current_user.id, game))
+
+
+@router.put("/games/{game_id}/{alert_type}", response_model=GameAlertPreferenceItemOut)
+def update_game_alert_override(
+    game_id: int,
+    alert_type: str,
+    payload: UpdateGameAlertOverrideRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GameAlertPreferenceItemOut:
+    if alert_type not in ALERT_TYPES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
+
+    game = db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+
+    row = db.scalar(
+        select(UserGameAlertOverride).where(
+            UserGameAlertOverride.user_id == current_user.id,
+            UserGameAlertOverride.game_id == game_id,
+            UserGameAlertOverride.alert_type == alert_type,
+        )
+    )
+    now = datetime.now(timezone.utc)
+    if not row:
+        row = UserGameAlertOverride(
+            user_id=current_user.id,
+            game_id=game_id,
+            alert_type=alert_type,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+
+    row.is_enabled_override = payload.is_enabled_override
+    if alert_type == "close_game_late":
+        row.close_game_margin_threshold_override = payload.close_game_margin_threshold_override
+        row.close_game_time_threshold_seconds_override = payload.close_game_time_threshold_seconds_override
+    else:
+        row.close_game_margin_threshold_override = None
+        row.close_game_time_threshold_seconds_override = None
+    row.updated_at = now
+
+    db.commit()
+
+    items = _resolve_game_alert_items(db, current_user.id, game)
+    match = next((item for item in items if item.alert_type == alert_type), None)
+    if not match:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to resolve override")
+    return match
+
+
+@router.delete("/games/{game_id}/{alert_type}", response_model=GameAlertPreferenceItemOut)
+def clear_game_alert_override(
+    game_id: int,
+    alert_type: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GameAlertPreferenceItemOut:
+    if alert_type not in ALERT_TYPES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
+
+    game = db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+
+    row = db.scalar(
+        select(UserGameAlertOverride).where(
+            UserGameAlertOverride.user_id == current_user.id,
+            UserGameAlertOverride.game_id == game_id,
+            UserGameAlertOverride.alert_type == alert_type,
+        )
+    )
+    if row:
+        db.delete(row)
+        db.commit()
+
+    items = _resolve_game_alert_items(db, current_user.id, game)
+    match = next((item for item in items if item.alert_type == alert_type), None)
+    if not match:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to resolve override")
+    return match
