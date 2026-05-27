@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import WorkerJob
+from app.db.models import Game, Team, WorkerJob
 from worker import scheduler
 
 
@@ -188,3 +188,77 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     )
     next_seconds = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
+
+
+def test_pull_live_sync_forward_to_next_scheduled_start(db_session):
+    now = datetime.now(timezone.utc)
+    team_a = Team(external_team_id="TST1", league="MLB", name="Test Team One", abbreviation="T1")
+    team_b = Team(external_team_id="TST2", league="MLB", name="Test Team Two", abbreviation="T2")
+    db_session.add_all([team_a, team_b])
+    db_session.flush()
+    db_session.add(
+        Game(
+            external_game_id="g1",
+            league="MLB",
+            home_team_id=team_a.id,
+            away_team_id=team_b.id,
+            scheduled_start_time=now + timedelta(minutes=20),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    live_job = WorkerJob(
+        job_type="live_sync",
+        league="MLB",
+        status="queued",
+        next_run_at=now + timedelta(hours=6),
+        attempt_count=0,
+        max_attempts=5,
+    )
+    db_session.add(live_job)
+    db_session.commit()
+
+    scheduler._pull_live_sync_forward("MLB")
+
+    db_session.expire_all()
+    updated = db_session.get(WorkerJob, live_job.id)
+    assert updated is not None
+    assert updated.next_run_at.replace(tzinfo=timezone.utc) <= (now + timedelta(minutes=20)).replace(tzinfo=timezone.utc)
+
+
+def test_pull_live_sync_forward_to_now_when_live_exists(db_session):
+    now = datetime.now(timezone.utc)
+    team_a = Team(external_team_id="TST3", league="MLB", name="Test Team Three", abbreviation="T3")
+    team_b = Team(external_team_id="TST4", league="MLB", name="Test Team Four", abbreviation="T4")
+    db_session.add_all([team_a, team_b])
+    db_session.flush()
+    db_session.add(
+        Game(
+            external_game_id="g2",
+            league="MLB",
+            home_team_id=team_a.id,
+            away_team_id=team_b.id,
+            scheduled_start_time=now - timedelta(minutes=10),
+            status="in_progress",
+            is_final=False,
+        )
+    )
+    live_job = WorkerJob(
+        job_type="live_sync",
+        league="MLB",
+        status="queued",
+        next_run_at=now + timedelta(hours=1),
+        attempt_count=0,
+        max_attempts=5,
+    )
+    db_session.add(live_job)
+    db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    scheduler._pull_live_sync_forward("MLB")
+    after = datetime.now(timezone.utc)
+
+    db_session.expire_all()
+    updated = db_session.get(WorkerJob, live_job.id)
+    assert updated is not None
+    assert before <= updated.next_run_at.replace(tzinfo=timezone.utc) <= after

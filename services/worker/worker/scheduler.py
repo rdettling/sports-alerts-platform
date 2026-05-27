@@ -4,9 +4,9 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.db.models import WorkerJob
+from app.db.models import Game, WorkerJob
 from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
@@ -164,9 +164,59 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
 def _run_catalog_sync_job(league: str) -> int:
     provider = get_provider()
     result = run_catalog_sync(provider=provider, league=league)
+    if str(result.get("status", "")) == "success":
+        _pull_live_sync_forward(league)
     fallback = settings.catalog_sync_interval_seconds
     next_poll = int(result.get("next_poll_seconds", fallback))
     return max(1, next_poll)
+
+
+def _pull_live_sync_forward(league: str) -> None:
+    """Move live-sync earlier when catalog discovers an upcoming/live game."""
+    now = _utcnow()
+    db = SessionLocal()
+    try:
+        live_job = db.scalar(
+            select(WorkerJob).where(
+                WorkerJob.job_type == LIVE_SYNC_JOB,
+                WorkerJob.league == league,
+            )
+        )
+        if live_job is None or live_job.status == "running":
+            return
+
+        has_live = bool(
+            db.scalar(
+                select(func.count(Game.id)).where(
+                    Game.league == league,
+                    Game.is_final.is_(False),
+                    Game.status.in_(("in_progress", "live")),
+                )
+            )
+            or 0
+        )
+        if has_live:
+            desired = now
+        else:
+            next_scheduled = db.scalar(
+                select(func.min(Game.scheduled_start_time)).where(
+                    Game.league == league,
+                    Game.is_final.is_(False),
+                    Game.status == "scheduled",
+                    Game.scheduled_start_time >= now,
+                )
+            )
+            if next_scheduled is None:
+                return
+            desired = next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)
+
+        current = live_job.next_run_at if live_job.next_run_at.tzinfo else live_job.next_run_at.replace(tzinfo=timezone.utc)
+        if desired < current:
+            live_job.next_run_at = desired
+            live_job.status = "queued"
+            db.commit()
+    finally:
+        db.close()
 
 
 def _run_live_sync_job(league: str) -> int:
