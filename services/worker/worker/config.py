@@ -13,9 +13,14 @@ class WorkerSettings(BaseSettings):
     nba_provider: str = "espn"
     odds_provider: str = "the_odds_api"
     odds_api_key: str
+    odds_api_base_url: str = "https://api.the-odds-api.com/v4/sports"
     odds_api_sport_key_nba: str = "basketball_nba"
     odds_api_sport_key_mlb: str = "baseball_mlb"
+    odds_api_regions: str = "us"
     odds_api_market: str = "h2h"
+    odds_api_format: str = "american"
+    odds_api_timeout_seconds: int = 6
+    odds_api_cache_seconds: int = 60
     odds_enabled: bool = True
     scheduler_tick_seconds: int = 15
     delivery_idle_seconds: int = 300

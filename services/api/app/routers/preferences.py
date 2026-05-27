@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Game, User, UserAlertDefault, UserGameAlertOverride
 from app.db.session import get_db
 from app.deps import get_current_user
+from app.services.alert_defaults import get_alert_default_values
 from app.schemas.preference import (
     ALERT_TYPES_BY_LEAGUE,
     SUPPORTED_LEAGUES,
@@ -20,12 +21,6 @@ from app.schemas.preference import (
 )
 
 router = APIRouter(prefix="/alert-preferences", tags=["alert-preferences"])
-
-
-def _default_values(alert_type: str) -> tuple[bool, int | None, int | None]:
-    if alert_type == "close_game_late":
-        return True, 5, 120
-    return True, None, None
 
 
 def _validate_league(league: str) -> str:
@@ -47,17 +42,16 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
             key = (league, alert_type)
             if key in existing:
                 continue
-            is_enabled, margin, seconds = _default_values(alert_type)
-            inning = 7 if alert_type == "inning_start" else None
+            defaults = get_alert_default_values(alert_type)
             db.add(
                 UserAlertDefault(
                     user_id=user_id,
                     league=league,
                     alert_type=alert_type,
-                    is_enabled=is_enabled,
-                    close_game_margin_threshold=margin,
-                    close_game_time_threshold_seconds=seconds,
-                    inning_start_threshold=inning,
+                    is_enabled=defaults.is_enabled,
+                    close_game_margin_threshold=defaults.close_game_margin_threshold,
+                    close_game_time_threshold_seconds=defaults.close_game_time_threshold_seconds,
+                    inning_start_threshold=defaults.inning_start_threshold,
                     created_at=now,
                     updated_at=now,
                 )

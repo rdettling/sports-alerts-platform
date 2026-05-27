@@ -15,11 +15,6 @@ from sqlalchemy.orm import Session
 from worker.config import settings
 
 logger = logging.getLogger(__name__)
-ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"
-ODDS_API_REGIONS = "us"
-ODDS_API_FORMAT = "american"
-ODDS_API_TIMEOUT_SECONDS = 6
-ODDS_API_CACHE_SECONDS = 60
 
 TEAM_NAME_ALIASES = {
     "la clippers": "los angeles clippers",
@@ -115,17 +110,17 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[MoneylineOdd
     query = urlencode(
         {
             "apiKey": settings.odds_api_key,
-            "regions": ODDS_API_REGIONS,
+            "regions": settings.odds_api_regions,
             "markets": settings.odds_api_market,
-            "oddsFormat": ODDS_API_FORMAT,
+            "oddsFormat": settings.odds_api_format,
         }
     )
     sport_key = _odds_sport_key_for_league(league)
-    url = f"{ODDS_API_BASE_URL.rstrip('/')}/{sport_key}/odds?{query}"
+    url = f"{settings.odds_api_base_url.rstrip('/')}/{sport_key}/odds?{query}"
 
     started_at = monotonic()
     try:
-        with urlopen(url, timeout=ODDS_API_TIMEOUT_SECONDS) as response:  # noqa: S310
+        with urlopen(url, timeout=settings.odds_api_timeout_seconds) as response:  # noqa: S310
             status_code = int(getattr(response, "status", 200))
             payload = json.loads(response.read().decode("utf-8"))
             if _TELEMETRY_DB is not None:
@@ -209,7 +204,7 @@ def fetch_odds_index(league: str) -> dict[tuple[str, str], list[MoneylineOdds]]:
     with _CACHE_LOCK:
         cached = _CACHE_DATA_BY_LEAGUE.get(normalized)
         fetched_at = _CACHE_FETCHED_AT_BY_LEAGUE.get(normalized, 0.0)
-        if cached and now - fetched_at < ODDS_API_CACHE_SECONDS:
+        if cached and now - fetched_at < settings.odds_api_cache_seconds:
             return cached
 
     try:

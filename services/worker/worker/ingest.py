@@ -19,6 +19,7 @@ from app.db.models import (
     UserGameUnfollow,
     UserTeamFollow,
 )
+from app.services.alert_defaults import get_alert_default_values
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_odds_index, game_key
@@ -161,18 +162,16 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
                 key = (user_id, league, alert_type)
                 if key in existing:
                     continue
-                margin = 5 if alert_type == "close_game_late" else None
-                seconds = 120 if alert_type == "close_game_late" else None
-                inning = 7 if alert_type == "inning_start" else None
+                defaults = get_alert_default_values(alert_type)
                 db.add(
                     UserAlertDefault(
                         user_id=user_id,
                         league=league,
                         alert_type=alert_type,
-                        is_enabled=True,
-                        close_game_margin_threshold=margin,
-                        close_game_time_threshold_seconds=seconds,
-                        inning_start_threshold=inning,
+                        is_enabled=defaults.is_enabled,
+                        close_game_margin_threshold=defaults.close_game_margin_threshold,
+                        close_game_time_threshold_seconds=defaults.close_game_time_threshold_seconds,
+                        inning_start_threshold=defaults.inning_start_threshold,
                         created_at=now,
                         updated_at=now,
                     )
