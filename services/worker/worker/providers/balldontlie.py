@@ -134,8 +134,14 @@ class BallDontLieProvider(SportsProvider):
             return None
         scheduled_start_time = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
 
-        period = competition.get("status", {}).get("period")
-        clock = competition.get("status", {}).get("displayClock")
+        status_payload = competition.get("status", {}) or {}
+        period = status_payload.get("period")
+        clock = status_payload.get("displayClock")
+        if league.upper() == "MLB":
+            short_detail = str(status_type.get("shortDetail") or "").strip()
+            # ESPN shortDetail carries half-inning context (e.g. "Top 6th", "Bot 7th").
+            if short_detail:
+                clock = short_detail
         completed = bool(status_type.get("completed"))
 
         return ProviderGame(

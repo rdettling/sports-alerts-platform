@@ -19,6 +19,14 @@ export const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
 
 type DashboardShellContextValue = {
   setLastSync: (value: Date | null) => void;
+  setHeaderSyncItems: (items: HeaderSyncItem[] | null) => void;
+};
+
+export type HeaderSyncItem = {
+  key: string;
+  label: string;
+  value: string;
+  tone: "fresh" | "stale" | "idle";
 };
 
 const DashboardShellContext = createContext<DashboardShellContextValue | undefined>(undefined);

@@ -66,3 +66,37 @@ def test_provider_skips_if_necessary_playoff_games():
     schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260525")])
 
     assert schedule == []
+
+
+def test_provider_uses_mlb_short_detail_for_half_inning_clock():
+    payload = {
+        "events": [
+            {
+                "id": "401815518",
+                "date": "2026-05-27T17:07:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 6,
+                            "displayClock": "0:00",
+                            "type": {
+                                "state": "in",
+                                "name": "STATUS_IN_PROGRESS",
+                                "completed": False,
+                                "shortDetail": "Top 6th",
+                            },
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "3", "team": {"abbreviation": "TOR"}},
+                            {"homeAway": "away", "score": "2", "team": {"abbreviation": "MIA"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260527")])
+    assert len(schedule) == 1
+    assert schedule[0].clock == "Top 6th"

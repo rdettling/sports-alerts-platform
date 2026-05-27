@@ -7,6 +7,16 @@ import { useDashboardShell } from "./shell";
 import { useGamesData } from "../hooks/useGamesData";
 
 type GameDayGroup = { label: string; items: Game[] };
+type SyncTone = "fresh" | "stale" | "idle";
+
+type SyncRow = {
+  key: string;
+  label: string;
+  cadenceLabel: string;
+  lastAt: Date | null;
+  detail: string;
+  tone: SyncTone;
+};
 
 function localDateKey(dateIso: string): string {
   const value = new Date(dateIso);
@@ -23,8 +33,27 @@ function leagueLogoUrl(league: string | null | undefined): string | null {
   return null;
 }
 
+function formatRelativeTime(value: Date | null): string {
+  if (!value) return "Never";
+  const diffMs = Date.now() - value.getTime();
+  if (diffMs < 60_000) return "Just now";
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function syncTone(lastAt: Date | null, maxStaleMinutes: number, active: boolean): SyncTone {
+  if (!lastAt) return "stale";
+  if (!active) return "idle";
+  const ageMinutes = (Date.now() - lastAt.getTime()) / 60_000;
+  return ageMinutes <= maxStaleMinutes ? "fresh" : "stale";
+}
+
 export function GamesView({ token }: { token: string }) {
-  const { setLastSync } = useDashboardShell();
+  const { setLastSync, setHeaderSyncItems } = useDashboardShell();
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
 
@@ -94,6 +123,74 @@ export function GamesView({ token }: { token: string }) {
     return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
   }, [visibleGames]);
 
+  const syncRows = useMemo(() => {
+    const byLeague = (league: "NBA" | "MLB") => {
+      const leagueGames = games.filter((game) => (game.league || "").toUpperCase() === league);
+      const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
+      const nextStartMs = leagueGames
+        .filter((game) => game.status === "scheduled")
+        .map((game) => new Date(game.scheduled_start_time).getTime())
+        .filter((ts) => !Number.isNaN(ts))
+        .sort((a, b) => a - b)[0];
+      const lastMs = leagueGames
+        .map((game) => (game.last_ingested_at ? new Date(game.last_ingested_at).getTime() : Number.NaN))
+        .filter((ts) => !Number.isNaN(ts))
+        .reduce((max, ts) => Math.max(max, ts), 0);
+      const lastAt = lastMs > 0 ? new Date(lastMs) : null;
+      return { liveCount, nextStartMs, lastAt };
+    };
+
+    const nba = byLeague("NBA");
+    const mlb = byLeague("MLB");
+    const allLastMs = games
+      .map((game) => (game.last_ingested_at ? new Date(game.last_ingested_at).getTime() : Number.NaN))
+      .filter((ts) => !Number.isNaN(ts))
+      .reduce((max, ts) => Math.max(max, ts), 0);
+    const catalogLastAt = allLastMs > 0 ? new Date(allLastMs) : null;
+
+    const leagueRow = (label: string, cadenceLabel: string, info: { liveCount: number; nextStartMs?: number; lastAt: Date | null }, staleAfterMinutes: number): SyncRow => {
+      const active = info.liveCount > 0;
+      const detail = active
+        ? `${info.liveCount} live`
+        : info.nextStartMs
+          ? `Next ${new Date(info.nextStartMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+          : "No upcoming";
+      return {
+        key: label,
+        label,
+        cadenceLabel,
+        lastAt: info.lastAt,
+        detail,
+        tone: syncTone(info.lastAt, staleAfterMinutes, active),
+      };
+    };
+
+    return [
+      {
+        key: "catalog",
+        label: "Catalog",
+        cadenceLabel: "12h cadence",
+        lastAt: catalogLastAt,
+        detail: "Schedule + odds snapshot",
+        tone: syncTone(catalogLastAt, 12 * 60 + 30, true),
+      },
+      leagueRow("Live (NBA)", "2m cadence", nba, 4),
+      leagueRow("Live (MLB)", "5m cadence", mlb, 10),
+    ] satisfies SyncRow[];
+  }, [games]);
+
+  useEffect(() => {
+    setHeaderSyncItems(
+      syncRows.map((row) => ({
+        key: row.key,
+        label: row.label.replace("Live ", "").replace("(NBA)", "NBA").replace("(MLB)", "MLB"),
+        value: formatRelativeTime(row.lastAt),
+        tone: row.tone,
+      })),
+    );
+    return () => setHeaderSyncItems(null);
+  }, [setHeaderSyncItems, syncRows]);
+
   const statusLabel = (game: Game): string => {
     if (game.status === "in_progress" || game.status === "live") {
       return `Live • ${formatGameTime(game)}`;
@@ -117,6 +214,16 @@ export function GamesView({ token }: { token: string }) {
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
       setDayFilter("all");
+    }
+  }, [dayFilter, dayOptions]);
+
+  useEffect(() => {
+    if (dayFilter !== "all") return;
+    if (dayOptions.length === 0) return;
+    const todayKey = localDateKey(new Date().toISOString());
+    const todayOption = dayOptions.find((day) => day.key === todayKey);
+    if (todayOption) {
+      setDayFilter(todayOption.key);
     }
   }, [dayFilter, dayOptions]);
 

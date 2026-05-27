@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 
 import { useAuth } from "../auth/auth-context";
 import { AdminView, AlertsView, FollowingView, GamesView } from "./index";
-import { DASHBOARD_ROUTES, DashboardRouteMeta, DashboardShellProvider } from "./components/shell";
+import { DASHBOARD_ROUTES, DashboardRouteMeta, DashboardShellProvider, type HeaderSyncItem } from "./components/shell";
 
 function NavIcon({ routeKey }: { routeKey: string }) {
   if (routeKey === "games") {
@@ -57,6 +57,7 @@ export function DashboardLayout() {
   const { token, user, logout } = useAuth();
   const location = useLocation();
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [headerSyncItems, setHeaderSyncItems] = useState<HeaderSyncItem[] | null>(null);
 
   const isAdmin = user?.role === "admin";
   const currentRoute = routeForPath(location.pathname);
@@ -70,7 +71,7 @@ export function DashboardLayout() {
   }
 
   return (
-    <DashboardShellProvider value={{ setLastSync }}>
+    <DashboardShellProvider value={{ setLastSync, setHeaderSyncItems }}>
       <div className="app-shell">
         <aside className="app-sidebar">
           <div className="sidebar-brand">
@@ -99,7 +100,18 @@ export function DashboardLayout() {
               <p>{currentRoute.subtitle}</p>
             </div>
             <div className="topbar-meta">
-              <span className="status-pill">{relativeTimeLabel(lastSync)}</span>
+              {headerSyncItems && currentRoute.key === "games" ? (
+                <span className="sync-inline-group" aria-label="Data sync status">
+                  {headerSyncItems.map((item) => (
+                    <span key={item.key} className={`sync-inline-pill ${item.tone}`.trim()} title={`${item.label}: ${item.value}`}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="status-pill">{relativeTimeLabel(lastSync)}</span>
+              )}
               <span className="user-email">{user.email}</span>
               <button className="btn btn-secondary" onClick={logout}>
                 Logout
