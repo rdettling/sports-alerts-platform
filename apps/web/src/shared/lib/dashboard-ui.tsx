@@ -30,6 +30,13 @@ export function messageFromUnknown(error: unknown): string {
   return "Request failed";
 }
 
+export function leagueLogoUrl(league: string | null | undefined): string | null {
+  const normalized = (league || "").toUpperCase();
+  if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
+  if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
+  return null;
+}
+
 export function scoreSnippet(game: Game): string {
   if (game.home_score === null || game.away_score === null) {
     return "";

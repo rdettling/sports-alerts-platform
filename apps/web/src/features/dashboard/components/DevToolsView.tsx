@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertType, League, Team, listTeams, sendDevTestEmail } from "../../../shared/api";
 import { TeamLogo, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 
-const TEST_ALERT_TYPES_BY_LEAGUE: Record<League, AlertType[]> = {
+const ALERT_TYPES_BY_LEAGUE: Record<League, AlertType[]> = {
   NBA: ["game_start", "close_game_late", "final_result"],
   MLB: ["game_start", "inning_start", "final_result"],
 };
@@ -11,34 +11,6 @@ const DEFAULT_TEST_MATCHUP_BY_LEAGUE: Record<League, { away: string; home: strin
   NBA: { away: "ATL", home: "BOS" },
   MLB: { away: "MIA", home: "TOR" },
 };
-
-function resolveSyntheticTeams(teams: Team[], league: League): { away: Team | null; home: Team | null } {
-  const leagueTeams = teams.filter((team) => (team.league || "").toUpperCase() === league);
-  if (leagueTeams.length < 2) {
-    return { away: null, home: null };
-  }
-  const byAbbr = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team]));
-  const defaults = DEFAULT_TEST_MATCHUP_BY_LEAGUE[league];
-  const away = byAbbr.get(defaults.away);
-  const home = byAbbr.get(defaults.home);
-  if (away && home && away.id !== home.id) {
-    return { away, home };
-  }
-  return { away: leagueTeams[0], home: leagueTeams[1] };
-}
-
-function labelForAlertType(alertType: AlertType): string {
-  if (alertType === "game_start") {
-    return "Game start alert";
-  }
-  if (alertType === "close_game_late") {
-    return "Close-game alert";
-  }
-  if (alertType === "inning_start") {
-    return "Inning-start alert";
-  }
-  return "Final-result alert";
-}
 
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -81,8 +53,21 @@ export function DevToolsView({ token }: { token: string }) {
     }
   };
 
-  const syntheticTeams = useMemo(() => resolveSyntheticTeams(teams, activeLeague), [teams, activeLeague]);
-  const activeAlertTypes = TEST_ALERT_TYPES_BY_LEAGUE[activeLeague];
+  const syntheticTeams = useMemo(() => {
+    const leagueTeams = teams.filter((team) => (team.league || "").toUpperCase() === activeLeague);
+    if (leagueTeams.length < 2) {
+      return { away: null, home: null };
+    }
+    const byAbbr = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team]));
+    const defaults = DEFAULT_TEST_MATCHUP_BY_LEAGUE[activeLeague];
+    const away = byAbbr.get(defaults.away);
+    const home = byAbbr.get(defaults.home);
+    if (away && home && away.id !== home.id) {
+      return { away, home };
+    }
+    return { away: leagueTeams[0], home: leagueTeams[1] };
+  }, [teams, activeLeague]);
+  const activeAlertTypes = ALERT_TYPES_BY_LEAGUE[activeLeague];
 
   return (
     <section className="card admin-tools-card">
@@ -128,7 +113,7 @@ export function DevToolsView({ token }: { token: string }) {
               disabled={loading || busyAlertType !== null || !syntheticTeams.away || !syntheticTeams.home}
               onClick={() => onSendTest(alertType)}
             >
-              <span>{labelForAlertType(alertType)}</span>
+              <span>{alertType === "game_start" ? "Game start alert" : alertType === "close_game_late" ? "Close-game alert" : alertType === "inning_start" ? "Inning-start alert" : "Final-result alert"}</span>
               <span className="admin-test-btn-meta">Queue now</span>
             </button>
           ))}

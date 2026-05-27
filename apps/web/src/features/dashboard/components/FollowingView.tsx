@@ -12,16 +12,9 @@ import {
   type GameAlertPreferences,
   type Team,
 } from "../../../shared/api";
-import { PREFERENCE_LABELS, TeamLogo, formatGameTime, formatMoneyline, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { PREFERENCE_LABELS, TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 import { useFollowingData } from "../hooks/useFollowingData";
-
-function leagueLogoUrl(league: string | null | undefined): string | null {
-  const normalized = (league || "").toUpperCase();
-  if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
-  if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
-  return null;
-}
 
 function statusLabel(status: string, isFinal: boolean, fallbackTime: string): string {
   if (status === "in_progress" || status === "live") return `Live • ${fallbackTime}`;

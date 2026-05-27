@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
-import { TeamLogo, formatGameTime, formatMoneyline, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 import { useGamesData } from "../hooks/useGamesData";
 
@@ -24,13 +24,6 @@ function localDateKey(dateIso: string): string {
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function leagueLogoUrl(league: string | null | undefined): string | null {
-  const normalized = (league || "").toUpperCase();
-  if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
-  if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
-  return null;
 }
 
 function formatRelativeTime(value: Date | null): string {

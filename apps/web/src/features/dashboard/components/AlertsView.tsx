@@ -4,6 +4,7 @@ import {
   listAlertHistory,
   listAlertPreferences,
   updateAlertPreference,
+  type League,
   type AlertPreference,
   type AlertPreferenceGroup,
   type AlertHistoryItem,
@@ -11,7 +12,7 @@ import {
 import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useDashboardShell } from "./shell";
 
-const ALERT_TYPES_BY_LEAGUE: Record<"NBA" | "MLB", string[]> = {
+const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
   NBA: ["game_start", "close_game_late", "final_result"],
   MLB: ["game_start", "inning_start", "final_result"],
 };
@@ -19,7 +20,7 @@ const ALERT_TYPES_BY_LEAGUE: Record<"NBA" | "MLB", string[]> = {
 export function AlertsView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
 
-  const [activeLeague, setActiveLeague] = useState<"NBA" | "MLB">("NBA");
+  const [activeLeague, setActiveLeague] = useState<League>("NBA");
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
