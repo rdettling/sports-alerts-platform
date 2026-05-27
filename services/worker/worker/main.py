@@ -7,8 +7,6 @@ from worker import scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("worker")
-SCHEDULER_MAX_SLEEP_SECONDS = 300
-
 _stop_event = threading.Event()
 
 
@@ -24,7 +22,7 @@ def main() -> None:
     logger.info(
         "Worker started provider=%s scheduler_max_sleep=%ss intervals(catalog=%ss nba_live=%ss mlb_live=%ss)",
         settings.nba_provider,
-        SCHEDULER_MAX_SLEEP_SECONDS,
+        settings.scheduler_tick_seconds,
         settings.catalog_sync_interval_seconds,
         settings.nba_live_sync_interval_seconds,
         settings.mlb_live_sync_interval_seconds,

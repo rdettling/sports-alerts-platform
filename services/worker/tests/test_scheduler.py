@@ -12,12 +12,29 @@ def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "MLB"),
         ("catalog_sync", "NBA"),
-        ("cleanup_games", None),
         ("delivery", None),
         ("live_sync", "MLB"),
         ("live_sync", "NBA"),
     ]
     assert all(job.status == "queued" for job in jobs)
+
+
+def test_bootstrap_jobs_removes_legacy_cleanup_job(db_session):
+    db_session.add(
+        WorkerJob(
+            job_type="cleanup_games",
+            league=None,
+            status="queued",
+            next_run_at=datetime.now(timezone.utc),
+            attempt_count=0,
+            max_attempts=5,
+        )
+    )
+    db_session.commit()
+
+    scheduler._bootstrap_jobs()
+    cleanup_job = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "cleanup_games"))
+    assert cleanup_job is None
 
 
 def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
@@ -132,14 +149,6 @@ def test_run_delivery_job_uses_active_backoff_when_pending(db_session, monkeypat
     assert next_seconds == scheduler.DELIVERY_ACTIVE_BACKOFF_SECONDS
 
 
-def test_run_delivery_job_uses_live_fast_backoff_within_window(db_session, monkeypatch):
-    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
-    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
-    scheduler._delivery_fast_until = datetime.now(timezone.utc) + timedelta(minutes=5)
-    next_seconds = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.DELIVERY_LIVE_FAST_BACKOFF_SECONDS
-
-
 def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
     target = datetime.now(timezone.utc) + timedelta(minutes=42)
     monkeypatch.setattr(
@@ -188,6 +197,51 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     )
     next_seconds = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
+
+
+def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "alerts_created": 2,
+            "has_live_games": "false",
+            "mode": "no_upcoming",
+            "next_poll_seconds": 123,
+        },
+    )
+    called = {"nudged": 0}
+    monkeypatch.setattr("worker.scheduler._nudge_delivery_job_now", lambda: called.__setitem__("nudged", called["nudged"] + 1))
+
+    next_seconds = scheduler._run_live_sync_job("MLB")
+    assert next_seconds == 123
+    assert called["nudged"] == 1
+
+
+def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_catalog_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "catalog_sync",
+            "league": league,
+            "next_poll_seconds": 123,
+        },
+    )
+    called = {"cleanup": 0}
+
+    def fake_cleanup(_db):
+        called["cleanup"] += 1
+        return 0
+
+    monkeypatch.setattr("worker.scheduler.cleanup_games_outside_window", fake_cleanup)
+    monkeypatch.setattr("worker.scheduler._pull_live_sync_forward", lambda _league: None)
+
+    next_seconds = scheduler._run_catalog_sync_job("MLB")
+    assert next_seconds == 123
+    assert called["cleanup"] == 1
 
 
 def test_pull_live_sync_forward_to_next_scheduled_start(db_session):

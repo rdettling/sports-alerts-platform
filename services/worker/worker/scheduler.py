@@ -4,7 +4,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.db.models import Game, WorkerJob
 from worker.cleanup import cleanup_games_outside_window
@@ -15,21 +15,16 @@ from worker.ingest import run_catalog_sync, run_live_sync
 from worker.providers.factory import get_provider
 
 logger = logging.getLogger(__name__)
-SCHEDULER_MAX_SLEEP_SECONDS = 300
+SCHEDULER_MAX_SLEEP_SECONDS = settings.scheduler_tick_seconds
 JOB_MAX_RETRIES = 5
 JOB_RETRY_BASE_SECONDS = 30
 JOB_RETRY_MAX_BACKOFF_SECONDS = 3600
-DELIVERY_EMPTY_BACKOFF_SECONDS = 900
-DELIVERY_ACTIVE_BACKOFF_SECONDS = 120
-DELIVERY_LIVE_FAST_BACKOFF_SECONDS = 60
-DELIVERY_LIVE_FAST_WINDOW_SECONDS = 600
-CLEANUP_INTERVAL_SECONDS = 21600
-
+DELIVERY_EMPTY_BACKOFF_SECONDS = settings.delivery_idle_seconds
+DELIVERY_ACTIVE_BACKOFF_SECONDS = settings.delivery_active_seconds
 CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
 DELIVERY_JOB = "delivery"
 CLEANUP_JOB = "cleanup_games"
-_delivery_fast_until: datetime | None = None
 
 
 def _utcnow() -> datetime:
@@ -40,13 +35,14 @@ def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
+        # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
+        db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
         for job_type, league in (
             (CATALOG_SYNC_JOB, "NBA"),
             (CATALOG_SYNC_JOB, "MLB"),
             (LIVE_SYNC_JOB, "NBA"),
             (LIVE_SYNC_JOB, "MLB"),
             (DELIVERY_JOB, None),
-            (CLEANUP_JOB, None),
         ):
             existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type, WorkerJob.league == league))
             if existing:
@@ -164,6 +160,17 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
 def _run_catalog_sync_job(league: str) -> int:
     provider = get_provider()
     result = run_catalog_sync(provider=provider, league=league)
+    db = SessionLocal()
+    try:
+        removed = cleanup_games_outside_window(db)
+        db.commit()
+        if removed:
+            logger.info("Cleanup removed games=%s", removed)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
     if str(result.get("status", "")) == "success":
         _pull_live_sync_forward(league)
     fallback = settings.catalog_sync_interval_seconds
@@ -222,7 +229,8 @@ def _pull_live_sync_forward(league: str) -> None:
 def _run_live_sync_job(league: str) -> int:
     provider = get_provider()
     result = run_live_sync(provider=provider, league=league)
-    _mark_delivery_fast_window(result)
+    if int(result.get("alerts_created", 0)) > 0:
+        _nudge_delivery_job_now()
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:
         fallback = settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds
@@ -248,16 +256,18 @@ def _run_live_sync_job(league: str) -> int:
     return max(1, next_poll)
 
 
-def _mark_delivery_fast_window(result: dict[str, int | str]) -> None:
-    global _delivery_fast_until  # noqa: PLW0603
-    if str(result.get("job_type", "")) != LIVE_SYNC_JOB:
-        return
-    if str(result.get("league", "")).upper() != "NBA":
-        return
-    if int(result.get("games_checked", 0)) <= 0:
-        return
-    fast_window_seconds = max(1, DELIVERY_LIVE_FAST_WINDOW_SECONDS)
-    _delivery_fast_until = _utcnow() + timedelta(seconds=fast_window_seconds)
+def _nudge_delivery_job_now() -> None:
+    now = _utcnow()
+    db = SessionLocal()
+    try:
+        row = db.scalar(select(WorkerJob).where(WorkerJob.job_type == DELIVERY_JOB, WorkerJob.league.is_(None)))
+        if row is None or row.status == "running":
+            return
+        row.status = "queued"
+        row.next_run_at = now
+        db.commit()
+    finally:
+        db.close()
 
 
 def _run_delivery_job() -> int:
@@ -269,30 +279,11 @@ def _run_delivery_job() -> int:
         if has_activity:
             return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
 
-        fast_until = _delivery_fast_until
-        if fast_until is not None and _utcnow() <= fast_until:
-            return max(1, DELIVERY_LIVE_FAST_BACKOFF_SECONDS)
-
         # If queue is empty, sleep longer; if queue has pending, keep short cadence.
         pending_count = count_pending_alerts(db)
         if pending_count > 0:
             return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
         return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS)
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def _run_cleanup_job() -> int:
-    db = SessionLocal()
-    try:
-        removed = cleanup_games_outside_window(db)
-        db.commit()
-        if removed:
-            logger.info("Cleanup removed games=%s", removed)
-        return max(60, CLEANUP_INTERVAL_SECONDS)
     except Exception:
         db.rollback()
         raise
@@ -319,8 +310,6 @@ def run(stop_event: threading.Event) -> None:
                 next_run = _run_live_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == DELIVERY_JOB:
                 next_run = _run_delivery_job()
-            elif due_job.job_type == CLEANUP_JOB:
-                next_run = _run_cleanup_job()
             else:
                 raise RuntimeError(f"unsupported job type: {due_job.job_type}")
             _mark_job_success(due_job.id, next_run, _utcnow())

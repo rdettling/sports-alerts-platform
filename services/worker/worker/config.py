@@ -17,6 +17,9 @@ class WorkerSettings(BaseSettings):
     odds_api_sport_key_mlb: str = "baseball_mlb"
     odds_api_market: str = "h2h"
     odds_enabled: bool = True
+    scheduler_tick_seconds: int = 15
+    delivery_idle_seconds: int = 300
+    delivery_active_seconds: int = 60
     delivery_mode: str = "email"
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str

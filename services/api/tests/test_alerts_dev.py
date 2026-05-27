@@ -1,7 +1,9 @@
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, SentAlert, User
+from datetime import datetime, timedelta, timezone
+
+from app.db.models import Game, SentAlert, User, WorkerJob
 from app.db.session import SessionLocal
 
 
@@ -100,3 +102,40 @@ def test_admin_test_email_endpoint_rejects_invalid_league_alert_combo(client):
     )
     assert response.status_code == 400
     assert "Invalid alert type" in response.json()["detail"]
+
+
+def test_admin_test_email_endpoint_nudges_delivery_job(client):
+    headers = _auth_headers(client, email="dev-alerts-delivery-nudge@example.com", role="admin")
+    db = SessionLocal()
+    try:
+        db.add(
+            WorkerJob(
+                job_type="delivery",
+                league=None,
+                status="queued",
+                next_run_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+                attempt_count=0,
+                max_attempts=5,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    before = datetime.now(timezone.utc)
+    response = client.post(
+        "/alerts/admin/test-email",
+        headers=headers,
+        json={"league": "MLB", "alert_type": "game_start"},
+    )
+    after = datetime.now(timezone.utc)
+    assert response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        delivery_job = db.scalar(select(WorkerJob).where(WorkerJob.job_type == "delivery", WorkerJob.league.is_(None)))
+        assert delivery_job is not None
+        scheduled = delivery_job.next_run_at.replace(tzinfo=timezone.utc)
+        assert before <= scheduled <= after
+    finally:
+        db.close()
