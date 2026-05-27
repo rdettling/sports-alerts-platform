@@ -52,6 +52,9 @@ def _bootstrap_jobs() -> None:
             if existing:
                 if existing.status == "failed":
                     existing.status = "queued"
+                if existing.job_type == CATALOG_SYNC_JOB:
+                    # Force one fresh catalog pass on each worker startup.
+                    existing.next_run_at = now
                 if existing.next_run_at is None:
                     existing.next_run_at = now
                 continue

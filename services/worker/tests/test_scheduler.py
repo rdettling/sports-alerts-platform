@@ -20,6 +20,29 @@ def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
     assert all(job.status == "queued" for job in jobs)
 
 
+def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
+    stale = datetime.now(timezone.utc) + timedelta(hours=6)
+    db_session.add_all(
+        [
+            WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=stale, attempt_count=0, max_attempts=5),
+            WorkerJob(job_type="live_sync", league="MLB", status="queued", next_run_at=stale, attempt_count=0, max_attempts=5),
+        ]
+    )
+    db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    scheduler._bootstrap_jobs()
+    after = datetime.now(timezone.utc)
+
+    db_session.expire_all()
+    catalog = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "catalog_sync", WorkerJob.league == "MLB"))
+    live = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "live_sync", WorkerJob.league == "MLB"))
+    assert catalog is not None
+    assert live is not None
+    assert before <= catalog.next_run_at.replace(tzinfo=timezone.utc) <= after
+    assert live.next_run_at.replace(tzinfo=timezone.utc) == stale
+
+
 def test_mark_job_failed_applies_backoff(db_session):
     now = datetime.now(timezone.utc)
     job = WorkerJob(
