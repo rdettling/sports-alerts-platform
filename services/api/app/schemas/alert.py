@@ -22,11 +22,13 @@ class AlertHistoryResponse(BaseModel):
 
 
 class DevTestAlertRequest(BaseModel):
+    league: str
     alert_type: str
 
 
 class DevTestAlertResponse(BaseModel):
     id: int
     game_id: int
+    league: str
     alert_type: str
     delivery_status: str

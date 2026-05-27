@@ -75,9 +75,9 @@ export function listAlertHistory(
 
 export function sendDevTestEmail(
   token: string,
-  payload: { alert_type: AlertType },
-): Promise<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }> {
-  return apiRequest<{ id: number; game_id: number; alert_type: AlertType; delivery_status: DeliveryStatus }>(
+  payload: { league: League; alert_type: AlertType },
+): Promise<{ id: number; game_id: number; league: League; alert_type: AlertType; delivery_status: DeliveryStatus }> {
+  return apiRequest<{ id: number; game_id: number; league: League; alert_type: AlertType; delivery_status: DeliveryStatus }>(
     "/alerts/admin/test-email",
     {
       method: "POST",

@@ -11,18 +11,25 @@ from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
-DEFAULT_TEST_AWAY_ABBR = "ATL"
-DEFAULT_TEST_HOME_ABBR = "BOS"
+ALERT_TYPES_BY_LEAGUE: dict[str, set[str]] = {
+    "NBA": {"game_start", "close_game_late", "final_result"},
+    "MLB": {"game_start", "inning_start", "final_result"},
+}
+DEFAULT_TEST_MATCHUPS_BY_LEAGUE: dict[str, tuple[str, str]] = {
+    "NBA": ("ATL", "BOS"),
+    "MLB": ("MIA", "TOR"),
+}
 
 
-def _resolve_admin_test_teams(db: Session) -> tuple[Team, Team]:
-    teams = db.scalars(select(Team).order_by(Team.id.asc())).all()
+def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
+    teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc())).all()
     if len(teams) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough teams available for test alerts")
 
     by_abbr = {team.abbreviation.upper(): team for team in teams}
-    away = by_abbr.get(DEFAULT_TEST_AWAY_ABBR)
-    home = by_abbr.get(DEFAULT_TEST_HOME_ABBR)
+    default_away_abbr, default_home_abbr = DEFAULT_TEST_MATCHUPS_BY_LEAGUE.get(league, ("", ""))
+    away = by_abbr.get(default_away_abbr)
+    home = by_abbr.get(default_home_abbr)
     if away and home and away.id != home.id:
         return away, home
     return teams[0], teams[1]
@@ -78,23 +85,63 @@ def create_admin_test_alert(
     current_user: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> DevTestAlertResponse:
-    allowed_alert_types = {"game_start", "close_game_late", "inning_start", "final_result"}
+    league = payload.league.strip().upper()
+    allowed_alert_types = ALERT_TYPES_BY_LEAGUE.get(league)
+    if not allowed_alert_types:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
     if payload.alert_type not in allowed_alert_types:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert type")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid alert type '{payload.alert_type}' for league '{league}'",
+        )
 
-    away_team, home_team = _resolve_admin_test_teams(db)
+    away_team, home_team = _resolve_admin_test_teams(db, league)
+
+    game_status = "scheduled"
+    home_score = None
+    away_score = None
+    period = None
+    clock = None
+    is_final = False
+    scheduled_start_time = datetime.now(timezone.utc) + timedelta(minutes=30)
+    if payload.alert_type == "close_game_late":
+        game_status = "in_progress"
+        home_score = 102
+        away_score = 100
+        period = 4
+        clock = "01:42"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    elif payload.alert_type == "inning_start":
+        game_status = "in_progress"
+        home_score = 2
+        away_score = 1
+        period = 7
+        clock = "Mid 7th"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    elif payload.alert_type == "final_result":
+        game_status = "final"
+        home_score = 109
+        away_score = 105
+        is_final = True
+        if league == "MLB":
+            home_score = 5
+            away_score = 3
+            period = 9
+            clock = "Final"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=4)
+
     target_game = Game(
         external_game_id=f"admin-test-game-{uuid4()}",
-        league="NBA",
+        league=league,
         home_team_id=home_team.id,
         away_team_id=away_team.id,
-        scheduled_start_time=datetime.now(timezone.utc) + timedelta(minutes=30),
-        status="scheduled",
-        home_score=None,
-        away_score=None,
-        period=None,
-        clock=None,
-        is_final=False,
+        scheduled_start_time=scheduled_start_time,
+        status=game_status,
+        home_score=home_score,
+        away_score=away_score,
+        period=period,
+        clock=clock,
+        is_final=is_final,
     )
     db.add(target_game)
     db.flush()
@@ -115,6 +162,7 @@ def create_admin_test_alert(
     return DevTestAlertResponse(
         id=sent_alert.id,
         game_id=sent_alert.game_id,
+        league=league,
         alert_type=sent_alert.alert_type,
         delivery_status=sent_alert.delivery_status,
     )
