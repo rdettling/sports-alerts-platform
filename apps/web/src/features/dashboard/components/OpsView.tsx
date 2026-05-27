@@ -1,102 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { getOpsAdminOverview, type OpsAdminOverviewResponse, type OpsAdminOverviewWindow } from "../../../shared/api";
+import { type OpsAdminOverviewResponse, type OpsAdminOverviewWindow } from "../../../shared/api";
+import { useOpsOverviewData } from "../hooks/useOpsOverviewData";
+import {
+  formatElapsedTime,
+  formatHealthStatus,
+  formatNullableNumber,
+  severityToBadgeClass,
+  trendDirectionSymbol,
+} from "../utils/telemetry-format";
 
-type HealthState = "healthy" | "watch" | "at_risk";
-
-function riskLabel(status: HealthState): string {
-  if (status === "at_risk") {
-    return "At Risk";
-  }
-  if (status === "watch") {
-    return "Watch";
-  }
-  return "Healthy";
-}
-
-function timeAgoLabel(isoTime: string): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(isoTime).getTime()) / 1000));
-  if (seconds < 60) {
-    return `${seconds}s ago`;
-  }
-  if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ago`;
-  }
-  if (seconds < 86400) {
-    return `${Math.floor(seconds / 3600)}h ago`;
-  }
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
-
-function numberLabel(value: number | null): string {
-  if (value === null) {
-    return "n/a";
-  }
-  return new Intl.NumberFormat().format(value);
-}
-
-function trendSymbol(direction: "up" | "down" | "flat"): string {
-  if (direction === "up") {
-    return "↑";
-  }
-  if (direction === "down") {
-    return "↓";
-  }
-  return "→";
-}
-
-function severityBadgeClass(severity: "low" | "medium" | "high"): string {
-  if (severity === "high") {
-    return "is-danger";
-  }
-  if (severity === "medium") {
-    return "is-warn";
-  }
-  return "is-ok";
-}
-
-function useAdminOverview(token: string, windowValue: OpsAdminOverviewWindow) {
-  const [data, setData] = useState<OpsAdminOverviewResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      if (active) {
-        setLoading(true);
-        setError(null);
-      }
-      try {
-        const response = await getOpsAdminOverview(token, windowValue, { limit: 30 });
-        if (active) {
-          setData(response);
-        }
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load admin telemetry");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-    const interval = globalThis.setInterval(load, 30_000);
-    return () => {
-      active = false;
-      globalThis.clearInterval(interval);
-    };
-  }, [token, windowValue]);
-
-  return { data, loading, error };
-}
-
-function RiskBadge({ status }: { status: HealthState }) {
-  return <span className={`admin-health-pill ${status}`}>{riskLabel(status)}</span>;
+function RiskBadge({ status }: { status: "healthy" | "watch" | "at_risk" }) {
+  return <span className={`admin-health-pill ${status}`}>{formatHealthStatus(status)}</span>;
 }
 
 function CapacityBar({ utilizationPct }: { utilizationPct: number | null }) {
@@ -117,7 +32,7 @@ function SparklineMini({ delta }: { delta: number }) {
   const down = delta < 0;
   return (
     <span className={`admin-sparkline-mini ${up ? "up" : down ? "down" : "flat"}`}>
-      <span>{trendSymbol(up ? "up" : down ? "down" : "flat")}</span>
+      <span>{trendDirectionSymbol(up ? "up" : down ? "down" : "flat")}</span>
       <span>{delta >= 0 ? `+${delta}` : String(delta)}</span>
     </span>
   );
@@ -131,9 +46,9 @@ function IncidentRow({ incident }: { incident: OpsAdminOverviewResponse["inciden
         <p className="muted">{incident.detail}</p>
       </div>
       <div className="admin-incident-meta">
-        <span className={`admin-health-pill ${severityBadgeClass(incident.severity)}`}>{incident.severity}</span>
+        <span className={`admin-health-pill ${severityToBadgeClass(incident.severity)}`}>{incident.severity}</span>
         <span className="muted">{incident.provider ?? "system"}</span>
-        <span className="muted">{timeAgoLabel(incident.occurred_at)}</span>
+        <span className="muted">{formatElapsedTime(incident.occurred_at)}</span>
       </div>
     </li>
   );
@@ -141,7 +56,9 @@ function IncidentRow({ incident }: { incident: OpsAdminOverviewResponse["inciden
 
 export function OpsView({ token }: { token: string }) {
   const [windowValue, setWindowValue] = useState<OpsAdminOverviewWindow>("24h");
-  const { data, loading, error } = useAdminOverview(token, windowValue);
+  const { data, isLoading, isFetching, error } = useOpsOverviewData(token, windowValue);
+  const loading = isLoading || isFetching;
+  const errorMessage = error instanceof Error ? error.message : error ? "Failed to load admin telemetry" : null;
 
   const providers = useMemo(() => data?.providers ?? [], [data]);
 
@@ -161,15 +78,15 @@ export function OpsView({ token }: { token: string }) {
         </div>
 
         <div className="admin-toolbar-right">
-          {data ? <span className="muted">Updated {timeAgoLabel(data.meta.last_updated_at)}</span> : null}
+          {data ? <span className="muted">Updated {formatElapsedTime(data.meta.last_updated_at)}</span> : null}
           {data ? <RiskBadge status={data.global_health.status} /> : null}
         </div>
       </div>
 
       {loading ? <p className="muted">Loading admin telemetry...</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
-      {!loading && !error && data ? (
+      {!loading && !errorMessage && data ? (
         <div className="admin-monitoring-grid">
           <section className="admin-panel">
             <h3>Risk summary</h3>
@@ -177,7 +94,7 @@ export function OpsView({ token }: { token: string }) {
               {data.risk_cards.map((card) => (
                 <article key={card.key} className="admin-kpi-card">
                   <span>{card.label}</span>
-                  <strong>{numberLabel(card.value)}</strong>
+                  <strong>{formatNullableNumber(card.value)}</strong>
                 </article>
               ))}
             </div>
@@ -209,9 +126,9 @@ export function OpsView({ token }: { token: string }) {
                         <div className="admin-provider-name">
                           <strong>{provider.provider}</strong>
                           <span className="muted">
-                            limit {numberLabel(provider.quota_limit_24h)}/24h
+                            limit {formatNullableNumber(provider.quota_limit_24h)}/24h
                             {provider.quota_limit_window !== null
-                              ? ` (window ${numberLabel(provider.quota_limit_window)})`
+                              ? ` (window ${formatNullableNumber(provider.quota_limit_window)})`
                               : ""}
                           </span>
                         </div>
@@ -219,7 +136,7 @@ export function OpsView({ token }: { token: string }) {
                       <td>
                         <CapacityBar utilizationPct={provider.utilization_pct} />
                       </td>
-                      <td>{numberLabel(provider.remaining_budget)}</td>
+                      <td>{formatNullableNumber(provider.remaining_budget)}</td>
                       <td>{provider.calls_per_hour.toFixed(2)}</td>
                       <td>{provider.error_pct.toFixed(1)}%</td>
                       <td>{provider.rate_limited_calls}</td>

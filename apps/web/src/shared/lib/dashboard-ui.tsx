@@ -16,13 +16,6 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   final_result: "Final result",
 };
 
-export const ALERT_TYPE_LABELS: Record<string, string> = {
-  game_start: "Game start",
-  close_game_late: "Close game late",
-  inning_start: "Inning start",
-  final_result: "Final result",
-};
-
 export function messageFromUnknown(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

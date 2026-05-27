@@ -13,14 +13,9 @@ import {
   type Team,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { formatGameStatusLabel } from "../utils/telemetry-format";
 import { useDashboardShell } from "./shell";
 import { useFollowingData } from "../hooks/useFollowingData";
-
-function statusLabel(status: string, isFinal: boolean, fallbackTime: string): string {
-  if (status === "in_progress" || status === "live") return `Live • ${fallbackTime}`;
-  if (status === "final" || isFinal) return "Final";
-  return fallbackTime;
-}
 
 export function FollowingView({ token }: { token: string }) {
   const { setLastSync } = useDashboardShell();
@@ -238,7 +233,7 @@ export function FollowingView({ token }: { token: string }) {
                             <img src={leagueLogoUrl(game.league) ?? ""} alt="League logo" className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()} />
                           </span>
                         ) : null}
-                        <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>{statusLabel(game.status, isFinal, formatGameTime(game))}</span>
+                        <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>{formatGameStatusLabel(game.status, isFinal, formatGameTime(game))}</span>
                         <div className="following-game-actions">
                           <button className="btn btn-secondary" type="button" onClick={() => openGameAlerts(game)}>Alert settings</button>
                           <button

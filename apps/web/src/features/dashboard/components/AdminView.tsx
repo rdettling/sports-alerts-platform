@@ -1,44 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
-  getOpsAdminOverview,
-  getOpsIngestHealth,
-  getOpsNeonUsage,
   type OpsAdminOverviewResponse,
   type OpsAdminOverviewWindow,
   type OpsIngestHealthResponse,
   type OpsNeonUsageResponse,
 } from "../../../shared/api";
+import { useAdminData } from "../hooks/useAdminData";
+import { formatHealthStatus, formatNullableNumber, formatRelativeTime } from "../utils/telemetry-format";
 import { DevToolsView } from "./DevToolsView";
 
 type AdminTab = "espn" | "odds" | "resend" | "db" | "tools";
 
 type ProviderKey = "espn" | "odds" | "resend";
-
-function timeAgoLabel(isoTime: string): string {
-  const deltaSeconds = Math.floor((Date.now() - new Date(isoTime).getTime()) / 1000);
-  const absSeconds = Math.abs(deltaSeconds);
-  if (absSeconds < 60) {
-    return deltaSeconds <= 0 ? `in ${absSeconds}s` : `${absSeconds}s ago`;
-  }
-  if (absSeconds < 3600) {
-    const minutes = Math.floor(absSeconds / 60);
-    return deltaSeconds <= 0 ? `in ${minutes}m` : `${minutes}m ago`;
-  }
-  if (absSeconds < 86400) {
-    const hours = Math.floor(absSeconds / 3600);
-    return deltaSeconds <= 0 ? `in ${hours}h` : `${hours}h ago`;
-  }
-  const days = Math.floor(absSeconds / 86400);
-  return deltaSeconds <= 0 ? `in ${days}d` : `${days}d ago`;
-}
-
-function numberLabel(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return "n/a";
-  }
-  return new Intl.NumberFormat().format(value);
-}
 
 function dateLabel(isoTime: string | null | undefined): string {
   if (!isoTime) {
@@ -92,16 +66,6 @@ function sparklinePath(points: number[], width: number, height: number): string 
     .join(" ");
 }
 
-function statusLabel(status: "healthy" | "watch" | "at_risk"): string {
-  if (status === "at_risk") {
-    return "At Risk";
-  }
-  if (status === "watch") {
-    return "Watch";
-  }
-  return "Healthy";
-}
-
 function normalizeProviderTab(tab: AdminTab): ProviderKey | null {
   if (tab === "espn" || tab === "resend") {
     return tab;
@@ -117,54 +81,6 @@ function findProvider(
   providerKey: ProviderKey,
 ): OpsAdminOverviewResponse["providers"][number] | null {
   return providers.find((provider) => provider.provider === providerKey) ?? null;
-}
-
-function useAdminData(token: string, windowValue: OpsAdminOverviewWindow) {
-  const [overview, setOverview] = useState<OpsAdminOverviewResponse | null>(null);
-  const [ingestHealth, setIngestHealth] = useState<OpsIngestHealthResponse | null>(null);
-  const [neonUsage, setNeonUsage] = useState<OpsNeonUsageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      if (active) {
-        setLoading(true);
-        setError(null);
-      }
-      try {
-        const [overviewResponse, ingestHealthResponse, neonUsageResponse] = await Promise.all([
-          getOpsAdminOverview(token, windowValue, { limit: 30 }),
-          getOpsIngestHealth(token, 40),
-          getOpsNeonUsage(token),
-        ]);
-        if (active) {
-          setOverview(overviewResponse);
-          setIngestHealth(ingestHealthResponse);
-          setNeonUsage(neonUsageResponse);
-        }
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : "Failed to load admin data");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-    const interval = globalThis.setInterval(load, 30_000);
-    return () => {
-      active = false;
-      globalThis.clearInterval(interval);
-    };
-  }, [token, windowValue]);
-
-  return { overview, ingestHealth, neonUsage, loading, error };
 }
 
 function ProviderPanel({
@@ -188,7 +104,7 @@ function ProviderPanel({
         <div className="admin-simple-metrics">
           <div>
             <span className="muted">Status</span>
-            <strong>{statusLabel(provider.status)}</strong>
+            <strong>{formatHealthStatus(provider.status)}</strong>
           </div>
           <div>
             <span className="muted">Utilization</span>
@@ -196,19 +112,19 @@ function ProviderPanel({
           </div>
           <div>
             <span className="muted">Calls in window</span>
-            <strong>{numberLabel(provider.total_calls)}</strong>
+            <strong>{formatNullableNumber(provider.total_calls)}</strong>
           </div>
           <div>
             <span className="muted">Window limit</span>
-            <strong>{numberLabel(provider.quota_limit_window)}</strong>
+            <strong>{formatNullableNumber(provider.quota_limit_window)}</strong>
           </div>
           <div>
             <span className="muted">24h limit</span>
-            <strong>{numberLabel(provider.quota_limit_24h)}</strong>
+            <strong>{formatNullableNumber(provider.quota_limit_24h)}</strong>
           </div>
           <div>
             <span className="muted">Remaining window budget</span>
-            <strong>{numberLabel(provider.remaining_budget)}</strong>
+            <strong>{formatNullableNumber(provider.remaining_budget)}</strong>
           </div>
           <div>
             <span className="muted">Error %</span>
@@ -290,11 +206,11 @@ function DbStatsPanel({
               </article>
               <article>
                 <span className="muted">Next run</span>
-                <strong>{ingestHealth?.next_run_at ? timeAgoLabel(ingestHealth.next_run_at) : "n/a"}</strong>
+                <strong>{ingestHealth?.next_run_at ? formatRelativeTime(ingestHealth.next_run_at) : "n/a"}</strong>
               </article>
               <article>
                 <span className="muted">Last success</span>
-                <strong>{ingestHealth?.last_success_at ? timeAgoLabel(ingestHealth.last_success_at) : "n/a"}</strong>
+                <strong>{ingestHealth?.last_success_at ? formatRelativeTime(ingestHealth.last_success_at) : "n/a"}</strong>
               </article>
             </div>
           </section>
@@ -337,7 +253,7 @@ function DbStatsPanel({
                 {events.map((event) => (
                   <li key={event.id} className="admin-db-event-row">
                     <strong>{compactEventLabel(event.event_type)} · {event.source_key}</strong>
-                    <span className="muted">{timeAgoLabel(event.occurred_at)}</span>
+                    <span className="muted">{formatRelativeTime(event.occurred_at)}</span>
                     <span className={`admin-health-pill ${event.mode ?? "off"}`}>{titleCaseMode(event.mode ?? "off")}</span>
                     <span className="muted">{event.message ?? "state updated"}</span>
                   </li>
@@ -380,7 +296,12 @@ function DbStatsPanel({
 export function AdminView({ token }: { token: string }) {
   const [tab, setTab] = useState<AdminTab>("espn");
   const [windowValue, setWindowValue] = useState<OpsAdminOverviewWindow>("24h");
-  const { overview, ingestHealth, neonUsage, loading, error } = useAdminData(token, windowValue);
+  const { data, isLoading, isFetching, error } = useAdminData(token, windowValue);
+  const loading = isLoading || isFetching;
+  const errorMessage = error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
+  const overview = data?.overview ?? null;
+  const ingestHealth = data?.ingestHealth ?? null;
+  const neonUsage = data?.neonUsage ?? null;
 
   const providerTab = normalizeProviderTab(tab);
   const provider = useMemo(() => {
@@ -411,15 +332,15 @@ export function AdminView({ token }: { token: string }) {
                 <option value="7d">7d</option>
               </select>
             </label>
-            {overview ? <span className="muted">Updated {timeAgoLabel(overview.meta.last_updated_at)}</span> : null}
+            {overview ? <span className="muted">Updated {formatRelativeTime(overview.meta.last_updated_at)}</span> : null}
           </div>
         </div>
       </section>
 
       {loading ? <p className="muted">Loading admin data...</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
-      {!loading && !error ? (
+      {!loading && !errorMessage ? (
         <div className="admin-tab-content">
           {tab === "tools" ? <DevToolsView token={token} /> : null}
           {tab === "db" ? <DbStatsPanel ingestHealth={ingestHealth} neonUsage={neonUsage} /> : null}

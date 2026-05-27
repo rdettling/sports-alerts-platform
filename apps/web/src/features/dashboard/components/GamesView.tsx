@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
 import { TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { formatGameStatusLabel, formatSyncAge } from "../utils/telemetry-format";
 import { useDashboardShell } from "./shell";
 import { useGamesData } from "../hooks/useGamesData";
 
@@ -24,18 +25,6 @@ function localDateKey(dateIso: string): string {
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function formatRelativeTime(value: Date | null): string {
-  if (!value) return "Never";
-  const diffMs = Date.now() - value.getTime();
-  if (diffMs < 60_000) return "Just now";
-  const mins = Math.round(diffMs / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
 }
 
 function syncTone(lastAt: Date | null, maxStaleMinutes: number, active: boolean): SyncTone {
@@ -177,22 +166,19 @@ export function GamesView({ token }: { token: string }) {
       syncRows.map((row) => ({
         key: row.key,
         label: row.label.replace("Live ", "").replace("(NBA)", "NBA").replace("(MLB)", "MLB"),
-        value: formatRelativeTime(row.lastAt),
+        value: formatSyncAge(row.lastAt),
         tone: row.tone,
       })),
     );
     return () => setHeaderSyncItems(null);
   }, [setHeaderSyncItems, syncRows]);
 
-  const statusLabel = (game: Game): string => {
-    if (game.status === "in_progress" || game.status === "live") {
-      return `Live • ${formatGameTime(game)}`;
-    }
-    if (game.status === "final" || game.is_final) {
-      return "Final";
-    }
-    return new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  };
+  const statusLabel = (game: Game): string =>
+    formatGameStatusLabel(
+      game.status,
+      game.status === "final" || game.is_final,
+      new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    );
 
   useEffect(() => {
     const latestMs = games.reduce((latest, game) => {
