@@ -22,7 +22,7 @@ export function FollowingView({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
-  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride, clearAlertOverride } =
+  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride } =
     useGameAlertSettings(token, setError);
 
   const teams = data?.teams ?? [];
@@ -179,7 +179,6 @@ export function FollowingView({ token }: { token: string }) {
         gameAlertState={gameAlertState}
         onClose={closeGameAlerts}
         onApplyAlertOverride={applyAlertOverride}
-        onClearAlertOverride={clearAlertOverride}
       />
     </section>
   );

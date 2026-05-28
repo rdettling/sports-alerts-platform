@@ -184,7 +184,7 @@ def test_game_alert_override_flow(client):
     close_item = next(item for item in payload["items"] if item["alert_type"] == "close_game_late")
     assert close_item["use_league_default"] is True
     assert close_item["close_game_margin_threshold"] == 5
-    assert close_item["close_game_time_threshold_seconds"] == 120
+    assert close_item["close_game_time_threshold_seconds"] == 300
 
     update_response = client.put(
         f"/alert-preferences/games/{game_id}/close_game_late",
@@ -208,4 +208,4 @@ def test_game_alert_override_flow(client):
     assert cleared_item["use_league_default"] is True
     assert cleared_item["is_enabled"] is True
     assert cleared_item["close_game_margin_threshold"] == 5
-    assert cleared_item["close_game_time_threshold_seconds"] == 120
+    assert cleared_item["close_game_time_threshold_seconds"] == 300

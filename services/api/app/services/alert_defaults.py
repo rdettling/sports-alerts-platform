@@ -21,7 +21,7 @@ _ALERT_DEFAULTS: dict[str, AlertDefaultValues] = {
     "close_game_late": AlertDefaultValues(
         is_enabled=True,
         close_game_margin_threshold=5,
-        close_game_time_threshold_seconds=120,
+        close_game_time_threshold_seconds=300,
         inning_start_threshold=None,
     ),
     "inning_start": AlertDefaultValues(

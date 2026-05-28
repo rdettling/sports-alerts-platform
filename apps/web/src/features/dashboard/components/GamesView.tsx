@@ -26,7 +26,7 @@ export function GamesView({ token }: { token: string }) {
   const [leagueFilter, setLeagueFilter] = useState<"all" | "NBA" | "MLB">("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
-  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride, clearAlertOverride } =
+  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride } =
     useGameAlertSettings(token, setError);
 
   const toggleMutation = useMutation({
@@ -143,7 +143,6 @@ export function GamesView({ token }: { token: string }) {
         gameAlertState={gameAlertState}
         onClose={closeGameAlerts}
         onApplyAlertOverride={applyAlertOverride}
-        onClearAlertOverride={clearAlertOverride}
       />
     </section>
   );

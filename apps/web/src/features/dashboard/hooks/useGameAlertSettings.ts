@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import {
-  clearGameAlertOverride,
   getGameAlertPreferences,
   type Game,
   type GameAlertPreferences,
@@ -55,20 +54,6 @@ export function useGameAlertSettings(token: string, setError: (value: string | n
     }
   };
 
-  const clearAlertOverride = async (gameId: number, alertType: string) => {
-    setAlertsBusy(true);
-    setError(null);
-    try {
-      await clearGameAlertOverride(token, gameId, alertType);
-      const refreshed = await getGameAlertPreferences(token, gameId);
-      setGameAlertState(refreshed);
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setAlertsBusy(false);
-    }
-  };
-
   return {
     alertGame,
     gameAlertState,
@@ -76,6 +61,5 @@ export function useGameAlertSettings(token: string, setError: (value: string | n
     openGameAlerts,
     closeGameAlerts,
     applyAlertOverride,
-    clearAlertOverride,
   };
 }

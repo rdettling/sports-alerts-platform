@@ -50,14 +50,14 @@ export function GameRowCard({
         <div className="games-lines">
           <div className={`games-team-row ${awayWon ? "winner" : ""}`.trim()}>
             <div className="games-team-ident">
-              <TeamLogo team={away} size={24} />
+              <TeamLogo team={away} size={28} />
               <strong>{away.abbreviation}</strong>
             </div>
             <div className="games-team-score">{awayValueText}</div>
           </div>
           <div className={`games-team-row ${homeWon ? "winner" : ""}`.trim()}>
             <div className="games-team-ident">
-              <TeamLogo team={home} size={24} />
+              <TeamLogo team={home} size={28} />
               <strong>{home.abbreviation}</strong>
             </div>
             <div className="games-team-score">{homeValueText}</div>

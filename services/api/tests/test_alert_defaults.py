@@ -5,7 +5,7 @@ def test_close_game_late_defaults():
     defaults = get_alert_default_values("close_game_late")
     assert defaults.is_enabled is True
     assert defaults.close_game_margin_threshold == 5
-    assert defaults.close_game_time_threshold_seconds == 120
+    assert defaults.close_game_time_threshold_seconds == 300
     assert defaults.inning_start_threshold is None
 
 

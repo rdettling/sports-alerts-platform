@@ -10,6 +10,8 @@ import {
   type AlertHistoryItem,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { AlertRuleCard } from "./alerts/AlertRuleCard";
+import { buildLeagueRulePayload, getLeagueFieldValue, ruleFieldsFor } from "./alerts/alert-rule-config";
 
 const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
   NBA: ["game_start", "close_game_late", "final_result"],
@@ -50,46 +52,20 @@ export function AlertsView({ token }: { token: string }) {
     return () => window.clearInterval(id);
   }, [token]);
 
-  const onToggle = async (preference: AlertPreference) => {
+  const onRuleFieldSettingChange = async (
+    preference: AlertPreference,
+    fieldKey: "close_game_margin_threshold" | "close_game_time_threshold_seconds" | "inning_start_threshold",
+    fieldValue: number,
+  ) => {
     setError(null);
     setBusyAlertType(`${preference.league}:${preference.alert_type}`);
     try {
-      await updateAlertPreference(token, preference.league, preference.alert_type, {
-        is_enabled: !preference.is_enabled,
-      });
-      await load();
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setBusyAlertType(null);
-    }
-  };
-
-  const onCloseGameSettingChange = async (preference: AlertPreference, nextMargin: number, nextMinutes: number) => {
-    setError(null);
-    setBusyAlertType(`${preference.league}:${preference.alert_type}`);
-    try {
-      await updateAlertPreference(token, preference.league as "NBA" | "MLB", preference.alert_type, {
-        is_enabled: preference.is_enabled,
-        close_game_margin_threshold: nextMargin,
-        close_game_time_threshold_seconds: nextMinutes * 60,
-      });
-      await load();
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setBusyAlertType(null);
-    }
-  };
-
-  const onInningStartSettingChange = async (preference: AlertPreference, nextInning: number) => {
-    setError(null);
-    setBusyAlertType(`${preference.league}:${preference.alert_type}`);
-    try {
-      await updateAlertPreference(token, preference.league as "NBA" | "MLB", preference.alert_type, {
-        is_enabled: preference.is_enabled,
-        inning_start_threshold: nextInning,
-      });
+      await updateAlertPreference(
+        token,
+        preference.league as "NBA" | "MLB",
+        preference.alert_type,
+        buildLeagueRulePayload(preference, { fieldKey, fieldValue }),
+      );
       await load();
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
@@ -126,40 +102,83 @@ export function AlertsView({ token }: { token: string }) {
 
             {activeGroup ? (
               <ul className="list">
-                {activeGroup.preferences.map((preference) => (
-                  <li key={`${preference.league}:${preference.alert_type}`} className={`row-card alert-rule-row ${preference.is_enabled ? "" : "alert-rule-disabled"}`.trim()}>
-                    <div className="alert-rule-content">
-                      <div className="alert-rule-header">
-                        <div className="alert-rule-title-wrap"><strong>{PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type}</strong></div>
-                        <button className={`alert-toggle ${preference.is_enabled ? "on" : "off"}`} type="button" role="switch" aria-checked={preference.is_enabled} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`} onClick={() => onToggle(preference)}><span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span></button>
-                      </div>
-                      {preference.alert_type === "close_game_late" && preference.is_enabled ? (
-                        <div className="alert-rule-controls">
-                          <label>Margin<select className="alert-rule-select" value={preference.close_game_margin_threshold ?? 5} onChange={(event) => { const nextMargin = Number(event.target.value); onCloseGameSettingChange(preference, nextMargin, Math.max(1, Math.round((preference.close_game_time_threshold_seconds ?? 120) / 60))).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-                          <label>Minutes<select className="alert-rule-select" value={Math.max(1, Math.round((preference.close_game_time_threshold_seconds ?? 120) / 60))} onChange={(event) => { const nextMinutes = Number(event.target.value); onCloseGameSettingChange(preference, preference.close_game_margin_threshold ?? 5, nextMinutes).catch((requestError) => setError(messageFromUnknown(requestError))); }} disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}>{[1, 2, 3, 4, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-                        </div>
-                      ) : null}
-                      {preference.alert_type === "inning_start" && preference.is_enabled ? (
-                        <div className="alert-rule-controls">
-                          <label>Inning
-                            <select
-                              className="alert-rule-select"
-                              value={preference.inning_start_threshold ?? 7}
-                              onChange={(event) => {
-                                onInningStartSettingChange(preference, Number(event.target.value)).catch((requestError) =>
-                                  setError(messageFromUnknown(requestError)),
+                {activeGroup.preferences.map((preference) => {
+                  const fields = ruleFieldsFor(preference.alert_type, preference.is_enabled);
+                  const inlineField = fields.length === 1 ? fields[0] : null;
+                  return (
+                    <AlertRuleCard
+                      key={`${preference.league}:${preference.alert_type}`}
+                      title={PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type}
+                      isDisabled={!preference.is_enabled}
+                      endSlot={
+                        <div className="alert-rule-header-end">
+                          {inlineField ? (
+                            <label className="alert-inline-field">{inlineField.label}
+                              <select
+                                className="alert-rule-select"
+                                value={getLeagueFieldValue(preference, inlineField)}
+                                onChange={(event) => {
+                                  onRuleFieldSettingChange(preference, inlineField.key, Number(event.target.value)).catch((requestError) =>
+                                    setError(messageFromUnknown(requestError)),
+                                  );
+                                }}
+                                disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
+                              >
+                                {inlineField.options.map((value) => <option key={value} value={value}>{value}</option>)}
+                              </select>
+                            </label>
+                          ) : null}
+                          <button
+                            className={`alert-toggle ${preference.is_enabled ? "on" : "off"}`}
+                            type="button"
+                            role="switch"
+                            aria-checked={preference.is_enabled}
+                            disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
+                            onClick={async () => {
+                              setError(null);
+                              setBusyAlertType(`${preference.league}:${preference.alert_type}`);
+                              try {
+                                await updateAlertPreference(
+                                  token,
+                                  preference.league as "NBA" | "MLB",
+                                  preference.alert_type,
+                                  buildLeagueRulePayload(preference, { is_enabled: !preference.is_enabled }),
                                 );
-                              }}
-                              disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
-                            >
-                              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => <option key={value} value={value}>{value}</option>)}
-                            </select>
-                          </label>
+                                await load();
+                              } catch (requestError) {
+                                setError(messageFromUnknown(requestError));
+                              } finally {
+                                setBusyAlertType(null);
+                              }
+                            }}
+                          >
+                            <span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span>
+                          </button>
                         </div>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
+                      }
+                      controls={
+                        <>
+                          {fields.filter((field) => field !== inlineField).map((field) => (
+                            <label key={field.key}>{field.label}
+                              <select
+                                className="alert-rule-select"
+                                value={getLeagueFieldValue(preference, field)}
+                                onChange={(event) => {
+                                  onRuleFieldSettingChange(preference, field.key, Number(event.target.value)).catch((requestError) =>
+                                    setError(messageFromUnknown(requestError)),
+                                  );
+                                }}
+                                disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
+                              >
+                                {field.options.map((value) => <option key={value} value={value}>{value}</option>)}
+                              </select>
+                            </label>
+                          ))}
+                        </>
+                      }
+                    />
+                  );
+                })}
               </ul>
             ) : <p className="muted">No rules for this league.</p>}
           </section>
