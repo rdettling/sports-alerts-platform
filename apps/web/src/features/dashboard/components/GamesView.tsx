@@ -1,41 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
+import { followGame, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { formatGameStatusLabel, formatSyncAge } from "../utils/telemetry-format";
-import { useDashboardShell } from "./dashboard-shell-context";
+import { formatSyncAge } from "../utils/telemetry-format";
 import { useGamesData } from "../hooks/useGamesData";
-import { GameRowCard } from "./GameRowCard";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
-
-type GameDayGroup = { label: string; items: Game[] };
-type SyncTone = "fresh" | "stale" | "idle";
-
-type SyncRow = {
-  key: string;
-  label: string;
-  cadenceLabel: string;
-  lastAt: Date | null;
-  detail: string;
-  tone: SyncTone;
-};
-
-function localDateKey(dateIso: string): string {
-  const value = new Date(dateIso);
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function syncTone(lastAt: Date | null, maxStaleMinutes: number, active: boolean): SyncTone {
-  if (!lastAt) return "stale";
-  if (!active) return "idle";
-  const ageMinutes = (Date.now() - lastAt.getTime()) / 60_000;
-  return ageMinutes <= maxStaleMinutes ? "fresh" : "stale";
-}
+import { GameRowCard } from "./GameRowCard";
+import { useDashboardShell } from "./dashboard-shell-context";
+import { GamesFiltersPanel } from "./games/GamesFiltersPanel";
+import {
+  buildDayOptions,
+  buildSyncRows,
+  filterGamesByDay,
+  filterGamesByLeague,
+  gameStatusLabel,
+  groupGamesByDay,
+  latestIngestAtFromGames,
+  localDateKey,
+  sortGamesByStart,
+} from "./games/games-view-utils";
 
 export function GamesView({ token }: { token: string }) {
   const { setLastSync, setHeaderSyncItems } = useDashboardShell();
@@ -71,101 +56,12 @@ export function GamesView({ token }: { token: string }) {
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
 
-  const sortedGames = useMemo(
-    () => [...games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime()),
-    [games],
-  );
-
-  const gameDateKey = (game: Game): string => localDateKey(game.scheduled_start_time);
-
-  const leagueFilteredGames = useMemo(() => {
-    if (leagueFilter === "all") return sortedGames;
-    return sortedGames.filter((game) => (game.league || "").toUpperCase() === leagueFilter);
-  }, [sortedGames, leagueFilter]);
-
-  const dayOptions = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; count: number }>();
-    leagueFilteredGames.forEach((game) => {
-      const key = gameDateKey(game);
-      const label = new Date(game.scheduled_start_time).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-      const current = map.get(key);
-      if (current) current.count += 1;
-      else map.set(key, { key, label, count: 1 });
-    });
-    return Array.from(map.values());
-  }, [leagueFilteredGames]);
-
-  const visibleGames = useMemo(() => {
-    if (dayFilter === "all") return leagueFilteredGames;
-    return leagueFilteredGames.filter((game) => gameDateKey(game) === dayFilter);
-  }, [leagueFilteredGames, dayFilter]);
-
-  const groupedVisibleGames: GameDayGroup[] = useMemo(() => {
-    const groups = new Map<string, Game[]>();
-    visibleGames.forEach((game) => {
-      const label = new Date(game.scheduled_start_time).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-      const current = groups.get(label) ?? [];
-      current.push(game);
-      groups.set(label, current);
-    });
-    return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
-  }, [visibleGames]);
-
-  const syncRows = useMemo(() => {
-    const byLeague = (league: "NBA" | "MLB") => {
-      const leagueGames = games.filter((game) => (game.league || "").toUpperCase() === league);
-      const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
-      const nextStartMs = leagueGames
-        .filter((game) => game.status === "scheduled")
-        .map((game) => new Date(game.scheduled_start_time).getTime())
-        .filter((ts) => !Number.isNaN(ts))
-        .sort((a, b) => a - b)[0];
-      const lastMs = leagueGames
-        .map((game) => (game.last_ingested_at ? new Date(game.last_ingested_at).getTime() : Number.NaN))
-        .filter((ts) => !Number.isNaN(ts))
-        .reduce((max, ts) => Math.max(max, ts), 0);
-      const lastAt = lastMs > 0 ? new Date(lastMs) : null;
-      return { liveCount, nextStartMs, lastAt };
-    };
-
-    const nba = byLeague("NBA");
-    const mlb = byLeague("MLB");
-    const allLastMs = games
-      .map((game) => (game.last_ingested_at ? new Date(game.last_ingested_at).getTime() : Number.NaN))
-      .filter((ts) => !Number.isNaN(ts))
-      .reduce((max, ts) => Math.max(max, ts), 0);
-    const catalogLastAt = allLastMs > 0 ? new Date(allLastMs) : null;
-
-    const leagueRow = (label: string, cadenceLabel: string, info: { liveCount: number; nextStartMs?: number; lastAt: Date | null }, staleAfterMinutes: number): SyncRow => {
-      const active = info.liveCount > 0;
-      const detail = active
-        ? `${info.liveCount} live`
-        : info.nextStartMs
-          ? `Next ${new Date(info.nextStartMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-          : "No upcoming";
-      return {
-        key: label,
-        label,
-        cadenceLabel,
-        lastAt: info.lastAt,
-        detail,
-        tone: syncTone(info.lastAt, staleAfterMinutes, active),
-      };
-    };
-
-    return [
-      {
-        key: "catalog",
-        label: "Catalog",
-        cadenceLabel: "12h cadence",
-        lastAt: catalogLastAt,
-        detail: "Schedule + odds snapshot",
-        tone: syncTone(catalogLastAt, 12 * 60 + 30, true),
-      },
-      leagueRow("Live (NBA)", "2m cadence", nba, 4),
-      leagueRow("Live (MLB)", "5m cadence", mlb, 10),
-    ] satisfies SyncRow[];
-  }, [games]);
+  const sortedGames = useMemo(() => sortGamesByStart(games), [games]);
+  const leagueFilteredGames = useMemo(() => filterGamesByLeague(sortedGames, leagueFilter), [sortedGames, leagueFilter]);
+  const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
+  const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
+  const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
+  const syncRows = useMemo(() => buildSyncRows(games), [games]);
 
   useEffect(() => {
     setHeaderSyncItems(
@@ -179,21 +75,8 @@ export function GamesView({ token }: { token: string }) {
     return () => setHeaderSyncItems(null);
   }, [setHeaderSyncItems, syncRows]);
 
-  const statusLabel = (game: Game): string =>
-    formatGameStatusLabel(
-      game.status,
-      game.status === "final" || game.is_final,
-      new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-    );
-
   useEffect(() => {
-    const latestMs = games.reduce((latest, game) => {
-      if (!game.last_ingested_at) return latest;
-      const ts = new Date(game.last_ingested_at).getTime();
-      if (Number.isNaN(ts)) return latest;
-      return Math.max(latest, ts);
-    }, 0);
-    setLastSync(latestMs > 0 ? new Date(latestMs) : null);
+    setLastSync(latestIngestAtFromGames(games));
   }, [games, setLastSync]);
 
   useEffect(() => {
@@ -220,23 +103,15 @@ export function GamesView({ token }: { token: string }) {
 
         {!isLoading ? (
           <div className="games-feed-grid">
-            <aside className="games-day-filter">
-              <div className="games-league-filter" role="tablist" aria-label="League filter">
-                <button className={`chip-btn ${leagueFilter === "all" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("all")} disabled={isLoading}>All</button>
-                <button className={`chip-btn ${leagueFilter === "NBA" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("NBA")} disabled={isLoading}>NBA</button>
-                <button className={`chip-btn ${leagueFilter === "MLB" ? "active" : ""}`.trim()} onClick={() => setLeagueFilter("MLB")} disabled={isLoading}>MLB</button>
-              </div>
-              <button className={`games-day-filter-btn ${dayFilter === "all" ? "active" : ""}`.trim()} onClick={() => setDayFilter("all")} disabled={isLoading}>
-                <span>All</span>
-                <span className="muted">{leagueFilteredGames.length}</span>
-              </button>
-              {dayOptions.map((day) => (
-                <button key={day.key} className={`games-day-filter-btn ${dayFilter === day.key ? "active" : ""}`.trim()} onClick={() => setDayFilter(day.key)} disabled={isLoading}>
-                  <span>{day.label}</span>
-                  <span className="muted">{day.count}</span>
-                </button>
-              ))}
-            </aside>
+            <GamesFiltersPanel
+              leagueFilter={leagueFilter}
+              onLeagueFilterChange={setLeagueFilter}
+              dayFilter={dayFilter}
+              onDayFilterChange={setDayFilter}
+              isLoading={isLoading}
+              totalLeagueGames={leagueFilteredGames.length}
+              dayOptions={dayOptions}
+            />
 
             <div className="data-table-wrap">
               <div className="games-list" role="list" aria-label="Games feed">
@@ -257,7 +132,7 @@ export function GamesView({ token }: { token: string }) {
                             home={home}
                             away={away}
                             isFollowed={isFollowed}
-                            statusLabel={statusLabel(game)}
+                            statusLabel={gameStatusLabel(game)}
                             actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
                             onFollow={() => toggleMutation.mutate({ gameId: game.id, isFollowed: false })}
                             onUnfollow={async () => {

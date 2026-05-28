@@ -1,3 +1,19 @@
+.games-team-ident,
+.games-status-pill,
+.team-logo-fallback,
+.games-meta-rail,
+.games-league-logo-wrap,
+.games-league-logo-fallback,
+.games-outcome-pill,
+.following-team-option,
+.following-followed-team-main,
+.following-game-actions,
+.alert-history-row-main,
+.following-alert-default-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
 .games-page {
   display: flex;
   flex-direction: column;
@@ -148,8 +164,6 @@
 }
 
 .games-team-ident {
-  display: inline-flex;
-  align-items: center;
   gap: 0.5rem;
   min-width: 0;
 }
@@ -194,8 +208,6 @@
 }
 
 .games-status-pill {
-  display: inline-flex;
-  align-items: center;
   border-radius: var(--radius-pill);
   padding: 0.2rem 0.52rem;
   font-size: 0.75rem;
@@ -223,8 +235,6 @@
 }
 
 .team-logo-fallback {
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
   background: #dce5f8;
@@ -235,16 +245,12 @@
 
 .games-meta-rail {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
   justify-content: flex-end;
   gap: 0.55rem;
   justify-self: end;
 }
 
 .games-league-logo-wrap {
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
   padding: 0.16rem 0.38rem;
@@ -270,8 +276,6 @@
 }
 
 .games-league-logo-fallback {
-  display: inline-flex;
-  align-items: center;
   border-radius: var(--radius-pill);
   padding: 0.16rem 0.5rem;
   font-size: 0.7rem;
@@ -289,8 +293,6 @@
 }
 
 .games-outcome-pill {
-  display: inline-flex;
-  align-items: center;
   width: 102px;
   justify-content: center;
   text-align: center;
@@ -392,8 +394,6 @@
 }
 
 .alert-history-row-main {
-  display: inline-flex;
-  align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
 }
@@ -429,8 +429,6 @@
 }
 
 .following-team-option {
-  display: inline-flex;
-  align-items: center;
   gap: 0.45rem;
   width: 100%;
   text-align: left;
@@ -453,8 +451,6 @@
 }
 
 .following-followed-team-main {
-  display: inline-flex;
-  align-items: center;
   gap: 0.55rem;
   min-width: 0;
 }
@@ -477,8 +473,6 @@
 }
 
 .following-game-actions {
-  display: inline-flex;
-  align-items: center;
   gap: 0.4rem;
 }
 
@@ -567,8 +561,6 @@
 }
 
 .following-alert-default-toggle {
-  display: inline-flex;
-  align-items: center;
   gap: 0.4rem;
   font-size: 0.95rem;
   color: var(--text-muted);
