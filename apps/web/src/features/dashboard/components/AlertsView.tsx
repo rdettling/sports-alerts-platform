@@ -10,7 +10,6 @@ import {
   type AlertHistoryItem,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { useDashboardShell } from "./dashboard-shell-context";
 
 const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
   NBA: ["game_start", "close_game_late", "final_result"],
@@ -18,8 +17,6 @@ const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
 };
 
 export function AlertsView({ token }: { token: string }) {
-  const { setLastSync } = useDashboardShell();
-
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +34,6 @@ export function AlertsView({ token }: { token: string }) {
       ]);
       setPreferenceGroups(preferenceResponse);
       setHistoryItems(historyResponse.items);
-      const now = new Date();
-      setLastSync(now);
     } finally {
       setLoading(false);
     }
@@ -54,10 +49,6 @@ export function AlertsView({ token }: { token: string }) {
     }, 120_000);
     return () => window.clearInterval(id);
   }, [token]);
-
-  useEffect(() => {
-    setLastSync(new Date());
-  }, [setLastSync]);
 
   const onToggle = async (preference: AlertPreference) => {
     setError(null);

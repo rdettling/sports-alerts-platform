@@ -9,14 +9,12 @@ import {
 } from "../../../shared/api";
 import { TeamLogo, formatGameTime, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../utils/telemetry-format";
-import { useDashboardShell } from "./dashboard-shell-context";
 import { useFollowingData } from "../hooks/useFollowingData";
 import { GameRowCard } from "./GameRowCard";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 
 export function FollowingView({ token }: { token: string }) {
-  const { setLastSync } = useDashboardShell();
   const queryClient = useQueryClient();
   const { data, isLoading, error: queryError } = useFollowingData(token);
 
@@ -34,10 +32,6 @@ export function FollowingView({ token }: { token: string }) {
   useEffect(() => {
     if (queryError) setError(messageFromUnknown(queryError));
   }, [queryError]);
-
-  useEffect(() => {
-    if (data) setLastSync(new Date());
-  }, [data, setLastSync]);
 
   const followTeamMutation = useMutation({
     mutationFn: (teamId: number) => followTeam(token, teamId),

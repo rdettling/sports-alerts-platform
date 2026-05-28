@@ -22,6 +22,11 @@
   letter-spacing: -0.01em;
 }
 
+.sidebar-brand {
+  display: grid;
+  gap: 0.55rem;
+}
+
 .sidebar-nav {
   display: grid;
   gap: var(--space-2);
@@ -104,57 +109,69 @@
 .topbar-meta {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
-.status-pill {
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-pill);
-  padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #31476f;
+.sync-table {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(145, 173, 225, 0.4);
+  border-radius: 0.65rem;
+  padding: 0.38rem 0.5rem 0.42rem;
 }
 
-.sync-inline-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.38rem;
+.sync-table-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.sync-inline-pill {
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-pill);
-  padding: 0.22rem 0.52rem;
-  font-size: 0.74rem;
+.sync-table th,
+.sync-table td {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+}
+
+.sync-table .sync-table-title {
+  text-align: center;
+  color: #b7c9ed;
+  font-size: 0.68rem;
   font-weight: 650;
-  color: #31476f;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding-bottom: 0.18rem;
+}
+
+.sync-table th {
+  color: #9fb5e3;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.sync-table td {
+  color: #d8e6ff;
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding-top: 0.08rem;
+}
+
+.sidebar-sync {
+  max-width: 100%;
+}
+
+.topbar-account {
   display: inline-flex;
   align-items: center;
-  gap: 0.36rem;
-}
-
-.sync-inline-pill strong {
-  font-size: 0.76rem;
-}
-
-.sync-inline-pill.fresh strong {
-  color: #166534;
-}
-
-.sync-inline-pill.idle strong {
-  color: #334155;
-}
-
-.sync-inline-pill.stale strong {
-  color: #b91c1c;
+  gap: 0.8rem;
 }
 
 .user-email {
   color: #20335c;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .app-content {

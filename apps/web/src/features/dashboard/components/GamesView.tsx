@@ -3,27 +3,22 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { formatSyncAge } from "../utils/telemetry-format";
 import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameRowCard } from "./GameRowCard";
-import { useDashboardShell } from "./dashboard-shell-context";
 import { GamesFiltersPanel } from "./games/GamesFiltersPanel";
 import {
   buildDayOptions,
-  buildSyncRows,
   filterGamesByDay,
   filterGamesByLeague,
   gameStatusLabel,
   groupGamesByDay,
-  latestIngestAtFromGames,
   localDateKey,
   sortGamesByStart,
 } from "./games/games-view-utils";
 
 export function GamesView({ token }: { token: string }) {
-  const { setLastSync, setHeaderSyncItems } = useDashboardShell();
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
 
@@ -44,7 +39,6 @@ export function GamesView({ token }: { token: string }) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["games-page", token] });
-      setLastSync(new Date());
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });
@@ -61,24 +55,6 @@ export function GamesView({ token }: { token: string }) {
   const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
   const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
-  const syncRows = useMemo(() => buildSyncRows(games), [games]);
-
-  useEffect(() => {
-    setHeaderSyncItems(
-      syncRows.map((row) => ({
-        key: row.key,
-        label: row.label.replace("Live ", "").replace("(NBA)", "NBA").replace("(MLB)", "MLB"),
-        value: formatSyncAge(row.lastAt),
-        tone: row.tone,
-      })),
-    );
-    return () => setHeaderSyncItems(null);
-  }, [setHeaderSyncItems, syncRows]);
-
-  useEffect(() => {
-    setLastSync(latestIngestAtFromGames(games));
-  }, [games, setLastSync]);
-
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
       setDayFilter("all");

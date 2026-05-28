@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/auth-context";
 import { AdminView } from "./components/AdminView";
 import { AlertsView } from "./components/AlertsView";
+import { DashboardSyncBadges } from "./components/DashboardSyncBadges";
 import { FollowingView } from "./components/FollowingView";
 import { GamesView } from "./components/GamesView";
-import { DashboardShellProvider, type HeaderSyncItem } from "./components/dashboard-shell-context";
+import { useDashboardSyncItems } from "./hooks/useDashboardSyncItems";
 
 type DashboardRouteKey = "games" | "following" | "alerts" | "admin";
 
@@ -57,21 +58,10 @@ function routeForPath(pathname: string): DashboardRouteMeta {
   return DASHBOARD_ROUTES.find((route) => route.path === segment) ?? DASHBOARD_ROUTES[0];
 }
 
-function relativeTimeLabel(timestamp: Date | null): string {
-  if (!timestamp) return "Sync pending";
-  const diff = Math.max(0, Math.floor((new Date().getTime() - timestamp.getTime()) / 1000));
-  if (diff < 60) return `Last sync ${diff}s ago`;
-  const minutes = Math.floor(diff / 60);
-  if (minutes < 60) return `Last sync ${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `Last sync ${hours}h ago`;
-}
-
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
   const location = useLocation();
-  const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [headerSyncItems, setHeaderSyncItems] = useState<HeaderSyncItem[] | null>(null);
+  const headerSyncItems = useDashboardSyncItems();
 
   const isAdmin = user?.role === "admin";
   const currentRoute = routeForPath(location.pathname);
@@ -85,11 +75,11 @@ export function DashboardLayout() {
   }
 
   return (
-    <DashboardShellProvider value={{ setLastSync, setHeaderSyncItems }}>
-      <div className="app-shell">
+    <div className="app-shell">
         <aside className="app-sidebar">
           <div className="sidebar-brand">
             <h1>Live Game Alerts</h1>
+            <DashboardSyncBadges items={headerSyncItems} className="sidebar-sync" variant="sidebar" />
           </div>
           <nav className="sidebar-nav">
             {navRoutes.map((route) => (
@@ -114,22 +104,12 @@ export function DashboardLayout() {
               <p>{currentRoute.subtitle}</p>
             </div>
             <div className="topbar-meta">
-              {headerSyncItems && currentRoute.key === "games" ? (
-                <span className="sync-inline-group" aria-label="Data sync status">
-                  {headerSyncItems.map((item) => (
-                    <span key={item.key} className={`sync-inline-pill ${item.tone}`.trim()} title={`${item.label}: ${item.value}`}>
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                    </span>
-                  ))}
-                </span>
-              ) : (
-                <span className="status-pill">{relativeTimeLabel(lastSync)}</span>
-              )}
-              <span className="user-email">{user.email}</span>
-              <button className="btn btn-secondary" onClick={logout}>
-                Logout
-              </button>
+              <div className="topbar-account">
+                <span className="user-email">{user.email}</span>
+                <button className="btn btn-secondary" onClick={logout}>
+                  Logout
+                </button>
+              </div>
             </div>
           </header>
 
@@ -146,6 +126,5 @@ export function DashboardLayout() {
           </main>
         </div>
       </div>
-    </DashboardShellProvider>
   );
 }
