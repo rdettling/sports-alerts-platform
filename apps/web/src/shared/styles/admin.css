@@ -1,0 +1,210 @@
+/* Admin feature styles */
+.admin-page { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-4); height: 100%; min-height: 0; overflow: hidden; }
+.admin-tools-card { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid #d6e0ef; }
+.admin-panel { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-elevated); padding: 0.75rem; display: grid; gap: 0.5rem; }
+.admin-panel-scroll { min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.admin-scroll-body,
+.admin-tools-body { min-height: 0; overflow: auto; padding-right: 0.25rem; display: grid; gap: 0.6rem; align-content: start; }
+.admin-tools-body { gap: 0.9rem; padding-right: 0; }
+
+.admin-tools-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.admin-tools-intro { display: grid; gap: 0.2rem; }
+.admin-tools-intro h3 { margin: 0; font-size: 1.05rem; letter-spacing: 0.01em; }
+.admin-tools-matchup { border: 1px solid #d7e0ef; background: #fff; border-radius: 12px; padding: 0.75rem 0.85rem; display: grid; gap: 0.45rem; }
+.admin-action-list { display: grid; gap: 0.55rem; }
+
+.admin-test-btn {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #cfd9eb;
+  background: linear-gradient(180deg, #f9fbff 0%, #f2f6ff 100%);
+  color: #1d3157;
+  border-radius: 12px;
+  padding: 0.68rem 0.85rem;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.admin-test-btn:hover:not(:disabled) { border-color: #9fb4d6; transform: translateY(-1px); }
+.admin-test-btn:disabled { opacity: 0.62; cursor: not-allowed; }
+.admin-test-btn-meta { font-size: 0.78rem; color: #51678b; font-weight: 700; }
+.admin-result { border: 1px solid #cfe3d4; background: #edf9f1; color: #1f5131; border-radius: 10px; padding: 0.55rem 0.65rem; font-size: 0.88rem; }
+
+.admin-health-pill { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid var(--border); background: #eef3fc; color: #1c3566; font-weight: 700; font-size: 0.74rem; padding: 0.12rem 0.5rem; text-transform: capitalize; }
+.admin-health-pill.healthy,
+.admin-health-pill.is-ok { background: #edf9f1; border-color: #b7dfc0; color: #1f6a35; }
+.admin-health-pill.watch,
+.admin-health-pill.is-warn { background: #fff8e8; border-color: #ead59b; color: #7b5a06; }
+.admin-health-pill.at_risk,
+.admin-health-pill.is-danger { background: #fff1f1; border-color: #f2c2c2; color: #9f2222; }
+
+.admin-action-history-row { font-size: 0.85rem; padding: 0.4rem 0.45rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+
+.admin-tabs-page { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-3); min-height: 0; overflow: hidden; }
+.admin-tab-content { min-height: 0; overflow: hidden; display: grid; }
+.admin-simple-stack { min-height: 0; display: grid; gap: var(--space-3); grid-template-rows: auto minmax(0, 1fr); }
+.admin-simple-panel { min-height: 0; display: grid; gap: 0.75rem; }
+.admin-tabs-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.admin-tab-list { display: inline-flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; padding: 0.25rem; border-radius: 14px; background: #eef3fb; border: 1px solid #d8e0ef; }
+.admin-tab-controls { display: inline-flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
+.admin-tab-controls label { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 700; color: #25324a; }
+.admin-tab-button { border: 1px solid #c8d3e7; border-radius: 11px; background: #fff; color: #304563; padding: 0.42rem 0.82rem; font-weight: 700; font-size: 0.92rem; line-height: 1.1; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease; }
+.admin-tab-button:hover { border-color: #9db0d1; color: #1e3358; transform: translateY(-1px); }
+.admin-tab-button.active { background: linear-gradient(180deg, #1e3f7a 0%, #1a3366 100%); border-color: #1a3366; color: #fff; box-shadow: 0 4px 10px rgba(26, 51, 102, 0.25); }
+.admin-tab-button:focus-visible { outline: 2px solid #90b2e8; outline-offset: 2px; }
+.admin-simple-metrics { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 0.65rem; }
+.admin-simple-metrics > div { border: 1px solid #d7e0ef; border-radius: 12px; padding: 0.6rem 0.72rem; display: grid; gap: 0.2rem; background: #fff; }
+.admin-simple-metrics > div strong { font-size: 1.06rem; color: #152745; }
+
+.admin-db-layout { min-height: 0; height: 100%; display: grid; }
+.admin-db-shell { min-height: 0; height: 100%; display: grid; gap: 0.7rem; grid-template-rows: auto minmax(0, 1fr); padding: 0.9rem; }
+.admin-db-header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.7rem; }
+.admin-db-header p { margin: 0; }
+.admin-db-grid { min-height: 0; display: grid; gap: 0.7rem; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: auto minmax(0, 1fr); }
+.admin-db-card { border: 1px solid #d7e0ef; border-radius: 12px; background: #fff; padding: 0.78rem 0.82rem; display: grid; gap: 0.62rem; min-height: 0; }
+.admin-db-card h4 { margin: 0; font-size: 1rem; letter-spacing: 0.01em; text-transform: none; color: #1f3157; }
+.admin-db-card-head { display: flex; align-items: flex-start; gap: 0.6rem; }
+.admin-db-card-head p { margin: 0.1rem 0 0; font-size: 0.75rem; }
+.admin-db-kpis { display: grid; gap: 0.45rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-db-kpis article { border: 1px solid var(--border); border-radius: 10px; background: #f8fbff; padding: 0.52rem 0.55rem; display: grid; gap: 0.18rem; }
+.admin-db-kpis article span { line-height: 1.2; }
+.admin-db-kpis article strong {
+  font-size: 0.98rem;
+  color: #14274a;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+}
+.admin-db-scheduler-list { display: grid; }
+.admin-db-scheduler-list article { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.38rem 0.1rem; border-top: 1px solid #e6edf8; }
+.admin-db-scheduler-list article:first-child { border-top: 0; }
+.admin-db-scheduler-list article strong { font-size: 1rem; color: #1a2b4d; justify-self: end; }
+.admin-db-actions { display: grid; gap: 0.5rem; align-content: start; }
+.admin-db-actions .admin-test-btn { padding: 0.58rem 0.7rem; font-size: 0.9rem; }
+.admin-db-actions .admin-test-btn.admin-test-btn-primary { background: linear-gradient(180deg, #173c92 0%, #132f72 100%); border-color: #143579; color: #fff; }
+.admin-db-actions .admin-test-btn {
+  min-height: 48px;
+  border-radius: 14px;
+  padding: 0.62rem 0.95rem;
+  text-decoration: none;
+}
+.admin-db-actions .admin-test-btn span:first-child {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+.admin-db-actions .admin-test-btn-meta {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+.admin-db-actions .admin-test-btn.admin-test-btn-primary .admin-test-btn-meta {
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(245, 249, 255, 0.95);
+}
+.admin-db-actions .admin-test-btn:not(.admin-test-btn-primary) .admin-test-btn-meta {
+  color: #7282a0;
+}
+.admin-db-events-card { grid-column: 1 / span 2; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+.admin-db-events-scroll {
+  --admin-events-cols: 2.2fr 0.85fr 0.95fr 2.1fr;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+.admin-db-events-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--admin-events-cols);
+  gap: 0.55rem;
+  padding: 0 0.2rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #617291;
+  background: #fff;
+  border-bottom: 1px solid #e6edf8;
+}
+.admin-db-events-list { display: grid; gap: 0; border-top: 1px solid #e6edf8; }
+.admin-db-event-row { border-bottom: 1px solid #e6edf8; background: #fff; padding: 0.5rem 0.2rem; display: grid; grid-template-columns: var(--admin-events-cols); gap: 0.55rem; align-items: center; min-height: 46px; }
+.admin-db-event-row strong { font-size: 0.92rem; color: #1c2f54; text-transform: lowercase; }
+.admin-db-event-row .admin-health-pill { justify-self: start; }
+.admin-db-events-scroll { max-height: calc(46px * 6 + 2px); }
+.admin-db-health-card { grid-column: 3; min-height: 0; align-content: start; grid-template-rows: auto auto auto; }
+.admin-db-health-metrics { display: grid; gap: 0.45rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-db-health-metrics article { border: 1px solid var(--border); border-radius: 10px; padding: 0.45rem 0.5rem; background: #f8fbff; display: grid; gap: 0.12rem; min-height: 72px; }
+.admin-db-health-metrics article strong { font-size: 1.03rem; color: #16294c; }
+.admin-db-sparkline { border: 1px solid var(--border); border-radius: 10px; background: #f8fbff; padding: 0.55rem 0.6rem; display: grid; gap: 0.25rem; }
+.admin-db-sparkline svg { width: 100%; height: 44px; }
+.admin-db-sparkline path { fill: none; stroke: #2f548f; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (max-width: 1200px) {
+  .admin-db-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .admin-db-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-db-events-card {
+    grid-column: 1 / span 2;
+  }
+
+  .admin-db-health-card {
+    grid-column: 1 / span 2;
+  }
+
+  .admin-db-health-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .admin-simple-metrics {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
+  .admin-tools-card {
+    height: auto;
+  }
+
+  .admin-db-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(5, auto);
+  }
+
+  .admin-db-events-card,
+  .admin-db-health-card {
+    grid-column: auto;
+  }
+
+  .admin-db-shell {
+    height: auto;
+  }
+
+  .admin-db-events-header,
+  .admin-db-event-row {
+    grid-template-columns: var(--admin-events-cols);
+  }
+
+  .admin-db-events-scroll {
+    --admin-events-cols: 1.8fr 0.8fr 0.8fr 1.8fr;
+  }
+
+  .admin-db-health-metrics {
+    grid-template-columns: 1fr;
+  }
+}

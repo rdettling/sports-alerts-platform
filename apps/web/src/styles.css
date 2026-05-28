@@ -1,2 +1,5 @@
 @import "./shared/styles/tokens.css";
+@import "./shared/styles/base.css";
+@import "./shared/styles/layout.css";
 @import "./shared/styles/dashboard.css";
+@import "./shared/styles/admin.css";
