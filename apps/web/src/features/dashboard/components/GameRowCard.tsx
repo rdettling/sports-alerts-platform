@@ -65,32 +65,38 @@ export function GameRowCard({
         </div>
 
         <div className="games-meta-rail">
-          {logoUrl ? (
-            <span className="games-league-logo-wrap" aria-label={`${league} league`}>
-              <img src={logoUrl} alt={`${league} logo`} className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()} />
+          <div className="games-meta-col games-meta-col-logo">
+            {logoUrl ? (
+              <span className="games-league-logo-plain" aria-label={`${league} league`}>
+                <img src={logoUrl} alt={`${league} logo`} className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()} />
+              </span>
+            ) : (
+              <span className="games-league-logo-fallback">{league}</span>
+            )}
+          </div>
+
+          <div className="games-meta-col games-meta-col-status">
+            <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>
+              {statusLabel}
             </span>
-          ) : (
-            <span className="games-league-logo-fallback">{league}</span>
-          )}
+          </div>
 
-          <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>
-            {statusLabel}
-          </span>
-
-          {isFollowed && !isFinal ? (
-            <div className="following-game-actions">
-              <button className="btn btn-secondary" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
-                Alert settings
+          <div className="games-meta-col games-meta-col-actions">
+            {isFollowed && !isFinal ? (
+              <div className="following-game-actions following-game-actions-stacked">
+                <button className="btn btn-secondary games-action-cell" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
+                  Alert settings
+                </button>
+                <button className="btn btn-secondary games-action-cell" type="button" onClick={onUnfollow} disabled={actionsDisabled || !onUnfollow}>
+                  Unfollow
+                </button>
+              </div>
+            ) : canFollow ? (
+              <button className="btn games-action-cell games-action-cell-tall" type="button" disabled={actionsDisabled} onClick={onFollow}>
+                Follow
               </button>
-              <button className="btn btn-secondary games-action-cell" type="button" onClick={onUnfollow} disabled={actionsDisabled || !onUnfollow}>
-                Unfollow
-              </button>
-            </div>
-          ) : canFollow ? (
-            <button className="btn games-action-cell" type="button" disabled={actionsDisabled} onClick={onFollow}>
-              Follow
-            </button>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </article>

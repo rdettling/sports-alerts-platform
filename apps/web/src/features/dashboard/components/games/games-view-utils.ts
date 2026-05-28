@@ -1,4 +1,5 @@
 import { type Game } from "../../../../shared/api";
+import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
 
 export type SyncTone = "fresh" | "stale" | "idle";
@@ -144,6 +145,6 @@ export function gameStatusLabel(game: Game): string {
   return formatGameStatusLabel(
     game.status,
     game.status === "final" || game.is_final,
-    new Date(game.scheduled_start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    formatGameTime(game),
   );
 }

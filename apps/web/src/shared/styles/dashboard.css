@@ -209,8 +209,9 @@
 
 .games-status-pill {
   border-radius: var(--radius-pill);
-  padding: 0.2rem 0.52rem;
-  font-size: 0.75rem;
+  padding: 0.38rem 0.82rem;
+  min-height: 2.05rem;
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -245,19 +246,40 @@
 
 .games-meta-rail {
   margin-left: auto;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: 4rem minmax(9.5rem, auto) 12rem;
+  grid-template-rows: minmax(2rem, auto) minmax(2rem, auto);
+  align-items: center;
   gap: 0.55rem;
   justify-self: end;
 }
 
-.games-league-logo-wrap {
+.games-meta-col {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  border-radius: var(--radius-pill);
-  padding: 0.16rem 0.38rem;
-  background: #eaf1ff;
-  border: 1px solid #c9d8f2;
-  width: 4.25rem;
-  min-height: 2.1rem;
+}
+
+.games-meta-col-status {
+  grid-row: 1 / span 2;
+}
+
+.games-meta-col-actions {
+  align-items: stretch;
+  grid-row: 1 / span 2;
+}
+
+.games-meta-col-logo {
+  justify-content: center;
+  grid-row: 1 / span 2;
+}
+
+.games-league-logo-plain {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 4rem;
+  min-height: 2rem;
 }
 
 .games-league-logo {
@@ -268,11 +290,11 @@
 }
 
 .games-league-logo.league-nba {
-  width: 1.05rem;
+  width: 1.15rem;
 }
 
 .games-league-logo.league-mlb {
-  width: 3.2rem;
+  width: 3.35rem;
 }
 
 .games-league-logo-fallback {
@@ -287,9 +309,15 @@
 }
 
 .games-action-cell {
-  width: 102px;
+  width: 100%;
   text-align: center;
-  padding: 0.46rem 0.62rem;
+  padding: 0.5rem 0.62rem;
+  min-height: 2rem;
+}
+
+.games-action-cell-tall {
+  grid-row: 1 / span 2;
+  min-height: calc(4rem + 0.38rem);
 }
 
 .games-outcome-pill {
@@ -474,6 +502,21 @@
 
 .following-game-actions {
   gap: 0.4rem;
+}
+
+.following-game-actions-stacked {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 0.38rem;
+  width: 100%;
+}
+
+.following-game-actions-stacked > .games-action-cell:first-child {
+  grid-row: 1;
+}
+
+.following-game-actions-stacked > .games-action-cell:last-child {
+  grid-row: 2;
 }
 
 .overlay-sheet {
