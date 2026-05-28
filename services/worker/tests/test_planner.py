@@ -130,11 +130,14 @@ def test_build_catalog_requests_returns_wide_window_for_cold_start(db_session):
     assert "20260510" in dates
 
 
-def test_build_live_requests_tracks_only_live_games(db_session):
+def test_build_live_requests_tracks_live_and_imminent_scheduled_games(db_session):
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
     _seed_game(db_session, external_id="g-live-sync", status="live", scheduled_start=now + timedelta(hours=1))
-    _seed_game(db_session, external_id="g-not-live", status="scheduled", scheduled_start=now + timedelta(hours=2))
+    _seed_game(db_session, external_id="g-imminent", status="scheduled", scheduled_start=now + timedelta(hours=2))
+    _seed_game(db_session, external_id="g-far-future", status="scheduled", scheduled_start=now + timedelta(days=2))
     requests = build_live_requests(db_session, "NBA", now=now)
     dates = [request.date for request in requests]
     assert len(dates) >= 1
     assert (now + timedelta(hours=1)).strftime("%Y%m%d") in dates
+    assert (now + timedelta(hours=2)).strftime("%Y%m%d") in dates
+    assert (now + timedelta(days=2)).strftime("%Y%m%d") not in dates

@@ -616,3 +616,51 @@ def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
     assert result["has_live_games"] == "false"
     assert result["mode"] == "no_upcoming"
     assert result["next_scheduled_start_at"] is None
+
+
+def test_live_sync_promotes_scheduled_game_to_live(db_session):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    db_session.add(
+        Game(
+            external_game_id="mlb-angels-like",
+            league="MLB",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now - timedelta(minutes=15),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    class PromoteProvider:
+        def fetch_games(self, league, requests):
+            return [
+                ProviderGame(
+                    external_game_id="mlb-angels-like",
+                    home_external_team_id=teams[0].external_team_id,
+                    away_external_team_id=teams[1].external_team_id,
+                    scheduled_start_time=now - timedelta(minutes=15),
+                    status="in_progress",
+                    home_score=1,
+                    away_score=0,
+                    period=2,
+                    clock="Top 2nd",
+                    is_final=False,
+                )
+            ]
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    result = run_live_sync(PromoteProvider(), league="MLB")
+    assert result["status"] == "success"
+    assert result["has_live_games"] == "true"
+    assert result["mode"] == "live"
+    assert result["games_updated"] >= 1
+
+    db_session.expire_all()
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "mlb-angels-like", Game.league == "MLB"))
+    assert game is not None
+    assert game.status == "in_progress"

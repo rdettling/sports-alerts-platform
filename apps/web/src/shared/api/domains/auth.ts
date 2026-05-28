@@ -8,6 +8,16 @@ export function startMagicLink(email: string): Promise<MagicLinkStartResponse> {
   });
 }
 
+export async function warmAuthDb(): Promise<void> {
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/warm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("Auth warmup failed");
+  }
+}
+
 export function verifyMagicLink(token: string): Promise<AuthResponse> {
   return apiRequest<AuthResponse>("/auth/magic-link/verify", {
     method: "POST",

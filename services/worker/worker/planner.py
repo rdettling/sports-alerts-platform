@@ -18,6 +18,8 @@ INGEST_PREGAME_HOT_WINDOW_MINUTES = 90
 INGEST_PREGAME_COLD_WINDOW_HOURS = 24
 INGEST_COLD_START_LOOKBACK_DAYS = 2
 INGEST_COLD_START_LOOKAHEAD_DAYS = 7
+INGEST_LIVE_SYNC_LOOKBACK_HOURS = 2
+INGEST_LIVE_SYNC_LOOKAHEAD_HOURS = 6
 
 
 @dataclass(frozen=True)
@@ -194,18 +196,25 @@ def build_catalog_requests(db: Session, league: str, now: datetime | None = None
 
 def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[ScoreboardRequest]:
     at = now or datetime.now(timezone.utc)
-    live_rows = db.execute(
+    candidate_rows = db.execute(
         select(Game.scheduled_start_time).where(
             Game.league == league,
             Game.is_final.is_(False),
-            Game.status.in_(("in_progress", "live")),
+            or_(
+                Game.status.in_(("in_progress", "live")),
+                and_(
+                    Game.status == "scheduled",
+                    Game.scheduled_start_time >= at - timedelta(hours=INGEST_LIVE_SYNC_LOOKBACK_HOURS),
+                    Game.scheduled_start_time <= at + timedelta(hours=INGEST_LIVE_SYNC_LOOKAHEAD_HOURS),
+                ),
+            ),
         )
     ).all()
-    if not live_rows:
+    if not candidate_rows:
         return []
     dates = {
         (start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)).strftime("%Y%m%d")
-        for start_time, in live_rows
+        for start_time, in candidate_rows
     }
     # Include current day to absorb provider status lag around day boundaries.
     dates.add(at.strftime("%Y%m%d"))

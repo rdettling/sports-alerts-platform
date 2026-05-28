@@ -628,17 +628,8 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
-        live_game_ids = {
-            external_id
-            for external_id, in db.execute(
-                select(Game.external_game_id).where(
-                    Game.league == league,
-                    Game.is_final.is_(False),
-                    Game.status.in_(("in_progress", "live")),
-                )
-            ).all()
-        }
-        if not live_game_ids:
+        requests = build_live_requests(db, league)
+        if not requests:
             next_scheduled = _next_scheduled_start(db, league, now)
             if next_scheduled is None:
                 mode = "no_upcoming"
@@ -658,52 +649,64 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
                 "mode": mode,
             }
 
-        requests = build_live_requests(db, league)
-        if not requests:
-            return {
-                "status": "success",
-                "job_type": "live_sync",
-                "league": league,
-                "has_live_games": "false",
-                "next_scheduled_start_at": None,
-                "games_checked": 0,
-                "games_updated": 0,
-                "next_poll_seconds": max(1, settings.live_sync_pregame_retry_seconds),
-                "mode": "waiting_for_start",
-            }
-
         team_map = _team_id_map(db, league)
         team_names = _team_name_map(db, league)
         provider_games = provider.fetch_games(league, requests)
+        candidate_ids = {
+            external_id
+            for external_id, in db.execute(
+                select(Game.external_game_id).where(
+                    Game.league == league,
+                    Game.is_final.is_(False),
+                    Game.status.in_(("in_progress", "live", "scheduled")),
+                )
+            ).all()
+        }
         updated, touched_game_ids, _ = _upsert_games_and_collect(
             db,
             league,
             provider_games,
             team_map,
             team_names,
-            only_external_ids=live_game_ids,
+            only_external_ids=candidate_ids,
         )
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
         alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
+        has_live_games = bool(
+            db.scalar(
+                select(func.count(Game.id)).where(
+                    Game.league == league,
+                    Game.is_final.is_(False),
+                    Game.status.in_(("in_progress", "live")),
+                )
+            )
+            or 0
+        )
+        next_scheduled = _next_scheduled_start(db, league, now)
         db.commit()
         logger.info(
-            "Live sync league=%s checked=%s updated=%s alerts_created=%s",
+            "Live sync league=%s checked=%s updated=%s alerts_created=%s has_live_games=%s",
             league,
             len(provider_games),
             updated,
             alerts_created,
+            has_live_games,
         )
         return {
             "status": "success",
             "job_type": "live_sync",
             "league": league,
-            "has_live_games": "true",
-            "next_scheduled_start_at": None,
+            "has_live_games": "true" if has_live_games else "false",
+            "next_scheduled_start_at": (
+                (next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)).isoformat()
+                if next_scheduled is not None
+                else None
+            ),
             "games_checked": len(provider_games),
             "games_updated": updated,
-            "next_poll_seconds": _live_interval_seconds(league),
-            "mode": "live",
+            "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(league),
+            "mode": "live" if has_live_games else ("waiting_for_start" if next_scheduled is not None else "no_upcoming"),
         }
     except Exception:
         db.rollback()
