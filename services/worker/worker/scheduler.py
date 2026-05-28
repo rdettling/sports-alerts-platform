@@ -16,11 +16,14 @@ from worker.providers.factory import get_provider
 
 logger = logging.getLogger(__name__)
 SCHEDULER_MAX_SLEEP_SECONDS = settings.scheduler_tick_seconds
+SCHEDULER_IDLE_MAX_SLEEP_SECONDS = max(60, settings.scheduler_idle_max_sleep_seconds)
 JOB_MAX_RETRIES = 5
 JOB_RETRY_BASE_SECONDS = 30
 JOB_RETRY_MAX_BACKOFF_SECONDS = 3600
 DELIVERY_EMPTY_BACKOFF_SECONDS = settings.delivery_idle_seconds
 DELIVERY_ACTIVE_BACKOFF_SECONDS = settings.delivery_active_seconds
+DELIVERY_DEEP_IDLE_BACKOFF_SECONDS = settings.delivery_deep_idle_seconds
+DELIVERY_DEEP_IDLE_IMMINENT_WINDOW_HOURS = max(1, settings.delivery_deep_idle_imminent_window_hours)
 CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
 DELIVERY_JOB = "delivery"
@@ -99,9 +102,11 @@ def _next_due_seconds(now: datetime) -> float:
             .limit(1)
         )
         if not row:
-            return float(SCHEDULER_MAX_SLEEP_SECONDS)
+            return float(SCHEDULER_IDLE_MAX_SLEEP_SECONDS)
         delta = (row.next_run_at - now).total_seconds()
-        return max(0.0, min(float(SCHEDULER_MAX_SLEEP_SECONDS), delta))
+        # Let the worker sleep until the next due job instead of wake-polling every
+        # scheduler tick; stop_event.wait() still wakes immediately on shutdown.
+        return max(0.0, min(float(SCHEDULER_IDLE_MAX_SLEEP_SECONDS), delta))
     finally:
         db.close()
 
@@ -283,6 +288,26 @@ def _run_delivery_job() -> int:
         pending_count = count_pending_alerts(db)
         if pending_count > 0:
             return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
+        has_live_or_imminent = bool(
+            db.scalar(
+                select(func.count(Game.id)).where(
+                    Game.is_final.is_(False),
+                    (
+                        Game.status.in_(("in_progress", "live"))
+                        | (
+                            (Game.status == "scheduled")
+                            & (
+                                Game.scheduled_start_time
+                                <= _utcnow() + timedelta(hours=DELIVERY_DEEP_IDLE_IMMINENT_WINDOW_HOURS)
+                            )
+                        )
+                    ),
+                )
+            )
+            or 0
+        )
+        if not has_live_or_imminent:
+            return max(1, DELIVERY_DEEP_IDLE_BACKOFF_SECONDS)
         return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS)
     except Exception:
         db.rollback()

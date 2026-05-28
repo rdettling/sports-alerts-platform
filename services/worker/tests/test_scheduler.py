@@ -139,6 +139,31 @@ def test_run_delivery_job_uses_empty_backoff(db_session, monkeypatch):
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
     next_seconds = scheduler._run_delivery_job()
+    assert next_seconds == scheduler.DELIVERY_DEEP_IDLE_BACKOFF_SECONDS
+
+
+def test_run_delivery_job_uses_empty_backoff_when_imminent_game(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    team_a = Team(external_team_id="imminent1", league="NBA", name="Imminent A", abbreviation="IA")
+    team_b = Team(external_team_id="imminent2", league="NBA", name="Imminent B", abbreviation="IB")
+    db_session.add_all([team_a, team_b])
+    db_session.flush()
+    db_session.add(
+        Game(
+            external_game_id="imminent-game-1",
+            league="NBA",
+            home_team_id=team_a.id,
+            away_team_id=team_b.id,
+            scheduled_start_time=now + timedelta(minutes=45),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
+    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
+    next_seconds = scheduler._run_delivery_job()
     assert next_seconds == scheduler.DELIVERY_EMPTY_BACKOFF_SECONDS
 
 

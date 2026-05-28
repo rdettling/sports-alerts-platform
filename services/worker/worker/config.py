@@ -23,8 +23,11 @@ class WorkerSettings(BaseSettings):
     odds_api_cache_seconds: int = 60
     odds_enabled: bool = True
     scheduler_tick_seconds: int = 15
+    scheduler_idle_max_sleep_seconds: int = 3600
     delivery_idle_seconds: int = 300
     delivery_active_seconds: int = 60
+    delivery_deep_idle_seconds: int = 1800
+    delivery_deep_idle_imminent_window_hours: int = 2
     delivery_mode: str = "email"
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str

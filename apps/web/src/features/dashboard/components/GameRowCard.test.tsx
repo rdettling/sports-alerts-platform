@@ -60,16 +60,16 @@ describe("GameRowCard", () => {
     expect(onFollow).toHaveBeenCalledTimes(1);
   });
 
-  it("shows alert settings and unfollow for followed games", () => {
+  it("shows alert settings and unfollow for followed non-final games", () => {
     const onUnfollow = vi.fn();
     const onOpenAlertSettings = vi.fn();
     render(
       <GameRowCard
-        game={makeGame({ status: "final", is_final: true, home_score: 100, away_score: 95 })}
+        game={makeGame({ status: "scheduled", is_final: false })}
         home={home}
         away={away}
         isFollowed
-        statusLabel="Final"
+        statusLabel="7:00 PM"
         onUnfollow={onUnfollow}
         onOpenAlertSettings={onOpenAlertSettings}
       />,
@@ -82,8 +82,23 @@ describe("GameRowCard", () => {
     expect(onUnfollow).toHaveBeenCalledTimes(1);
   });
 
-  it("shows final indicator for unfollowed final games", () => {
-    const { container } = render(
+  it("hides followed actions for final games", () => {
+    render(
+      <GameRowCard
+        game={makeGame({ status: "final", is_final: true, home_score: 100, away_score: 95 })}
+        home={home}
+        away={away}
+        isFollowed
+        statusLabel="Final"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Alert settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unfollow" })).toBeNull();
+  });
+
+  it("does not show follow action for unfollowed final games", () => {
+    render(
       <GameRowCard
         game={makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 })}
         home={home}
@@ -93,7 +108,6 @@ describe("GameRowCard", () => {
       />,
     );
 
-    expect(container.querySelector(".games-outcome-pill.final")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
   });
 });

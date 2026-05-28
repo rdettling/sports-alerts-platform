@@ -20,7 +20,7 @@ type DashboardRouteMeta = {
 };
 
 const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
-  { key: "games", path: "games", label: "Games", subtitle: "NBA game slate and follow actions" },
+  { key: "games", path: "games", label: "Games", subtitle: "Live game slate and follow actions" },
   { key: "following", path: "following", label: "Following", subtitle: "Manage your followed teams and games" },
   { key: "alerts", path: "alerts", label: "Alerts", subtitle: "Configure rules and review delivery history" },
   { key: "admin", path: "admin", label: "Admin", subtitle: "Operational telemetry and test tools", adminOnly: true },

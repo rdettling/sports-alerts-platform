@@ -77,7 +77,7 @@ export function GameRowCard({
             {statusLabel}
           </span>
 
-          {isFollowed ? (
+          {isFollowed && !isFinal ? (
             <div className="following-game-actions">
               <button className="btn btn-secondary" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
                 Alert settings
@@ -90,8 +90,6 @@ export function GameRowCard({
             <button className="btn games-action-cell" type="button" disabled={actionsDisabled} onClick={onFollow}>
               Follow
             </button>
-          ) : isFinal ? (
-            <span className="games-outcome-pill final">Final</span>
           ) : null}
         </div>
       </div>
