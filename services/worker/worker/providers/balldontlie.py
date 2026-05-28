@@ -17,6 +17,8 @@ SCOREBOARD_URLS = {
     "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
 }
+
+
 class BallDontLieProvider(SportsProvider):
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
@@ -70,6 +72,10 @@ class BallDontLieProvider(SportsProvider):
         home_external_team_id = str(home_team.get("id") or "").strip()
         away_external_team_id = str(away_team.get("id") or "").strip()
         if not home_external_team_id or not away_external_team_id:
+            return None
+        # ESPN sometimes emits placeholder/non-team ids (e.g. "-1") in edge events.
+        # Ignore these rows to avoid polluting ingest with guaranteed mapping misses.
+        if home_external_team_id.startswith("-") or away_external_team_id.startswith("-"):
             return None
 
         status_type = ((competition.get("status") or {}).get("type") or {})

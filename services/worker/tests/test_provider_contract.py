@@ -130,3 +130,31 @@ def test_provider_uses_numeric_team_ids_for_mlb():
     assert len(schedule) == 1
     assert schedule[0].home_external_team_id == "4"
     assert schedule[0].away_external_team_id == "11"
+
+
+def test_provider_skips_events_with_invalid_placeholder_team_ids():
+    payload = {
+        "events": [
+            {
+                "id": "401859963",
+                "date": "2026-05-28T23:10:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "-1", "abbreviation": "TBD"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "18", "abbreviation": "NY"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260528")])
+    assert schedule == []

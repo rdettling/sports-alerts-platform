@@ -34,7 +34,16 @@ def main() -> int:
 
     db = SessionLocal()
     try:
+        existing_tables = {
+            name
+            for name, in db.execute(
+                text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            ).all()
+        }
         for table in SPORTS_TABLES:
+            if table not in existing_tables:
+                print(f"Skipping missing table: {table}")
+                continue
             db.execute(text(f"DELETE FROM {table}"))
         db.commit()
         seed_teams_if_empty(db)
