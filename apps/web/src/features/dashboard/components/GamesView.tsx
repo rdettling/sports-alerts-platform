@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
-import { TeamLogo,  formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel, formatSyncAge } from "../utils/telemetry-format";
 import { useDashboardShell } from "./dashboard-shell-context";
 import { useGamesData } from "../hooks/useGamesData";
+import { GameRowCard } from "./GameRowCard";
+import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
+import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 
 type GameDayGroup = { label: string; items: Game[] };
 type SyncTone = "fresh" | "stale" | "idle";
@@ -42,6 +45,9 @@ export function GamesView({ token }: { token: string }) {
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [leagueFilter, setLeagueFilter] = useState<"all" | "NBA" | "MLB">("all");
   const [error, setError] = useState<string | null>(null);
+  const [busyGameId, setBusyGameId] = useState<number | null>(null);
+  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride, clearAlertOverride } =
+    useGameAlertSettings(token, setError);
 
   const toggleMutation = useMutation({
     mutationFn: async ({ gameId, isFollowed }: { gameId: number; isFollowed: boolean }) => {
@@ -243,58 +249,29 @@ export function GamesView({ token }: { token: string }) {
                         const away = teamMap.get(game.away_team_id);
                         if (!home || !away) return null;
                         const isFollowed = followedGameIds.has(game.id);
-                        const hasScore = game.away_score !== null && game.home_score !== null;
-                        const awayWon = Boolean(hasScore && game.is_final && game.away_score! > game.home_score!);
-                        const homeWon = Boolean(hasScore && game.is_final && game.home_score! > game.away_score!);
-                        const isLive = game.status === "in_progress" || game.status === "live";
-                        const isFinal = game.status === "final" || game.is_final;
-                        const showScoreValues = isLive || isFinal;
-                        const awayValueText = showScoreValues
-                          ? String(game.away_score ?? "—")
-                          : game.odds
-                            ? formatMoneyline(game.odds.away_moneyline)
-                            : "—";
-                        const homeValueText = showScoreValues
-                          ? String(game.home_score ?? "—")
-                          : game.odds
-                            ? formatMoneyline(game.odds.home_moneyline)
-                            : "—";
 
                         return (
-                          <article key={game.id} className="games-card-row" role="listitem">
-                            <div className="games-card-main">
-                              <div className="games-lines">
-                                <div className={`games-team-row ${awayWon ? "winner" : ""}`.trim()}>
-                                  <div className="games-team-ident"><TeamLogo team={away} size={24} /><strong>{away.abbreviation}</strong></div>
-                                  <div className="games-team-score">{awayValueText}</div>
-                                </div>
-                                <div className={`games-team-row ${homeWon ? "winner" : ""}`.trim()}>
-                                  <div className="games-team-ident"><TeamLogo team={home} size={24} /><strong>{home.abbreviation}</strong></div>
-                                  <div className="games-team-score">{homeValueText}</div>
-                                </div>
-                              </div>
-
-                              <div className="games-meta-rail">
-                                {leagueLogoUrl(game.league) ? (
-                                  <span className="games-league-logo-wrap" aria-label={`${(game.league || "N/A").toUpperCase()} league`}>
-                                    <img
-                                      src={leagueLogoUrl(game.league) ?? ""}
-                                      alt={`${(game.league || "N/A").toUpperCase()} logo`}
-                                      className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()}
-                                    />
-                                  </span>
-                                ) : (
-                                  <span className="games-league-logo-fallback">{(game.league || "N/A").toUpperCase()}</span>
-                                )}
-                                {!isFinal ? <span className={`games-status-pill ${isLive ? "live" : "scheduled"}`.trim()}>{statusLabel(game)}</span> : null}
-                                {isFinal ? (
-                                  <span className="games-outcome-pill final">Final</span>
-                                ) : (
-                                  <button className={`btn ${isFollowed ? "btn-secondary" : ""} games-action-cell`.trim()} disabled={toggleMutation.isPending} onClick={() => toggleMutation.mutate({ gameId: game.id, isFollowed })}>{isFollowed ? "Following" : "Follow"}</button>
-                                )}
-                              </div>
-                            </div>
-                          </article>
+                          <GameRowCard
+                            key={game.id}
+                            game={game}
+                            home={home}
+                            away={away}
+                            isFollowed={isFollowed}
+                            statusLabel={statusLabel(game)}
+                            actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
+                            onFollow={() => toggleMutation.mutate({ gameId: game.id, isFollowed: false })}
+                            onUnfollow={async () => {
+                              setBusyGameId(game.id);
+                              try {
+                                await toggleMutation.mutateAsync({ gameId: game.id, isFollowed: true });
+                              } finally {
+                                setBusyGameId(null);
+                              }
+                            }}
+                            onOpenAlertSettings={() => {
+                              openGameAlerts(game).catch(() => undefined);
+                            }}
+                          />
                         );
                       })}
                     </div>
@@ -307,6 +284,16 @@ export function GamesView({ token }: { token: string }) {
 
         {!isLoading && visibleGames.length === 0 ? <p className="muted">No games in this filter.</p> : null}
       </section>
+
+      <GameAlertSettingsModal
+        isOpen={Boolean(alertGame)}
+        matchupLabel={`${teamMap.get(alertGame?.away_team_id ?? -1)?.abbreviation ?? "AWAY"} @ ${teamMap.get(alertGame?.home_team_id ?? -1)?.abbreviation ?? "HOME"}`}
+        alertsBusy={alertsBusy}
+        gameAlertState={gameAlertState}
+        onClose={closeGameAlerts}
+        onApplyAlertOverride={applyAlertOverride}
+        onClearAlertOverride={clearAlertOverride}
+      />
     </section>
   );
 }
