@@ -10,7 +10,7 @@ from app.db.session import SessionLocal
 def test_user_team_follow_unique_constraint():
     db = SessionLocal()
     user = User(email="u@example.com")
-    team = Team(external_team_id="1610612737", league="NBA", name="Atlanta Hawks", abbreviation="ATL")
+    team = Team(external_team_id="1", league="NBA", name="Atlanta Hawks", abbreviation="ATL")
     db.add_all([user, team])
     db.commit()
     db.refresh(user)
@@ -29,8 +29,8 @@ def test_user_team_follow_unique_constraint():
 def test_sent_alert_dedupe_key_unique():
     db = SessionLocal()
     user = User(email="v@example.com")
-    home = Team(external_team_id="1610612738", league="NBA", name="Boston Celtics", abbreviation="BOS")
-    away = Team(external_team_id="1610612751", league="NBA", name="Brooklyn Nets", abbreviation="BKN")
+    home = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
+    away = Team(external_team_id="17", league="NBA", name="Brooklyn Nets", abbreviation="BKN")
     db.add_all([user, home, away])
     db.commit()
     db.refresh(user)

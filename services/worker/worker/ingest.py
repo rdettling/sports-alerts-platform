@@ -353,7 +353,13 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
     if not home_id or not away_id:
-        logger.warning("Skipping game %s due to missing teams", payload.external_game_id)
+        logger.warning(
+            "Skipping game due to missing teams league=%s external_game_id=%s home_external_team_id=%s away_external_team_id=%s",
+            league,
+            payload.external_game_id,
+            payload.home_external_team_id,
+            payload.away_external_team_id,
+        )
         return False, None
 
     existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == league))

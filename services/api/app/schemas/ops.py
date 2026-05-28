@@ -152,3 +152,16 @@ class NeonUsageOut(BaseModel):
     compute_last_active_at: datetime | None = None
     avg_cu_while_active: float | None = None
     message: str | None = None
+
+
+class TeamMappingLeagueHealthOut(BaseModel):
+    league: str
+    checked_games: int
+    checked_team_refs: int
+    missing_team_ids: list[str]
+
+
+class TeamMappingHealthOut(BaseModel):
+    ok: bool
+    checked_at: datetime
+    leagues: list[TeamMappingLeagueHealthOut]

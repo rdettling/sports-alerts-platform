@@ -25,8 +25,8 @@ class SuccessProvider:
         return [
             ProviderGame(
                 external_game_id="game-1",
-                home_external_team_id="1610612737",
-                away_external_team_id="1610612738",
+                home_external_team_id="1",
+                away_external_team_id="2",
                 scheduled_start_time=datetime.now(timezone.utc),
                 status="scheduled",
             )
@@ -49,8 +49,8 @@ class LiveCloseProvider:
         return [
             ProviderGame(
                 external_game_id="game-live",
-                home_external_team_id="1610612737",
-                away_external_team_id="1610612738",
+                home_external_team_id="1",
+                away_external_team_id="2",
                 scheduled_start_time=datetime.now(timezone.utc),
                 status="in_progress",
                 home_score=100,
@@ -70,8 +70,8 @@ class FinalProvider:
         return [
             ProviderGame(
                 external_game_id="game-final",
-                home_external_team_id="1610612737",
-                away_external_team_id="1610612738",
+                home_external_team_id="1",
+                away_external_team_id="2",
                 scheduled_start_time=datetime.now(timezone.utc),
                 status="final",
                 home_score=110,
@@ -91,8 +91,8 @@ class MlbInningProvider:
         return [
             ProviderGame(
                 external_game_id="game-mlb-live",
-                home_external_team_id="BOS",
-                away_external_team_id="NYY",
+                home_external_team_id="2",
+                away_external_team_id="10",
                 scheduled_start_time=datetime.now(timezone.utc),
                 status="in_progress",
                 home_score=2,
@@ -116,15 +116,15 @@ class RepeatMatchupProvider:
         return [
             ProviderGame(
                 external_game_id="game-repeat-1",
-                home_external_team_id="1610612737",
-                away_external_team_id="1610612738",
+                home_external_team_id="1",
+                away_external_team_id="2",
                 scheduled_start_time=self.first_start,
                 status="scheduled",
             ),
             ProviderGame(
                 external_game_id="game-repeat-2",
-                home_external_team_id="1610612737",
-                away_external_team_id="1610612738",
+                home_external_team_id="1",
+                away_external_team_id="2",
                 scheduled_start_time=self.second_start,
                 status="scheduled",
             ),
@@ -461,8 +461,8 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
             return [
                 ProviderGame(
                     external_game_id="game-catalog",
-                    home_external_team_id="1610612737",
-                    away_external_team_id="1610612738",
+                    home_external_team_id="1",
+                    away_external_team_id="2",
                     scheduled_start_time=now + timedelta(hours=4),
                     status="scheduled",
                 )
@@ -519,8 +519,8 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
             return [
                 ProviderGame(
                     external_game_id="game-live-only",
-                    home_external_team_id="1610612737",
-                    away_external_team_id="1610612738",
+                    home_external_team_id="1",
+                    away_external_team_id="2",
                     scheduled_start_time=now,
                     status="in_progress",
                     home_score=101,
@@ -551,8 +551,8 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
             return [
                 ProviderGame(
                     external_game_id="game-no-odds",
-                    home_external_team_id="1610612737",
-                    away_external_team_id="1610612738",
+                    home_external_team_id="1",
+                    away_external_team_id="2",
                     scheduled_start_time=now + timedelta(hours=4),
                     status="scheduled",
                 )

@@ -79,10 +79,10 @@ def reset_db():
     db = local_session()
     db.add_all(
         [
-            Team(external_team_id="1610612737", league="NBA", name="Atlanta Hawks", abbreviation="ATL"),
-            Team(external_team_id="1610612738", league="NBA", name="Boston Celtics", abbreviation="BOS"),
-            Team(external_team_id="NYY", league="MLB", name="New York Yankees", abbreviation="NYY"),
-            Team(external_team_id="BOS", league="MLB", name="Boston Red Sox", abbreviation="BOS"),
+            Team(external_team_id="1", league="NBA", name="Atlanta Hawks", abbreviation="ATL"),
+            Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS"),
+            Team(external_team_id="10", league="MLB", name="New York Yankees", abbreviation="NYY"),
+            Team(external_team_id="2", league="MLB", name="Boston Red Sox", abbreviation="BOS"),
         ]
     )
     db.commit()

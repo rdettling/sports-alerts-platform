@@ -57,6 +57,21 @@ Use carefully:
 
 `make reset` deletes local DB data and requires signing in again with a new magic link.
 
+## Full sports data reset + reseed (identity migration)
+
+Use this during a maintenance window when you want a clean sports-domain reset.
+
+1. Pause worker and hold API traffic briefly.
+2. Run migrations:
+`cd services/api && uv run alembic upgrade head`
+3. Reset sports-domain tables and reseed teams:
+`cd services/api && uv run python scripts/reset_sports_data.py --yes`
+4. Restart API and worker.
+5. Verify worker logs do not show missing-team ingest skips.
+6. Verify team mapping health:
+`GET /ops/db/team-mapping-health?date=YYYYMMDD`
+Expected: `ok=true` and empty `missing_team_ids` for MLB and NBA.
+
 ## Strict env startup failures
 
 Symptoms:

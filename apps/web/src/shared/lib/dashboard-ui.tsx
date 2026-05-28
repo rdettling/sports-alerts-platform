@@ -38,10 +38,15 @@ export function scoreSnippet(game: Game): string {
 }
 
 function teamLogoUrl(team: Team): string {
-  if ((team.league || "").toUpperCase() === "MLB") {
-    return `https://a.espncdn.com/i/teamlogos/mlb/500/${team.abbreviation.toLowerCase()}.png`;
+  const league = (team.league || "").toUpperCase();
+  const abbr = team.abbreviation.toLowerCase();
+  if (league === "MLB") {
+    return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbr}.png`;
   }
-  return `https://cdn.nba.com/logos/nba/${team.external_team_id}/global/L/logo.svg`;
+  if (league === "NBA") {
+    return `https://a.espncdn.com/i/teamlogos/nba/500/${abbr}.png`;
+  }
+  return "";
 }
 
 export function TeamLogo({ team, size = 26 }: { team: Team; size?: number }) {

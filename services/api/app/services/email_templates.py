@@ -91,10 +91,10 @@ def _normalize_league(game: Game, home: Team | None, away: Team | None) -> str:
 
 def _team_logo_url(team: Team | None, fallback_abbr: str, league: str) -> str:
     if league == "NBA":
-        external_id = (team.external_team_id if team and team.external_team_id else "").strip()
-        if external_id:
-            return f"https://cdn.nba.com/logos/nba/{external_id}/global/L/logo.svg"
-        return ""
+        abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
+        if not abbr:
+            return ""
+        return f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr}.png"
     if league == "MLB":
         abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
         if not abbr:

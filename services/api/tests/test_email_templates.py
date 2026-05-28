@@ -44,8 +44,8 @@ def test_mlb_inning_start_uses_mlb_logos_and_non_nba_details():
 
 
 def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
-    away = Team(external_team_id="1610612738", league="NBA", name="Boston Celtics", abbreviation="BOS")
-    home = Team(external_team_id="1610612747", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
+    away = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
+    home = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
     game = Game(
         external_game_id="nba-1",
         league="NBA",
@@ -62,8 +62,8 @@ def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
     _, html_body = build_alert_email_content(alert, game, home, away)
 
     assert subject.startswith("Tip-off · BOS @ LAL")
-    assert "cdn.nba.com/logos/nba/1610612738/global/L/logo.svg" in html_body
-    assert "cdn.nba.com/logos/nba/1610612747/global/L/logo.svg" in html_body
+    assert "teamlogos/nba/500/bos.png" in html_body
+    assert "teamlogos/nba/500/lal.png" in html_body
 
 
 def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
@@ -85,6 +85,5 @@ def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
     _, html_body = build_alert_email_content(alert, game, home, away)
 
     assert subject.startswith("Game start · AWY @ HOM")
-    assert "cdn.nba.com/logos/nba/" not in html_body
+    assert "teamlogos/nba/500/" not in html_body
     assert "teamlogos/mlb/500/" not in html_body
-

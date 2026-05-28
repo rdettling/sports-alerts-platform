@@ -16,8 +16,8 @@ def test_provider_parses_espn_payload_shape():
                             "type": {"state": "in", "name": "STATUS_IN_PROGRESS", "completed": False},
                         },
                         "competitors": [
-                            {"homeAway": "home", "score": "102", "team": {"abbreviation": "LAL"}},
-                            {"homeAway": "away", "score": "98", "team": {"abbreviation": "BOS"}},
+                            {"homeAway": "home", "score": "102", "team": {"id": "13", "abbreviation": "LAL"}},
+                            {"homeAway": "away", "score": "98", "team": {"id": "2", "abbreviation": "BOS"}},
                         ],
                     }
                 ],
@@ -31,8 +31,8 @@ def test_provider_parses_espn_payload_shape():
     assert len(schedule) == 1
     game = schedule[0]
     assert game.external_game_id == "401705001"
-    assert game.home_external_team_id == "1610612747"
-    assert game.away_external_team_id == "1610612738"
+    assert game.home_external_team_id == "13"
+    assert game.away_external_team_id == "2"
     assert game.status == "in_progress"
     assert game.home_score == 102
     assert game.away_score == 98
@@ -87,8 +87,8 @@ def test_provider_uses_mlb_short_detail_for_half_inning_clock():
                             },
                         },
                         "competitors": [
-                            {"homeAway": "home", "score": "3", "team": {"abbreviation": "TOR"}},
-                            {"homeAway": "away", "score": "2", "team": {"abbreviation": "MIA"}},
+                            {"homeAway": "home", "score": "3", "team": {"id": "14", "abbreviation": "TOR"}},
+                            {"homeAway": "away", "score": "2", "team": {"id": "28", "abbreviation": "MIA"}},
                         ],
                     }
                 ],
@@ -100,3 +100,33 @@ def test_provider_uses_mlb_short_detail_for_half_inning_clock():
     schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260527")])
     assert len(schedule) == 1
     assert schedule[0].clock == "Top 6th"
+
+
+def test_provider_uses_numeric_team_ids_for_mlb():
+    payload = {
+        "events": [
+            {
+                "id": "401815999",
+                "date": "2026-05-28T22:10:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 1,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "4", "abbreviation": "CHW"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "11", "abbreviation": "ATH"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260528")])
+    assert len(schedule) == 1
+    assert schedule[0].home_external_team_id == "4"
+    assert schedule[0].away_external_team_id == "11"

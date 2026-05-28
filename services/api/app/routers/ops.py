@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiCallRollupHourly, User, WorkerJob
+from app.db.models import ApiCallRollupHourly, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.ops import (
@@ -29,6 +29,8 @@ from app.schemas.ops import (
     OpsAdminRiskThresholdsOut,
     NeonUsageOut,
     ProviderUsageOut,
+    TeamMappingHealthOut,
+    TeamMappingLeagueHealthOut,
 )
 
 router = APIRouter(prefix="/ops", tags=["ops"])
@@ -37,6 +39,10 @@ WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 TIMESERIES_WINDOWS = {"24h": 24, "7d": 24 * 7}
 ADMIN_OVERVIEW_WINDOWS = {"1h", "6h", "24h", "7d"}
 NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
+SCOREBOARD_URLS = {
+    "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+    "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+}
 OPS_PROVIDER_QUOTAS = {"espn": 5000, "odds": 1000}
 OPS_RISK_UTILIZATION_WATCH_PCT = 70.0
 OPS_RISK_UTILIZATION_RISK_PCT = 85.0
@@ -447,4 +453,58 @@ def neon_usage(_: User = Depends(require_admin_user)) -> NeonUsageOut:
         active_time_sec=active_time_sec,
         compute_last_active_at=data.get("compute_last_active_at"),
         avg_cu_while_active=avg_cu_while_active,
+    )
+
+
+@router.get("/db/team-mapping-health", response_model=TeamMappingHealthOut)
+def team_mapping_health(
+    date: str | None = Query(default=None, description="Date in YYYYMMDD format"),
+    _: User = Depends(require_admin_user),
+    db: Session = Depends(get_db),
+) -> TeamMappingHealthOut:
+    check_date = date or datetime.now(timezone.utc).strftime("%Y%m%d")
+    if len(check_date) != 8 or not check_date.isdigit():
+        raise HTTPException(status_code=422, detail="Invalid date. Use YYYYMMDD.")
+
+    leagues_out: list[TeamMappingLeagueHealthOut] = []
+    for league in ("MLB", "NBA"):
+        seeded_team_ids = {
+            team_id
+            for team_id, in db.execute(select(Team.external_team_id).where(Team.league == league)).all()
+        }
+        missing_team_ids: set[str] = set()
+        checked_games = 0
+        checked_team_refs = 0
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                response = client.get(SCOREBOARD_URLS[league], params={"dates": check_date})
+                response.raise_for_status()
+                payload = response.json()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Failed to load {league} scoreboard for {check_date}: {exc}") from exc
+
+        for event in payload.get("events", []):
+            checked_games += 1
+            competition = (event.get("competitions") or [{}])[0]
+            for competitor in competition.get("competitors", []):
+                team = competitor.get("team") or {}
+                team_id = str(team.get("id") or "").strip()
+                if not team_id:
+                    continue
+                checked_team_refs += 1
+                if team_id not in seeded_team_ids:
+                    missing_team_ids.add(team_id)
+        leagues_out.append(
+            TeamMappingLeagueHealthOut(
+                league=league,
+                checked_games=checked_games,
+                checked_team_refs=checked_team_refs,
+                missing_team_ids=sorted(missing_team_ids, key=lambda value: int(value) if value.isdigit() else value),
+            )
+        )
+
+    return TeamMappingHealthOut(
+        ok=all(not league.missing_team_ids for league in leagues_out),
+        checked_at=datetime.now(timezone.utc),
+        leagues=leagues_out,
     )

@@ -77,3 +77,73 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     assert "providers" in overview_json
     assert "risk_cards" in overview_json
     assert len(overview_json["providers"]) >= 1
+
+
+def test_team_mapping_health_endpoint(client, monkeypatch):
+    token = _issue_token(client, monkeypatch, "ops-admin@example.com")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "ops-admin@example.com").first()
+        assert user is not None
+        user.role = "admin"
+        db.commit()
+    finally:
+        db.close()
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url, params=None):
+            _ = params
+            if "mlb" in url:
+                return _FakeResponse(
+                    {
+                        "events": [
+                            {
+                                "competitions": [
+                                    {"competitors": [{"team": {"id": "2"}}, {"team": {"id": "10"}}]}
+                                ]
+                            }
+                        ]
+                    }
+                )
+            return _FakeResponse(
+                {
+                    "events": [
+                        {
+                            "competitions": [
+                                {"competitors": [{"team": {"id": "1"}}, {"team": {"id": "2"}}]}
+                            ]
+                        }
+                    ]
+                }
+            )
+
+    monkeypatch.setattr("app.routers.ops.httpx.Client", _FakeClient)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get("/ops/db/team-mapping-health?date=20260528", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert len(payload["leagues"]) == 2
+    assert payload["leagues"][0]["missing_team_ids"] == []
+    assert payload["leagues"][1]["missing_team_ids"] == []

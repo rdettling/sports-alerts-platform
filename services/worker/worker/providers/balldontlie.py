@@ -17,44 +17,6 @@ SCOREBOARD_URLS = {
     "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
 }
-ABBR_TO_EXTERNAL_TEAM_ID = {
-    "ATL": "1610612737",
-    "BOS": "1610612738",
-    "BKN": "1610612751",
-    "CHA": "1610612766",
-    "CHI": "1610612741",
-    "CLE": "1610612739",
-    "DAL": "1610612742",
-    "DEN": "1610612743",
-    "DET": "1610612765",
-    "GSW": "1610612744",
-    "HOU": "1610612745",
-    "IND": "1610612754",
-    "LAC": "1610612746",
-    "LAL": "1610612747",
-    "MEM": "1610612763",
-    "MIA": "1610612748",
-    "MIL": "1610612749",
-    "MIN": "1610612750",
-    "NOP": "1610612740",
-    "NYK": "1610612752",
-    "OKC": "1610612760",
-    "ORL": "1610612753",
-    "PHI": "1610612755",
-    "PHX": "1610612756",
-    "POR": "1610612757",
-    "SAC": "1610612758",
-    "SAS": "1610612759",
-    "TOR": "1610612761",
-    "UTA": "1610612762",
-    "WAS": "1610612764",
-    "GS": "1610612744",
-    "NO": "1610612740",
-    "SA": "1610612759",
-    "NY": "1610612752",
-}
-
-
 class BallDontLieProvider(SportsProvider):
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
@@ -105,16 +67,8 @@ class BallDontLieProvider(SportsProvider):
 
         home_team = home.get("team") or {}
         away_team = away.get("team") or {}
-        home_abbr = str(home_team.get("abbreviation") or "").upper()
-        away_abbr = str(away_team.get("abbreviation") or "").upper()
-        if league.upper() == "NBA":
-            # ESPN's team.id values are provider-internal and do not match our canonical NBA ids.
-            # Always map NBA teams by abbreviation first to align with seeded Team.external_team_id.
-            home_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(home_abbr) or str(home_team.get("id") or "").strip()
-            away_external_team_id = ABBR_TO_EXTERNAL_TEAM_ID.get(away_abbr) or str(away_team.get("id") or "").strip()
-        else:
-            home_external_team_id = home_abbr
-            away_external_team_id = away_abbr
+        home_external_team_id = str(home_team.get("id") or "").strip()
+        away_external_team_id = str(away_team.get("id") or "").strip()
         if not home_external_team_id or not away_external_team_id:
             return None
 
