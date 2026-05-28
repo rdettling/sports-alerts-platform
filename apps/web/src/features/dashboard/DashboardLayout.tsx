@@ -2,41 +2,55 @@ import { useMemo, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/auth-context";
-import { AdminView, AlertsView, FollowingView, GamesView } from "./index";
-import { DASHBOARD_ROUTES, DashboardRouteMeta, DashboardShellProvider, type HeaderSyncItem } from "./components/shell";
+import { AdminView } from "./components/AdminView";
+import { AlertsView } from "./components/AlertsView";
+import { FollowingView } from "./components/FollowingView";
+import { GamesView } from "./components/GamesView";
+import { DashboardShellProvider, type HeaderSyncItem } from "./components/dashboard-shell-context";
 
-function NavIcon({ routeKey }: { routeKey: string }) {
-  if (routeKey === "games") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M7.5 9.2h9M7.5 14.8h9M12 4v16" />
-      </svg>
-    );
-  }
-  if (routeKey === "following") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 6.5h14M5 12h10M5 17.5h14" />
-        <path d="M16.8 9.8l2.6 2.2-2.6 2.2" />
-      </svg>
-    );
-  }
-  if (routeKey === "alerts") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 4a5 5 0 0 0-5 5v2.8c0 .8-.3 1.6-.8 2.3L5 16h14l-1.2-1.9a4 4 0 0 1-.8-2.3V9a5 5 0 0 0-5-5Z" />
-        <path d="M10 18a2 2 0 0 0 4 0" />
-      </svg>
-    );
-  }
-  return (
+type DashboardRouteKey = "games" | "following" | "alerts" | "admin";
+
+type DashboardRouteMeta = {
+  key: DashboardRouteKey;
+  path: string;
+  label: string;
+  subtitle: string;
+  adminOnly?: boolean;
+};
+
+const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
+  { key: "games", path: "games", label: "Games", subtitle: "NBA game slate and follow actions" },
+  { key: "following", path: "following", label: "Following", subtitle: "Manage your followed teams and games" },
+  { key: "alerts", path: "alerts", label: "Alerts", subtitle: "Configure rules and review delivery history" },
+  { key: "admin", path: "admin", label: "Admin", subtitle: "Operational telemetry and test tools", adminOnly: true },
+];
+
+const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
+  games: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M7.5 9.2h9M7.5 14.8h9M12 4v16" />
+    </svg>
+  ),
+  following: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 6.5h14M5 12h10M5 17.5h14" />
+      <path d="M16.8 9.8l2.6 2.2-2.6 2.2" />
+    </svg>
+  ),
+  alerts: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4a5 5 0 0 0-5 5v2.8c0 .8-.3 1.6-.8 2.3L5 16h14l-1.2-1.9a4 4 0 0 1-.8-2.3V9a5 5 0 0 0-5-5Z" />
+      <path d="M10 18a2 2 0 0 0 4 0" />
+    </svg>
+  ),
+  admin: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="4.5" y="4.5" width="15" height="15" rx="2.2" />
       <path d="M8 8h8M8 12h8M8 16h8" />
     </svg>
-  );
-}
+  ),
+};
 
 function routeForPath(pathname: string): DashboardRouteMeta {
   const segment = pathname.split("/").filter(Boolean)[0] ?? "games";
@@ -85,7 +99,7 @@ export function DashboardLayout() {
                 className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`.trim()}
               >
                 <span className="sidebar-icon" aria-hidden>
-                  <NavIcon routeKey={route.key} />
+                  {ROUTE_ICON_BY_KEY[route.key]}
                 </span>
                 <span>{route.label}</span>
               </NavLink>

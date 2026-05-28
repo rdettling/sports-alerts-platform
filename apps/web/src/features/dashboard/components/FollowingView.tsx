@@ -14,7 +14,7 @@ import {
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../utils/telemetry-format";
-import { useDashboardShell } from "./shell";
+import { useDashboardShell } from "./dashboard-shell-context";
 import { useFollowingData } from "../hooks/useFollowingData";
 
 export function FollowingView({ token }: { token: string }) {

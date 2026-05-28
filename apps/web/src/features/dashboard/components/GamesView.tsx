@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Game, type Team, unfollowGame } from "../../../shared/api";
-import { TeamLogo, formatGameTime, formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo,  formatMoneyline, leagueLogoUrl, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel, formatSyncAge } from "../utils/telemetry-format";
-import { useDashboardShell } from "./shell";
+import { useDashboardShell } from "./dashboard-shell-context";
 import { useGamesData } from "../hooks/useGamesData";
 
 type GameDayGroup = { label: string; items: Game[] };

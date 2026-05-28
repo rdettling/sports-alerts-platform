@@ -10,7 +10,7 @@ import {
   type AlertHistoryItem,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { useDashboardShell } from "./shell";
+import { useDashboardShell } from "./dashboard-shell-context";
 
 const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
   NBA: ["game_start", "close_game_late", "final_result"],
