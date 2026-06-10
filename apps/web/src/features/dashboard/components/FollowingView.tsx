@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  followLeague,
   followTeam,
+  type League,
   unfollowGame,
+  unfollowLeague,
   unfollowTeam,
   type Team,
 } from "../../../shared/api";
@@ -27,6 +30,7 @@ export function FollowingView({ token }: { token: string }) {
 
   const teams = data?.teams ?? [];
   const followedTeams = data?.follows.teams ?? [];
+  const followedLeagues = data?.follows.leagues ?? [];
   const followedGames = data?.games ?? [];
 
   useEffect(() => {
@@ -57,6 +61,24 @@ export function FollowingView({ token }: { token: string }) {
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });
 
+  const followLeagueMutation = useMutation({
+    mutationFn: (league: League) => followLeague(token, league),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["following-page", token] });
+      await queryClient.invalidateQueries({ queryKey: ["updates-page", token] });
+    },
+    onError: (mutationError) => setError(messageFromUnknown(mutationError)),
+  });
+
+  const unfollowLeagueMutation = useMutation({
+    mutationFn: (league: League) => unfollowLeague(token, league),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["following-page", token] });
+      await queryClient.invalidateQueries({ queryKey: ["updates-page", token] });
+    },
+    onError: (mutationError) => setError(messageFromUnknown(mutationError)),
+  });
+
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedTeamIds = useMemo(() => new Set(followedTeams.map((team) => team.id)), [followedTeams]);
 
@@ -75,6 +97,32 @@ export function FollowingView({ token }: { token: string }) {
 
       {!isLoading ? (
         <div className="following-two-col-panels">
+          <section className="panel following-simple-section">
+            <h4>Followed Leagues ({followedLeagues.length})</h4>
+            <div className="chip-row">
+              {(["NBA", "MLB"] as League[]).map((league) => {
+                const isFollowed = followedLeagues.some((item) => item.league === league);
+                return (
+                  <button
+                    key={league}
+                    className={`chip-btn ${isFollowed ? "active" : ""}`.trim()}
+                    type="button"
+                    disabled={followLeagueMutation.isPending || unfollowLeagueMutation.isPending}
+                    onClick={async () => {
+                      if (isFollowed) {
+                        await unfollowLeagueMutation.mutateAsync(league);
+                      } else {
+                        await followLeagueMutation.mutateAsync(league);
+                      }
+                    }}
+                  >
+                    {isFollowed ? `${league} Following` : `Follow ${league}`}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <section className="panel following-simple-section">
             <h4>Followed Teams ({followedTeams.length})</h4>
             <div className="following-team-autocomplete">

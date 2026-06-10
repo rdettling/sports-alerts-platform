@@ -43,9 +43,30 @@ export type Game = {
   } | null;
 };
 
-export type CurrentFollows = { teams: Team[]; games: Game[] };
-
 export type League = "NBA" | "MLB";
+
+export type LeagueFollow = { league: League };
+
+export type CurrentFollows = { leagues: LeagueFollow[]; teams: Team[]; games: Game[] };
+
+export type SportsUpdate = {
+  id: number;
+  title: string;
+  summary: string | null;
+  article_url: string;
+  source_name: string;
+  published_at: string | null;
+  league: League;
+  scope: "team" | "league";
+  importance: "low" | "medium" | "high" | "critical";
+  confidence: "low" | "medium" | "high" | null;
+  tags: string[];
+  reason: string | null;
+  team_abbreviations: string[];
+  matched_scope: "team" | "league";
+};
+
+export type SportsUpdatesFeed = { items: SportsUpdate[] };
 
 export type AlertPreference = {
   league: League;

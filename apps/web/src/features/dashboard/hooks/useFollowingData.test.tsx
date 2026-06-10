@@ -6,6 +6,7 @@ import { useFollowingData } from "./useFollowingData";
 
 vi.mock("../../../shared/api", () => ({
   listFollows: vi.fn(async () => ({
+    leagues: [],
     teams: [],
     games: [
       {

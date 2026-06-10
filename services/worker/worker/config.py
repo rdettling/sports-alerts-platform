@@ -32,6 +32,16 @@ class WorkerSettings(BaseSettings):
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str
     resend_api_url: str = "https://api.resend.com/emails"
+    updates_rss_nba_url: str = "https://www.cbssports.com/rss/headlines/nba"
+    updates_rss_mlb_url: str = "https://www.cbssports.com/rss/headlines/mlb"
+    updates_sync_interval_seconds: int = 21600
+    updates_classify_idle_seconds: int = 900
+    updates_classify_active_seconds: int = 60
+    updates_classify_batch_size: int = 10
+    openai_api_key: str = ""
+    openai_api_base_url: str = "https://api.openai.com/v1"
+    openai_updates_model: str = "gpt-4o-mini"
+    updates_classifier_version: str = "v1"
 
 
 settings = WorkerSettings()
