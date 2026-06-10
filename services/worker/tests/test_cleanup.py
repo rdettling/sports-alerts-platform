@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, Team
+from app.db.models import Game, GameOddsCurrent, SentAlert, Team, User, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
 from worker.cleanup import cleanup_games_outside_window
 
 
@@ -27,6 +27,38 @@ def test_cleanup_removes_games_outside_window(db_session):
         is_final=False,
     )
     db_session.add_all([old_game, current_game])
+    db_session.commit()
+    user = User(email="cleanup@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.add_all(
+        [
+            GameOddsCurrent(
+                game_id=old_game.id,
+                provider="the_odds_api",
+                market="h2h",
+                home_moneyline=-120,
+                away_moneyline=110,
+                fetched_at=datetime.now(timezone.utc),
+            ),
+            SentAlert(
+                user_id=user.id,
+                game_id=old_game.id,
+                alert_type="close_game",
+                delivery_channel="email",
+                delivery_status="sent",
+                dedupe_key="cleanup-old-game-alert",
+            ),
+            UserGameAlertOverride(
+                user_id=user.id,
+                game_id=old_game.id,
+                alert_type="close_game",
+                is_enabled_override=True,
+            ),
+            UserGameFollow(user_id=user.id, game_id=old_game.id),
+            UserGameUnfollow(user_id=user.id, game_id=old_game.id),
+        ]
+    )
     db_session.commit()
 
     removed = cleanup_games_outside_window(db_session)
