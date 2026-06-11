@@ -32,8 +32,8 @@ class WorkerSettings(BaseSettings):
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str
     resend_api_url: str = "https://api.resend.com/emails"
-    updates_rss_nba_url: str = "https://www.cbssports.com/rss/headlines/nba"
-    updates_rss_mlb_url: str = "https://www.cbssports.com/rss/headlines/mlb"
+    updates_rss_nba_url: str = "https://www.espn.com/espn/rss/nba/news"
+    updates_rss_mlb_url: str = "https://www.espn.com/espn/rss/mlb/news"
     updates_sync_interval_seconds: int = 21600
     updates_classify_idle_seconds: int = 900
     updates_classify_active_seconds: int = 60

@@ -44,6 +44,32 @@ RSS_BODY_SHARED_CROSS_FEED = """<?xml version="1.0" encoding="UTF-8" ?>
 </rss>
 """
 
+RSS_BODY_PROMO = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss>
+  <channel>
+    <item>
+      <title>Use DraftKings promo code for $200 in bonus bets by targeting Knicks-Spurs NBA Finals Game 4, MLB on Wednesday</title>
+      <link>https://www.cbssports.com/betting/news/use-draftkings-promo-code-for-200-bonus-bets-knicks-spurs-nba-finals-game-4-mlb-wednesday/</link>
+      <description>DraftKings offers $200 in bonus bets instantly after your first $5 wager.</description>
+      <pubDate>Tue, 10 Jun 2026 12:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
+RSS_BODY_FILLER = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss>
+  <channel>
+    <item>
+      <title>Knicks vs. Spurs odds, prediction: 2026 NBA Finals picks, Game 4 best bets by model on 26-10 run</title>
+      <link>https://www.cbssports.com/nba/news/knicks-vs-spurs-odds-prediction-2026-nba-finals-picks-game-4-best-bets-by-model-on-26-10-run/</link>
+      <description>Odds, prediction and best bets for Game 4 of the NBA Finals.</description>
+      <pubDate>Tue, 10 Jun 2026 12:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
 
 def test_ingest_updates_feed_creates_pending_items_once(monkeypatch, db_session):
     monkeypatch.setattr(updates.httpx, "get", lambda *args, **kwargs: DummyResponse(text=RSS_BODY))
@@ -70,9 +96,9 @@ def test_ingest_updates_feed_dedupes_source_items(monkeypatch, db_session):
 
 def test_ingest_updates_feed_dedupes_shared_story_across_feeds(monkeypatch, db_session):
     def fake_get(url, *args, **kwargs):
-        if "headlines/nba" in url:
+        if "/nba/" in url or url.endswith("/nba/news"):
             return DummyResponse(text=RSS_BODY_SHARED_CROSS_FEED)
-        if "headlines/mlb" in url:
+        if "/mlb/" in url or url.endswith("/mlb/news"):
             return DummyResponse(text=RSS_BODY_SHARED_CROSS_FEED)
         raise AssertionError(f"Unexpected URL: {url}")
 
@@ -87,6 +113,32 @@ def test_ingest_updates_feed_dedupes_shared_story_across_feeds(monkeypatch, db_s
     assert second["created"] == 0
     assert len(source_items) == 1
     assert len(classified_items) == 1
+
+
+def test_ingest_updates_feed_suppresses_betting_promotions(monkeypatch, db_session):
+    monkeypatch.setattr(updates.httpx, "get", lambda *args, **kwargs: DummyResponse(text=RSS_BODY_PROMO))
+
+    result = updates.ingest_updates_feed("NBA")
+
+    source_items = db_session.scalars(select(SportsUpdateSourceItem)).all()
+    classified_items = db_session.scalars(select(SportsUpdate)).all()
+    assert result["fetched"] == 0
+    assert result["created"] == 0
+    assert source_items == []
+    assert classified_items == []
+
+
+def test_ingest_updates_feed_suppresses_odds_and_prediction_filler(monkeypatch, db_session):
+    monkeypatch.setattr(updates.httpx, "get", lambda *args, **kwargs: DummyResponse(text=RSS_BODY_FILLER))
+
+    result = updates.ingest_updates_feed("NBA")
+
+    source_items = db_session.scalars(select(SportsUpdateSourceItem)).all()
+    classified_items = db_session.scalars(select(SportsUpdate)).all()
+    assert result["fetched"] == 0
+    assert result["created"] == 0
+    assert source_items == []
+    assert classified_items == []
 
 
 def test_classify_pending_updates_leaves_items_pending_without_openai_key(monkeypatch, db_session):

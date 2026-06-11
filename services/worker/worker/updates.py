@@ -19,6 +19,30 @@ from worker.config import settings
 from worker.db import SessionLocal
 
 logger = logging.getLogger(__name__)
+SUPPRESSED_URL_PATH_PREFIXES = ("/betting/news/",)
+SUPPRESSED_TEXT_FRAGMENTS = (
+    "promo code",
+    "bonus bets",
+    "betmgm",
+    "draftkings",
+    "fanduel",
+    "caesars",
+    "sportsbook",
+    "best bets",
+    "prop bets",
+    "prediction",
+    "predictions",
+    "picks by model",
+    "picks by expert",
+    "expert picks",
+    "best pick",
+    "odds, prediction",
+    "odds and prediction",
+    "to watch, best bets, odds",
+    "where to watch",
+    "tv channel",
+    "start time, schedule",
+)
 
 CLASSIFIER_SCHEMA = {
     "type": "object",
@@ -45,8 +69,8 @@ class FeedConfig:
 
 
 FEEDS: dict[str, FeedConfig] = {
-    "NBA": FeedConfig(league="NBA", feed_key="cbs_nba", source_name="CBS Sports", url=settings.updates_rss_nba_url),
-    "MLB": FeedConfig(league="MLB", feed_key="cbs_mlb", source_name="CBS Sports", url=settings.updates_rss_mlb_url),
+    "NBA": FeedConfig(league="NBA", feed_key="espn_nba", source_name="ESPN", url=settings.updates_rss_nba_url),
+    "MLB": FeedConfig(league="MLB", feed_key="espn_mlb", source_name="ESPN", url=settings.updates_rss_mlb_url),
 }
 
 
@@ -62,6 +86,16 @@ def _canonicalize_url(url: str) -> str:
 
 def _normalize_title(text: str) -> str:
     return " ".join(text.lower().split())
+
+
+def _should_suppress_item(*, title: str, summary: str | None, canonical_url: str) -> bool:
+    path = urlsplit(canonical_url).path.lower()
+    if any(path.startswith(prefix) for prefix in SUPPRESSED_URL_PATH_PREFIXES):
+        return True
+
+    normalized_title = _normalize_title(title)
+    haystack = " ".join(part for part in (normalized_title, (summary or "").lower())).lower()
+    return any(fragment in haystack for fragment in SUPPRESSED_TEXT_FRAGMENTS)
 
 
 def _dedupe_key(*, canonical_url: str, league: str, source_name: str, title: str, published_at: datetime | None) -> str:
@@ -105,6 +139,8 @@ def _fetch_feed_items(feed: FeedConfig) -> list[dict[str, Any]]:
         summary = _extract_text(item, "description")
         published_at = _parse_datetime(_extract_text(item, "pubDate"))
         canonical_url = _canonicalize_url(link)
+        if _should_suppress_item(title=title, summary=summary, canonical_url=canonical_url):
+            continue
         dedupe_key = _dedupe_key(
             canonical_url=canonical_url,
             league=feed.league,
