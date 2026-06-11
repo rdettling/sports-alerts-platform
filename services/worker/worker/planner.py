@@ -216,6 +216,9 @@ def build_live_requests(db: Session, league: str, now: datetime | None = None) -
         (start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)).strftime("%Y%m%d")
         for start_time, in candidate_rows
     }
+    # ESPN can bucket late-evening U.S. games under the previous scoreboard date
+    # even when their UTC start spills into the next day.
+    dates.add((at - timedelta(days=1)).strftime("%Y%m%d"))
     # Include current day to absorb provider status lag around day boundaries.
     dates.add(at.strftime("%Y%m%d"))
     return [ScoreboardRequest(date=value) for value in sorted(dates)]

@@ -16,7 +16,7 @@ from app.db.models import (
 )
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import MoneylineOdds
-from worker.planner import FetchPlan
+from worker.planner import FetchPlan, build_live_requests
 from worker.providers.base import ProviderGame, ScoreboardRequest
 
 
@@ -99,6 +99,31 @@ class MlbInningProvider:
                 away_score=1,
                 period=7,
                 clock="Top 7th",
+                is_final=False,
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
+class LongClockProvider:
+    def __init__(self, *, home_external_team_id: str, away_external_team_id: str):
+        self.home_external_team_id = home_external_team_id
+        self.away_external_team_id = away_external_team_id
+
+    def fetch_games(self, league, requests):
+        return [
+            ProviderGame(
+                external_game_id="game-long-clock",
+                home_external_team_id=self.home_external_team_id,
+                away_external_team_id=self.away_external_team_id,
+                scheduled_start_time=datetime.now(timezone.utc),
+                status="in_progress",
+                home_score=2,
+                away_score=1,
+                period=1,
+                clock="Rain Delay, Bottom 1st",
                 is_final=False,
             )
         ]
@@ -205,6 +230,41 @@ def test_ingest_creates_final_result_alert(db_session):
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
     assert sent[0].delivery_status == "pending"
+
+
+def test_live_sync_persists_long_clock_values(db_session):
+    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc())).all()
+    result = run_ingest_cycle(
+        LongClockProvider(
+            home_external_team_id=teams[0].external_team_id,
+            away_external_team_id=teams[1].external_team_id,
+        )
+    )
+    assert result["status"] == "success"
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-long-clock"))
+    assert game is not None
+    assert game.clock == "Rain Delay, Bottom 1st"
+
+
+def test_build_live_requests_includes_previous_scoreboard_date_for_midnight_utc_games(db_session):
+    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc())).all()
+    now = datetime(2026, 6, 11, 1, 0, tzinfo=timezone.utc)
+    db_session.add(
+        Game(
+            external_game_id="nba-midnight-utc",
+            league="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=datetime(2026, 6, 11, 0, 30, tzinfo=timezone.utc),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    requests = build_live_requests(db_session, "NBA", now=now)
+    assert [request.date for request in requests] == ["20260610", "20260611"]
 
 
 def test_ingest_respects_game_override_over_league_default(db_session):
