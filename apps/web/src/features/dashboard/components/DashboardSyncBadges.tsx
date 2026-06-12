@@ -11,9 +11,25 @@ export function DashboardSyncBadges({
 }: {
   items: HeaderSyncItem[];
   className?: string;
-  variant?: "default" | "sidebar";
+  variant?: "default" | "sidebar" | "topbar";
 }) {
-  const visibleItems = items.slice(0, 3);
+  const visibleItems = items;
+
+  if (variant === "topbar") {
+    return (
+      <div className={`sync-strip ${className}`.trim()} aria-label="Data sync status">
+        <span className="sync-strip-title">Last sync</span>
+        <div className="sync-strip-items">
+          {visibleItems.map((item) => (
+            <span key={item.key} className="sync-strip-item" title={`${item.label}: ${item.value}`}>
+              <strong>{item.label}</strong>
+              <span>{compactAgeLabel(item.value)}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`sync-table ${className}`.trim()} aria-label="Data sync status">

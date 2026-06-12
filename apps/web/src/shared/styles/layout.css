@@ -96,6 +96,12 @@
   gap: var(--space-4);
 }
 
+.topbar-heading {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .topbar h2 {
   margin: 0;
   font-size: 1.5rem;
@@ -160,6 +166,53 @@
 
 .sidebar-sync {
   max-width: 100%;
+}
+
+.topbar-sync {
+  margin-top: 0.15rem;
+}
+
+.sync-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.sync-strip-title {
+  color: #6a7895;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sync-strip-items {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.sync-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.52rem;
+  border-radius: 999px;
+  border: 1px solid #d7e2f5;
+  background: rgba(247, 250, 255, 0.92);
+  color: #4f607f;
+  font-size: 0.84rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sync-strip-item strong {
+  color: #223a68;
+  font-size: 0.82rem;
+  font-weight: 750;
 }
 
 .topbar-account {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
@@ -26,6 +26,7 @@ export function GamesView({ token }: { token: string }) {
   const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
+  const hasAutoSelectedInitialDay = useRef(false);
   const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride } =
     useGameAlertSettings(token, setError);
 
@@ -70,11 +71,13 @@ export function GamesView({ token }: { token: string }) {
   }, [dayFilter, dayOptions]);
 
   useEffect(() => {
+    if (hasAutoSelectedInitialDay.current) return;
     if (dayFilter !== "all") return;
     if (dayOptions.length === 0) return;
     const todayKey = localDateKey(new Date().toISOString());
     const todayOption = dayOptions.find((day) => day.key === todayKey);
     if (todayOption) {
+      hasAutoSelectedInitialDay.current = true;
       setDayFilter(todayOption.key);
     }
   }, [dayFilter, dayOptions]);

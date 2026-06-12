@@ -79,7 +79,6 @@ export function DashboardLayout() {
         <aside className="app-sidebar">
           <div className="sidebar-brand">
             <h1>Live Game Alerts</h1>
-            <DashboardSyncBadges items={headerSyncItems} className="sidebar-sync" variant="sidebar" />
           </div>
           <nav className="sidebar-nav">
             {navRoutes.map((route) => (
@@ -99,9 +98,10 @@ export function DashboardLayout() {
 
         <div className="app-main">
           <header className="topbar">
-            <div>
+            <div className="topbar-heading">
               <h2>{currentRoute.label}</h2>
               <p>{currentRoute.subtitle}</p>
+              {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
             </div>
             <div className="topbar-meta">
               <div className="topbar-account">
