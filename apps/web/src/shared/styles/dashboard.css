@@ -180,6 +180,17 @@
   min-width: 0;
 }
 
+.games-context-label {
+  max-width: 24rem;
+  margin-top: 0.16rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  font-weight: 600;
+  color: #5a6784;
+  padding: 0 0.24rem 0.18rem;
+  letter-spacing: 0.01em;
+}
+
 .games-team-row {
   display: flex;
   align-items: center;

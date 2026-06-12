@@ -36,6 +36,69 @@ def test_provider_parses_espn_payload_shape():
     assert game.status == "in_progress"
     assert game.home_score == 102
     assert game.away_score == 98
+    assert game.context_label is None
+
+
+def test_provider_builds_nba_context_label_from_round_and_series():
+    payload = {
+        "events": [
+            {
+                "id": "401999001",
+                "date": "2026-06-14T00:30Z",
+                "season": {"year": 2026, "type": 3, "slug": "post-season"},
+                "competitions": [
+                    {
+                        "notes": [{"headline": "NBA Finals - Game 5"}],
+                        "series": {"summary": "NY leads series 3-1"},
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "24", "abbreviation": "SA"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "18", "abbreviation": "NY"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260613")])
+    assert len(schedule) == 1
+    assert schedule[0].context_label == "NBA Finals - Game 5 · NY leads series 3-1"
+
+
+def test_provider_builds_world_cup_stage_context_label():
+    payload = {
+        "events": [
+            {
+                "id": "760416",
+                "date": "2026-06-12T19:00Z",
+                "season": {"year": 2026, "type": 13802, "slug": "group-stage"},
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "660", "abbreviation": "USA"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "203", "abbreviation": "MEX"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("WORLD_CUP", [ScoreboardRequest(date="20260612")])
+    assert len(schedule) == 1
+    assert schedule[0].context_label == "Group Stage"
 
 
 def test_provider_skips_if_necessary_playoff_games():

@@ -11,6 +11,7 @@ function makeGame(overrides: Partial<Game>): Game {
     home_team_id: 10,
     away_team_id: 11,
     scheduled_start_time: "2026-05-28T17:10:00Z",
+    context_label: null,
     status: "scheduled",
     home_score: null,
     away_score: null,

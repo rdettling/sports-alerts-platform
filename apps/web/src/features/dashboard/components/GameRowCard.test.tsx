@@ -22,6 +22,7 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     home_team_id: 1,
     away_team_id: 2,
     scheduled_start_time: "2026-05-28T01:00:00Z",
+    context_label: null,
     status: "scheduled",
     home_score: null,
     away_score: null,
@@ -109,5 +110,34 @@ describe("GameRowCard", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Follow" })).toBeNull();
+  });
+
+  it("shows context label when present", () => {
+    render(
+      <GameRowCard
+        game={makeGame({ context_label: "NBA Finals - Game 5 · Knicks lead series 3-1" })}
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+        showContextLabel
+      />,
+    );
+
+    expect(screen.getByText("NBA Finals - Game 5 · Knicks lead series 3-1")).toBeInTheDocument();
+  });
+
+  it("hides context label when not enabled for the surface", () => {
+    render(
+      <GameRowCard
+        game={makeGame({ context_label: "Group Stage" })}
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.queryByText("Group Stage")).toBeNull();
   });
 });

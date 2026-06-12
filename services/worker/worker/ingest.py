@@ -466,6 +466,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
     if existing:
         score_change_event = _classify_world_cup_score_change(existing, payload, league)
         before = (
+            existing.context_label,
             existing.status,
             existing.home_score,
             existing.away_score,
@@ -473,6 +474,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
             existing.clock,
             existing.is_final,
         )
+        existing.context_label = payload.context_label
         existing.status = payload.status
         existing.home_score = payload.home_score
         existing.away_score = payload.away_score
@@ -481,6 +483,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
         existing.is_final = payload.is_final
         existing.last_ingested_at = datetime.now(timezone.utc)
         after = (
+            existing.context_label,
             existing.status,
             existing.home_score,
             existing.away_score,
@@ -496,6 +499,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
         home_team_id=home_id,
         away_team_id=away_id,
         scheduled_start_time=payload.scheduled_start_time,
+        context_label=payload.context_label,
         status=payload.status,
         home_score=payload.home_score,
         away_score=payload.away_score,

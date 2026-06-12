@@ -209,6 +209,26 @@ class RepeatMatchupProvider:
         return len(requests)
 
 
+class ContextLabelProvider:
+    def __init__(self, context_label: str | None):
+        self.context_label = context_label
+
+    def fetch_games(self, league, requests):
+        return [
+            ProviderGame(
+                external_game_id="game-context",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                scheduled_start_time=datetime.now(timezone.utc),
+                status="scheduled",
+                context_label=self.context_label,
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
 def test_ingest_run_success(db_session):
     provider = SuccessProvider()
     result = run_ingest_cycle(provider)
@@ -894,3 +914,18 @@ def test_live_sync_promotes_scheduled_game_to_live(db_session):
     game = db_session.scalar(select(Game).where(Game.external_game_id == "mlb-angels-like", Game.league == "MLB"))
     assert game is not None
     assert game.status == "in_progress"
+
+
+def test_ingest_persists_and_refreshes_context_label(db_session):
+    first = run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · NY leads series 3-1"), league="NBA")
+    assert first["status"] == "success"
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-context"))
+    assert game is not None
+    assert game.context_label == "NBA Finals - Game 5 · NY leads series 3-1"
+
+    second = run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · Series tied 3-3"), league="NBA")
+    assert second["status"] == "success"
+
+    db_session.refresh(game)
+    assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"

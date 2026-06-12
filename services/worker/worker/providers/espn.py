@@ -15,6 +15,28 @@ from worker.providers.base import ProviderGame, ScoreboardRequest, SportsProvide
 logger = logging.getLogger(__name__)
 
 
+def _clean_text(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _format_world_cup_stage(slug: str | None) -> str | None:
+    if not slug:
+        return None
+    mapping = {
+        "group-stage": "Group Stage",
+        "round-of-32": "Round of 32",
+        "rd-of-16": "Round of 16",
+        "quarterfinals": "Quarterfinals",
+        "semifinals": "Semifinals",
+        "3rd-place-match": "3rd-Place Match",
+        "final": "Final",
+    }
+    return mapping.get(slug)
+
+
 class EspnScoreboardProvider(SportsProvider):
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
@@ -97,12 +119,27 @@ class EspnScoreboardProvider(SportsProvider):
         elif normalized_league == "WORLD_CUP" and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
+        context_label: str | None = None
+        if normalized_league == "NBA":
+            round_label = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
+            series_summary = _clean_text(((competition.get("series") or {}).get("summary")))
+            if round_label and series_summary:
+                context_label = f"{round_label} · {series_summary}"
+            else:
+                context_label = round_label or series_summary
+        elif normalized_league == "WORLD_CUP":
+            season = event.get("season") or {}
+            season_slug = _clean_text(season.get("slug"))
+            season_type = season.get("type")
+            season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
+            context_label = _format_world_cup_stage(season_slug) or season_type_name
 
         return ProviderGame(
             external_game_id=str(event.get("id")),
             home_external_team_id=home_external_team_id,
             away_external_team_id=away_external_team_id,
             scheduled_start_time=scheduled_start_time,
+            context_label=context_label,
             status=status,
             home_score=int(home.get("score")) if home.get("score") else None,
             away_score=int(away.get("score")) if away.get("score") else None,

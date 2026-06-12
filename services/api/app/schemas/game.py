@@ -17,6 +17,7 @@ class GameOut(BaseModel):
     home_team_id: int
     away_team_id: int
     scheduled_start_time: datetime
+    context_label: str | None
     status: str
     home_score: int | None
     away_score: int | None

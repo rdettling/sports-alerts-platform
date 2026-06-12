@@ -28,6 +28,7 @@ export type Game = {
   home_team_id: number;
   away_team_id: number;
   scheduled_start_time: string;
+  context_label: string | null;
   status: string;
   home_score: number | null;
   away_score: number | null;

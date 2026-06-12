@@ -118,6 +118,7 @@ export function GamesView({ token }: { token: string }) {
                             away={away}
                             isFollowed={isFollowed}
                             statusLabel={gameStatusLabel(game)}
+                            showContextLabel
                             actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
                             onFollow={() => toggleMutation.mutate({ gameId: game.id, isFollowed: false })}
                             onUnfollow={async () => {

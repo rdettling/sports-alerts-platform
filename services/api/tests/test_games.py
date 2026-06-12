@@ -69,6 +69,7 @@ def test_games_include_odds_when_available(client):
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
+    assert payload[0]["context_label"] is None
     assert payload[0]["odds"]["home_moneyline"] == -145
     assert payload[0]["odds"]["away_moneyline"] == 125
     assert payload[0]["odds"]["bookmaker"] == "DraftKings"
@@ -175,3 +176,30 @@ def test_games_hide_disabled_league(client):
     response = client.get("/games")
     assert response.status_code == 200
     assert {row["external_game_id"] for row in response.json()} == set()
+
+
+def test_games_return_context_label(client):
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        db.add(
+            Game(
+                external_game_id="test-context-game",
+                league="NBA",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+                context_label="NBA Finals - Game 5 · NY leads series 3-1",
+                status="scheduled",
+                is_final=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games?league=NBA")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["context_label"] == "NBA Finals - Game 5 · NY leads series 3-1"

@@ -17,6 +17,7 @@ class ProviderGame:
     away_external_team_id: str
     scheduled_start_time: datetime
     status: str
+    context_label: str | None = None
     home_score: int | None = None
     away_score: int | None = None
     period: int | None = None

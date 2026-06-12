@@ -7,6 +7,7 @@ type GameRowCardProps = {
   away: Team;
   isFollowed: boolean;
   statusLabel: string;
+  showContextLabel?: boolean;
   actionsDisabled?: boolean;
   onFollow?: () => void;
   onUnfollow?: () => void;
@@ -19,6 +20,7 @@ export function GameRowCard({
   away,
   isFollowed,
   statusLabel,
+  showContextLabel = false,
   actionsDisabled = false,
   onFollow,
   onUnfollow,
@@ -62,6 +64,7 @@ export function GameRowCard({
             </div>
             <div className="games-team-score">{homeValueText}</div>
           </div>
+          {showContextLabel && game.context_label ? <div className="games-context-label">{game.context_label}</div> : null}
         </div>
 
         <div className="games-meta-rail">
