@@ -9,14 +9,6 @@ export function followTeam(token: string, teamId: number): Promise<{ status: str
   return apiRequest<{ status: string }>(`/follows/teams/${teamId}`, { method: "POST", token });
 }
 
-export function followLeague(token: string, league: "NBA" | "MLB"): Promise<{ status: string }> {
-  return apiRequest<{ status: string }>(`/follows/leagues/${league}`, { method: "POST", token });
-}
-
-export function unfollowLeague(token: string, league: "NBA" | "MLB"): Promise<{ status: string }> {
-  return apiRequest<{ status: string }>(`/follows/leagues/${league}`, { method: "DELETE", token });
-}
-
 export function unfollowTeam(token: string, teamId: number): Promise<{ status: string }> {
   return apiRequest<{ status: string }>(`/follows/teams/${teamId}`, { method: "DELETE", token });
 }

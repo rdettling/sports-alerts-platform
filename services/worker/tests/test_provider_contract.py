@@ -132,6 +132,42 @@ def test_provider_uses_numeric_team_ids_for_mlb():
     assert schedule[0].away_external_team_id == "11"
 
 
+def test_provider_maps_status_postponed_payload_to_postponed():
+    payload = {
+        "events": [
+            {
+                "id": "401815716",
+                "date": "2026-06-11T23:40:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {
+                                "state": "post",
+                                "name": "STATUS_POSTPONED",
+                                "completed": False,
+                                "description": "Postponed",
+                                "shortDetail": "Postponed",
+                            },
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "4", "abbreviation": "CHW"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "15", "abbreviation": "ATL"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260611")])
+    assert len(schedule) == 1
+    assert schedule[0].status == "postponed"
+    assert schedule[0].is_final is False
+
+
 def test_provider_skips_events_with_invalid_placeholder_team_ids():
     payload = {
         "events": [

@@ -44,4 +44,14 @@ describe("gameStatusLabel", () => {
     );
     expect(label).toBe("Final");
   });
+
+  it("shows postponed label for postponed games", () => {
+    const label = gameStatusLabel(
+      makeGame({
+        status: "postponed",
+        is_final: false,
+      }),
+    );
+    expect(label).toBe("Postponed");
+  });
 });

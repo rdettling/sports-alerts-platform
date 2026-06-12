@@ -15,9 +15,6 @@ def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
         ("delivery", None),
         ("live_sync", "MLB"),
         ("live_sync", "NBA"),
-        ("updates_classify", None),
-        ("updates_sync", "MLB"),
-        ("updates_sync", "NBA"),
     ]
     assert all(job.status == "queued" for job in jobs)
 

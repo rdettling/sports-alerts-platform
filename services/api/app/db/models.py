@@ -20,7 +20,6 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     team_follows = relationship("UserTeamFollow", back_populates="user")
-    league_follows = relationship("UserLeagueFollow", back_populates="user")
     game_follows = relationship("UserGameFollow", back_populates="user")
     game_unfollows = relationship("UserGameUnfollow", back_populates="user")
     alert_defaults = relationship("UserAlertDefault", back_populates="user")
@@ -102,18 +101,6 @@ class UserTeamFollow(Base):
 
     user = relationship("User", back_populates="team_follows")
     team = relationship("Team")
-
-
-class UserLeagueFollow(Base):
-    __tablename__ = "user_league_follows"
-    __table_args__ = (UniqueConstraint("user_id", "league", name="uq_user_league_follows_user_league"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    league: Mapped[str] = mapped_column(String(16))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user = relationship("User", back_populates="league_follows")
 
 
 class UserGameFollow(Base):
@@ -198,71 +185,6 @@ class SentAlert(Base):
 
 
 Index("ix_sent_alerts_delivery_status_sent_at", SentAlert.delivery_status, SentAlert.sent_at)
-
-
-class SportsUpdateSourceItem(Base):
-    __tablename__ = "sports_update_source_items"
-    __table_args__ = (
-        UniqueConstraint("dedupe_key", name="uq_sports_update_source_items_dedupe_key"),
-        Index("ix_sports_update_source_items_league_published", "league", "published_at"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    source_type: Mapped[str] = mapped_column(String(16), default="rss", index=True)
-    source_name: Mapped[str] = mapped_column(String(80))
-    feed_key: Mapped[str] = mapped_column(String(32), index=True)
-    league: Mapped[str] = mapped_column(String(16), index=True)
-    title: Mapped[str] = mapped_column(String(500))
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    article_url: Mapped[str] = mapped_column(String(1000))
-    canonical_url: Mapped[str] = mapped_column(String(1000))
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    dedupe_key: Mapped[str] = mapped_column(String(128))
-    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
-class SportsUpdate(Base):
-    __tablename__ = "sports_updates"
-    __table_args__ = (
-        UniqueConstraint("source_item_id", name="uq_sports_updates_source_item"),
-        Index("ix_sports_updates_status_created", "classifier_status", "created_at"),
-        Index("ix_sports_updates_scope_league", "scope", "league"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    source_item_id: Mapped[int] = mapped_column(ForeignKey("sports_update_source_items.id"))
-    league: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
-    scope: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
-    importance: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
-    confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    classifier_status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
-    classifier_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    source_item = relationship("SportsUpdateSourceItem")
-
-
-class SportsUpdateTeam(Base):
-    __tablename__ = "sports_update_teams"
-    __table_args__ = (
-        UniqueConstraint("sports_update_id", "team_id", name="uq_sports_update_teams_update_team"),
-        Index("ix_sports_update_teams_team", "team_id"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    sports_update_id: Mapped[int] = mapped_column(ForeignKey("sports_updates.id"))
-    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-
-    sports_update = relationship("SportsUpdate")
-    team = relationship("Team")
 
 
 class ApiCallRollupHourly(Base):

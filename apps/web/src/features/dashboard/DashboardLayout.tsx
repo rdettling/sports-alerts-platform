@@ -7,10 +7,9 @@ import { AlertsView } from "./components/AlertsView";
 import { DashboardSyncBadges } from "./components/DashboardSyncBadges";
 import { FollowingView } from "./components/FollowingView";
 import { GamesView } from "./components/GamesView";
-import { UpdatesView } from "./components/UpdatesView";
 import { useDashboardSyncItems } from "./hooks/useDashboardSyncItems";
 
-type DashboardRouteKey = "games" | "updates" | "following" | "alerts" | "admin";
+type DashboardRouteKey = "games" | "following" | "alerts" | "admin";
 
 type DashboardRouteMeta = {
   key: DashboardRouteKey;
@@ -22,7 +21,6 @@ type DashboardRouteMeta = {
 
 const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
   { key: "games", path: "games", label: "Games", subtitle: "Live game slate and follow actions" },
-  { key: "updates", path: "updates", label: "Updates", subtitle: "Personalized NBA and MLB news feed" },
   { key: "following", path: "following", label: "Following", subtitle: "Manage your followed teams and games" },
   { key: "alerts", path: "alerts", label: "Alerts", subtitle: "Configure rules and review delivery history" },
   { key: "admin", path: "admin", label: "Admin", subtitle: "Operational telemetry and test tools", adminOnly: true },
@@ -33,12 +31,6 @@ const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="8.5" />
       <path d="M7.5 9.2h9M7.5 14.8h9M12 4v16" />
-    </svg>
-  ),
-  updates: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 7.5h12M6 12h12M6 16.5h8" />
-      <path d="M17 16.5h1.5" />
     </svg>
   ),
   following: (
@@ -125,7 +117,6 @@ export function DashboardLayout() {
             <Routes>
               <Route path="/" element={<Navigate to="games" replace />} />
               <Route path="games" element={<GamesView token={token} />} />
-              <Route path="updates" element={<UpdatesView token={token} />} />
               <Route path="following" element={<FollowingView token={token} />} />
               <Route path="alerts" element={<AlertsView token={token} />} />
               <Route path="admin" element={isAdmin ? <AdminView token={token} /> : <Navigate to="games" replace />} />

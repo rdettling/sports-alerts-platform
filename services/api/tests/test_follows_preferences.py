@@ -71,7 +71,6 @@ def test_team_follow_flow(client):
 
     empty_follows = client.get("/follows", headers=headers)
     assert empty_follows.status_code == 200
-    assert empty_follows.json()["leagues"] == []
     assert empty_follows.json()["teams"] == []
     assert empty_follows.json()["games"] == []
 
@@ -87,23 +86,6 @@ def test_team_follow_flow(client):
     unfollow_response = client.delete(f"/follows/teams/{team_id}", headers=headers)
     assert unfollow_response.status_code == 200
     assert unfollow_response.json()["status"] == "unfollowed"
-
-
-def test_league_follow_flow(client):
-    headers = _auth_headers(client, email="m2-leagues@example.com")
-
-    follow_response = client.post("/follows/leagues/NBA", headers=headers)
-    assert follow_response.status_code == 201
-    assert follow_response.json()["status"] in {"followed", "already_following"}
-
-    follows_response = client.get("/follows", headers=headers)
-    assert follows_response.status_code == 200
-    assert follows_response.json()["leagues"] == [{"league": "NBA"}]
-
-    unfollow_response = client.delete("/follows/leagues/NBA", headers=headers)
-    assert unfollow_response.status_code == 200
-    assert unfollow_response.json()["status"] == "unfollowed"
-
 
 def test_game_follow_flow(client):
     headers = _auth_headers(client, email="m2-games@example.com")

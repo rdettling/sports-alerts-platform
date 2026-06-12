@@ -13,7 +13,6 @@ from worker.db import SessionLocal
 from worker.delivery import count_pending_alerts, process_pending_alerts
 from worker.ingest import run_catalog_sync, run_live_sync
 from worker.providers.factory import get_provider
-from worker.updates import classify_pending_updates, ingest_updates_feed
 
 logger = logging.getLogger(__name__)
 SCHEDULER_MAX_SLEEP_SECONDS = settings.scheduler_tick_seconds
@@ -29,8 +28,6 @@ CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
 DELIVERY_JOB = "delivery"
 CLEANUP_JOB = "cleanup_games"
-UPDATES_SYNC_JOB = "updates_sync"
-UPDATES_CLASSIFY_JOB = "updates_classify"
 
 
 def _utcnow() -> datetime:
@@ -43,14 +40,12 @@ def _bootstrap_jobs() -> None:
         now = _utcnow()
         # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
         db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
+        db.execute(delete(WorkerJob).where(WorkerJob.job_type.in_(("updates_sync", "updates_classify"))))
         for job_type, league in (
             (CATALOG_SYNC_JOB, "NBA"),
             (CATALOG_SYNC_JOB, "MLB"),
             (LIVE_SYNC_JOB, "NBA"),
             (LIVE_SYNC_JOB, "MLB"),
-            (UPDATES_SYNC_JOB, "NBA"),
-            (UPDATES_SYNC_JOB, "MLB"),
-            (UPDATES_CLASSIFY_JOB, None),
             (DELIVERY_JOB, None),
         ):
             existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type, WorkerJob.league == league))
@@ -321,34 +316,6 @@ def _run_delivery_job() -> int:
     finally:
         db.close()
 
-
-def _run_updates_sync_job(league: str) -> int:
-    ingest_updates_feed(league)
-    _nudge_updates_classify_job_now()
-    return max(60, settings.updates_sync_interval_seconds)
-
-
-def _nudge_updates_classify_job_now() -> None:
-    now = _utcnow()
-    db = SessionLocal()
-    try:
-        row = db.scalar(select(WorkerJob).where(WorkerJob.job_type == UPDATES_CLASSIFY_JOB, WorkerJob.league.is_(None)))
-        if row is None or row.status == "running":
-            return
-        row.status = "queued"
-        row.next_run_at = now
-        db.commit()
-    finally:
-        db.close()
-
-
-def _run_updates_classify_job() -> int:
-    result = classify_pending_updates()
-    if result.get("classified", 0) > 0 or result.get("processed", 0) > 0:
-        return max(30, settings.updates_classify_active_seconds)
-    return max(300, settings.updates_classify_idle_seconds)
-
-
 def run(stop_event: threading.Event) -> None:
     _bootstrap_jobs()
     logger.info("Scheduler loop started max_sleep=%ss", SCHEDULER_MAX_SLEEP_SECONDS)
@@ -366,10 +333,6 @@ def run(stop_event: threading.Event) -> None:
                 next_run = _run_catalog_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == LIVE_SYNC_JOB:
                 next_run = _run_live_sync_job((due_job.league or "NBA").upper())
-            elif due_job.job_type == UPDATES_SYNC_JOB:
-                next_run = _run_updates_sync_job((due_job.league or "NBA").upper())
-            elif due_job.job_type == UPDATES_CLASSIFY_JOB:
-                next_run = _run_updates_classify_job()
             elif due_job.job_type == DELIVERY_JOB:
                 next_run = _run_delivery_job()
             else:

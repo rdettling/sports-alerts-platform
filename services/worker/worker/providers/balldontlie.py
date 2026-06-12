@@ -81,13 +81,14 @@ class BallDontLieProvider(SportsProvider):
         status_type = ((competition.get("status") or {}).get("type") or {})
         status_state = status_type.get("state", "")
         status_name = status_type.get("name", "")
+        status_description = str(status_type.get("description") or "").lower()
         status = "scheduled"
-        if status_state == "in":
+        if "postponed" in status_name.lower() or status_description == "postponed":
+            status = "postponed"
+        elif status_state == "in":
             status = "in_progress"
         elif status_state == "post":
             status = "final"
-        elif status_name.lower() == "postponed":
-            status = "postponed"
 
         game_date = event.get("date")
         if not game_date:

@@ -71,6 +71,9 @@ export function formatGameStatusLabel(status: string, isFinal: boolean, fallback
   if (status === "in_progress" || status === "live") {
     return fallbackTime || "Live";
   }
+  if (status === "postponed") {
+    return "Postponed";
+  }
   if (status === "final" || isFinal) {
     return "Final";
   }

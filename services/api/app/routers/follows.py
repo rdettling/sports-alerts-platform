@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select, union
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, Team, User, UserGameFollow, UserGameUnfollow, UserLeagueFollow, UserTeamFollow
+from app.db.models import Game, Team, User, UserGameFollow, UserGameUnfollow, UserTeamFollow
 from app.db.session import get_db
 from app.deps import get_current_user
-from app.schemas.follow import CurrentFollowsOut, LeagueFollowOut
+from app.schemas.follow import CurrentFollowsOut
 from app.schemas.game import GameOut
 from app.schemas.team import TeamOut
 
@@ -19,12 +19,6 @@ def list_current_follows(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CurrentFollowsOut:
-    leagues = db.scalars(
-        select(UserLeagueFollow)
-        .where(UserLeagueFollow.user_id == current_user.id)
-        .order_by(UserLeagueFollow.league.asc())
-    ).all()
-
     teams = db.scalars(
         select(Team)
         .join(UserTeamFollow, UserTeamFollow.team_id == Team.id)
@@ -49,7 +43,6 @@ def list_current_follows(
         .order_by(Game.scheduled_start_time.asc())
     ).all()
     return CurrentFollowsOut(
-        leagues=[LeagueFollowOut(league=row.league) for row in leagues],
         teams=[TeamOut.model_validate(team) for team in teams],
         games=[GameOut.model_validate(game) for game in games],
     )
@@ -74,47 +67,6 @@ def follow_team(
     db.add(UserTeamFollow(user_id=current_user.id, team_id=team_id, created_at=datetime.now(timezone.utc)))
     db.commit()
     return {"status": "followed"}
-
-
-@router.post("/leagues/{league}", status_code=status.HTTP_201_CREATED)
-def follow_league(
-    league: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> dict[str, str]:
-    normalized = league.strip().upper()
-    if normalized not in {"NBA", "MLB"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
-
-    existing = db.scalar(
-        select(UserLeagueFollow).where(UserLeagueFollow.user_id == current_user.id, UserLeagueFollow.league == normalized)
-    )
-    if existing:
-        return {"status": "already_following"}
-
-    db.add(UserLeagueFollow(user_id=current_user.id, league=normalized, created_at=datetime.now(timezone.utc)))
-    db.commit()
-    return {"status": "followed"}
-
-
-@router.delete("/leagues/{league}")
-def unfollow_league(
-    league: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> dict[str, str]:
-    normalized = league.strip().upper()
-    if normalized not in {"NBA", "MLB"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
-
-    existing = db.scalar(
-        select(UserLeagueFollow).where(UserLeagueFollow.user_id == current_user.id, UserLeagueFollow.league == normalized)
-    )
-    if not existing:
-        return {"status": "not_following"}
-    db.delete(existing)
-    db.commit()
-    return {"status": "unfollowed"}
 
 
 @router.delete("/teams/{team_id}")
