@@ -113,3 +113,75 @@ def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
     assert "teamlogos/countries/500/mex.png" in html_body
     assert "teamlogos/countries/500/usa.png" in html_body
     assert "Kickoff is live now" in text_body
+
+
+def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-2",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=1,
+        away_score=1,
+        period=1,
+        clock="20'",
+    )
+    alert = _mk_alert("score_changed")
+    alert.metadata_json = {
+        "status": "in_progress",
+        "period": 1,
+        "clock": "18'",
+        "previous_home_score": 0,
+        "previous_away_score": 0,
+        "new_home_score": 0,
+        "new_away_score": 1,
+        "scoring_side": "away",
+        "is_inferred_goal": True,
+    }
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Goal · MEX 1–0 USA"
+    assert "Goal for MEX · MEX 1–0 USA" in text_body
+    assert "18'" in text_body
+
+
+def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-3",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=3,
+        away_score=2,
+        period=2,
+        clock="70'",
+    )
+    alert = _mk_alert("score_changed")
+    alert.metadata_json = {
+        "status": "in_progress",
+        "period": 2,
+        "clock": "68'",
+        "previous_home_score": 1,
+        "previous_away_score": 1,
+        "new_home_score": 2,
+        "new_away_score": 2,
+        "scoring_side": None,
+        "is_inferred_goal": False,
+    }
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Score update · MEX 2–2 USA"
+    assert "Score update · MEX 2–2 USA" in text_body
+    assert "68'" in text_body

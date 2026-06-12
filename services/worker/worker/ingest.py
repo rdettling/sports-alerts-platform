@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -30,6 +31,26 @@ from worker.providers.base import ProviderGame, SportsProvider
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 SUPPORTED_LEAGUES = tuple(list_supported_leagues())
+
+
+@dataclass(frozen=True)
+class ScoreChangeEvent:
+    previous_home_score: int
+    previous_away_score: int
+    new_home_score: int
+    new_away_score: int
+    scoring_side: str | None
+    is_inferred_goal: bool
+    period: int | None
+    clock: str | None
+    status: str
+
+
+@dataclass(frozen=True)
+class GameUpdateResult:
+    did_update: bool
+    game_id: int | None
+    score_change_event: ScoreChangeEvent | None = None
 
 
 def _normalize_league(league: str) -> str:
@@ -248,9 +269,54 @@ def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold:
     return game.period >= (inning_threshold or 7)
 
 
-def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
+def _classify_world_cup_score_change(previous: Game | None, payload: ProviderGame, league: str) -> ScoreChangeEvent | None:
+    if league != "WORLD_CUP" or previous is None:
+        return None
+    if payload.status not in {"in_progress", "live"}:
+        return None
+    if previous.home_score is None or previous.away_score is None:
+        return None
+    if payload.home_score is None or payload.away_score is None:
+        return None
+
+    home_delta = payload.home_score - previous.home_score
+    away_delta = payload.away_score - previous.away_score
+    if home_delta == 0 and away_delta == 0:
+        return None
+    if home_delta < 0 or away_delta < 0:
+        return None
+    if home_delta == 0 and away_delta == 1:
+        scoring_side = "away"
+        is_inferred_goal = True
+    elif away_delta == 0 and home_delta == 1:
+        scoring_side = "home"
+        is_inferred_goal = True
+    else:
+        scoring_side = None
+        is_inferred_goal = False
+
+    return ScoreChangeEvent(
+        previous_home_score=previous.home_score,
+        previous_away_score=previous.away_score,
+        new_home_score=payload.home_score,
+        new_away_score=payload.away_score,
+        scoring_side=scoring_side,
+        is_inferred_goal=is_inferred_goal,
+        period=payload.period,
+        clock=payload.clock,
+        status=payload.status,
+    )
+
+
+def _evaluate_and_record_alerts_batched(
+    db: Session,
+    games: list[Game],
+    *,
+    score_change_events: dict[int, ScoreChangeEvent] | None = None,
+) -> int:
     if not games:
         return 0
+    score_change_events = score_change_events or {}
     watchers_by_game = _load_game_watchers(db, games)
     all_user_ids = {user_id for users in watchers_by_game.values() for user_id in users}
     leagues = {game.league for game in games}
@@ -298,6 +364,36 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
                             delivery_status="pending",
                             dedupe_key=key,
                             metadata_json={"status": game.status},
+                        )
+                    )
+
+            score_change_event = score_change_events.get(game.id)
+            default_score_changed = defaults_by_key.get((user_id, game.league, "score_changed"))
+            override_score_changed = overrides_by_key.get((user_id, game.id, "score_changed"))
+            score_changed_enabled, _, _, _ = _effective_alert_settings(default_score_changed, override_score_changed)
+            if score_change_event and score_changed_enabled:
+                key = f"{user_id}:{game.id}:score_changed:{score_change_event.new_away_score}-{score_change_event.new_home_score}"
+                if key not in candidate_dedupe_keys:
+                    candidate_dedupe_keys.add(key)
+                    candidate_alerts.append(
+                        SentAlert(
+                            user_id=user_id,
+                            game_id=game.id,
+                            alert_type="score_changed",
+                            delivery_channel="email",
+                            delivery_status="pending",
+                            dedupe_key=key,
+                            metadata_json={
+                                "status": score_change_event.status,
+                                "period": score_change_event.period,
+                                "clock": score_change_event.clock or "",
+                                "previous_home_score": score_change_event.previous_home_score,
+                                "previous_away_score": score_change_event.previous_away_score,
+                                "new_home_score": score_change_event.new_home_score,
+                                "new_away_score": score_change_event.new_away_score,
+                                "scoring_side": score_change_event.scoring_side,
+                                "is_inferred_goal": score_change_event.is_inferred_goal,
+                            },
                         )
                     )
 
@@ -353,7 +449,7 @@ def _evaluate_and_record_alerts_batched(db: Session, games: list[Game]) -> int:
     return len(to_insert)
 
 
-def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict[str, int]) -> tuple[bool, int | None]:
+def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict[str, int]) -> GameUpdateResult:
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
     if not home_id or not away_id:
@@ -364,10 +460,11 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
             payload.home_external_team_id,
             payload.away_external_team_id,
         )
-        return False, None
+        return GameUpdateResult(did_update=False, game_id=None)
 
     existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == league))
     if existing:
+        score_change_event = _classify_world_cup_score_change(existing, payload, league)
         before = (
             existing.status,
             existing.home_score,
@@ -391,7 +488,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
             existing.clock,
             existing.is_final,
         )
-        return before != after, existing.id
+        return GameUpdateResult(did_update=before != after, game_id=existing.id, score_change_event=score_change_event)
 
     created = Game(
         external_game_id=payload.external_game_id,
@@ -409,7 +506,7 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
     )
     db.add(created)
     db.flush()
-    return True, created.id
+    return GameUpdateResult(did_update=True, game_id=created.id)
 
 
 def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> bool:
@@ -513,25 +610,28 @@ def _upsert_games_and_collect(
     team_names: dict[int, str],
     *,
     only_external_ids: set[str] | None = None,
-) -> tuple[int, list[int], dict[int, tuple[str, str]]]:
+) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, ScoreChangeEvent]]:
     updated = 0
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}
+    score_change_events: dict[int, ScoreChangeEvent] = {}
     for provider_game in provider_games:
         if only_external_ids is not None and provider_game.external_game_id not in only_external_ids:
             continue
-        did_update, game_id = _upsert_game(db, league, provider_game, team_map)
-        if did_update:
+        result = _upsert_game(db, league, provider_game, team_map)
+        if result.did_update:
             updated += 1
-        if game_id:
-            touched_game_ids.append(game_id)
+        if result.game_id:
+            touched_game_ids.append(result.game_id)
             home_id = team_map.get(provider_game.home_external_team_id)
             away_id = team_map.get(provider_game.away_external_team_id)
             home_name = team_names.get(home_id) if home_id else None
             away_name = team_names.get(away_id) if away_id else None
             if home_name and away_name:
-                game_key_by_id[game_id] = game_key(home_name, away_name)
-    return updated, touched_game_ids, game_key_by_id
+                game_key_by_id[result.game_id] = game_key(home_name, away_name)
+            if result.score_change_event is not None:
+                score_change_events[result.game_id] = result.score_change_event
+    return updated, touched_game_ids, game_key_by_id, score_change_events
 
 
 def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> list[Game]:
@@ -573,7 +673,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
         team_map = _team_id_map(db, league)
         team_names = _team_name_map(db, league)
         all_games = provider.fetch_games(league, requests)
-        updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
+        updated, touched_game_ids, game_key_by_id, score_change_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
         odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
         odds_calls = 0
@@ -596,7 +696,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
+        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games, score_change_events=score_change_events)
         db.commit()
 
         logger.info(
@@ -674,7 +774,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
                 )
             ).all()
         }
-        updated, touched_game_ids, _ = _upsert_games_and_collect(
+        updated, touched_game_ids, _, score_change_events = _upsert_games_and_collect(
             db,
             league,
             provider_games,
@@ -684,7 +784,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
         )
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games)
+        alerts_created = _evaluate_and_record_alerts_batched(db, touched_games, score_change_events=score_change_events)
         has_live_games = bool(
             db.scalar(
                 select(func.count(Game.id)).where(

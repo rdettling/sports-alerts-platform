@@ -25,7 +25,7 @@ vi.mock("../../../shared/api", () => ({
   listLeagues: vi.fn(async () => [
     { league: "NBA", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], is_enabled: true },
     { league: "MLB", label: "MLB", badge_label: "MLB", alert_types: ["game_start", "inning_start", "final_result"], is_enabled: true },
-    { league: "WORLD_CUP", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "final_result"], is_enabled: true },
+    { league: "WORLD_CUP", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "score_changed", "final_result"], is_enabled: true },
   ]),
   sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB" | "WORLD_CUP"; alert_type: string }) =>
     sendDevTestEmailMock(payload),
@@ -36,14 +36,14 @@ describe("DevToolsView", () => {
     render(<DevToolsView token="token" />);
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());
-    expect(screen.getByText("Close-game alert")).toBeInTheDocument();
-    expect(screen.queryByText("Inning-start alert")).toBeNull();
+    expect(screen.getByText("Close game late alert")).toBeInTheDocument();
+    expect(screen.queryByText("Inning start alert")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (MLB)")).toBeInTheDocument());
-    expect(screen.getByText("Inning-start alert")).toBeInTheDocument();
-    expect(screen.queryByText("Close-game alert")).toBeNull();
+    expect(screen.getByText("Inning start alert")).toBeInTheDocument();
+    expect(screen.queryByText("Close game late alert")).toBeNull();
     expect(screen.getByText("MIA")).toBeInTheDocument();
     expect(screen.getByText("TOR")).toBeInTheDocument();
   });
@@ -52,12 +52,12 @@ describe("DevToolsView", () => {
     render(<DevToolsView token="token" />);
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Close-game alert"));
+    fireEvent.click(screen.getByText("Close game late alert"));
     await waitFor(() => expect(sendDevTestEmailMock).toHaveBeenCalledWith({ league: "NBA", alert_type: "close_game_late" }));
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
-    await waitFor(() => expect(screen.getByText("Inning-start alert")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Inning-start alert"));
+    await waitFor(() => expect(screen.getByText("Inning start alert")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Inning start alert"));
     await waitFor(() => expect(sendDevTestEmailMock).toHaveBeenCalledWith({ league: "MLB", alert_type: "inning_start" }));
   });
 
@@ -69,8 +69,9 @@ describe("DevToolsView", () => {
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (World Cup)")).toBeInTheDocument());
     expect(screen.getByText("Game start alert")).toBeInTheDocument();
-    expect(screen.getByText("Final-result alert")).toBeInTheDocument();
-    expect(screen.queryByText("Close-game alert")).toBeNull();
-    expect(screen.queryByText("Inning-start alert")).toBeNull();
+    expect(screen.getByText("Final result alert")).toBeInTheDocument();
+    expect(screen.getByText("Score change alert")).toBeInTheDocument();
+    expect(screen.queryByText("Close game late alert")).toBeNull();
+    expect(screen.queryByText("Inning start alert")).toBeNull();
   });
 });

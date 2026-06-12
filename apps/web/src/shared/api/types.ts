@@ -104,7 +104,7 @@ export type AlertHistoryItem = {
   away_team_abbreviation: string;
 };
 
-export type AlertType = "game_start" | "close_game_late" | "inning_start" | "final_result";
+export type AlertType = "game_start" | "close_game_late" | "inning_start" | "score_changed" | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
 
 export type OpsWindow = "24h" | "7d" | "30d";

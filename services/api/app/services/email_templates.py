@@ -10,6 +10,7 @@ ALERT_LABELS = {
     "game_start": "Game start",
     "close_game_late": "Close game late",
     "inning_start": "Inning start",
+    "score_changed": "Score change",
     "final_result": "Final result",
 }
 
@@ -108,6 +109,44 @@ def _scoreline(game: Game) -> str:
     return f"{game.away_score}\u2013{game.home_score}"
 
 
+def _scoreline_from_values(away_score: int | None, home_score: int | None) -> str:
+    if away_score is None or home_score is None:
+        return "—"
+    return f"{away_score}\u2013{home_score}"
+
+
+def _alert_metadata(alert: SentAlert) -> dict[str, object]:
+    return alert.metadata_json if isinstance(alert.metadata_json, dict) else {}
+
+
+def _metadata_int(metadata: dict[str, object], key: str) -> int | None:
+    value = metadata.get(key)
+    return value if isinstance(value, int) else None
+
+
+def _metadata_text(metadata: dict[str, object], key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _score_changed_values(alert: SentAlert, game: Game) -> tuple[int | None, int | None, int | None, int | None, bool, str | None]:
+    metadata = _alert_metadata(alert)
+    previous_away_score = _metadata_int(metadata, "previous_away_score")
+    previous_home_score = _metadata_int(metadata, "previous_home_score")
+    new_away_score = _metadata_int(metadata, "new_away_score")
+    new_home_score = _metadata_int(metadata, "new_home_score")
+    scoring_side = _metadata_text(metadata, "scoring_side")
+    is_inferred_goal = bool(metadata.get("is_inferred_goal"))
+    return (
+        previous_away_score,
+        previous_home_score,
+        new_away_score if new_away_score is not None else game.away_score,
+        new_home_score if new_home_score is not None else game.home_score,
+        is_inferred_goal,
+        scoring_side,
+    )
+
+
 def _format_clock(game: Game) -> str:
     raw = (game.clock or "").strip()
     if not raw or raw in {"0", "0.0", "00:00"}:
@@ -125,6 +164,50 @@ def _format_period(game: Game, league: str) -> str:
     return f"OT{game.period - 4}"
 
 
+def _format_period_value(period: int | None, league: str) -> str:
+    if period is None:
+        return ""
+    if league == "NBA":
+        if period <= 4:
+            return f"Q{period}"
+        return f"OT{period - 4}"
+    if league == "MLB":
+        if period <= 0:
+            return ""
+        return f"Inning {period}"
+    if league == "WORLD_CUP":
+        if period <= 0:
+            return ""
+        if period == 1:
+            return "1H"
+        if period == 2:
+            return "2H"
+        return f"ET {period - 2}"
+    return ""
+
+
+def _event_status_details(alert: SentAlert, game: Game, league: str) -> str:
+    metadata = _alert_metadata(alert)
+    status = _metadata_text(metadata, "status") or game.status
+    period = _metadata_int(metadata, "period")
+    clock = _metadata_text(metadata, "clock") or game.clock
+
+    details_parts: list[str] = []
+    if status:
+        details_parts.append(status.replace("_", " ").title())
+    period_label = _format_period_value(period, league)
+    if period_label:
+        details_parts.append(period_label)
+
+    normalized_clock = (clock or "").strip()
+    if normalized_clock:
+        if league == "NBA":
+            details_parts.append(f"{normalized_clock} left")
+        else:
+            details_parts.append(normalized_clock)
+    return " \u2022 ".join(details_parts) if details_parts else "Live update"
+
+
 def _primary_status_line(alert: SentAlert, game: Game, away_abbr: str, home_abbr: str, league: str) -> str:
     if alert.alert_type == "final_result":
         return f"Final score: {away_abbr} {_scoreline(game)} {home_abbr}"
@@ -136,6 +219,13 @@ def _primary_status_line(alert: SentAlert, game: Game, away_abbr: str, home_abbr
         if league == "WORLD_CUP":
             return "Kickoff is live now"
         return "Game start is live now"
+    if alert.alert_type == "score_changed":
+        _, _, new_away_score, new_home_score, is_inferred_goal, scoring_side = _score_changed_values(alert, game)
+        scoreline = _scoreline_from_values(new_away_score, new_home_score)
+        if is_inferred_goal:
+            scorer = away_abbr if scoring_side == "away" else home_abbr if scoring_side == "home" else "A team"
+            return f"Goal for {scorer} · {away_abbr} {scoreline} {home_abbr}"
+        return f"Score update · {away_abbr} {scoreline} {home_abbr}"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
         period = _format_period(game, league)
@@ -169,6 +259,11 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
         if league == "WORLD_CUP":
             return f"Kickoff · {away_abbr} @ {home_abbr}"
         return f"Game start · {away_abbr} @ {home_abbr}"
+    if alert.alert_type == "score_changed":
+        _, _, new_away_score, new_home_score, is_inferred_goal, _ = _score_changed_values(alert, game)
+        scoreline = _scoreline_from_values(new_away_score, new_home_score)
+        prefix = "Goal" if is_inferred_goal else "Score update"
+        return f"{prefix} · {away_abbr} {scoreline} {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "inning_start":
@@ -184,23 +279,15 @@ def build_alert_email_content(alert: SentAlert, game: Game, home: Team | None, a
     league = _normalize_league(game, home, away)
     away_logo = _team_logo_url(away, away_abbr, league)
     home_logo = _team_logo_url(home, home_abbr, league)
-    away_score = "—" if game.away_score is None else str(game.away_score)
-    home_score = "—" if game.home_score is None else str(game.home_score)
+    _, _, score_changed_away_score, score_changed_home_score, _, _ = _score_changed_values(alert, game)
+    resolved_away_score = score_changed_away_score if alert.alert_type == "score_changed" else game.away_score
+    resolved_home_score = score_changed_home_score if alert.alert_type == "score_changed" else game.home_score
+    away_score = "—" if resolved_away_score is None else str(resolved_away_score)
+    home_score = "—" if resolved_home_score is None else str(resolved_home_score)
     alert_label = ALERT_LABELS.get(alert.alert_type, alert.alert_type.replace("_", " ").title())
     primary_line = _primary_status_line(alert, game, away_abbr, home_abbr, league)
 
-    details_parts: list[str] = []
-    if game.status:
-        details_parts.append(game.status.replace("_", " ").title())
-    period = _format_period(game, league)
-    if period:
-        details_parts.append(period)
-    clock = _format_clock(game)
-    if clock and league == "NBA":
-        details_parts.append(f"{clock} left")
-    elif clock and league == "MLB":
-        details_parts.append(clock)
-    details_line = " \u2022 ".join(details_parts) if details_parts else "Live update"
+    details_line = _event_status_details(alert, game, league)
 
     sent_at = datetime.now(timezone.utc).strftime("%b %d, %Y %I:%M %p UTC")
 

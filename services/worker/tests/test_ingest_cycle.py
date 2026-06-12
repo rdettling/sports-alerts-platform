@@ -130,6 +130,33 @@ class WorldCupProvider:
         return len(requests)
 
 
+class SequenceWorldCupProvider:
+    def __init__(self, snapshots):
+        self._snapshots = list(snapshots)
+        self._index = 0
+
+    def fetch_games(self, league, requests):
+        snapshot = self._snapshots[min(self._index, len(self._snapshots) - 1)]
+        self._index += 1
+        return [
+            ProviderGame(
+                external_game_id="game-world-cup-live",
+                home_external_team_id="660",
+                away_external_team_id="203",
+                scheduled_start_time=datetime.now(timezone.utc),
+                status="in_progress",
+                home_score=snapshot["home_score"],
+                away_score=snapshot["away_score"],
+                period=snapshot.get("period", 2),
+                clock=snapshot.get("clock", "65'"),
+                is_final=False,
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
 class LongClockProvider:
     def __init__(self, *, home_external_team_id: str, away_external_team_id: str):
         self.home_external_team_id = home_external_team_id
@@ -374,6 +401,93 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
 
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert any(row.alert_type == "inning_start" for row in sent)
+
+
+def test_world_cup_score_changed_creates_inferred_goal_alert(db_session):
+    user = User(email="world-cup-score@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 0, "away_score": 0, "period": 1, "clock": "10'"},
+            {"home_score": 0, "away_score": 1, "period": 1, "clock": "18'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    assert len(sent) == 1
+    assert sent[0].metadata_json["is_inferred_goal"] is True
+    assert sent[0].metadata_json["scoring_side"] == "away"
+    assert sent[0].metadata_json["new_away_score"] == 1
+    assert sent[0].metadata_json["new_home_score"] == 0
+
+
+def test_world_cup_score_changed_creates_generic_alert_for_ambiguous_jump(db_session):
+    user = User(email="world-cup-score-ambiguous@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "60'"},
+            {"home_score": 2, "away_score": 2, "period": 2, "clock": "68'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    assert len(sent) == 1
+    assert sent[0].metadata_json["is_inferred_goal"] is False
+    assert sent[0].metadata_json["scoring_side"] is None
+
+
+def test_world_cup_score_changed_ignores_score_decreases(db_session):
+    user = User(email="world-cup-score-decrease@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "60'"},
+            {"home_score": 1, "away_score": 0, "period": 2, "clock": "61'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    assert len(sent) == 0
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):

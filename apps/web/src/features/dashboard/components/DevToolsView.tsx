@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail, type LeagueSetting } from "../../../shared/api";
 import {
   TeamLogo,
+  PREFERENCE_LABELS,
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 
@@ -106,7 +107,7 @@ export function DevToolsView({ token }: { token: string }) {
               disabled={loading || busyAlertType !== null || !syntheticTeams.away || !syntheticTeams.home}
               onClick={() => onSendTest(alertType)}
             >
-              <span>{alertType === "game_start" ? "Game start alert" : alertType === "close_game_late" ? "Close-game alert" : alertType === "inning_start" ? "Inning-start alert" : "Final-result alert"}</span>
+              <span>{PREFERENCE_LABELS[alertType] ?? alertType} alert</span>
               <span className="admin-test-btn-meta">Queue now</span>
             </button>
           ))}
