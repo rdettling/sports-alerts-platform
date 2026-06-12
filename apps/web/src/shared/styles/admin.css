@@ -208,3 +208,104 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 840px) {
+  .admin-page,
+  .admin-tabs-page,
+  .admin-tab-content {
+    overflow: visible;
+  }
+
+  .admin-tabs-header {
+    align-items: stretch;
+  }
+
+  .admin-tab-list,
+  .admin-tab-controls {
+    width: 100%;
+  }
+
+  .admin-tab-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .admin-tab-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-tab-button {
+    flex: 0 0 auto;
+  }
+
+  .admin-tab-controls {
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .admin-tab-controls label {
+    flex-wrap: wrap;
+  }
+
+  .admin-panel,
+  .admin-db-card {
+    padding: 0.68rem;
+  }
+
+  .admin-db-shell {
+    padding: 0.75rem;
+  }
+
+  .admin-db-header,
+  .admin-db-card-head,
+  .admin-test-btn {
+    align-items: flex-start;
+  }
+
+  .admin-test-btn {
+    gap: 0.6rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-simple-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tab-button {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.88rem;
+  }
+
+  .admin-tab-controls {
+    justify-content: flex-start;
+  }
+
+  .admin-db-shell {
+    padding: 0.65rem;
+  }
+
+  .admin-db-kpis,
+  .admin-db-health-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-db-events-scroll {
+    --admin-events-cols: 1.35fr 0.72fr 0.72fr 1.35fr;
+  }
+
+  .admin-db-events-header,
+  .admin-db-event-row {
+    gap: 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .admin-db-scheduler-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-db-scheduler-list article strong {
+    justify-self: start;
+  }
+}

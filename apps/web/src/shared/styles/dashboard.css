@@ -15,27 +15,21 @@
 }
 
 .games-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  display: grid;
   gap: 0;
+  min-height: 0;
 }
 
 .games-panel {
+  display: grid;
+  gap: 0.9rem;
   min-height: 0;
-  flex: 1;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 .alerts-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
   align-items: start;
 }
 
@@ -46,34 +40,27 @@
 .data-table-wrap {
   display: grid;
   gap: 0.6rem;
-  height: 100%;
-  flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding-right: 0.2rem;
+  overflow: visible;
 }
 
 .games-feed-grid {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: stretch;
-  flex: 1;
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
+  align-items: start;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .games-day-filter {
-  position: sticky;
-  top: var(--space-2);
-  align-self: start;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: #fcfeff;
   box-shadow: var(--shadow-panel);
-  padding: 0.6rem;
+  padding: 0.8rem;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.45rem;
 }
 
 .games-league-filter {
@@ -195,7 +182,7 @@
 
 .games-card-row {
   display: block;
-  padding: 0.72rem 0.8rem;
+  padding: 0.82rem 0.88rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: #fff;
@@ -203,10 +190,14 @@
 }
 
 .games-card-main {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.7rem;
-  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.games-card-matchup {
+  display: grid;
+  gap: 0.45rem;
   min-width: 0;
 }
 
@@ -218,23 +209,25 @@
 .games-team-ident strong {
   font-size: 0.98rem;
   letter-spacing: 0.01em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .games-lines {
   display: grid;
-  gap: 0.28rem;
-  width: max-content;
+  gap: 0.34rem;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .games-context-label {
-  max-width: 24rem;
-  margin-top: 0.16rem;
+  max-width: none;
   font-size: 0.8rem;
   line-height: 1.25;
   font-weight: 600;
   color: #5a6784;
-  padding: 0 0.24rem 0.18rem;
+  padding: 0 0.12rem;
   letter-spacing: 0.01em;
 }
 
@@ -242,11 +235,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.1rem;
-  min-width: 13.5rem;
+  gap: 0.8rem;
+  min-width: 0;
   padding: 0.1rem 0.24rem;
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: 14px;
 }
 
 .games-team-score {
@@ -269,7 +262,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-width: 13.5rem;
+  min-width: 0;
   padding: 0 0.24rem;
   margin-top: 0.06rem;
   color: #5a6784;
@@ -319,42 +312,30 @@
   font-weight: 700;
 }
 
-.games-meta-rail {
-  margin-left: auto;
+.games-card-footer {
   display: grid;
-  grid-template-columns: 4rem minmax(9.5rem, auto) 12rem;
-  grid-template-rows: minmax(2rem, auto) minmax(2rem, auto);
+  gap: 0.7rem;
+}
+
+.games-card-meta {
+  display: flex;
   align-items: center;
   gap: 0.55rem;
-  justify-self: end;
+  flex-wrap: wrap;
 }
 
-.games-meta-col {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.games-meta-col-status {
-  grid-row: 1 / span 2;
-}
-
-.games-meta-col-actions {
-  align-items: stretch;
-  grid-row: 1 / span 2;
-}
-
-.games-meta-col-logo {
-  justify-content: center;
-  grid-row: 1 / span 2;
+.games-card-actions {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .games-league-logo-plain {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 4rem;
-  min-height: 2rem;
+  width: auto;
+  min-height: 0;
+  padding: 0.2rem 0.15rem;
 }
 
 .games-league-logo {
@@ -386,13 +367,8 @@
 .games-action-cell {
   width: 100%;
   text-align: center;
-  padding: 0.5rem 0.62rem;
-  min-height: 2rem;
-}
-
-.games-action-cell-tall {
-  grid-row: 1 / span 2;
-  min-height: calc(4rem + 0.38rem);
+  padding: 0.56rem 0.7rem;
+  min-height: 0;
 }
 
 .games-outcome-pill {
@@ -427,16 +403,16 @@
 }
 
 .alert-rule-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.8rem;
+  display: grid;
+  gap: 0.65rem;
 }
 
 .alert-rule-header-end {
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .alert-inline-field {
@@ -446,6 +422,7 @@
   font-weight: 600;
   color: #2a3a59;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .alert-rule-title-wrap strong {
@@ -571,6 +548,7 @@
 .following-followed-team-main {
   gap: 0.55rem;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .following-followed-team-text {
@@ -585,7 +563,7 @@
 
 .following-two-col-panels {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: 1fr;
   gap: 0.8rem;
   align-items: start;
 }
@@ -596,17 +574,9 @@
 
 .following-game-actions-stacked {
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.38rem;
   width: 100%;
-}
-
-.following-game-actions-stacked > .games-action-cell:first-child {
-  grid-row: 1;
-}
-
-.following-game-actions-stacked > .games-action-cell:last-child {
-  grid-row: 2;
 }
 
 .overlay-sheet {
@@ -682,9 +652,7 @@
 }
 
 .following-alert-rule-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
   gap: 0.75rem;
 }
 
@@ -720,49 +688,119 @@
   min-width: 66px;
 }
 
-@media (max-width: 1200px) {
+@media (min-width: 900px) {
   .games-feed-grid {
-    grid-template-columns: 1fr;
-    overflow: visible;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    align-items: start;
   }
 
   .games-day-filter {
-    position: static;
+    position: sticky;
+    top: var(--space-2);
   }
-}
 
-@media (max-width: 1024px) {
+  .games-card-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .games-card-actions {
+    justify-items: end;
+    min-width: 11rem;
+  }
+
   .alerts-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   }
 
   .following-two-col-panels {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .alert-rule-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .following-alert-rule-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 }
 
-@media (max-width: 900px) {
+@media (min-width: 1100px) {
   .games-card-main {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.8rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
   }
 
-  .game-alert-modal {
-    width: min(680px, 100%);
-    padding: 1rem;
-  }
-
-  .overlay-card-header h4 {
-    font-size: 1.45rem;
-  }
-
-  .following-alert-rule-controls {
-    gap: 0.65rem;
+  .games-card-footer {
+    width: 15rem;
   }
 }
 
 @media (max-width: 640px) {
+  .games-card-row {
+    padding: 0.75rem;
+  }
+
+  .games-panel,
+  .alerts-rules-panel,
+  .alerts-history-panel,
+  .following-simple-section,
+  .overlay-card {
+    padding: 0.95rem;
+  }
+
+  .games-group-row-inner {
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+
+  .games-league-filter-btn {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.55rem;
+    font-size: 0.86rem;
+  }
+
+  .games-day-filter-btn {
+    font-size: 0.88rem;
+  }
+
+  .games-team-ident strong {
+    font-size: 0.94rem;
+  }
+
+  .games-status-pill {
+    padding: 0.34rem 0.72rem;
+    font-size: 0.88rem;
+  }
+
+  .alert-rule-row {
+    padding: 0.82rem 0.88rem;
+  }
+
+  .alert-inline-field,
+  .alert-rule-controls label,
+  .following-alert-rule-controls label {
+    white-space: normal;
+  }
+
+  .alerts-history-panel .row-card,
+  .following-simple-team-list .row-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .following-simple-team-list .btn {
+    width: 100%;
+  }
+
+  .alerts-history-simple-row {
+    display: grid;
+    gap: 0.2rem;
+  }
+
   .overlay-sheet {
     padding: 0.55rem;
     align-items: end;
@@ -793,5 +831,14 @@
 
   .following-alert-rule-controls label {
     white-space: normal;
+  }
+
+  .game-alert-modal {
+    width: min(680px, 100%);
+    padding: 1rem;
+  }
+
+  .overlay-card-header h4 {
+    font-size: 1.45rem;
   }
 }

@@ -76,55 +76,54 @@ export function DashboardLayout() {
 
   return (
     <div className="app-shell">
-        <aside className="app-sidebar">
-          <div className="sidebar-brand">
+      <header className="app-header">
+        <div className="app-header-top">
+          <div className="app-brand">
             <h1>Live Game Alerts</h1>
           </div>
-          <nav className="sidebar-nav">
+          <nav className="app-nav" aria-label="Dashboard sections">
             {navRoutes.map((route) => (
               <NavLink
                 key={route.key}
                 to={route.path}
-                className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`.trim()}
+                className={({ isActive }) => `app-nav-link ${isActive ? "active" : ""}`.trim()}
               >
-                <span className="sidebar-icon" aria-hidden>
+                <span className="app-nav-icon" aria-hidden>
                   {ROUTE_ICON_BY_KEY[route.key]}
                 </span>
                 <span>{route.label}</span>
               </NavLink>
             ))}
           </nav>
-        </aside>
-
-        <div className="app-main">
-          <header className="topbar">
-            <div className="topbar-heading">
-              <h2>{currentRoute.label}</h2>
-              <p>{currentRoute.subtitle}</p>
-              {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
-            </div>
-            <div className="topbar-meta">
-              <div className="topbar-account">
-                <span className="user-email">{user.email}</span>
-                <button className="btn btn-secondary" onClick={logout}>
-                  Logout
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <main className={`app-content ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>
-            <Routes>
-              <Route path="/" element={<Navigate to="games" replace />} />
-              <Route path="games" element={<GamesView token={token} />} />
-              <Route path="following" element={<FollowingView token={token} />} />
-              <Route path="alerts" element={<AlertsView token={token} />} />
-              <Route path="admin" element={isAdmin ? <AdminView token={token} /> : <Navigate to="games" replace />} />
-              <Route path="ops" element={<Navigate to="admin" replace />} />
-              <Route path="test" element={<Navigate to="admin" replace />} />
-            </Routes>
-          </main>
         </div>
-      </div>
+        <div className="app-header-main">
+          <div className="page-intro">
+            <h2>{currentRoute.label}</h2>
+            <p>{currentRoute.subtitle}</p>
+            {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
+          </div>
+          <div className="app-account">
+            <span className="user-email">{user.email}</span>
+            <button className="btn btn-secondary" onClick={logout}>
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>
+        <div className="app-content">
+          <Routes>
+            <Route path="/" element={<Navigate to="games" replace />} />
+            <Route path="games" element={<GamesView token={token} />} />
+            <Route path="following" element={<FollowingView token={token} />} />
+            <Route path="alerts" element={<AlertsView token={token} />} />
+            <Route path="admin" element={isAdmin ? <AdminView token={token} /> : <Navigate to="games" replace />} />
+            <Route path="ops" element={<Navigate to="admin" replace />} />
+            <Route path="test" element={<Navigate to="admin" replace />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
   );
 }

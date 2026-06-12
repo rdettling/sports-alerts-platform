@@ -51,32 +51,34 @@ export function GameRowCard({
   return (
     <article className="games-card-row" role="listitem">
       <div className="games-card-main">
-        <div className="games-lines">
-          <div className={`games-team-row ${awayWon ? "winner" : ""}`.trim()}>
-            <div className="games-team-ident">
-              <TeamLogo team={away} size={28} />
-              <strong>{away.abbreviation}</strong>
+        <div className="games-card-matchup">
+          <div className="games-lines">
+            <div className={`games-team-row ${awayWon ? "winner" : ""}`.trim()}>
+              <div className="games-team-ident">
+                <TeamLogo team={away} size={28} />
+                <strong>{away.abbreviation}</strong>
+              </div>
+              <div className="games-team-score">{awayValueText}</div>
             </div>
-            <div className="games-team-score">{awayValueText}</div>
+            <div className={`games-team-row ${homeWon ? "winner" : ""}`.trim()}>
+              <div className="games-team-ident">
+                <TeamLogo team={home} size={28} />
+                <strong>{home.abbreviation}</strong>
+              </div>
+              <div className="games-team-score">{homeValueText}</div>
+            </div>
+            {showThreeWayOdds ? (
+              <div className="games-odds-draw-row" aria-label="Draw odds">
+                <span className="games-odds-draw-label">Draw</span>
+                <span className="games-team-score">{drawValueText}</span>
+              </div>
+            ) : null}
           </div>
-          <div className={`games-team-row ${homeWon ? "winner" : ""}`.trim()}>
-            <div className="games-team-ident">
-              <TeamLogo team={home} size={28} />
-              <strong>{home.abbreviation}</strong>
-            </div>
-            <div className="games-team-score">{homeValueText}</div>
-          </div>
-          {showThreeWayOdds ? (
-            <div className="games-odds-draw-row" aria-label="Draw odds">
-              <span className="games-odds-draw-label">Draw</span>
-              <span className="games-team-score">{drawValueText}</span>
-            </div>
-          ) : null}
           {showContextLabel && game.context_label ? <div className="games-context-label">{game.context_label}</div> : null}
         </div>
 
-        <div className="games-meta-rail">
-          <div className="games-meta-col games-meta-col-logo">
+        <div className="games-card-footer">
+          <div className="games-card-meta">
             {logoUrl ? (
               <span className="games-league-logo-plain" aria-label={`${league} league`}>
                 <img src={logoUrl} alt={`${league} logo`} className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()} />
@@ -84,15 +86,13 @@ export function GameRowCard({
             ) : (
               <span className="games-league-logo-fallback">{league}</span>
             )}
-          </div>
 
-          <div className="games-meta-col games-meta-col-status">
             <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>
               {statusLabel}
             </span>
           </div>
 
-          <div className="games-meta-col games-meta-col-actions">
+          <div className="games-card-actions">
             {isFollowed && !isFinal ? (
               <div className="following-game-actions following-game-actions-stacked">
                 <button className="btn btn-secondary games-action-cell" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
@@ -103,7 +103,7 @@ export function GameRowCard({
                 </button>
               </div>
             ) : canFollow ? (
-              <button className="btn games-action-cell games-action-cell-tall" type="button" disabled={actionsDisabled} onClick={onFollow}>
+              <button className="btn games-action-cell" type="button" disabled={actionsDisabled} onClick={onFollow}>
                 Follow
               </button>
             ) : null}
