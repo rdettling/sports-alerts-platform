@@ -247,7 +247,12 @@ def _run_live_sync_job(league: str) -> int:
         _nudge_delivery_job_now()
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:
-        fallback = settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds
+        if league == "NBA":
+            fallback = settings.nba_live_sync_interval_seconds
+        elif league == "MLB":
+            fallback = settings.mlb_live_sync_interval_seconds
+        else:
+            fallback = settings.world_cup_live_sync_interval_seconds
         next_poll = int(result.get("next_poll_seconds", fallback))
         return max(1, next_poll)
 

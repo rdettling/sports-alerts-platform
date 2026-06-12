@@ -109,6 +109,27 @@ class MlbInningProvider:
         return len(requests)
 
 
+class WorldCupProvider:
+    def fetch_games(self, league, requests):
+        return [
+            ProviderGame(
+                external_game_id="game-world-cup-live",
+                home_external_team_id="660",
+                away_external_team_id="203",
+                scheduled_start_time=datetime.now(timezone.utc),
+                status="in_progress",
+                home_score=1,
+                away_score=0,
+                period=2,
+                clock="65'",
+                is_final=False,
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
 class LongClockProvider:
     def __init__(self, *, home_external_team_id: str, away_external_team_id: str):
         self.home_external_team_id = home_external_team_id
@@ -633,6 +654,21 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
     assert result["status"] == "success"
     assert result["odds_candidates"] == 0
     assert result["odds_snapshots_created"] == 0
+
+
+def test_world_cup_catalog_sync_skips_odds(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "worker.ingest.fetch_odds_index",
+        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched for world cup")),
+    )
+
+    result = run_catalog_sync(WorldCupProvider(), league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-world-cup-live"))
+    assert game is not None
+    odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id))
+    assert odds is None
 
 
 def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):

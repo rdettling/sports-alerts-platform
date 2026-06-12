@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail } from "../../../shared/api";
-import { TeamLogo, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-
-const ALERT_TYPES_BY_LEAGUE: Record<League, AlertType[]> = {
-  NBA: ["game_start", "close_game_late", "final_result"],
-  MLB: ["game_start", "inning_start", "final_result"],
-};
-const DEFAULT_TEST_MATCHUP_BY_LEAGUE: Record<League, { away: string; home: string }> = {
-  NBA: { away: "ATL", home: "BOS" },
-  MLB: { away: "MIA", home: "TOR" },
-};
+import {
+  ALERT_TYPES_BY_LEAGUE,
+  DEFAULT_TEST_MATCHUP_BY_LEAGUE,
+  TeamLogo,
+  leagueLabel,
+  messageFromUnknown,
+} from "../../../shared/lib/dashboard-ui";
 
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -76,7 +73,7 @@ export function DevToolsView({ token }: { token: string }) {
     }
     return { away: leagueTeams[0], home: leagueTeams[1] };
   }, [teams, activeLeague]);
-  const activeAlertTypes = ALERT_TYPES_BY_LEAGUE[activeLeague];
+  const activeAlertTypes = ALERT_TYPES_BY_LEAGUE[activeLeague] as AlertType[];
 
   return (
     <section className="card admin-tools-card">
@@ -93,13 +90,13 @@ export function DevToolsView({ token }: { token: string }) {
               type="button"
               onClick={() => setActiveLeague(league)}
             >
-              {league}
+              {leagueLabel(league)}
             </button>
           ))}
         </div>
 
         <div className="admin-tools-matchup">
-          <span className="admin-tools-label">Synthetic matchup ({activeLeague})</span>
+          <span className="admin-tools-label">Synthetic matchup ({leagueLabel(activeLeague)})</span>
           <span className="team-row">
             {syntheticTeams.away ? <TeamLogo team={syntheticTeams.away} size={20} /> : null}
             <strong>{syntheticTeams.away?.abbreviation ?? "AWAY"}</strong>

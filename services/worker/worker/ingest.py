@@ -30,6 +30,7 @@ from worker.providers.base import ProviderGame, SportsProvider
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 SUPPORTED_LEAGUES = LEAGUE_ORDER
+ODDS_SUPPORTED_LEAGUES = {"NBA", "MLB"}
 
 
 def _normalize_league(league: str) -> str:
@@ -49,10 +50,17 @@ def _catalog_interval_seconds(league: str) -> int:
 
 
 def _live_interval_seconds(league: str) -> int:
-    return max(
-        1,
-        settings.nba_live_sync_interval_seconds if league == "NBA" else settings.mlb_live_sync_interval_seconds,
-    )
+    if league == "NBA":
+        interval = settings.nba_live_sync_interval_seconds
+    elif league == "MLB":
+        interval = settings.mlb_live_sync_interval_seconds
+    else:
+        interval = settings.world_cup_live_sync_interval_seconds
+    return max(1, interval)
+
+
+def _league_supports_odds(league: str) -> bool:
+    return league in ODDS_SUPPORTED_LEAGUES
 
 
 def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
@@ -573,7 +581,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
         all_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
-        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled else []
+        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and _league_supports_odds(league) else []
         odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:

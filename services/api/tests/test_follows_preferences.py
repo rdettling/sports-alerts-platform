@@ -146,12 +146,14 @@ def test_alert_preferences_get_and_update(client):
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert len(groups) == 2
+    assert len(groups) == 3
     nba_group = next(group for group in groups if group["league"] == "NBA")
     mlb_group = next(group for group in groups if group["league"] == "MLB")
+    world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
     assert len(nba_group["preferences"]) == 3
     assert {item["alert_type"] for item in nba_group["preferences"]} == {"game_start", "close_game_late", "final_result"}
     assert {item["alert_type"] for item in mlb_group["preferences"]} == {"game_start", "inning_start", "final_result"}
+    assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "final_result"}
 
     update_response = client.put(
         "/alert-preferences/leagues/NBA/close_game_late",

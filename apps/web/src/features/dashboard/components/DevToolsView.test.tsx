@@ -8,9 +8,11 @@ const listTeamsMock = vi.fn(async () => [
   { id: 2, external_team_id: "1610612738", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
   { id: 3, external_team_id: "MIA", league: "MLB", name: "Miami Marlins", abbreviation: "MIA" },
   { id: 4, external_team_id: "TOR", league: "MLB", name: "Toronto Blue Jays", abbreviation: "TOR" },
+  { id: 5, external_team_id: "203", league: "WORLD_CUP", name: "Mexico", abbreviation: "MEX" },
+  { id: 6, external_team_id: "660", league: "WORLD_CUP", name: "United States", abbreviation: "USA" },
 ]);
 
-const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA" | "MLB"; alert_type: string }) => ({
+const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA" | "MLB" | "WORLD_CUP"; alert_type: string }) => ({
   id: 1,
   game_id: 100,
   league,
@@ -23,8 +25,9 @@ vi.mock("../../../shared/api", () => ({
   listLeagues: vi.fn(async () => [
     { league: "NBA", is_enabled: true },
     { league: "MLB", is_enabled: true },
+    { league: "WORLD_CUP", is_enabled: true },
   ]),
-  sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB"; alert_type: string }) =>
+  sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB" | "WORLD_CUP"; alert_type: string }) =>
     sendDevTestEmailMock(payload),
 }));
 
@@ -56,5 +59,18 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(screen.getByText("Inning-start alert")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Inning-start alert"));
     await waitFor(() => expect(sendDevTestEmailMock).toHaveBeenCalledWith({ league: "MLB", alert_type: "inning_start" }));
+  });
+
+  it("shows World Cup with only supported alerts", async () => {
+    render(<DevToolsView token="token" />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "World Cup" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "World Cup" }));
+
+    await waitFor(() => expect(screen.getByText("Synthetic matchup (World Cup)")).toBeInTheDocument());
+    expect(screen.getByText("Game start alert")).toBeInTheDocument();
+    expect(screen.getByText("Final-result alert")).toBeInTheDocument();
+    expect(screen.queryByText("Close-game alert")).toBeNull();
+    expect(screen.queryByText("Inning-start alert")).toBeNull();
   });
 });

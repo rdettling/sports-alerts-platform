@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 SCOREBOARD_URLS = {
     "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+    "WORLD_CUP": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
 }
 
 
@@ -98,11 +99,15 @@ class BallDontLieProvider(SportsProvider):
         status_payload = competition.get("status", {}) or {}
         period = status_payload.get("period")
         clock = status_payload.get("displayClock")
+        short_detail = str(status_type.get("shortDetail") or "").strip()
         if league.upper() == "MLB":
-            short_detail = str(status_type.get("shortDetail") or "").strip()
             # ESPN shortDetail carries half-inning context (e.g. "Top 6th", "Bot 7th").
             if short_detail:
                 clock = short_detail
+        elif league.upper() == "WORLD_CUP" and short_detail:
+            # ESPN shortDetail is more readable for soccer than the raw clock at
+            # state changes such as halftime and full time.
+            clock = short_detail
         completed = bool(status_type.get("completed"))
 
         return ProviderGame(

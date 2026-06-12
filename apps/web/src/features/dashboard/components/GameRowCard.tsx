@@ -1,5 +1,5 @@
 import { type Game, type Team } from "../../../shared/api";
-import { TeamLogo, formatMoneyline, leagueLogoUrl } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo, formatMoneyline, leagueBadgeLabel, leagueLogoUrl } from "../../../shared/lib/dashboard-ui";
 
 type GameRowCardProps = {
   game: Game;
@@ -40,7 +40,7 @@ export function GameRowCard({
     : game.odds
       ? formatMoneyline(game.odds.home_moneyline)
       : "—";
-  const league = (game.league || "N/A").toUpperCase();
+  const league = leagueBadgeLabel(game.league);
   const logoUrl = leagueLogoUrl(game.league);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
 

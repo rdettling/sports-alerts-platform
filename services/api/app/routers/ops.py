@@ -45,6 +45,7 @@ NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
 SCOREBOARD_URLS = {
     "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
     "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+    "WORLD_CUP": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
 }
 OPS_PROVIDER_QUOTAS = {"espn": 5000, "odds": 1000}
 OPS_RISK_UTILIZATION_WATCH_PCT = 70.0

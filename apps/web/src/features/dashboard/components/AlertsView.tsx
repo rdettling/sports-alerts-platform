@@ -10,14 +10,15 @@ import {
   type AlertPreferenceGroup,
   type AlertHistoryItem,
 } from "../../../shared/api";
-import { PREFERENCE_LABELS, deliveryStatusClass, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import {
+  ALERT_TYPES_BY_LEAGUE,
+  PREFERENCE_LABELS,
+  deliveryStatusClass,
+  leagueLabel,
+  messageFromUnknown,
+} from "../../../shared/lib/dashboard-ui";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
 import { buildLeagueRulePayload, getLeagueFieldValue, ruleFieldsFor } from "./alerts/alert-rule-config";
-
-const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
-  NBA: ["game_start", "close_game_late", "final_result"],
-  MLB: ["game_start", "inning_start", "final_result"],
-};
 
 export function AlertsView({ token }: { token: string }) {
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
@@ -73,7 +74,7 @@ export function AlertsView({ token }: { token: string }) {
     try {
       await updateAlertPreference(
         token,
-        preference.league as "NBA" | "MLB",
+        preference.league,
         preference.alert_type,
         buildLeagueRulePayload(preference, { fieldKey, fieldValue }),
       );
@@ -107,7 +108,7 @@ export function AlertsView({ token }: { token: string }) {
               <div><h3>Alert Rules</h3></div>
               <div className="chip-row">
                 {activeLeagues.map((league) => (
-                  <button key={league} className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league)}>{league}</button>
+                  <button key={league} className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league)}>{leagueLabel(league)}</button>
                 ))}
               </div>
             </div>
@@ -152,7 +153,7 @@ export function AlertsView({ token }: { token: string }) {
                               try {
                                 await updateAlertPreference(
                                   token,
-                                  preference.league as "NBA" | "MLB",
+                                  preference.league,
                                   preference.alert_type,
                                   buildLeagueRulePayload(preference, { is_enabled: !preference.is_enabled }),
                                 );

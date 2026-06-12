@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listGames, listLeagues } from "../../../shared/api";
+import { leagueLabel } from "../../../shared/lib/dashboard-ui";
 import { formatSyncAge } from "../utils/telemetry-format";
 import { buildSyncRows } from "../components/games/games-view-utils";
 
@@ -26,7 +27,7 @@ export function useDashboardSyncItems() {
     const rows = buildSyncRows(data?.games ?? [], data?.leagues.map((item) => item.league) ?? []);
     return rows.map((row) => ({
       key: row.key,
-      label: row.key === "catalog" ? "Catalog" : row.label.replace("Live (", "").replace(")", ""),
+      label: row.key === "catalog" ? "Catalog" : leagueLabel(row.label.replace("Live (", "").replace(")", "")),
       value: formatSyncAge(row.lastAt),
       tone: row.tone,
     }));

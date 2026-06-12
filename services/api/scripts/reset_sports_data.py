@@ -16,6 +16,7 @@ SPORTS_TABLES = [
     "game_odds_current",
     "games",
     "teams",
+    "league_settings",
     "worker_jobs",
     "ingest_events",
     "ingest_state",

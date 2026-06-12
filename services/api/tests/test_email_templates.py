@@ -87,3 +87,29 @@ def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
     assert subject.startswith("Game start · AWY @ HOM")
     assert "teamlogos/nba/500/" not in html_body
     assert "teamlogos/mlb/500/" not in html_body
+
+
+def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-1",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=1,
+        away_score=0,
+        period=1,
+        clock="12'",
+    )
+    alert = _mk_alert("game_start")
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject.startswith("Kickoff · MEX @ USA")
+    assert "teamlogos/countries/500/mex.png" in html_body
+    assert "teamlogos/countries/500/usa.png" in html_body
+    assert "Kickoff is live now" in text_body

@@ -8,6 +8,7 @@ class WorkerSettings(BaseSettings):
     catalog_sync_interval_seconds: int = 43200
     nba_live_sync_interval_seconds: int = 120
     mlb_live_sync_interval_seconds: int = 300
+    world_cup_live_sync_interval_seconds: int = 180
     live_sync_pregame_retry_seconds: int = 600
     odds_pregame_window_hours: int = 24
     nba_provider: str = "espn"

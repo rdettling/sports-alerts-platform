@@ -133,6 +133,11 @@ def create_admin_test_alert(
             away_score = 3
             period = 9
             clock = "Final"
+        elif league == "WORLD_CUP":
+            home_score = 2
+            away_score = 1
+            period = 2
+            clock = "FT"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=4)
 
     target_game = Game(

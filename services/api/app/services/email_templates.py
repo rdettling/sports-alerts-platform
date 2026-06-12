@@ -90,17 +90,15 @@ def _normalize_league(game: Game, home: Team | None, away: Team | None) -> str:
 
 
 def _team_logo_url(team: Team | None, fallback_abbr: str, league: str) -> str:
+    abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
+    if not abbr:
+        return ""
     if league == "NBA":
-        abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
-        if not abbr:
-            return ""
         return f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr}.png"
     if league == "MLB":
-        abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
-        if not abbr:
-            return ""
         return f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbr}.png"
-    abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
+    if league == "WORLD_CUP":
+        return f"https://a.espncdn.com/i/teamlogos/countries/500/{abbr}.png"
     return ""
 
 
@@ -135,6 +133,8 @@ def _primary_status_line(alert: SentAlert, game: Game, away_abbr: str, home_abbr
             return "Tip-off is live now"
         if league == "MLB":
             return "First pitch is live now"
+        if league == "WORLD_CUP":
+            return "Kickoff is live now"
         return "Game start is live now"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
@@ -166,6 +166,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
             return f"Tip-off · {away_abbr} @ {home_abbr}"
         if league == "MLB":
             return f"First pitch · {away_abbr} @ {home_abbr}"
+        if league == "WORLD_CUP":
+            return f"Kickoff · {away_abbr} @ {home_abbr}"
         return f"Game start · {away_abbr} @ {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"

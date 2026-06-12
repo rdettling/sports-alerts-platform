@@ -13,9 +13,11 @@ def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "MLB"),
         ("catalog_sync", "NBA"),
+        ("catalog_sync", "WORLD_CUP"),
         ("delivery", None),
         ("live_sync", "MLB"),
         ("live_sync", "NBA"),
+        ("live_sync", "WORLD_CUP"),
     ]
     assert all(job.status == "queued" for job in jobs)
 
@@ -31,8 +33,10 @@ def test_bootstrap_jobs_skips_disabled_leagues(db_session):
     jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "NBA"),
+        ("catalog_sync", "WORLD_CUP"),
         ("delivery", None),
         ("live_sync", "NBA"),
+        ("live_sync", "WORLD_CUP"),
     ]
 
 
@@ -239,6 +243,22 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     )
     next_seconds = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
+
+
+def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "true",
+            "next_poll_seconds": scheduler.settings.world_cup_live_sync_interval_seconds,
+        },
+    )
+
+    next_seconds = scheduler._run_live_sync_job("WORLD_CUP")
+    assert next_seconds == scheduler.settings.world_cup_live_sync_interval_seconds
 
 
 def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):

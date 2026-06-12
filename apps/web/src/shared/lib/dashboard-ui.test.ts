@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, formatMoneyline, noVigProbabilities } from "./dashboard-ui";
+import { formatGameTime, formatMoneyline, leagueLabel, noVigProbabilities } from "./dashboard-ui";
 
 describe("dashboard utilities", () => {
   it("formats moneyline", () => {
@@ -57,5 +57,28 @@ describe("dashboard utilities", () => {
     expect(label).toBe("Inning 8");
     expect(label.includes("OT")).toBe(false);
     expect(label).not.toBe("Halftime");
+  });
+
+  it("formats World Cup labels and live clock", () => {
+    expect(leagueLabel("WORLD_CUP")).toBe("World Cup");
+
+    const label = formatGameTime({
+      id: 3,
+      external_game_id: "c",
+      league: "WORLD_CUP",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: new Date().toISOString(),
+      status: "live",
+      home_score: 1,
+      away_score: 0,
+      period: 2,
+      clock: "67'",
+      is_final: false,
+      last_ingested_at: null,
+      odds: null,
+    });
+
+    expect(label).toBe("67'");
   });
 });

@@ -70,28 +70,74 @@ MLB_TEAMS = [
     ("30", "Tampa Bay Rays", "TB"),
 ]
 
+WORLD_CUP_TEAMS = [
+    ("624", "Algeria", "ALG"),
+    ("202", "Argentina", "ARG"),
+    ("628", "Australia", "AUS"),
+    ("474", "Austria", "AUT"),
+    ("459", "Belgium", "BEL"),
+    ("452", "Bosnia-Herzegovina", "BIH"),
+    ("205", "Brazil", "BRA"),
+    ("206", "Canada", "CAN"),
+    ("2597", "Cape Verde", "CPV"),
+    ("208", "Colombia", "COL"),
+    ("2850", "Congo DR", "COD"),
+    ("477", "Croatia", "CRO"),
+    ("11678", "Curacao", "CUW"),
+    ("450", "Czechia", "CZE"),
+    ("209", "Ecuador", "ECU"),
+    ("2620", "Egypt", "EGY"),
+    ("448", "England", "ENG"),
+    ("478", "France", "FRA"),
+    ("481", "Germany", "GER"),
+    ("4469", "Ghana", "GHA"),
+    ("2654", "Haiti", "HAI"),
+    ("469", "Iran", "IRN"),
+    ("4375", "Iraq", "IRQ"),
+    ("4789", "Ivory Coast", "CIV"),
+    ("627", "Japan", "JPN"),
+    ("2917", "Jordan", "JOR"),
+    ("203", "Mexico", "MEX"),
+    ("2869", "Morocco", "MAR"),
+    ("449", "Netherlands", "NED"),
+    ("2666", "New Zealand", "NZL"),
+    ("464", "Norway", "NOR"),
+    ("2659", "Panama", "PAN"),
+    ("210", "Paraguay", "PAR"),
+    ("482", "Portugal", "POR"),
+    ("4398", "Qatar", "QAT"),
+    ("655", "Saudi Arabia", "KSA"),
+    ("580", "Scotland", "SCO"),
+    ("654", "Senegal", "SEN"),
+    ("467", "South Africa", "RSA"),
+    ("451", "South Korea", "KOR"),
+    ("164", "Spain", "ESP"),
+    ("466", "Sweden", "SWE"),
+    ("475", "Switzerland", "SUI"),
+    ("659", "Tunisia", "TUN"),
+    ("465", "Turkiye", "TUR"),
+    ("660", "United States", "USA"),
+    ("212", "Uruguay", "URU"),
+    ("2570", "Uzbekistan", "UZB"),
+]
+
+TEAM_SEEDS_BY_LEAGUE = {
+    "NBA": NBA_TEAMS,
+    "MLB": MLB_TEAMS,
+    "WORLD_CUP": WORLD_CUP_TEAMS,
+}
+
 
 def seed_teams_if_empty(db: Session) -> None:
     ensure_league_settings(db)
-    existing_nba = db.scalar(select(Team.id).where(Team.league == "NBA").limit(1))
-    if not existing_nba:
-        for external_team_id, name, abbreviation in NBA_TEAMS:
+    for league, teams in TEAM_SEEDS_BY_LEAGUE.items():
+        if db.scalar(select(Team.id).where(Team.league == league).limit(1)):
+            continue
+        for external_team_id, name, abbreviation in teams:
             db.add(
                 Team(
                     external_team_id=external_team_id,
-                    league="NBA",
-                    name=name,
-                    abbreviation=abbreviation,
-                )
-            )
-
-    existing_mlb = db.scalar(select(Team.id).where(Team.league == "MLB").limit(1))
-    if not existing_mlb:
-        for external_team_id, name, abbreviation in MLB_TEAMS:
-            db.add(
-                Team(
-                    external_team_id=external_team_id,
-                    league="MLB",
+                    league=league,
                     name=name,
                     abbreviation=abbreviation,
                 )

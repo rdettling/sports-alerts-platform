@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Game, Team } from "../api";
+import { Game, type League, Team } from "../api";
 
 const GAME_STATUS_LABELS: Record<string, string> = {
   scheduled: "Scheduled",
@@ -16,6 +16,18 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   final_result: "Final result",
 };
 
+export const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
+  NBA: ["game_start", "close_game_late", "final_result"],
+  MLB: ["game_start", "inning_start", "final_result"],
+  WORLD_CUP: ["game_start", "final_result"],
+};
+
+export const DEFAULT_TEST_MATCHUP_BY_LEAGUE: Record<League, { away: string; home: string }> = {
+  NBA: { away: "ATL", home: "BOS" },
+  MLB: { away: "MIA", home: "TOR" },
+  WORLD_CUP: { away: "MEX", home: "USA" },
+};
+
 export function messageFromUnknown(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -28,6 +40,30 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
   return null;
+}
+
+export function leagueLabel(league: string | null | undefined): string {
+  const normalized = (league || "").toUpperCase();
+  if (normalized === "WORLD_CUP") return "World Cup";
+  return normalized || "Unknown";
+}
+
+export function leagueBadgeLabel(league: string | null | undefined): string {
+  const normalized = (league || "").toUpperCase();
+  if (normalized === "WORLD_CUP") return "WC";
+  return normalized || "N/A";
+}
+
+export function liveCadenceLabel(league: League): string {
+  if (league === "NBA") return "2m cadence";
+  if (league === "MLB") return "5m cadence";
+  return "3m cadence";
+}
+
+export function liveStaleAfterMinutes(league: League): number {
+  if (league === "NBA") return 4;
+  if (league === "MLB") return 10;
+  return 6;
 }
 
 export function scoreSnippet(game: Game): string {
@@ -45,6 +81,9 @@ function teamLogoUrl(team: Team): string {
   }
   if (league === "NBA") {
     return `https://a.espncdn.com/i/teamlogos/nba/500/${abbr}.png`;
+  }
+  if (league === "WORLD_CUP") {
+    return `https://a.espncdn.com/i/teamlogos/countries/500/${abbr}.png`;
   }
   return "";
 }
@@ -97,6 +136,19 @@ function formatBaseballPeriod(period: number | null): string {
   return `Inning ${period}`;
 }
 
+function formatSoccerPeriod(period: number | null): string {
+  if (period === null || period <= 0) {
+    return "";
+  }
+  if (period === 1) {
+    return "1H";
+  }
+  if (period === 2) {
+    return "2H";
+  }
+  return `ET ${period - 2}`;
+}
+
 function isClockAtZero(clock: string): boolean {
   return clock === "0" || clock === "0.0" || clock === "00:00" || clock === "0:00";
 }
@@ -104,10 +156,17 @@ function isClockAtZero(clock: string): boolean {
 export function formatGameTime(game: Game): string {
   if (game.status === "in_progress" || game.status === "live") {
     const league = (game.league || "").toUpperCase();
-    const period = league === "MLB" ? formatBaseballPeriod(game.period) : formatPeriod(game.period);
+    const period =
+      league === "MLB" ? formatBaseballPeriod(game.period) : league === "WORLD_CUP" ? formatSoccerPeriod(game.period) : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
     if (league !== "MLB" && game.period === 2 && isClockAtZero(clock)) {
       return "Halftime";
+    }
+    if (league === "WORLD_CUP" && clock.toUpperCase() === "HT") {
+      return "Halftime";
+    }
+    if (league === "WORLD_CUP" && clock) {
+      return clock;
     }
     if (league === "MLB" && clock && !isClockAtZero(clock)) {
       return clock;

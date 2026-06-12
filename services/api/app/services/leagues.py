@@ -7,14 +7,16 @@ from sqlalchemy.orm import Session
 
 from app.db.models import LeagueSetting
 
-LEAGUE_ORDER = ("NBA", "MLB")
+LEAGUE_ORDER = ("NBA", "MLB", "WORLD_CUP")
 ALERT_TYPES_BY_LEAGUE = {
     "NBA": ["game_start", "close_game_late", "final_result"],
     "MLB": ["game_start", "inning_start", "final_result"],
+    "WORLD_CUP": ["game_start", "final_result"],
 }
 DEFAULT_TEST_MATCHUPS_BY_LEAGUE = {
     "NBA": ("ATL", "BOS"),
     "MLB": ("MIA", "TOR"),
+    "WORLD_CUP": ("MEX", "USA"),
 }
 
 

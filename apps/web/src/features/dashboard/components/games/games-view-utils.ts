@@ -1,5 +1,5 @@
 import { type Game, type League } from "../../../../shared/api";
-import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
+import { formatGameTime, liveCadenceLabel, liveStaleAfterMinutes } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
 
 export type SyncTone = "fresh" | "stale" | "idle";
@@ -137,9 +137,9 @@ export function buildSyncRows(games: Game[], activeLeagues: League[]): SyncRow[]
     ...activeLeagues.map((league) =>
       leagueRow(
         `Live (${league})`,
-        league === "NBA" ? "2m cadence" : "5m cadence",
+        liveCadenceLabel(league),
         byLeague(league),
-        league === "NBA" ? 4 : 10,
+        liveStaleAfterMinutes(league),
       ),
     ),
   ];

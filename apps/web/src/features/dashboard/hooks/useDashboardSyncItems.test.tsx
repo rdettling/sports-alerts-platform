@@ -8,6 +8,7 @@ vi.mock("../../../shared/api", () => ({
   listLeagues: vi.fn(async () => [
     { league: "NBA", is_enabled: true },
     { league: "MLB", is_enabled: true },
+    { league: "WORLD_CUP", is_enabled: true },
   ]),
   listGames: vi.fn(async () => [
     {
@@ -54,8 +55,8 @@ describe("useDashboardSyncItems", () => {
   it("returns canonical sync labels", async () => {
     const { result } = renderHook(() => useDashboardSyncItems(), { wrapper });
 
-    await waitFor(() => expect(result.current.length).toBe(3));
+    await waitFor(() => expect(result.current.length).toBe(4));
 
-    expect(result.current.map((item) => item.label)).toEqual(["Catalog", "NBA", "MLB"]);
+    expect(result.current.map((item) => item.label)).toEqual(["Catalog", "NBA", "MLB", "World Cup"]);
   });
 });

@@ -1,4 +1,5 @@
 import { type League } from "../../../../shared/api";
+import { leagueLabel } from "../../../../shared/lib/dashboard-ui";
 import { type DayOption } from "./games-view-utils";
 
 export function GamesFiltersPanel({
@@ -25,7 +26,7 @@ export function GamesFiltersPanel({
       <div className="games-league-filter" role="tablist" aria-label="League filter">
         <button className={`chip-btn ${leagueFilter === "all" ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange("all")} disabled={isLoading}>All</button>
         {activeLeagues.map((league) => (
-          <button key={league} className={`chip-btn ${leagueFilter === league ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange(league)} disabled={isLoading}>{league}</button>
+          <button key={league} className={`chip-btn ${leagueFilter === league ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange(league)} disabled={isLoading}>{leagueLabel(league)}</button>
         ))}
       </div>
       <button className={`games-day-filter-btn ${dayFilter === "all" ? "active" : ""}`.trim()} onClick={() => onDayFilterChange("all")} disabled={isLoading}>

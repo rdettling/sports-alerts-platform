@@ -43,7 +43,7 @@ export type Game = {
   } | null;
 };
 
-export type League = "NBA" | "MLB";
+export type League = "NBA" | "MLB" | "WORLD_CUP";
 export type LeagueSetting = { league: League; is_enabled: boolean };
 
 export type CurrentFollows = { teams: Team[]; games: Game[] };

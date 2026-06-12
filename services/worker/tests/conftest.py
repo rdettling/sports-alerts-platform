@@ -83,6 +83,8 @@ def reset_db():
             Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS"),
             Team(external_team_id="10", league="MLB", name="New York Yankees", abbreviation="NYY"),
             Team(external_team_id="2", league="MLB", name="Boston Red Sox", abbreviation="BOS"),
+            Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX"),
+            Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA"),
         ]
     )
     db.commit()
