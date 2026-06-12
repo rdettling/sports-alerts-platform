@@ -888,6 +888,36 @@ def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
     assert result["next_scheduled_start_at"] is None
 
 
+def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    db_session.add(
+        Game(
+            external_game_id="mlb-overdue-1",
+            league="MLB",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now - timedelta(minutes=20),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    class EmptyProvider:
+        def fetch_games(self, league, requests):
+            return []
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    result = run_live_sync(EmptyProvider(), league="MLB")
+    assert result["status"] == "success"
+    assert result["has_live_games"] == "false"
+    assert result["mode"] == "waiting_for_start"
+    assert result["next_scheduled_start_at"] is not None
+
+
 def test_catalog_sync_fails_for_disabled_league(db_session):
     class DisabledProvider:
         def fetch_games(self, league, requests):

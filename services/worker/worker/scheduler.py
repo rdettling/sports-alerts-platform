@@ -265,7 +265,9 @@ def _run_live_sync_job(league: str) -> int:
                 if next_scheduled.tzinfo is None:
                     next_scheduled = next_scheduled.replace(tzinfo=timezone.utc)
                 seconds_until_start = int((next_scheduled - _utcnow()).total_seconds())
-                return max(1, seconds_until_start)
+                if seconds_until_start > 0:
+                    return max(1, seconds_until_start)
+                return max(1, settings.live_sync_pregame_retry_seconds)
             except ValueError:
                 pass
         return max(1, settings.live_sync_pregame_retry_seconds)

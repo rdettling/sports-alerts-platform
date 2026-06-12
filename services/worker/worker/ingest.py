@@ -31,6 +31,7 @@ from worker.providers.base import ProviderGame, SportsProvider
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
+LIVE_STATUS_RECHECK_GRACE = timedelta(hours=2)
 SUPPORTED_LEAGUES = tuple(list_supported_leagues())
 
 
@@ -85,7 +86,7 @@ def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime |
             Game.league == league,
             Game.is_final.is_(False),
             Game.status == "scheduled",
-            Game.scheduled_start_time >= now,
+            Game.scheduled_start_time >= now - LIVE_STATUS_RECHECK_GRACE,
         )
     )
 

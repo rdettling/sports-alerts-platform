@@ -50,7 +50,6 @@ describe("DashboardLayout", () => {
     expect(screen.getByText("Live Game Alerts")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
-    expect(screen.getByText("Live game slate and follow actions")).toBeInTheDocument();
     expect(screen.getByLabelText("Data sync status")).toBeInTheDocument();
     expect(screen.getByText("user@example.com")).toBeInTheDocument();
     expect(screen.getByText("Games view")).toBeInTheDocument();

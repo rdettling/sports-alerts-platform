@@ -18,6 +18,7 @@
   display: grid;
   gap: 0;
   min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .games-panel {
@@ -566,6 +567,7 @@
   grid-template-columns: 1fr;
   gap: 0.8rem;
   align-items: start;
+  min-height: 0;
 }
 
 .following-game-actions {
@@ -725,6 +727,46 @@
   .following-alert-rule-header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .view-stack,
+  .games-page,
+  .following-simple-page,
+  .alerts-skeleton-page {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .games-panel {
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .games-feed-grid,
+  .data-table-wrap {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .data-table-wrap {
+    overflow: auto;
+    padding-right: 0.2rem;
+  }
+
+  .alerts-layout,
+  .following-two-col-panels {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .alerts-rules-panel,
+  .alerts-history-panel,
+  .following-simple-section {
+    min-height: 0;
+    overflow: auto;
   }
 }
 

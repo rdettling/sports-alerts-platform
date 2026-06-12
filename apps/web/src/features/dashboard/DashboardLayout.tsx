@@ -15,15 +15,14 @@ type DashboardRouteMeta = {
   key: DashboardRouteKey;
   path: string;
   label: string;
-  subtitle: string;
   adminOnly?: boolean;
 };
 
 const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
-  { key: "games", path: "games", label: "Games", subtitle: "Live game slate and follow actions" },
-  { key: "following", path: "following", label: "Following", subtitle: "Manage your followed teams and games" },
-  { key: "alerts", path: "alerts", label: "Alerts", subtitle: "Configure rules and review delivery history" },
-  { key: "admin", path: "admin", label: "Admin", subtitle: "Operational telemetry and test tools", adminOnly: true },
+  { key: "games", path: "games", label: "Games" },
+  { key: "following", path: "following", label: "Following" },
+  { key: "alerts", path: "alerts", label: "Alerts" },
+  { key: "admin", path: "admin", label: "Admin", adminOnly: true },
 ];
 
 const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
@@ -95,13 +94,6 @@ export function DashboardLayout() {
               </NavLink>
             ))}
           </nav>
-        </div>
-        <div className="app-header-main">
-          <div className="page-intro">
-            <h2>{currentRoute.label}</h2>
-            <p>{currentRoute.subtitle}</p>
-            {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
-          </div>
           <div className="app-account">
             <span className="user-email">{user.email}</span>
             <button className="btn btn-secondary" onClick={logout}>
@@ -109,6 +101,7 @@ export function DashboardLayout() {
             </button>
           </div>
         </div>
+        {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
       </header>
 
       <main className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>

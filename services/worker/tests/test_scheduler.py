@@ -229,6 +229,23 @@ def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
     assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
 
 
+def test_run_live_sync_job_uses_pregame_retry_when_start_is_past(monkeypatch):
+    target = datetime.now(timezone.utc) - timedelta(minutes=5)
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "false",
+            "mode": "waiting_for_start",
+            "next_scheduled_start_at": target.isoformat(),
+        },
+    )
+    next_seconds = scheduler._run_live_sync_job("MLB")
+    assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+
+
 def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     monkeypatch.setattr(
         "worker.scheduler.run_live_sync",
