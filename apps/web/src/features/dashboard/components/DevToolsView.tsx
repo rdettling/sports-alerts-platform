@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail } from "../../../shared/api";
+import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail, type LeagueSetting } from "../../../shared/api";
 import {
-  ALERT_TYPES_BY_LEAGUE,
-  DEFAULT_TEST_MATCHUP_BY_LEAGUE,
   TeamLogo,
-  leagueLabel,
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
-  const [activeLeagues, setActiveLeagues] = useState<League[]>([]);
+  const [activeLeagues, setActiveLeagues] = useState<LeagueSetting[]>([]);
   const [busyAlertType, setBusyAlertType] = useState<AlertType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +23,7 @@ export function DevToolsView({ token }: { token: string }) {
       try {
         const [teamsResponse, leaguesResponse] = await Promise.all([listTeams(), listLeagues()]);
         setTeams(teamsResponse);
-        setActiveLeagues(leaguesResponse.map((item) => item.league));
+        setActiveLeagues(leaguesResponse);
       } catch (fetchError) {
         setError(messageFromUnknown(fetchError));
       } finally {
@@ -38,8 +35,8 @@ export function DevToolsView({ token }: { token: string }) {
 
   useEffect(() => {
     if (activeLeagues.length === 0) return;
-    if (!activeLeagues.includes(activeLeague)) {
-      setActiveLeague(activeLeagues[0]);
+    if (!activeLeagues.some((item) => item.league === activeLeague)) {
+      setActiveLeague(activeLeagues[0].league);
     }
   }, [activeLeague, activeLeagues]);
 
@@ -64,16 +61,10 @@ export function DevToolsView({ token }: { token: string }) {
     if (leagueTeams.length < 2) {
       return { away: null, home: null };
     }
-    const byAbbr = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team]));
-    const defaults = DEFAULT_TEST_MATCHUP_BY_LEAGUE[activeLeague];
-    const away = byAbbr.get(defaults.away);
-    const home = byAbbr.get(defaults.home);
-    if (away && home && away.id !== home.id) {
-      return { away, home };
-    }
     return { away: leagueTeams[0], home: leagueTeams[1] };
   }, [teams, activeLeague]);
-  const activeAlertTypes = ALERT_TYPES_BY_LEAGUE[activeLeague] as AlertType[];
+  const activeLeagueItem = activeLeagues.find((item) => item.league === activeLeague) ?? null;
+  const activeAlertTypes = (activeLeagueItem?.alert_types ?? []) as AlertType[];
 
   return (
     <section className="card admin-tools-card">
@@ -85,18 +76,18 @@ export function DevToolsView({ token }: { token: string }) {
         <div className="chip-row">
           {activeLeagues.map((league) => (
             <button
-              key={league}
-              className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()}
+              key={league.league}
+              className={`chip-btn ${activeLeague === league.league ? "active" : ""}`.trim()}
               type="button"
-              onClick={() => setActiveLeague(league)}
+              onClick={() => setActiveLeague(league.league)}
             >
-              {leagueLabel(league)}
+              {league.label}
             </button>
           ))}
         </div>
 
         <div className="admin-tools-matchup">
-          <span className="admin-tools-label">Synthetic matchup ({leagueLabel(activeLeague)})</span>
+          <span className="admin-tools-label">Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})</span>
           <span className="team-row">
             {syntheticTeams.away ? <TeamLogo team={syntheticTeams.away} size={20} /> : null}
             <strong>{syntheticTeams.away?.abbreviation ?? "AWAY"}</strong>

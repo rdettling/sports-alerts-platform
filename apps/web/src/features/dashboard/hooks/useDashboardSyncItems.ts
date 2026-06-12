@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { listGames, listLeagues } from "../../../shared/api";
-import { leagueLabel } from "../../../shared/lib/dashboard-ui";
+import { listGames, listLeagues, type League } from "../../../shared/api";
 import { formatSyncAge } from "../utils/telemetry-format";
 import { buildSyncRows } from "../components/games/games-view-utils";
 
@@ -24,10 +23,12 @@ export function useDashboardSyncItems() {
   });
 
   return useMemo<HeaderSyncItem[]>(() => {
-    const rows = buildSyncRows(data?.games ?? [], data?.leagues.map((item) => item.league) ?? []);
+    const leagueItems = data?.leagues ?? [];
+    const rows = buildSyncRows(data?.games ?? [], leagueItems.map((item) => item.league));
+    const labelByLeague = new Map(leagueItems.map((item) => [item.league, item.label]));
     return rows.map((row) => ({
       key: row.key,
-      label: row.key === "catalog" ? "Catalog" : leagueLabel(row.label.replace("Live (", "").replace(")", "")),
+      label: row.key === "catalog" ? "Catalog" : (labelByLeague.get(row.label.replace("Live (", "").replace(")", "") as League) ?? row.label),
       value: formatSyncAge(row.lastAt),
       tone: row.tone,
     }));

@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import argparse
-from sqlalchemy import text
+import os
+import sys
+from pathlib import Path
 
-from app.db.session import SessionLocal
-from app.services.seed import seed_teams_if_empty
+from sqlalchemy import inspect, text
+
+ROOT = Path(__file__).resolve().parents[1]
+os.chdir(ROOT)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.db.session import SessionLocal  # noqa: E402
+from app.services.seed import seed_teams_if_empty  # noqa: E402
 
 SPORTS_TABLES = [
     "sent_alerts",
@@ -35,12 +44,7 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        existing_tables = {
-            name
-            for name, in db.execute(
-                text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-            ).all()
-        }
+        existing_tables = set(inspect(db.get_bind()).get_table_names())
         for table in SPORTS_TABLES:
             if table not in existing_tables:
                 print(f"Skipping missing table: {table}")

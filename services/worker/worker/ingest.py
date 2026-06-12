@@ -20,7 +20,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from app.services.alert_defaults import get_alert_default_values
-from app.services.leagues import ALERT_TYPES_BY_LEAGUE, LEAGUE_ORDER, get_active_leagues
+from app.services.leagues import get_active_leagues, get_alert_types, league_supports_odds, list_supported_leagues
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_odds_index, game_key
@@ -29,8 +29,7 @@ from worker.providers.base import ProviderGame, SportsProvider
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
-SUPPORTED_LEAGUES = LEAGUE_ORDER
-ODDS_SUPPORTED_LEAGUES = {"NBA", "MLB"}
+SUPPORTED_LEAGUES = tuple(list_supported_leagues())
 
 
 def _normalize_league(league: str) -> str:
@@ -57,11 +56,6 @@ def _live_interval_seconds(league: str) -> int:
     else:
         interval = settings.world_cup_live_sync_interval_seconds
     return max(1, interval)
-
-
-def _league_supports_odds(league: str) -> bool:
-    return league in ODDS_SUPPORTED_LEAGUES
-
 
 def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
     return db.scalar(
@@ -168,7 +162,7 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
     created = False
     for user_id in sorted(user_ids):
         for league in sorted(leagues):
-            for alert_type in ALERT_TYPES_BY_LEAGUE.get(league, ()):
+            for alert_type in get_alert_types(league):
                 key = (user_id, league, alert_type)
                 if key in existing:
                     continue
@@ -581,7 +575,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
         all_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, game_key_by_id = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
-        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and _league_supports_odds(league) else []
+        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
         odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:

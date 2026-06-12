@@ -23,9 +23,9 @@ const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA
 vi.mock("../../../shared/api", () => ({
   listTeams: () => listTeamsMock(),
   listLeagues: vi.fn(async () => [
-    { league: "NBA", is_enabled: true },
-    { league: "MLB", is_enabled: true },
-    { league: "WORLD_CUP", is_enabled: true },
+    { league: "NBA", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], is_enabled: true },
+    { league: "MLB", label: "MLB", badge_label: "MLB", alert_types: ["game_start", "inning_start", "final_result"], is_enabled: true },
+    { league: "WORLD_CUP", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "final_result"], is_enabled: true },
   ]),
   sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB" | "WORLD_CUP"; alert_type: string }) =>
     sendDevTestEmailMock(payload),

@@ -9,7 +9,7 @@ vi.mock("../../../shared/api", () => ({
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
   listAlertHistory: vi.fn(async () => ({ items: [] })),
-  listLeagues: vi.fn(async () => [{ league: "NBA", is_enabled: true }]),
+  listLeagues: vi.fn(async () => [{ league: "NBA", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], is_enabled: true }]),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {

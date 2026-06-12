@@ -11,10 +11,8 @@ import {
   type AlertHistoryItem,
 } from "../../../shared/api";
 import {
-  ALERT_TYPES_BY_LEAGUE,
   PREFERENCE_LABELS,
   deliveryStatusClass,
-  leagueLabel,
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
@@ -27,7 +25,7 @@ export function AlertsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
-  const [activeLeagues, setActiveLeagues] = useState<League[]>([]);
+  const [activeLeagues, setActiveLeagues] = useState<Array<{ league: League; label: string; alert_types: string[] }>>([]);
 
   const load = async () => {
     setError(null);
@@ -40,7 +38,7 @@ export function AlertsView({ token }: { token: string }) {
       ]);
       setPreferenceGroups(preferenceResponse);
       setHistoryItems(historyResponse.items);
-      setActiveLeagues(leaguesResponse.map((item) => item.league));
+      setActiveLeagues(leaguesResponse);
     } finally {
       setLoading(false);
     }
@@ -59,8 +57,8 @@ export function AlertsView({ token }: { token: string }) {
 
   useEffect(() => {
     if (activeLeagues.length === 0) return;
-    if (!activeLeagues.includes(activeLeague)) {
-      setActiveLeague(activeLeagues[0]);
+    if (!activeLeagues.some((item) => item.league === activeLeague)) {
+      setActiveLeague(activeLeagues[0].league);
     }
   }, [activeLeague, activeLeagues]);
 
@@ -89,12 +87,13 @@ export function AlertsView({ token }: { token: string }) {
   const activeGroup = useMemo(() => {
     const raw = preferenceGroups.find((group) => group.league === activeLeague) ?? null;
     if (!raw) return null;
-    const allowed = new Set(ALERT_TYPES_BY_LEAGUE[activeLeague]);
+    const activeLeagueItem = activeLeagues.find((item) => item.league === activeLeague);
+    const allowed = new Set(activeLeagueItem?.alert_types ?? []);
     return {
       ...raw,
       preferences: raw.preferences.filter((preference) => allowed.has(preference.alert_type)),
     };
-  }, [preferenceGroups, activeLeague]);
+  }, [preferenceGroups, activeLeague, activeLeagues]);
 
   return (
     <section className="view-stack alerts-skeleton-page">
@@ -108,7 +107,7 @@ export function AlertsView({ token }: { token: string }) {
               <div><h3>Alert Rules</h3></div>
               <div className="chip-row">
                 {activeLeagues.map((league) => (
-                  <button key={league} className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league)}>{leagueLabel(league)}</button>
+                  <button key={league.league} className={`chip-btn ${activeLeague === league.league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league.league)}>{league.label}</button>
                 ))}
               </div>
             </div>

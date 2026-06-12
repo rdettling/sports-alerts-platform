@@ -1,26 +1,21 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from time import monotonic
 from typing import Any, Callable
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.services.api_usage import record_api_call_event
-from sqlalchemy.orm import Session
+from app.services.leagues import get_scoreboard_url
 from worker.providers.base import ProviderGame, ScoreboardRequest, SportsProvider
 
 logger = logging.getLogger(__name__)
 
-SCOREBOARD_URLS = {
-    "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-    "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-    "WORLD_CUP": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-}
 
-
-class BallDontLieProvider(SportsProvider):
+class EspnScoreboardProvider(SportsProvider):
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
         self._telemetry_db: Session | None = None
@@ -31,9 +26,7 @@ class BallDontLieProvider(SportsProvider):
         self._ingest_run_id = ingest_run_id
 
     def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
-        scoreboard_url = SCOREBOARD_URLS.get(league.upper())
-        if not scoreboard_url:
-            raise ValueError(f"Unsupported league for ESPN scoreboard: {league}")
+        scoreboard_url = get_scoreboard_url(league)
         started_at = monotonic()
         response = httpx.get(scoreboard_url, params=params, timeout=15.0)
         status_code = int(response.status_code)
@@ -74,8 +67,6 @@ class BallDontLieProvider(SportsProvider):
         away_external_team_id = str(away_team.get("id") or "").strip()
         if not home_external_team_id or not away_external_team_id:
             return None
-        # ESPN sometimes emits placeholder/non-team ids (e.g. "-1") in edge events.
-        # Ignore these rows to avoid polluting ingest with guaranteed mapping misses.
         if home_external_team_id.startswith("-") or away_external_team_id.startswith("-"):
             return None
 
@@ -100,13 +91,10 @@ class BallDontLieProvider(SportsProvider):
         period = status_payload.get("period")
         clock = status_payload.get("displayClock")
         short_detail = str(status_type.get("shortDetail") or "").strip()
-        if league.upper() == "MLB":
-            # ESPN shortDetail carries half-inning context (e.g. "Top 6th", "Bot 7th").
-            if short_detail:
-                clock = short_detail
-        elif league.upper() == "WORLD_CUP" and short_detail:
-            # ESPN shortDetail is more readable for soccer than the raw clock at
-            # state changes such as halftime and full time.
+        normalized_league = league.upper()
+        if normalized_league == "MLB" and short_detail:
+            clock = short_detail
+        elif normalized_league == "WORLD_CUP" and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
 
@@ -128,9 +116,7 @@ class BallDontLieProvider(SportsProvider):
         for date in dates:
             try:
                 payload = self._fetch_json(league, {"dates": date})
-            except Exception:  # pragma: no cover - exercised through integration behavior
-                # Keep existing game rows when a targeted request fails; retry next planner tick.
-                # This prevents widening to a broad fallback request in the same cycle.
+            except Exception:  # pragma: no cover
                 logger.warning("ESPN request failed for date=%s; preserving stale game rows until next cycle", date)
                 continue
             for event in payload.get("events", []):

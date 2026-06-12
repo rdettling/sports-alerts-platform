@@ -1,9 +1,9 @@
 from worker.config import settings
-from worker.providers.balldontlie import BallDontLieProvider
+from worker.providers.espn import EspnScoreboardProvider
 from worker.providers.base import SportsProvider
 
 
 def get_provider() -> SportsProvider:
-    if settings.nba_provider in {"balldontlie", "espn"}:
-        return BallDontLieProvider()
-    raise ValueError(f"Unsupported nba provider: {settings.nba_provider}")
+    if settings.scoreboard_provider == "espn":
+        return EspnScoreboardProvider()
+    raise ValueError(f"Unsupported scoreboard provider: {settings.scoreboard_provider}")

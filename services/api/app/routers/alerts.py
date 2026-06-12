@@ -9,7 +9,7 @@ from app.db.models import Game, SentAlert, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
-from app.services.leagues import ALERT_TYPES_BY_LEAGUE, DEFAULT_TEST_MATCHUPS_BY_LEAGUE, get_active_leagues
+from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -28,7 +28,7 @@ def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough teams available for test alerts")
 
     by_abbr = {team.abbreviation.upper(): team for team in teams}
-    default_away_abbr, default_home_abbr = DEFAULT_TEST_MATCHUPS_BY_LEAGUE.get(league, ("", ""))
+    default_away_abbr, default_home_abbr = get_default_test_matchup(league)
     away = by_abbr.get(default_away_abbr)
     home = by_abbr.get(default_home_abbr)
     if away and home and away.id != home.id:
@@ -89,7 +89,10 @@ def create_admin_test_alert(
     db: Session = Depends(get_db),
 ) -> DevTestAlertResponse:
     league = payload.league.strip().upper()
-    allowed_alert_types = set(ALERT_TYPES_BY_LEAGUE.get(league, []))
+    try:
+        allowed_alert_types = set(get_alert_types(league))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league") from exc
     if not allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
     if league not in set(get_active_leagues(db)):

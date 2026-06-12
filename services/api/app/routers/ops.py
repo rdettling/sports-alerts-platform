@@ -34,7 +34,7 @@ from app.schemas.ops import (
     TeamMappingLeagueHealthOut,
     OpsLeagueSettingsResponseOut,
 )
-from app.services.leagues import LEAGUE_ORDER, get_active_leagues, list_league_settings, normalize_league
+from app.services.leagues import get_active_leagues, get_league_profile, get_scoreboard_url, list_league_settings, normalize_league
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -42,11 +42,6 @@ WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 TIMESERIES_WINDOWS = {"24h": 24, "7d": 24 * 7}
 ADMIN_OVERVIEW_WINDOWS = {"1h", "6h", "24h", "7d"}
 NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
-SCOREBOARD_URLS = {
-    "NBA": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-    "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-    "WORLD_CUP": "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-}
 OPS_PROVIDER_QUOTAS = {"espn": 5000, "odds": 1000}
 OPS_RISK_UTILIZATION_WATCH_PCT = 70.0
 OPS_RISK_UTILIZATION_RISK_PCT = 85.0
@@ -273,7 +268,18 @@ def get_league_settings(
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> OpsLeagueSettingsResponseOut:
-    return OpsLeagueSettingsResponseOut(items=[LeagueSettingOut.model_validate(row) for row in list_league_settings(db)])
+    return OpsLeagueSettingsResponseOut(
+        items=[
+            LeagueSettingOut(
+                league=row.league,
+                label=get_league_profile(row.league).label,
+                badge_label=get_league_profile(row.league).badge_label,
+                alert_types=list(get_league_profile(row.league).alert_types),
+                is_enabled=row.is_enabled,
+            )
+            for row in list_league_settings(db)
+        ]
+    )
 
 
 @router.put("/leagues/{league}", response_model=LeagueSettingOut)
@@ -290,7 +296,14 @@ def update_league_setting(
     row.is_enabled = payload.is_enabled
     db.commit()
     db.refresh(row)
-    return LeagueSettingOut.model_validate(row)
+    profile = get_league_profile(row.league)
+    return LeagueSettingOut(
+        league=row.league,
+        label=profile.label,
+        badge_label=profile.badge_label,
+        alert_types=list(profile.alert_types),
+        is_enabled=row.is_enabled,
+    )
 
 
 @router.get("/admin/overview", response_model=OpsAdminOverviewOut)
@@ -512,7 +525,7 @@ def team_mapping_health(
         checked_team_refs = 0
         try:
             with httpx.Client(timeout=8.0) as client:
-                response = client.get(SCOREBOARD_URLS[league], params={"dates": check_date})
+                response = client.get(get_scoreboard_url(league), params={"dates": check_date})
                 response.raise_for_status()
                 payload = response.json()
         except Exception as exc:

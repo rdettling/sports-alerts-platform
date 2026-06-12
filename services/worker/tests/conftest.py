@@ -57,7 +57,7 @@ os.environ.update(
         "JOB_MAX_RETRIES": "5",
         "JOB_RETRY_BASE_SECONDS": "30",
         "JOB_RETRY_MAX_BACKOFF_SECONDS": "3600",
-        "NBA_PROVIDER": "espn",
+        "SCOREBOARD_PROVIDER": "espn",
         "DELIVERY_MODE": "log",
         "FROM_EMAIL": "alerts@test.local",
         "RESEND_API_KEY": "test-key",
@@ -68,6 +68,24 @@ os.environ.update(
 from app.db.models import Base, Team  # noqa: E402
 from worker.ingest import SessionLocal  # noqa: E402
 
+TEST_TEAM_SEEDS = [
+    ("1", "NBA", "Atlanta Hawks", "ATL"),
+    ("2", "NBA", "Boston Celtics", "BOS"),
+    ("10", "MLB", "New York Yankees", "NYY"),
+    ("2", "MLB", "Boston Red Sox", "BOS"),
+    ("203", "WORLD_CUP", "Mexico", "MEX"),
+    ("660", "WORLD_CUP", "United States", "USA"),
+]
+
+
+def seed_test_teams(db) -> None:
+    db.add_all(
+        [
+            Team(external_team_id=external_team_id, league=league, name=name, abbreviation=abbreviation)
+            for external_team_id, league, name, abbreviation in TEST_TEAM_SEEDS
+        ]
+    )
+
 
 @pytest.fixture(autouse=True)
 def reset_db():
@@ -77,16 +95,7 @@ def reset_db():
     Base.metadata.create_all(bind=engine)
     local_session = sessionmaker(bind=engine)
     db = local_session()
-    db.add_all(
-        [
-            Team(external_team_id="1", league="NBA", name="Atlanta Hawks", abbreviation="ATL"),
-            Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS"),
-            Team(external_team_id="10", league="MLB", name="New York Yankees", abbreviation="NYY"),
-            Team(external_team_id="2", league="MLB", name="Boston Red Sox", abbreviation="BOS"),
-            Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX"),
-            Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA"),
-        ]
-    )
+    seed_test_teams(db)
     db.commit()
     db.close()
     yield

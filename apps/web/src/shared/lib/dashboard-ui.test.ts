@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, formatMoneyline, leagueLabel, noVigProbabilities } from "./dashboard-ui";
+import { formatGameTime, formatMoneyline, noVigProbabilities } from "./dashboard-ui";
 
 describe("dashboard utilities", () => {
   it("formats moneyline", () => {
@@ -59,9 +59,7 @@ describe("dashboard utilities", () => {
     expect(label).not.toBe("Halftime");
   });
 
-  it("formats World Cup labels and live clock", () => {
-    expect(leagueLabel("WORLD_CUP")).toBe("World Cup");
-
+  it("formats World Cup live clock", () => {
     const label = formatGameTime({
       id: 3,
       external_game_id: "c",

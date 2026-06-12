@@ -16,18 +16,6 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   final_result: "Final result",
 };
 
-export const ALERT_TYPES_BY_LEAGUE: Record<League, string[]> = {
-  NBA: ["game_start", "close_game_late", "final_result"],
-  MLB: ["game_start", "inning_start", "final_result"],
-  WORLD_CUP: ["game_start", "final_result"],
-};
-
-export const DEFAULT_TEST_MATCHUP_BY_LEAGUE: Record<League, { away: string; home: string }> = {
-  NBA: { away: "ATL", home: "BOS" },
-  MLB: { away: "MIA", home: "TOR" },
-  WORLD_CUP: { away: "MEX", home: "USA" },
-};
-
 export function messageFromUnknown(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -40,12 +28,6 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
   return null;
-}
-
-export function leagueLabel(league: string | null | undefined): string {
-  const normalized = (league || "").toUpperCase();
-  if (normalized === "WORLD_CUP") return "World Cup";
-  return normalized || "Unknown";
 }
 
 export function leagueBadgeLabel(league: string | null | undefined): string {

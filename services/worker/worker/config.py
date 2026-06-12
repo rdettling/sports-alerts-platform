@@ -11,7 +11,7 @@ class WorkerSettings(BaseSettings):
     world_cup_live_sync_interval_seconds: int = 180
     live_sync_pregame_retry_seconds: int = 600
     odds_pregame_window_hours: int = 24
-    nba_provider: str = "espn"
+    scoreboard_provider: str = "espn"
     odds_provider: str = "the_odds_api"
     odds_api_key: str
     odds_api_base_url: str = "https://api.the-odds-api.com/v4/sports"

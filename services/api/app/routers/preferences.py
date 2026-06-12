@@ -11,7 +11,6 @@ from app.deps import get_current_user
 from app.services.leagues import get_active_leagues
 from app.services.alert_defaults import get_alert_default_values
 from app.schemas.preference import (
-    ALERT_TYPES_BY_LEAGUE,
     SUPPORTED_LEAGUES,
     AlertPreferenceGroupOut,
     AlertPreferenceOut,
@@ -20,6 +19,7 @@ from app.schemas.preference import (
     UpdateAlertPreferenceRequest,
     UpdateGameAlertOverrideRequest,
 )
+from app.services.leagues import get_alert_types
 
 router = APIRouter(prefix="/alert-preferences", tags=["alert-preferences"])
 
@@ -40,7 +40,7 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
 
     now = datetime.now(timezone.utc)
     for league in active_leagues:
-        for alert_type in ALERT_TYPES_BY_LEAGUE[league]:
+        for alert_type in get_alert_types(league):
             key = (league, alert_type)
             if key in existing:
                 continue
@@ -82,7 +82,7 @@ def _resolve_game_alert_items(db: Session, user_id: int, game: Game) -> list[Gam
     }
 
     items: list[GameAlertPreferenceItemOut] = []
-    for alert_type in ALERT_TYPES_BY_LEAGUE[game.league]:
+    for alert_type in get_alert_types(game.league):
         default = defaults.get(alert_type)
         if not default:
             continue
@@ -168,7 +168,7 @@ def update_alert_preference(
     normalized_league = _validate_league(league)
     if normalized_league not in set(get_active_leagues(db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
-    if alert_type not in ALERT_TYPES_BY_LEAGUE[normalized_league]:
+    if alert_type not in get_alert_types(normalized_league):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     _ensure_default_preferences(db, current_user.id)
@@ -235,7 +235,7 @@ def update_game_alert_override(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
     if game.league not in set(get_active_leagues(db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
-    if alert_type not in ALERT_TYPES_BY_LEAGUE[game.league]:
+    if alert_type not in get_alert_types(game.league):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     row = db.scalar(
@@ -290,7 +290,7 @@ def clear_game_alert_override(
     game = db.get(Game, game_id)
     if not game:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
-    if alert_type not in ALERT_TYPES_BY_LEAGUE[game.league]:
+    if alert_type not in get_alert_types(game.league):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
     row = db.scalar(

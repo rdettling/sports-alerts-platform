@@ -1,4 +1,4 @@
-from worker.providers.balldontlie import BallDontLieProvider
+from worker.providers.espn import EspnScoreboardProvider
 from worker.providers.base import ScoreboardRequest
 
 
@@ -25,7 +25,7 @@ def test_provider_parses_espn_payload_shape():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260406")])
 
     assert len(schedule) == 1
@@ -62,7 +62,7 @@ def test_provider_skips_if_necessary_playoff_games():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260525")])
 
     assert schedule == []
@@ -96,7 +96,7 @@ def test_provider_uses_mlb_short_detail_for_half_inning_clock():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260527")])
     assert len(schedule) == 1
     assert schedule[0].clock == "Top 6th"
@@ -125,7 +125,7 @@ def test_provider_uses_numeric_team_ids_for_mlb():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260528")])
     assert len(schedule) == 1
     assert schedule[0].home_external_team_id == "4"
@@ -161,7 +161,7 @@ def test_provider_maps_status_postponed_payload_to_postponed():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260611")])
     assert len(schedule) == 1
     assert schedule[0].status == "postponed"
@@ -191,6 +191,6 @@ def test_provider_skips_events_with_invalid_placeholder_team_ids():
         ]
     }
 
-    provider = BallDontLieProvider(fetch_json=lambda _, __: payload)
+    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260528")])
     assert schedule == []

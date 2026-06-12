@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { type LeagueSetting, updateOpsLeagueSetting } from "../../../../shared/api";
-import { leagueLabel, messageFromUnknown } from "../../../../shared/lib/dashboard-ui";
+import { messageFromUnknown } from "../../../../shared/lib/dashboard-ui";
 
 export function AdminLeagueSettingsPanel({
   token,
@@ -46,7 +46,7 @@ export function AdminLeagueSettingsPanel({
               disabled={busy}
               onClick={() => toggleMutation.mutate({ league: item.league, isEnabled: !item.is_enabled })}
             >
-              <span>{leagueLabel(item.league)} {item.is_enabled ? "enabled" : "disabled"}</span>
+              <span>{item.label} {item.is_enabled ? "enabled" : "disabled"}</span>
               <span className="admin-test-btn-meta">{busy ? "Saving..." : item.is_enabled ? "Disable" : "Enable"}</span>
             </button>
           );

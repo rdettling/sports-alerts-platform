@@ -44,7 +44,13 @@ export type Game = {
 };
 
 export type League = "NBA" | "MLB" | "WORLD_CUP";
-export type LeagueSetting = { league: League; is_enabled: boolean };
+export type LeagueSetting = {
+  league: League;
+  label: string;
+  badge_label: string;
+  alert_types: AlertType[];
+  is_enabled: boolean;
+};
 
 export type CurrentFollows = { teams: Team[]; games: Game[] };
 

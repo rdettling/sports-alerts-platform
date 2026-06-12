@@ -74,9 +74,9 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     league_settings = client.get("/ops/leagues", headers=headers)
     assert league_settings.status_code == 200
     assert league_settings.json()["items"] == [
-        {"league": "NBA", "is_enabled": True},
-        {"league": "MLB", "is_enabled": True},
-        {"league": "WORLD_CUP", "is_enabled": True},
+        {"league": "NBA", "label": "NBA", "badge_label": "NBA", "alert_types": ["game_start", "close_game_late", "final_result"], "is_enabled": True},
+        {"league": "MLB", "label": "MLB", "badge_label": "MLB", "alert_types": ["game_start", "inning_start", "final_result"], "is_enabled": True},
+        {"league": "WORLD_CUP", "label": "World Cup", "badge_label": "WC", "alert_types": ["game_start", "final_result"], "is_enabled": True},
     ]
 
     overview = client.get("/ops/admin/overview?window=24h&limit=10", headers=headers)

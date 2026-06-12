@@ -46,7 +46,8 @@ export function GamesView({ token }: { token: string }) {
   const games = data?.games ?? [];
   const follows = data?.follows;
   const teams = data?.teams ?? [];
-  const activeLeagues = data?.leagues.map((item) => item.league) ?? [];
+  const activeLeagues = data?.leagues ?? [];
+  const activeLeagueKeys = activeLeagues.map((item) => item.league);
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
@@ -57,10 +58,10 @@ export function GamesView({ token }: { token: string }) {
   const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
   useEffect(() => {
-    if (leagueFilter !== "all" && !activeLeagues.includes(leagueFilter)) {
+    if (leagueFilter !== "all" && !activeLeagueKeys.includes(leagueFilter)) {
       setLeagueFilter("all");
     }
-  }, [activeLeagues, leagueFilter]);
+  }, [activeLeagueKeys, leagueFilter]);
 
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
