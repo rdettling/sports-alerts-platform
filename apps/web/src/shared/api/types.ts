@@ -37,10 +37,15 @@ export type Game = {
   is_final: boolean;
   last_ingested_at: string | null;
   odds: {
-    home_moneyline: number | null;
-    away_moneyline: number | null;
+    market: string;
     bookmaker: string | null;
     last_update: string | null;
+    outcomes: Array<{
+      outcome_key: string;
+      outcome_label: string;
+      price_american: number | null;
+      team_side: "away" | "home" | null;
+    }>;
   } | null;
 };
 

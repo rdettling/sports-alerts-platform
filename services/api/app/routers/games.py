@@ -2,12 +2,12 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.db.models import Game, GameOddsCurrent
 from app.db.session import get_db
-from app.schemas.game import GameOddsOut, GameOut
+from app.schemas.game import GameOddsOut, GameOddsOutcomeOut, GameOut
 from app.services.leagues import get_active_leagues, normalize_league
 
 router = APIRouter(tags=["games"])
@@ -48,7 +48,9 @@ def list_games(
 
     game_ids = [game.id for game in games]
     odds_rows = db.scalars(
-        select(GameOddsCurrent).where(
+        select(GameOddsCurrent)
+        .options(selectinload(GameOddsCurrent.outcomes))
+        .where(
             GameOddsCurrent.game_id.in_(game_ids),
             GameOddsCurrent.provider == settings.odds_provider,
             GameOddsCurrent.market == settings.odds_api_market,
@@ -61,10 +63,18 @@ def list_games(
         if not odds:
             continue
         game_view.odds = GameOddsOut(
-            home_moneyline=odds.home_moneyline,
-            away_moneyline=odds.away_moneyline,
+            market=odds.market,
             bookmaker=odds.bookmaker,
             last_update=odds.fetched_at,
+            outcomes=[
+                GameOddsOutcomeOut(
+                    outcome_key=outcome.outcome_key,
+                    outcome_label=outcome.outcome_label,
+                    price_american=outcome.price_american,
+                    team_side=outcome.team_side,
+                )
+                for outcome in odds.outcomes
+            ],
         )
 
     return game_views

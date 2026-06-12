@@ -26,6 +26,7 @@ os.environ.update(
         "ODDS_API_SPORT_KEY": "basketball_nba",
         "ODDS_API_SPORT_KEY_NBA": "basketball_nba",
         "ODDS_API_SPORT_KEY_MLB": "baseball_mlb",
+        "ODDS_API_SPORT_KEY_WORLD_CUP": "soccer_fifa_world_cup",
         "ODDS_API_REGIONS": "us",
         "ODDS_API_MARKET": "h2h",
         "ODDS_API_FORMAT": "american",

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.db.models import (
     Game,
     GameOddsCurrent,
+    GameOddsOutcomeCurrent,
     LeagueSetting,
     SentAlert,
     Team,
@@ -17,9 +18,35 @@ from app.db.models import (
 )
 from app.services.leagues import ensure_league_settings
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
-from worker.odds import MoneylineOdds
+from worker.odds import OddsOutcome, OddsSnapshot
 from worker.planner import FetchPlan, build_live_requests
 from worker.providers.base import ProviderGame, ScoreboardRequest
+
+
+def make_snapshot(
+    *,
+    away_label: str,
+    away_price: int | None,
+    home_label: str,
+    home_price: int | None,
+    bookmaker: str = "DraftKings",
+    last_update: datetime | None = None,
+    commence_time: datetime | None = None,
+    draw_price: int | None = None,
+) -> OddsSnapshot:
+    outcomes = [
+        OddsOutcome(outcome_key=away_label.lower().replace(" ", "_"), outcome_label=away_label, outcome_order=0, price_american=away_price, team_side="away"),
+        OddsOutcome(outcome_key=home_label.lower().replace(" ", "_"), outcome_label=home_label, outcome_order=1 if draw_price is None else 2, price_american=home_price, team_side="home"),
+    ]
+    if draw_price is not None:
+        outcomes.insert(1, OddsOutcome(outcome_key="draw", outcome_label="Draw", outcome_order=1, price_american=draw_price, team_side=None))
+    return OddsSnapshot(
+        market="h2h",
+        outcomes=tuple(outcomes),
+        bookmaker=bookmaker,
+        last_update=last_update,
+        commence_time=commence_time,
+    )
 
 
 class SuccessProvider:
@@ -526,10 +553,11 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
         lambda league: {
-            ("atlanta hawks", "boston celtics"): MoneylineOdds(
-                home_moneyline=-130,
-                away_moneyline=110,
-                bookmaker="DraftKings",
+            ("atlanta hawks", "boston celtics"): make_snapshot(
+                away_label="Atlanta Hawks",
+                away_price=110,
+                home_label="Boston Celtics",
+                home_price=-130,
                 last_update=datetime.now(timezone.utc),
             )
         },
@@ -542,8 +570,7 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
     assert game is not None
     odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id))
     assert odds is not None
-    assert odds.home_moneyline == -130
-    assert odds.away_moneyline == 110
+    assert [(item.team_side, item.price_american) for item in odds.outcomes] == [("away", 110), ("home", -130)]
 
 
 def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeypatch):
@@ -568,20 +595,8 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
         "worker.ingest.fetch_odds_index",
         lambda league: {
             ("atlanta hawks", "boston celtics"): [
-                MoneylineOdds(
-                    home_moneyline=-140,
-                    away_moneyline=120,
-                    bookmaker="FanDuel",
-                    last_update=now,
-                    commence_time=first_start,
-                ),
-                MoneylineOdds(
-                    home_moneyline=-210,
-                    away_moneyline=175,
-                    bookmaker="FanDuel",
-                    last_update=now,
-                    commence_time=second_start,
-                ),
+                make_snapshot(away_label="Atlanta Hawks", away_price=120, home_label="Boston Celtics", home_price=-140, bookmaker="FanDuel", last_update=now, commence_time=first_start),
+                make_snapshot(away_label="Atlanta Hawks", away_price=175, home_label="Boston Celtics", home_price=-210, bookmaker="FanDuel", last_update=now, commence_time=second_start),
             ]
         },
     )
@@ -598,8 +613,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
     assert first_odds is not None
     assert second_odds is None
-    assert first_odds.home_moneyline == -140
-    assert first_odds.away_moneyline == 120
+    assert [(item.team_side, item.price_american) for item in first_odds.outcomes] == [("away", 120), ("home", -140)]
 
 
 def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
@@ -624,13 +638,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
         "worker.ingest.fetch_odds_index",
         lambda league: {
             ("atlanta hawks", "boston celtics"): [
-                MoneylineOdds(
-                    home_moneyline=-145,
-                    away_moneyline=122,
-                    bookmaker="FanDuel",
-                    last_update=now,
-                    commence_time=first_start,
-                )
+                make_snapshot(away_label="Atlanta Hawks", away_price=122, home_label="Boston Celtics", home_price=-145, bookmaker="FanDuel", last_update=now, commence_time=first_start)
             ]
         },
     )
@@ -694,13 +702,7 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
         odds_fetch_count["count"] += 1
         return {
             ("atlanta hawks", "boston celtics"): [
-                MoneylineOdds(
-                    home_moneyline=-130,
-                    away_moneyline=110,
-                    bookmaker="DraftKings",
-                    last_update=now,
-                    commence_time=now + timedelta(hours=4),
-                )
+                make_snapshot(away_label="Atlanta Hawks", away_price=110, home_label="Boston Celtics", home_price=-130, last_update=now, commence_time=now + timedelta(hours=4))
             ]
         }
 
@@ -790,19 +792,55 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
     assert result["odds_snapshots_created"] == 0
 
 
-def test_world_cup_catalog_sync_skips_odds(db_session, monkeypatch):
+def test_world_cup_catalog_sync_persists_three_way_odds(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+
+    class ScheduledWorldCupProvider:
+        def fetch_games(self, league, requests):
+            return [
+                ProviderGame(
+                    external_game_id="game-world-cup-scheduled",
+                    home_external_team_id="660",
+                    away_external_team_id="203",
+                    scheduled_start_time=now + timedelta(hours=3),
+                    status="scheduled",
+                    is_final=False,
+                )
+            ]
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
-        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched for world cup")),
+        lambda league: {
+            ("united states", "mexico"): [
+                make_snapshot(
+                    away_label="Mexico",
+                    away_price=180,
+                    home_label="United States",
+                    home_price=160,
+                    draw_price=210,
+                    last_update=now,
+                    commence_time=now + timedelta(hours=3),
+                )
+            ]
+        },
     )
 
-    result = run_catalog_sync(WorldCupProvider(), league="WORLD_CUP")
+    result = run_catalog_sync(ScheduledWorldCupProvider(), league="WORLD_CUP")
     assert result["status"] == "success"
+    assert result["odds_snapshots_created"] == 1
 
-    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-world-cup-live"))
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-world-cup-scheduled"))
     assert game is not None
     odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id))
-    assert odds is None
+    assert odds is not None
+    assert [(item.outcome_key, item.price_american) for item in odds.outcomes] == [
+        ("mexico", 180),
+        ("draw", 210),
+        ("united_states", 160),
+    ]
 
 
 def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):

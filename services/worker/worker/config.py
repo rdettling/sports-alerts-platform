@@ -17,6 +17,7 @@ class WorkerSettings(BaseSettings):
     odds_api_base_url: str = "https://api.the-odds-api.com/v4/sports"
     odds_api_sport_key_nba: str = "basketball_nba"
     odds_api_sport_key_mlb: str = "baseball_mlb"
+    odds_api_sport_key_world_cup: str = "soccer_fifa_world_cup"
     odds_api_regions: str = "us"
     odds_api_market: str = "h2h"
     odds_api_format: str = "american"

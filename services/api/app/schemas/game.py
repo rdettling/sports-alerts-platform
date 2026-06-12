@@ -3,11 +3,18 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class GameOddsOutcomeOut(BaseModel):
+    outcome_key: str
+    outcome_label: str
+    price_american: int | None
+    team_side: str | None
+
+
 class GameOddsOut(BaseModel):
-    home_moneyline: int | None
-    away_moneyline: int | None
+    market: str
     bookmaker: str | None
     last_update: datetime | None
+    outcomes: list[GameOddsOutcomeOut]
 
 
 class GameOut(BaseModel):

@@ -31,10 +31,13 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     is_final: false,
     last_ingested_at: null,
     odds: {
-      home_moneyline: -120,
-      away_moneyline: 105,
+      market: "h2h",
       bookmaker: null,
       last_update: null,
+      outcomes: [
+        { outcome_key: "atl", outcome_label: "ATL", price_american: 105, team_side: "away" },
+        { outcome_key: "bos", outcome_label: "BOS", price_american: -120, team_side: "home" },
+      ],
     },
     ...overrides,
   };
@@ -139,5 +142,32 @@ describe("GameRowCard", () => {
     );
 
     expect(screen.queryByText("Group Stage")).toBeNull();
+  });
+
+  it("shows draw odds for world cup pregame cards", () => {
+    render(
+      <GameRowCard
+        game={makeGame({
+          league: "WORLD_CUP",
+          odds: {
+            market: "h2h",
+            bookmaker: null,
+            last_update: null,
+            outcomes: [
+              { outcome_key: "mexico", outcome_label: "Mexico", price_american: 180, team_side: "away" },
+              { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
+              { outcome_key: "united_states", outcome_label: "United States", price_american: 160, team_side: "home" },
+            ],
+          },
+        })}
+        home={{ ...home, league: "WORLD_CUP" }}
+        away={{ ...away, league: "WORLD_CUP" }}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.getByText("Draw")).toBeInTheDocument();
+    expect(screen.getByText("+210")).toBeInTheDocument();
   });
 });

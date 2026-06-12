@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, LeagueSetting, Team
+from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, LeagueSetting, Team
 from app.db.session import SessionLocal
 
 
@@ -50,17 +50,20 @@ def test_games_include_odds_when_available(client):
     game = _create_game()
     db = SessionLocal()
     try:
-        db.add(
-            GameOddsCurrent(
-                game_id=game.id,
-                provider="the_odds_api",
-                market="h2h",
-                home_moneyline=-145,
-                away_moneyline=125,
-                bookmaker="DraftKings",
-                fetched_at=datetime.now(timezone.utc),
-            )
+        odds = GameOddsCurrent(
+            game_id=game.id,
+            provider="the_odds_api",
+            market="h2h",
+            bookmaker="DraftKings",
+            fetched_at=datetime.now(timezone.utc),
         )
+        odds.outcomes.extend(
+            [
+                GameOddsOutcomeCurrent(outcome_key="atlanta_hawks", outcome_label="Atlanta Hawks", outcome_order=0, price_american=125, team_side="away"),
+                GameOddsOutcomeCurrent(outcome_key="boston_celtics", outcome_label="Boston Celtics", outcome_order=1, price_american=-145, team_side="home"),
+            ]
+        )
+        db.add(odds)
         db.commit()
     finally:
         db.close()
@@ -70,9 +73,54 @@ def test_games_include_odds_when_available(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["context_label"] is None
-    assert payload[0]["odds"]["home_moneyline"] == -145
-    assert payload[0]["odds"]["away_moneyline"] == 125
+    assert payload[0]["odds"]["market"] == "h2h"
+    assert payload[0]["odds"]["outcomes"][0]["price_american"] == 125
+    assert payload[0]["odds"]["outcomes"][0]["team_side"] == "away"
+    assert payload[0]["odds"]["outcomes"][1]["price_american"] == -145
+    assert payload[0]["odds"]["outcomes"][1]["team_side"] == "home"
     assert payload[0]["odds"]["bookmaker"] == "DraftKings"
+
+
+def test_games_include_world_cup_draw_odds(client):
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()).limit(2)).all()
+        game = Game(
+            external_game_id="test-world-cup-odds",
+            league="WORLD_CUP",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+            status="scheduled",
+            is_final=False,
+        )
+        db.add(game)
+        db.commit()
+        db.refresh(game)
+        odds = GameOddsCurrent(
+            game_id=game.id,
+            provider="the_odds_api",
+            market="h2h",
+            bookmaker="DraftKings",
+            fetched_at=datetime.now(timezone.utc),
+        )
+        odds.outcomes.extend(
+            [
+                GameOddsOutcomeCurrent(outcome_key="united_states", outcome_label="United States", outcome_order=0, price_american=160, team_side="away"),
+                GameOddsOutcomeCurrent(outcome_key="draw", outcome_label="Draw", outcome_order=1, price_american=210, team_side=None),
+                GameOddsOutcomeCurrent(outcome_key="mexico", outcome_label="Mexico", outcome_order=2, price_american=180, team_side="home"),
+            ]
+        )
+        db.add(odds)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games?league=WORLD_CUP")
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert [item["outcome_key"] for item in payload[0]["odds"]["outcomes"]] == ["united_states", "draw", "mexico"]
 
 
 def test_games_skip_odds_fetch_when_include_odds_is_false(client):

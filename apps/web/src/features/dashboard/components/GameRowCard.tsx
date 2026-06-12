@@ -1,5 +1,5 @@
 import { type Game, type Team } from "../../../shared/api";
-import { TeamLogo, formatMoneyline, leagueBadgeLabel, leagueLogoUrl } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo, drawOdds, formatMoneyline, isThreeWayOdds, leagueBadgeLabel, leagueLogoUrl, oddsOutcomeByTeamSide } from "../../../shared/lib/dashboard-ui";
 
 type GameRowCardProps = {
   game: Game;
@@ -32,16 +32,18 @@ export function GameRowCard({
   const isLive = game.status === "in_progress" || game.status === "live";
   const isFinal = game.status === "final" || game.is_final;
   const showScoreValues = isLive || isFinal;
+  const showThreeWayOdds = !showScoreValues && game.league === "WORLD_CUP" && isThreeWayOdds(game);
   const awayValueText = showScoreValues
     ? String(game.away_score ?? "—")
     : game.odds
-      ? formatMoneyline(game.odds.away_moneyline)
+      ? formatMoneyline(oddsOutcomeByTeamSide(game, "away"))
       : "—";
   const homeValueText = showScoreValues
     ? String(game.home_score ?? "—")
     : game.odds
-      ? formatMoneyline(game.odds.home_moneyline)
+      ? formatMoneyline(oddsOutcomeByTeamSide(game, "home"))
       : "—";
+  const drawValueText = showThreeWayOdds ? formatMoneyline(drawOdds(game)) : null;
   const league = leagueBadgeLabel(game.league);
   const logoUrl = leagueLogoUrl(game.league);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
@@ -64,6 +66,12 @@ export function GameRowCard({
             </div>
             <div className="games-team-score">{homeValueText}</div>
           </div>
+          {showThreeWayOdds ? (
+            <div className="games-odds-draw-row" aria-label="Draw odds">
+              <span className="games-odds-draw-label">Draw</span>
+              <span className="games-team-score">{drawValueText}</span>
+            </div>
+          ) : null}
           {showContextLabel && game.context_label ? <div className="games-context-label">{game.context_label}</div> : null}
         </div>
 

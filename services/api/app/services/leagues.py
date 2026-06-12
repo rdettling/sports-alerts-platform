@@ -46,7 +46,7 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         alert_types=("game_start", "score_changed", "final_result"),
         default_test_matchup=("MEX", "USA"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-        supports_odds=False,
+        supports_odds=True,
     ),
 }
 

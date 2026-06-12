@@ -177,6 +177,20 @@ export function formatMoneyline(value: number | null): string {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+export function oddsOutcomeByTeamSide(game: Game, teamSide: "away" | "home"): number | null {
+  const outcome = game.odds?.outcomes.find((item) => item.team_side === teamSide);
+  return outcome?.price_american ?? null;
+}
+
+export function drawOdds(game: Game): number | null {
+  const outcome = game.odds?.outcomes.find((item) => item.outcome_key === "draw");
+  return outcome?.price_american ?? null;
+}
+
+export function isThreeWayOdds(game: Game): boolean {
+  return (game.odds?.outcomes.length ?? 0) >= 3;
+}
+
 function impliedProbabilityFromAmericanOdds(odds: number | null): number | null {
   if (odds === null || odds === 0) {
     return null;
@@ -189,11 +203,11 @@ function impliedProbabilityFromAmericanOdds(odds: number | null): number | null 
 }
 
 export function noVigProbabilities(game: Game): { home: number; away: number } | null {
-  if (!game.odds) {
+  if (!game.odds || game.odds.outcomes.length !== 2) {
     return null;
   }
-  const rawHome = impliedProbabilityFromAmericanOdds(game.odds.home_moneyline);
-  const rawAway = impliedProbabilityFromAmericanOdds(game.odds.away_moneyline);
+  const rawHome = impliedProbabilityFromAmericanOdds(oddsOutcomeByTeamSide(game, "home"));
+  const rawAway = impliedProbabilityFromAmericanOdds(oddsOutcomeByTeamSide(game, "away"));
   if (rawHome === null || rawAway === null) {
     return null;
   }

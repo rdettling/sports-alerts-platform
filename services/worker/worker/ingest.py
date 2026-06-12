@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Game,
     GameOddsCurrent,
+    GameOddsOutcomeCurrent,
     SentAlert,
     Team,
     UserAlertDefault,
@@ -24,7 +25,7 @@ from app.services.alert_defaults import get_alert_default_values
 from app.services.leagues import get_active_leagues, get_alert_types, league_supports_odds, list_supported_leagues
 from worker.db import SessionLocal
 from worker.config import settings
-from worker.odds import MoneylineOdds, fetch_odds_index, game_key
+from worker.odds import OddsSnapshot, fetch_odds_index, game_key
 from worker.planner import build_catalog_requests, build_fetch_plan, build_live_requests
 from worker.providers.base import ProviderGame, SportsProvider
 
@@ -513,36 +514,70 @@ def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict
     return GameUpdateResult(did_update=True, game_id=created.id)
 
 
-def _upsert_game_odds(db: Session, game_id: int, odds: MoneylineOdds) -> bool:
+def _odds_signature(odds: OddsSnapshot) -> tuple[tuple[str, str | None, int | None, str | None], ...]:
+    return tuple(
+        (outcome.outcome_key, outcome.team_side, outcome.price_american, outcome.outcome_label)
+        for outcome in odds.outcomes
+    )
+
+
+def _stored_odds_signature(row: GameOddsCurrent) -> tuple[tuple[str, str | None, int | None, str | None], ...]:
+    return tuple(
+        (outcome.outcome_key, outcome.team_side, outcome.price_american, outcome.outcome_label)
+        for outcome in sorted(row.outcomes, key=lambda outcome: outcome.outcome_order)
+    )
+
+
+def _upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
             GameOddsCurrent.game_id == game_id,
             GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
+            GameOddsCurrent.market == odds.market,
         )
     )
     if row:
-        before = (row.home_moneyline, row.away_moneyline, row.bookmaker)
-        after = (odds.home_moneyline, odds.away_moneyline, odds.bookmaker)
+        before = (row.bookmaker, _stored_odds_signature(row))
+        after = (odds.bookmaker, _odds_signature(odds))
         if before == after:
             return False
-        row.home_moneyline = odds.home_moneyline
-        row.away_moneyline = odds.away_moneyline
         row.bookmaker = odds.bookmaker
         row.fetched_at = odds.last_update or datetime.now(timezone.utc)
+        row.outcomes.clear()
+        row.outcomes.extend(
+            [
+                GameOddsOutcomeCurrent(
+                    outcome_key=outcome.outcome_key,
+                    outcome_label=outcome.outcome_label,
+                    outcome_order=outcome.outcome_order,
+                    price_american=outcome.price_american,
+                    team_side=outcome.team_side,
+                )
+                for outcome in odds.outcomes
+            ]
+        )
         return True
 
-    db.add(
-        GameOddsCurrent(
-            game_id=game_id,
-            provider=settings.odds_provider,
-            market=settings.odds_api_market,
-            home_moneyline=odds.home_moneyline,
-            away_moneyline=odds.away_moneyline,
-            bookmaker=odds.bookmaker,
-            fetched_at=odds.last_update or datetime.now(timezone.utc),
-        )
+    row = GameOddsCurrent(
+        game_id=game_id,
+        provider=settings.odds_provider,
+        market=odds.market,
+        bookmaker=odds.bookmaker,
+        fetched_at=odds.last_update or datetime.now(timezone.utc),
     )
+    row.outcomes.extend(
+        [
+            GameOddsOutcomeCurrent(
+                outcome_key=outcome.outcome_key,
+                outcome_label=outcome.outcome_label,
+                outcome_order=outcome.outcome_order,
+                price_american=outcome.price_american,
+                team_side=outcome.team_side,
+            )
+            for outcome in odds.outcomes
+        ]
+    )
+    db.add(row)
     return True
 
 
@@ -561,9 +596,9 @@ def _delete_game_odds(db: Session, game_id: int) -> bool:
 
 
 def _select_best_odds_for_game(
-    options: list[MoneylineOdds] | MoneylineOdds | None,
+    options: list[OddsSnapshot] | OddsSnapshot | None,
     scheduled_start_time: datetime,
-) -> MoneylineOdds | None:
+) -> OddsSnapshot | None:
     if options is None:
         return None
     candidates = options if isinstance(options, list) else [options]

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, SentAlert, Team, User, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
+from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, SentAlert, Team, User, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
 from worker.cleanup import cleanup_games_outside_window
 
 
@@ -37,8 +37,6 @@ def test_cleanup_removes_games_outside_window(db_session):
                 game_id=old_game.id,
                 provider="the_odds_api",
                 market="h2h",
-                home_moneyline=-120,
-                away_moneyline=110,
                 fetched_at=datetime.now(timezone.utc),
             ),
             SentAlert(
@@ -57,6 +55,15 @@ def test_cleanup_removes_games_outside_window(db_session):
             ),
             UserGameFollow(user_id=user.id, game_id=old_game.id),
             UserGameUnfollow(user_id=user.id, game_id=old_game.id),
+        ]
+    )
+    db_session.flush()
+    old_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == old_game.id))
+    assert old_odds is not None
+    old_odds.outcomes.extend(
+        [
+            GameOddsOutcomeCurrent(outcome_key="away", outcome_label="Away", outcome_order=0, price_american=110, team_side="away"),
+            GameOddsOutcomeCurrent(outcome_key="home", outcome_label="Home", outcome_order=1, price_american=-120, team_side="home"),
         ]
     )
     db_session.commit()

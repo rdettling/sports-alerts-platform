@@ -92,12 +92,31 @@ class GameOddsCurrent(Base):
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="the_odds_api")
     market: Mapped[str] = mapped_column(String(16), default="h2h")
-    home_moneyline: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    away_moneyline: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bookmaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    outcomes = relationship("GameOddsOutcomeCurrent", back_populates="odds", cascade="all, delete-orphan", order_by="GameOddsOutcomeCurrent.outcome_order")
+
+
+class GameOddsOutcomeCurrent(Base):
+    __tablename__ = "game_odds_outcomes_current"
+    __table_args__ = (
+        UniqueConstraint("odds_id", "outcome_key", name="uq_game_odds_outcomes_current_odds_outcome_key"),
+        UniqueConstraint("odds_id", "outcome_order", name="uq_game_odds_outcomes_current_odds_outcome_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    odds_id: Mapped[int] = mapped_column(ForeignKey("game_odds_current.id", ondelete="CASCADE"), index=True)
+    outcome_key: Mapped[str] = mapped_column(String(32))
+    outcome_label: Mapped[str] = mapped_column(String(80))
+    outcome_order: Mapped[int] = mapped_column(Integer)
+    price_american: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    team_side: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    odds = relationship("GameOddsCurrent", back_populates="outcomes")
 
 
 class UserTeamFollow(Base):

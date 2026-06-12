@@ -26,10 +26,13 @@ describe("dashboard utilities", () => {
       is_final: false,
       last_ingested_at: null,
       odds: {
-        home_moneyline: -110,
-        away_moneyline: 100,
+        market: "h2h",
         bookmaker: "x",
         last_update: null,
+        outcomes: [
+          { outcome_key: "away", outcome_label: "Away", price_american: 100, team_side: "away" },
+          { outcome_key: "home", outcome_label: "Home", price_american: -110, team_side: "home" },
+        ],
       },
     });
 
@@ -81,5 +84,36 @@ describe("dashboard utilities", () => {
     });
 
     expect(label).toBe("67'");
+  });
+
+  it("skips no-vig probabilities for three-way odds", () => {
+    const result = noVigProbabilities({
+      id: 4,
+      external_game_id: "d",
+      league: "WORLD_CUP",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: new Date().toISOString(),
+      context_label: null,
+      status: "scheduled",
+      home_score: null,
+      away_score: null,
+      period: null,
+      clock: null,
+      is_final: false,
+      last_ingested_at: null,
+      odds: {
+        market: "h2h",
+        bookmaker: "x",
+        last_update: null,
+        outcomes: [
+          { outcome_key: "mex", outcome_label: "Mexico", price_american: 180, team_side: "away" },
+          { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
+          { outcome_key: "usa", outcome_label: "United States", price_american: 160, team_side: "home" },
+        ],
+      },
+    });
+
+    expect(result).toBeNull();
   });
 });

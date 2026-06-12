@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
@@ -18,19 +19,33 @@ logger = logging.getLogger(__name__)
 
 TEAM_NAME_ALIASES = {
     "la clippers": "los angeles clippers",
+    "bosnia and herzegovina": "bosnia herzegovina",
+    "czech republic": "czechia",
+    "dr congo": "congo dr",
+    "turkey": "turkiye",
+    "usa": "united states",
 }
 
 _CACHE_LOCK = threading.Lock()
 _CACHE_FETCHED_AT_BY_LEAGUE: dict[str, float] = {}
-_CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list["MoneylineOdds"]]] = {}
+_CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
 _TELEMETRY_DB: Session | None = None
 _TELEMETRY_INGEST_RUN_ID: int | None = None
 
 
 @dataclass(frozen=True)
-class MoneylineOdds:
-    home_moneyline: int | None
-    away_moneyline: int | None
+class OddsOutcome:
+    outcome_key: str
+    outcome_label: str
+    outcome_order: int
+    price_american: int | None
+    team_side: str | None
+
+
+@dataclass(frozen=True)
+class OddsSnapshot:
+    market: str
+    outcomes: tuple[OddsOutcome, ...]
     bookmaker: str | None
     last_update: datetime | None
     commence_time: datetime | None = None
@@ -43,7 +58,10 @@ def set_telemetry_context(db: Session | None, ingest_run_id: int | None) -> None
 
 
 def _normalize_team_name(name: str) -> str:
-    cleaned = " ".join(name.strip().lower().split())
+    cleaned = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    cleaned = cleaned.strip().lower().replace("&", "and").replace("-", " ")
+    cleaned = "".join(character if character.isalnum() or character.isspace() else " " for character in cleaned)
+    cleaned = " ".join(cleaned.split())
     return TEAM_NAME_ALIASES.get(cleaned, cleaned)
 
 
@@ -60,7 +78,14 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
-def _extract_event_moneyline(event: dict) -> MoneylineOdds | None:
+def _outcome_key_from_name(name: str) -> str:
+    normalized = _normalize_team_name(name)
+    if normalized == "draw":
+        return "draw"
+    return normalized.replace(" ", "_")
+
+
+def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
     home_name = _normalize_team_name(str(event.get("home_team", "")))
     away_name = _normalize_team_name(str(event.get("away_team", "")))
     if not home_name or not away_name:
@@ -80,19 +105,32 @@ def _extract_event_moneyline(event: dict) -> MoneylineOdds | None:
             outcomes = market.get("outcomes")
             if not isinstance(outcomes, list):
                 continue
-            prices_by_team: dict[str, int] = {}
-            for outcome in outcomes:
+            parsed_outcomes: list[OddsOutcome] = []
+            for index, outcome in enumerate(outcomes):
                 if not isinstance(outcome, dict):
                     continue
-                outcome_name = _normalize_team_name(str(outcome.get("name", "")))
+                raw_name = str(outcome.get("name", ""))
+                outcome_name = _normalize_team_name(raw_name)
                 price = outcome.get("price")
-                if isinstance(price, int):
-                    prices_by_team[outcome_name] = price
-            if not prices_by_team:
+                team_side = None
+                if outcome_name == away_name:
+                    team_side = "away"
+                elif outcome_name == home_name:
+                    team_side = "home"
+                parsed_outcomes.append(
+                    OddsOutcome(
+                        outcome_key=_outcome_key_from_name(raw_name),
+                        outcome_label=raw_name,
+                        outcome_order=index,
+                        price_american=price if isinstance(price, int) else None,
+                        team_side=team_side,
+                    )
+                )
+            if not parsed_outcomes:
                 continue
-            return MoneylineOdds(
-                home_moneyline=prices_by_team.get(home_name),
-                away_moneyline=prices_by_team.get(away_name),
+            return OddsSnapshot(
+                market=str(market.get("key", settings.odds_api_market)),
+                outcomes=tuple(parsed_outcomes),
                 bookmaker=bookmaker.get("title") if isinstance(bookmaker, dict) else None,
                 last_update=_parse_datetime(bookmaker.get("last_update") if isinstance(bookmaker, dict) else None),
                 commence_time=_parse_datetime(event.get("commence_time")),
@@ -103,10 +141,12 @@ def _extract_event_moneyline(event: dict) -> MoneylineOdds | None:
 def _odds_sport_key_for_league(league: str) -> str:
     if league == "MLB":
         return settings.odds_api_sport_key_mlb
+    if league == "WORLD_CUP":
+        return settings.odds_api_sport_key_world_cup
     return settings.odds_api_sport_key_nba
 
 
-def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[MoneylineOdds]]:
+def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     query = urlencode(
         {
             "apiKey": settings.odds_api_key,
@@ -178,7 +218,7 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[MoneylineOdd
     if not isinstance(payload, list):
         return {}
 
-    odds_index: dict[tuple[str, str], list[MoneylineOdds]] = {}
+    odds_index: dict[tuple[str, str], list[OddsSnapshot]] = {}
     for event in payload:
         if not isinstance(event, dict):
             continue
@@ -195,9 +235,9 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[MoneylineOdd
     return odds_index
 
 
-def fetch_odds_index(league: str) -> dict[tuple[str, str], list[MoneylineOdds]]:
+def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     normalized = league.strip().upper()
-    if normalized not in {"NBA", "MLB"}:
+    if normalized not in {"NBA", "MLB", "WORLD_CUP"}:
         return {}
 
     now = monotonic()
