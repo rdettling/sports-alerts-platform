@@ -14,13 +14,6 @@ vi.mock("../auth/auth-context", () => ({
   }),
 }));
 
-vi.mock("./hooks/useDashboardSyncItems", () => ({
-  useDashboardSyncItems: () => [
-    { key: "catalog", label: "Catalog", value: "Just now" },
-    { key: "nba", label: "NBA", value: "2m ago" },
-  ],
-}));
-
 vi.mock("./components/GamesView", () => ({
   GamesView: () => <div>Games view</div>,
 }));
@@ -50,7 +43,6 @@ describe("DashboardLayout", () => {
     expect(screen.getByText("Live Game Alerts")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
-    expect(screen.getByLabelText("Data sync status")).toBeInTheDocument();
     expect(screen.getByText("user@example.com")).toBeInTheDocument();
     expect(screen.getByText("Games view")).toBeInTheDocument();
   });

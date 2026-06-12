@@ -1,5 +1,10 @@
 import { type League, type LeagueSetting } from "../../../../shared/api";
+import { type HeaderSyncItem } from "../../hooks/useDashboardSyncItems";
 import { type DayOption } from "./games-view-utils";
+
+function compactAgeLabel(value: string): string {
+  return value.replace(" ago", "");
+}
 
 export function GamesFiltersPanel({
   activeLeagues,
@@ -10,6 +15,7 @@ export function GamesFiltersPanel({
   isLoading,
   totalLeagueGames,
   dayOptions,
+  syncItems,
 }: {
   activeLeagues: LeagueSetting[];
   leagueFilter: "all" | League;
@@ -19,7 +25,14 @@ export function GamesFiltersPanel({
   isLoading: boolean;
   totalLeagueGames: number;
   dayOptions: DayOption[];
+  syncItems: HeaderSyncItem[];
 }) {
+  const syncByLabel = new Map(syncItems.map((item) => [item.label, item]));
+  const leagueOptions = activeLeagues.map((league) => ({
+    ...league,
+    syncItem: syncByLabel.get(league.label),
+  }));
+
   return (
     <aside className="games-day-filter">
       <div className="games-league-filter" role="tablist" aria-label="League filter">
@@ -30,17 +43,18 @@ export function GamesFiltersPanel({
           onClick={() => onLeagueFilterChange("all")}
           disabled={isLoading}
         >
-          All
+          <span className="games-league-filter-label">All</span>
         </button>
-        {activeLeagues.map((league) => (
+        {leagueOptions.map(({ league, label, syncItem }) => (
           <button
-            key={league.league}
-            className={`games-league-filter-btn ${leagueFilter === league.league ? "active" : ""}`.trim()}
+            key={league}
+            className={`games-league-filter-btn ${leagueFilter === league ? "active" : ""} ${syncItem ? `tone-${syncItem.tone}` : ""}`.trim()}
             type="button"
-            onClick={() => onLeagueFilterChange(league.league)}
+            onClick={() => onLeagueFilterChange(league)}
             disabled={isLoading}
           >
-            {league.label}
+            <span className="games-league-filter-label">{label}</span>
+            <span className="games-league-filter-meta">{syncItem ? compactAgeLabel(syncItem.value) : "Sync pending"}</span>
           </button>
         ))}
       </div>

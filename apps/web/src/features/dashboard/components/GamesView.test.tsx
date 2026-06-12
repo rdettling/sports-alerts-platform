@@ -56,6 +56,13 @@ vi.mock("../hooks/useGamesData", () => ({
   })),
 }));
 
+vi.mock("../hooks/useDashboardSyncItems", () => ({
+  useDashboardSyncItems: vi.fn(() => [
+    { key: "catalog", label: "Catalog", value: "2m ago", tone: "fresh" },
+    { key: "nba", label: "NBA", value: "20m ago", tone: "stale" },
+  ]),
+}));
+
 vi.mock("../hooks/useGameAlertSettings", () => ({
   useGameAlertSettings: vi.fn(() => ({
     alertGame: null,
@@ -89,5 +96,12 @@ describe("GamesView", () => {
 
     await waitFor(() => expect(screen.getByText("LAL")).toBeInTheDocument());
     expect(screen.getByText("BOS")).toBeInTheDocument();
+  });
+
+  it("shows league sync status inside the filters rail", async () => {
+    render(<GamesView token="token" />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText("20m")).toBeInTheDocument());
+    expect(screen.queryByText("Catalog sync 2m")).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
+import { useDashboardSyncItems } from "../hooks/useDashboardSyncItems";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameRowCard } from "./GameRowCard";
@@ -21,6 +22,7 @@ import {
 export function GamesView({ token }: { token: string }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
+  const syncItems = useDashboardSyncItems();
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
@@ -99,6 +101,7 @@ export function GamesView({ token }: { token: string }) {
               isLoading={isLoading}
               totalLeagueGames={leagueFilteredGames.length}
               dayOptions={dayOptions}
+              syncItems={syncItems}
             />
 
             <div className="data-table-wrap">

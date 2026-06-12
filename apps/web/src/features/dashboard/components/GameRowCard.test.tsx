@@ -169,5 +169,6 @@ describe("GameRowCard", () => {
 
     expect(screen.getByText("Draw")).toBeInTheDocument();
     expect(screen.getByText("+210")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "WC logo" })).toBeInTheDocument();
   });
 });

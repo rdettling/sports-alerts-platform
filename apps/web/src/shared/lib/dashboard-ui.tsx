@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Game, type League, Team } from "../api";
+import worldCupMark from "../../assets/world-cup-mark.png";
 
 const GAME_STATUS_LABELS: Record<string, string> = {
   scheduled: "Scheduled",
@@ -28,6 +29,7 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   const normalized = (league || "").toUpperCase();
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
+  if (normalized === "WORLD_CUP") return worldCupMark;
   return null;
 }
 

@@ -4,10 +4,8 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "../auth/auth-context";
 import { AdminView } from "./components/AdminView";
 import { AlertsView } from "./components/AlertsView";
-import { DashboardSyncBadges } from "./components/DashboardSyncBadges";
 import { FollowingView } from "./components/FollowingView";
 import { GamesView } from "./components/GamesView";
-import { useDashboardSyncItems } from "./hooks/useDashboardSyncItems";
 
 type DashboardRouteKey = "games" | "following" | "alerts" | "admin";
 
@@ -60,7 +58,6 @@ function routeForPath(pathname: string): DashboardRouteMeta {
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
   const location = useLocation();
-  const headerSyncItems = useDashboardSyncItems();
 
   const isAdmin = user?.role === "admin";
   const currentRoute = routeForPath(location.pathname);
@@ -101,7 +98,6 @@ export function DashboardLayout() {
             </button>
           </div>
         </div>
-        {currentRoute.key === "games" ? <DashboardSyncBadges items={headerSyncItems} className="topbar-sync" variant="topbar" /> : null}
       </header>
 
       <main className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>
