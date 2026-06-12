@@ -69,6 +69,14 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     ingest_health = client.get("/ops/db/ingest-health?event_limit=10", headers=headers)
     assert ingest_health.status_code == 200
     assert len(ingest_health.json()["states"]) >= 1
+    assert ingest_health.json()["active_leagues"] == ["NBA", "MLB"]
+
+    league_settings = client.get("/ops/leagues", headers=headers)
+    assert league_settings.status_code == 200
+    assert league_settings.json()["items"] == [
+        {"league": "NBA", "is_enabled": True},
+        {"league": "MLB", "is_enabled": True},
+    ]
 
     overview = client.get("/ops/admin/overview?window=24h&limit=10", headers=headers)
     assert overview.status_code == 200

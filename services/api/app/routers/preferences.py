@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Game, User, UserAlertDefault, UserGameAlertOverride
 from app.db.session import get_db
 from app.deps import get_current_user
+from app.services.leagues import get_active_leagues
 from app.services.alert_defaults import get_alert_default_values
 from app.schemas.preference import (
     ALERT_TYPES_BY_LEAGUE,
@@ -31,13 +32,14 @@ def _validate_league(league: str) -> str:
 
 
 def _ensure_default_preferences(db: Session, user_id: int) -> None:
+    active_leagues = get_active_leagues(db)
     existing = {
         (row.league, row.alert_type)
         for row in db.scalars(select(UserAlertDefault).where(UserAlertDefault.user_id == user_id)).all()
     }
 
     now = datetime.now(timezone.utc)
-    for league in SUPPORTED_LEAGUES:
+    for league in active_leagues:
         for alert_type in ALERT_TYPES_BY_LEAGUE[league]:
             key = (league, alert_type)
             if key in existing:
@@ -140,17 +142,19 @@ def list_alert_preferences(
     db: Session = Depends(get_db),
 ) -> list[AlertPreferenceGroupOut]:
     _ensure_default_preferences(db, current_user.id)
+    active_leagues = get_active_leagues(db)
     rows = db.scalars(
         select(UserAlertDefault)
         .where(UserAlertDefault.user_id == current_user.id)
+        .where(UserAlertDefault.league.in_(active_leagues))
         .order_by(UserAlertDefault.league.asc(), UserAlertDefault.alert_type.asc())
     ).all()
 
-    by_league: dict[str, list[AlertPreferenceOut]] = {league: [] for league in SUPPORTED_LEAGUES}
+    by_league: dict[str, list[AlertPreferenceOut]] = {league: [] for league in active_leagues}
     for row in rows:
         by_league.setdefault(row.league, []).append(AlertPreferenceOut.model_validate(row))
 
-    return [AlertPreferenceGroupOut(league=league, preferences=by_league.get(league, [])) for league in SUPPORTED_LEAGUES]
+    return [AlertPreferenceGroupOut(league=league, preferences=by_league.get(league, [])) for league in active_leagues]
 
 
 @router.put("/leagues/{league}/{alert_type}", response_model=AlertPreferenceOut)
@@ -162,6 +166,8 @@ def update_alert_preference(
     db: Session = Depends(get_db),
 ) -> AlertPreferenceOut:
     normalized_league = _validate_league(league)
+    if normalized_league not in set(get_active_leagues(db)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
     if alert_type not in ALERT_TYPES_BY_LEAGUE[normalized_league]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")
 
@@ -210,6 +216,8 @@ def get_game_alert_preferences(
     game = db.get(Game, game_id)
     if not game:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+    if game.league not in set(get_active_leagues(db)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
 
     return GameAlertPreferencesOut(game_id=game.id, league=game.league, items=_resolve_game_alert_items(db, current_user.id, game))
 
@@ -224,6 +232,8 @@ def update_game_alert_override(
 ) -> GameAlertPreferenceItemOut:
     game = db.get(Game, game_id)
     if not game:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+    if game.league not in set(get_active_leagues(db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
     if alert_type not in ALERT_TYPES_BY_LEAGUE[game.league]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found")

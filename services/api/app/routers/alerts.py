@@ -9,16 +9,9 @@ from app.db.models import Game, SentAlert, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
+from app.services.leagues import ALERT_TYPES_BY_LEAGUE, DEFAULT_TEST_MATCHUPS_BY_LEAGUE, get_active_leagues
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
-ALERT_TYPES_BY_LEAGUE: dict[str, set[str]] = {
-    "NBA": {"game_start", "close_game_late", "final_result"},
-    "MLB": {"game_start", "inning_start", "final_result"},
-}
-DEFAULT_TEST_MATCHUPS_BY_LEAGUE: dict[str, tuple[str, str]] = {
-    "NBA": ("ATL", "BOS"),
-    "MLB": ("MIA", "TOR"),
-}
 
 
 def _nudge_delivery_job_now(db: Session) -> None:
@@ -51,6 +44,7 @@ def get_alert_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AlertHistoryResponse:
+    active_leagues = get_active_leagues(db)
     home_team = aliased(Team)
     away_team = aliased(Team)
     stmt = (
@@ -59,6 +53,7 @@ def get_alert_history(
         .join(home_team, home_team.id == Game.home_team_id)
         .join(away_team, away_team.id == Game.away_team_id)
         .where(SentAlert.user_id == current_user.id)
+        .where(Game.league.in_(active_leagues))
     )
     if alert_type:
         stmt = stmt.where(SentAlert.alert_type == alert_type)
@@ -94,9 +89,11 @@ def create_admin_test_alert(
     db: Session = Depends(get_db),
 ) -> DevTestAlertResponse:
     league = payload.league.strip().upper()
-    allowed_alert_types = ALERT_TYPES_BY_LEAGUE.get(league)
+    allowed_alert_types = set(ALERT_TYPES_BY_LEAGUE.get(league, []))
     if not allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
+    if league not in set(get_active_leagues(db)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="League is disabled")
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

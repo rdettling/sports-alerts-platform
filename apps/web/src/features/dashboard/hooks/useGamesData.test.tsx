@@ -6,9 +6,10 @@ import { useGamesData } from "./useGamesData";
 
 vi.mock("../../../shared/api", () => ({
   listGames: vi.fn(async () => []),
-  listFollows: vi.fn(async () => ({ leagues: [], teams: [], games: [] })),
+  listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
   listAlertHistory: vi.fn(async () => ({ items: [] })),
+  listLeagues: vi.fn(async () => [{ league: "NBA", is_enabled: true }]),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {

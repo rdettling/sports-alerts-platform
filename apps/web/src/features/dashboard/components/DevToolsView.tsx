@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AlertType, League, Team, listTeams, sendDevTestEmail } from "../../../shared/api";
+import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail } from "../../../shared/api";
 import { TeamLogo, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 
 const ALERT_TYPES_BY_LEAGUE: Record<League, AlertType[]> = {
@@ -15,6 +15,7 @@ const DEFAULT_TEST_MATCHUP_BY_LEAGUE: Record<League, { away: string; home: strin
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
+  const [activeLeagues, setActiveLeagues] = useState<League[]>([]);
   const [busyAlertType, setBusyAlertType] = useState<AlertType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +27,9 @@ export function DevToolsView({ token }: { token: string }) {
       setError(null);
       setLoading(true);
       try {
-        const teamsResponse = await listTeams();
+        const [teamsResponse, leaguesResponse] = await Promise.all([listTeams(), listLeagues()]);
         setTeams(teamsResponse);
+        setActiveLeagues(leaguesResponse.map((item) => item.league));
       } catch (fetchError) {
         setError(messageFromUnknown(fetchError));
       } finally {
@@ -36,6 +38,13 @@ export function DevToolsView({ token }: { token: string }) {
     };
     load().catch((fetchError) => setError(messageFromUnknown(fetchError)));
   }, []);
+
+  useEffect(() => {
+    if (activeLeagues.length === 0) return;
+    if (!activeLeagues.includes(activeLeague)) {
+      setActiveLeague(activeLeagues[0]);
+    }
+  }, [activeLeague, activeLeagues]);
 
   const onSendTest = async (alertType: AlertType) => {
     setError(null);
@@ -77,20 +86,16 @@ export function DevToolsView({ token }: { token: string }) {
           <p className="muted">Queue one synthetic pending alert to validate delivery flow.</p>
         </div>
         <div className="chip-row">
-          <button
-            className={`chip-btn ${activeLeague === "NBA" ? "active" : ""}`.trim()}
-            type="button"
-            onClick={() => setActiveLeague("NBA")}
-          >
-            NBA
-          </button>
-          <button
-            className={`chip-btn ${activeLeague === "MLB" ? "active" : ""}`.trim()}
-            type="button"
-            onClick={() => setActiveLeague("MLB")}
-          >
-            MLB
-          </button>
+          {activeLeagues.map((league) => (
+            <button
+              key={league}
+              className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()}
+              type="button"
+              onClick={() => setActiveLeague(league)}
+            >
+              {league}
+            </button>
+          ))}
         </div>
 
         <div className="admin-tools-matchup">

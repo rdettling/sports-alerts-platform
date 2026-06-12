@@ -2,7 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, Team, WorkerJob
+from app.db.models import Game, LeagueSetting, Team, WorkerJob
+from app.services.leagues import ensure_league_settings
 from worker import scheduler
 
 
@@ -17,6 +18,22 @@ def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
         ("live_sync", "NBA"),
     ]
     assert all(job.status == "queued" for job in jobs)
+
+
+def test_bootstrap_jobs_skips_disabled_leagues(db_session):
+    ensure_league_settings(db_session)
+    row = db_session.get(LeagueSetting, "MLB")
+    assert row is not None
+    row.is_enabled = False
+    db_session.commit()
+
+    scheduler._bootstrap_jobs()
+    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
+    assert [(job.job_type, job.league) for job in jobs] == [
+        ("catalog_sync", "NBA"),
+        ("delivery", None),
+        ("live_sync", "NBA"),
+    ]
 
 
 def test_bootstrap_jobs_removes_legacy_cleanup_job(db_session):

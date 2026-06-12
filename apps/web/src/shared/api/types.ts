@@ -44,6 +44,7 @@ export type Game = {
 };
 
 export type League = "NBA" | "MLB";
+export type LeagueSetting = { league: League; is_enabled: boolean };
 
 export type CurrentFollows = { teams: Team[]; games: Game[] };
 
@@ -149,6 +150,7 @@ export type OpsIngestHealthResponse = {
   scheduler_mode: "live" | "pregame_hot" | "pregame_cold" | "off";
   next_run_at: string | null;
   last_success_at: string | null;
+  active_leagues: League[];
   states: Array<{
     source_key: string;
     mode: string;
@@ -221,4 +223,8 @@ export type OpsNeonUsageResponse = {
   compute_last_active_at: string | null;
   avg_cu_while_active: number | null;
   message: string | null;
+};
+
+export type OpsLeagueSettingsResponse = {
+  items: LeagueSetting[];
 };

@@ -1,11 +1,8 @@
 from pydantic import BaseModel, Field
+from app.services.leagues import ALERT_TYPES_BY_LEAGUE, LEAGUE_ORDER
 
 ALERT_TYPES = ["game_start", "close_game_late", "inning_start", "final_result"]
-SUPPORTED_LEAGUES = ["NBA", "MLB"]
-ALERT_TYPES_BY_LEAGUE = {
-    "NBA": ["game_start", "close_game_late", "final_result"],
-    "MLB": ["game_start", "inning_start", "final_result"],
-}
+SUPPORTED_LEAGUES = list(LEAGUE_ORDER)
 
 
 class AlertPreferenceOut(BaseModel):

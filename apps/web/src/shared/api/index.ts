@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./domains/auth";
+export * from "./domains/leagues";
 export * from "./domains/teams";
 export * from "./domains/games";
 export * from "./domains/follows";

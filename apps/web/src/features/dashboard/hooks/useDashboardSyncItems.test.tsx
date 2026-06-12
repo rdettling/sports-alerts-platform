@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { useDashboardSyncItems } from "./useDashboardSyncItems";
 
 vi.mock("../../../shared/api", () => ({
+  listLeagues: vi.fn(async () => [
+    { league: "NBA", is_enabled: true },
+    { league: "MLB", is_enabled: true },
+  ]),
   listGames: vi.fn(async () => [
     {
       id: 1,

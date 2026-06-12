@@ -1,6 +1,8 @@
+import { type League } from "../../../../shared/api";
 import { type DayOption } from "./games-view-utils";
 
 export function GamesFiltersPanel({
+  activeLeagues,
   leagueFilter,
   onLeagueFilterChange,
   dayFilter,
@@ -9,8 +11,9 @@ export function GamesFiltersPanel({
   totalLeagueGames,
   dayOptions,
 }: {
-  leagueFilter: "all" | "NBA" | "MLB";
-  onLeagueFilterChange: (value: "all" | "NBA" | "MLB") => void;
+  activeLeagues: League[];
+  leagueFilter: "all" | League;
+  onLeagueFilterChange: (value: "all" | League) => void;
   dayFilter: "all" | string;
   onDayFilterChange: (value: "all" | string) => void;
   isLoading: boolean;
@@ -21,8 +24,9 @@ export function GamesFiltersPanel({
     <aside className="games-day-filter">
       <div className="games-league-filter" role="tablist" aria-label="League filter">
         <button className={`chip-btn ${leagueFilter === "all" ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange("all")} disabled={isLoading}>All</button>
-        <button className={`chip-btn ${leagueFilter === "NBA" ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange("NBA")} disabled={isLoading}>NBA</button>
-        <button className={`chip-btn ${leagueFilter === "MLB" ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange("MLB")} disabled={isLoading}>MLB</button>
+        {activeLeagues.map((league) => (
+          <button key={league} className={`chip-btn ${leagueFilter === league ? "active" : ""}`.trim()} onClick={() => onLeagueFilterChange(league)} disabled={isLoading}>{league}</button>
+        ))}
       </div>
       <button className={`games-day-filter-btn ${dayFilter === "all" ? "active" : ""}`.trim()} onClick={() => onDayFilterChange("all")} disabled={isLoading}>
         <span>All</span>

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 
 from app.db.models import Game, WorkerJob
+from app.services.leagues import get_active_leagues
 from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
@@ -38,16 +39,23 @@ def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
+        active_leagues = get_active_leagues(db)
         # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
         db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
         db.execute(delete(WorkerJob).where(WorkerJob.job_type.in_(("updates_sync", "updates_classify"))))
-        for job_type, league in (
-            (CATALOG_SYNC_JOB, "NBA"),
-            (CATALOG_SYNC_JOB, "MLB"),
-            (LIVE_SYNC_JOB, "NBA"),
-            (LIVE_SYNC_JOB, "MLB"),
-            (DELIVERY_JOB, None),
-        ):
+        disabled_sync_jobs = delete(WorkerJob).where(
+            WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB)),
+            WorkerJob.league.is_not(None),
+        )
+        if active_leagues:
+            disabled_sync_jobs = disabled_sync_jobs.where(WorkerJob.league.not_in(active_leagues))
+        db.execute(disabled_sync_jobs)
+
+        jobs_to_ensure: list[tuple[str, str | None]] = [(DELIVERY_JOB, None)]
+        for league in active_leagues:
+            jobs_to_ensure.extend(((CATALOG_SYNC_JOB, league), (LIVE_SYNC_JOB, league)))
+
+        for job_type, league in jobs_to_ensure:
             existing = db.scalar(select(WorkerJob).where(WorkerJob.job_type == job_type, WorkerJob.league == league))
             if existing:
                 if existing.status == "failed":

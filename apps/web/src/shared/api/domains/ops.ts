@@ -1,8 +1,10 @@
 import { apiRequest } from "../client";
 import type {
+  LeagueSetting,
   OpsAdminOverviewResponse,
   OpsAdminOverviewWindow,
   OpsIngestHealthResponse,
+  OpsLeagueSettingsResponse,
   OpsNeonUsageResponse,
   OpsSummaryResponse,
   OpsTimeseriesResponse,
@@ -38,4 +40,16 @@ export function getOpsAdminOverview(
 
 export function getOpsNeonUsage(token: string): Promise<OpsNeonUsageResponse> {
   return apiRequest<OpsNeonUsageResponse>("/ops/db/neon-usage", { token });
+}
+
+export function getOpsLeagueSettings(token: string): Promise<OpsLeagueSettingsResponse> {
+  return apiRequest<OpsLeagueSettingsResponse>("/ops/leagues", { token });
+}
+
+export function updateOpsLeagueSetting(token: string, league: LeagueSetting["league"], isEnabled: boolean): Promise<LeagueSetting> {
+  return apiRequest<LeagueSetting>(`/ops/leagues/${league}`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({ is_enabled: isEnabled }),
+  });
 }

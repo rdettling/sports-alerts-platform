@@ -12,6 +12,7 @@ from app.config import settings
 from app.db.models import ApiCallRollupHourly, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
+from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
 from app.schemas.ops import (
     ApiUsageSummaryOut,
     IngestHealthEventOut,
@@ -31,7 +32,9 @@ from app.schemas.ops import (
     ProviderUsageOut,
     TeamMappingHealthOut,
     TeamMappingLeagueHealthOut,
+    OpsLeagueSettingsResponseOut,
 )
+from app.services.leagues import LEAGUE_ORDER, get_active_leagues, list_league_settings, normalize_league
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -230,8 +233,13 @@ def ingest_health(
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> IngestHealthResponseOut:
+    active_leagues = get_active_leagues(db)
     jobs = db.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
-    sync_jobs = [job for job in jobs if job.job_type in {"catalog_sync", "live_sync"}]
+    sync_jobs = [
+        job
+        for job in jobs
+        if job.job_type in {"catalog_sync", "live_sync"} and (job.league is None or job.league in active_leagues)
+    ]
     next_run_candidates = [job.next_run_at for job in sync_jobs if job.next_run_at is not None]
     next_run_at = min(next_run_candidates) if next_run_candidates else None
     last_success_at = max((job.last_finished_at for job in jobs if job.last_finished_at is not None), default=None)
@@ -243,6 +251,7 @@ def ingest_health(
         scheduler_mode=scheduler_mode,
         next_run_at=next_run_at,
         last_success_at=last_success_at,
+        active_leagues=active_leagues,
         states=[
             IngestHealthOut(
                 source_key=f"worker:{job.job_type}:{job.league or 'global'}",
@@ -256,6 +265,31 @@ def ingest_health(
         ],
         events=[],
     )
+
+
+@router.get("/leagues", response_model=OpsLeagueSettingsResponseOut)
+def get_league_settings(
+    _: User = Depends(require_admin_user),
+    db: Session = Depends(get_db),
+) -> OpsLeagueSettingsResponseOut:
+    return OpsLeagueSettingsResponseOut(items=[LeagueSettingOut.model_validate(row) for row in list_league_settings(db)])
+
+
+@router.put("/leagues/{league}", response_model=LeagueSettingOut)
+def update_league_setting(
+    league: str,
+    payload: UpdateLeagueSettingRequest,
+    _: User = Depends(require_admin_user),
+    db: Session = Depends(get_db),
+) -> LeagueSettingOut:
+    normalized = normalize_league(league)
+    row = next((item for item in list_league_settings(db) if item.league == normalized), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail="League not found")
+    row.is_enabled = payload.is_enabled
+    db.commit()
+    db.refresh(row)
+    return LeagueSettingOut.model_validate(row)
 
 
 @router.get("/admin/overview", response_model=OpsAdminOverviewOut)
@@ -467,7 +501,7 @@ def team_mapping_health(
         raise HTTPException(status_code=422, detail="Invalid date. Use YYYYMMDD.")
 
     leagues_out: list[TeamMappingLeagueHealthOut] = []
-    for league in ("MLB", "NBA"):
+    for league in get_active_leagues(db):
         seeded_team_ids = {
             team_id
             for team_id, in db.execute(select(Team.external_team_id).where(Team.league == league)).all()

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listAlertHistory,
   listAlertPreferences,
+  listLeagues,
   updateAlertPreference,
   type League,
   type AlertPreference,
@@ -25,17 +26,20 @@ export function AlertsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
+  const [activeLeagues, setActiveLeagues] = useState<League[]>([]);
 
   const load = async () => {
     setError(null);
     setLoading(true);
     try {
-      const [preferenceResponse, historyResponse] = await Promise.all([
+      const [preferenceResponse, historyResponse, leaguesResponse] = await Promise.all([
         listAlertPreferences(token),
         listAlertHistory(token, { sinceHours: 24 * 7, limit: 100 }),
+        listLeagues(),
       ]);
       setPreferenceGroups(preferenceResponse);
       setHistoryItems(historyResponse.items);
+      setActiveLeagues(leaguesResponse.map((item) => item.league));
     } finally {
       setLoading(false);
     }
@@ -51,6 +55,13 @@ export function AlertsView({ token }: { token: string }) {
     }, 120_000);
     return () => window.clearInterval(id);
   }, [token]);
+
+  useEffect(() => {
+    if (activeLeagues.length === 0) return;
+    if (!activeLeagues.includes(activeLeague)) {
+      setActiveLeague(activeLeagues[0]);
+    }
+  }, [activeLeague, activeLeagues]);
 
   const onRuleFieldSettingChange = async (
     preference: AlertPreference,
@@ -95,8 +106,9 @@ export function AlertsView({ token }: { token: string }) {
             <div className="section-header section-header-inline alerts-rules-header">
               <div><h3>Alert Rules</h3></div>
               <div className="chip-row">
-                <button className={`chip-btn ${activeLeague === "NBA" ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague("NBA")}>NBA</button>
-                <button className={`chip-btn ${activeLeague === "MLB" ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague("MLB")}>MLB</button>
+                {activeLeagues.map((league) => (
+                  <button key={league} className={`chip-btn ${activeLeague === league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league)}>{league}</button>
+                ))}
               </div>
             </div>
 

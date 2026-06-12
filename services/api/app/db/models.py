@@ -50,6 +50,15 @@ class Team(Base):
     abbreviation: Mapped[str] = mapped_column(String(10))
 
 
+class LeagueSetting(Base):
+    __tablename__ = "league_settings"
+
+    league: Mapped[str] = mapped_column(String(16), primary_key=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class Game(Base):
     __tablename__ = "games"
     __table_args__ = (

@@ -8,6 +8,7 @@ from app.config import settings
 from app.db.models import Game, GameOddsCurrent
 from app.db.session import get_db
 from app.schemas.game import GameOddsOut, GameOut
+from app.services.leagues import get_active_leagues, normalize_league
 
 router = APIRouter(tags=["games"])
 GAMES_RETENTION_PAST_HOURS = 36
@@ -23,17 +24,19 @@ def list_games(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
+    active_leagues = get_active_leagues(db)
     now = datetime.now(timezone.utc)
     lower = now - timedelta(hours=max(1, GAMES_RETENTION_PAST_HOURS))
     upper = now + timedelta(days=max(1, GAMES_RETENTION_FUTURE_DAYS))
     stmt = (
         select(Game)
+        .where(Game.league.in_(active_leagues))
         .where(Game.scheduled_start_time >= lower, Game.scheduled_start_time <= upper)
         .order_by(Game.scheduled_start_time.asc())
         .limit(limit)
     )
     if league:
-        stmt = stmt.where(Game.league == league.strip().upper())
+        stmt = stmt.where(Game.league == normalize_league(league))
     if status:
         stmt = stmt.where(Game.status == status)
     elif not include_finals:

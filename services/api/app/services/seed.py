@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Team, User
+from app.services.leagues import ensure_league_settings
 
 NBA_TEAMS = [
     ("1", "Atlanta Hawks", "ATL"),
@@ -71,6 +72,7 @@ MLB_TEAMS = [
 
 
 def seed_teams_if_empty(db: Session) -> None:
+    ensure_league_settings(db)
     existing_nba = db.scalar(select(Team.id).where(Team.league == "NBA").limit(1))
     if not existing_nba:
         for external_team_id, name, abbreviation in NBA_TEAMS:

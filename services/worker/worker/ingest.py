@@ -20,6 +20,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from app.services.alert_defaults import get_alert_default_values
+from app.services.leagues import ALERT_TYPES_BY_LEAGUE, LEAGUE_ORDER, get_active_leagues
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import MoneylineOdds, fetch_odds_index, game_key
@@ -28,11 +29,7 @@ from worker.providers.base import ProviderGame, SportsProvider
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
-SUPPORTED_LEAGUES = ("NBA", "MLB")
-ALERT_TYPES_BY_LEAGUE = {
-    "NBA": ("game_start", "close_game_late", "final_result"),
-    "MLB": ("game_start", "inning_start", "final_result"),
-}
+SUPPORTED_LEAGUES = LEAGUE_ORDER
 
 
 def _normalize_league(league: str) -> str:
@@ -40,6 +37,11 @@ def _normalize_league(league: str) -> str:
     if value not in SUPPORTED_LEAGUES:
         raise ValueError(f"Unsupported league: {league}")
     return value
+
+
+def _assert_league_enabled(db: Session, league: str) -> None:
+    if league not in set(get_active_leagues(db)):
+        raise ValueError(f"League disabled: {league}")
 
 
 def _catalog_interval_seconds(league: str) -> int:
@@ -564,6 +566,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
+        _assert_league_enabled(db, league)
         requests = build_catalog_requests(db, league, now=now)
         team_map = _team_id_map(db, league)
         team_names = _team_name_map(db, league)
@@ -634,6 +637,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
+        _assert_league_enabled(db, league)
         requests = build_live_requests(db, league)
         if not requests:
             next_scheduled = _next_scheduled_start(db, league, now)

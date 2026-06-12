@@ -1,4 +1,4 @@
-import { type Game } from "../../../../shared/api";
+import { type Game, type League } from "../../../../shared/api";
 import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
 
@@ -29,7 +29,7 @@ export function sortGamesByStart(games: Game[]): Game[] {
   return [...games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime());
 }
 
-export function filterGamesByLeague(games: Game[], leagueFilter: "all" | "NBA" | "MLB"): Game[] {
+export function filterGamesByLeague(games: Game[], leagueFilter: "all" | League): Game[] {
   if (leagueFilter === "all") return games;
   return games.filter((game) => (game.league || "").toUpperCase() === leagueFilter);
 }
@@ -89,8 +89,8 @@ export function latestIngestAtFromGames(games: Game[]): Date | null {
   return latestIngestAt(games);
 }
 
-export function buildSyncRows(games: Game[]): SyncRow[] {
-  const byLeague = (league: "NBA" | "MLB") => {
+export function buildSyncRows(games: Game[], activeLeagues: League[]): SyncRow[] {
+  const byLeague = (league: League) => {
     const leagueGames = games.filter((game) => (game.league || "").toUpperCase() === league);
     const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
     const nextStartMs = leagueGames
@@ -101,8 +101,6 @@ export function buildSyncRows(games: Game[]): SyncRow[] {
     return { liveCount, nextStartMs, lastAt: latestIngestAt(leagueGames) };
   };
 
-  const nba = byLeague("NBA");
-  const mlb = byLeague("MLB");
   const catalogLastAt = latestIngestAt(games);
 
   const leagueRow = (
@@ -136,8 +134,14 @@ export function buildSyncRows(games: Game[]): SyncRow[] {
       detail: "Schedule + odds snapshot",
       tone: syncTone(catalogLastAt, 12 * 60 + 30, true),
     },
-    leagueRow("Live (NBA)", "2m cadence", nba, 4),
-    leagueRow("Live (MLB)", "5m cadence", mlb, 10),
+    ...activeLeagues.map((league) =>
+      leagueRow(
+        `Live (${league})`,
+        league === "NBA" ? "2m cadence" : "5m cadence",
+        byLeague(league),
+        league === "NBA" ? 4 : 10,
+      ),
+    ),
   ];
 }
 

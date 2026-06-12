@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, Team
+from app.db.models import Game, GameOddsCurrent, LeagueSetting, Team
 from app.db.session import SessionLocal
 
 
@@ -148,3 +148,30 @@ def test_games_include_finals_when_requested(client):
     assert include_response.status_code == 200
     include_ids = {row["external_game_id"] for row in include_response.json()}
     assert "test-final-game" in include_ids
+
+
+def test_games_hide_disabled_league(client):
+    db = SessionLocal()
+    try:
+        settings = db.get(LeagueSetting, "MLB")
+        assert settings is not None
+        settings.is_enabled = False
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        db.add(
+            Game(
+                external_game_id="hidden-mlb-game",
+                league="MLB",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+                status="scheduled",
+                is_final=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games")
+    assert response.status_code == 200
+    assert {row["external_game_id"] for row in response.json()} == set()

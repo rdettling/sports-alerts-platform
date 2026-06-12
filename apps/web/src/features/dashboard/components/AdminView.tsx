@@ -4,6 +4,7 @@ import { type OpsAdminOverviewWindow } from "../../../shared/api";
 import { useAdminData } from "../hooks/useAdminData";
 import { formatRelativeTime } from "../utils/telemetry-format";
 import { AdminDbStatsPanel } from "./admin/AdminDbStatsPanel";
+import { AdminLeagueSettingsPanel } from "./admin/AdminLeagueSettingsPanel";
 import { AdminProviderPanel } from "./admin/AdminProviderPanel";
 import { AdminTabsHeader } from "./admin/AdminTabsHeader";
 import { findProvider, normalizeProviderTab } from "./admin/admin-view-utils";
@@ -28,6 +29,7 @@ export function AdminView({ token }: { token: string }) {
   const errorMessage = error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
   const overview = data?.overview ?? null;
   const ingestHealth = data?.ingestHealth ?? null;
+  const leagueSettings = data?.leagueSettings?.items ?? [];
   const neonUsage = data?.neonUsage ?? null;
 
   const providerTab = normalizeProviderTab(tab);
@@ -52,6 +54,7 @@ export function AdminView({ token }: { token: string }) {
 
       {!loading && !errorMessage ? (
         <div className="admin-tab-content">
+          <AdminLeagueSettingsPanel token={token} items={leagueSettings} />
           {tab === "tools" ? <DevToolsView token={token} /> : null}
           {tab === "db" ? <AdminDbStatsPanel ingestHealth={ingestHealth} neonUsage={neonUsage} /> : null}
           {providerTab && overview ? <AdminProviderPanel provider={provider} /> : null}

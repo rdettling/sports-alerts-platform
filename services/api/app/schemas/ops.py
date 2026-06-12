@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel
+from app.schemas.league import LeagueSettingOut
 
 
 class ProviderUsageOut(BaseModel):
@@ -74,6 +75,7 @@ class IngestHealthResponseOut(BaseModel):
     scheduler_mode: str
     next_run_at: datetime | None
     last_success_at: datetime | None
+    active_leagues: list[str]
     states: list[IngestHealthOut]
     events: list[IngestHealthEventOut]
 
@@ -165,3 +167,7 @@ class TeamMappingHealthOut(BaseModel):
     ok: bool
     checked_at: datetime
     leagues: list[TeamMappingLeagueHealthOut]
+
+
+class OpsLeagueSettingsResponseOut(BaseModel):
+    items: list[LeagueSettingOut]

@@ -20,6 +20,10 @@ const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA
 
 vi.mock("../../../shared/api", () => ({
   listTeams: () => listTeamsMock(),
+  listLeagues: vi.fn(async () => [
+    { league: "NBA", is_enabled: true },
+    { league: "MLB", is_enabled: true },
+  ]),
   sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB"; alert_type: string }) =>
     sendDevTestEmailMock(payload),
 }));
@@ -54,4 +58,3 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(sendDevTestEmailMock).toHaveBeenCalledWith({ league: "MLB", alert_type: "inning_start" }));
   });
 });
-

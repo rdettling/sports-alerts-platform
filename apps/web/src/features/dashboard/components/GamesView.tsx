@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { followGame, type Team, unfollowGame } from "../../../shared/api";
+import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
@@ -23,7 +23,7 @@ export function GamesView({ token }: { token: string }) {
   const { data, isLoading } = useGamesData(token);
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
-  const [leagueFilter, setLeagueFilter] = useState<"all" | "NBA" | "MLB">("all");
+  const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
   const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride } =
@@ -46,6 +46,7 @@ export function GamesView({ token }: { token: string }) {
   const games = data?.games ?? [];
   const follows = data?.follows;
   const teams = data?.teams ?? [];
+  const activeLeagues = data?.leagues.map((item) => item.league) ?? [];
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
@@ -55,6 +56,12 @@ export function GamesView({ token }: { token: string }) {
   const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
   const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
+  useEffect(() => {
+    if (leagueFilter !== "all" && !activeLeagues.includes(leagueFilter)) {
+      setLeagueFilter("all");
+    }
+  }, [activeLeagues, leagueFilter]);
+
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
       setDayFilter("all");
@@ -80,6 +87,7 @@ export function GamesView({ token }: { token: string }) {
         {!isLoading ? (
           <div className="games-feed-grid">
             <GamesFiltersPanel
+              activeLeagues={activeLeagues}
               leagueFilter={leagueFilter}
               onLeagueFilterChange={setLeagueFilter}
               dayFilter={dayFilter}

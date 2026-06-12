@@ -10,6 +10,7 @@ from app.deps import get_current_user
 from app.schemas.follow import CurrentFollowsOut
 from app.schemas.game import GameOut
 from app.schemas.team import TeamOut
+from app.services.leagues import get_active_leagues
 
 router = APIRouter(prefix="/follows", tags=["follows"])
 
@@ -19,10 +20,12 @@ def list_current_follows(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CurrentFollowsOut:
+    active_leagues = get_active_leagues(db)
     teams = db.scalars(
         select(Team)
         .join(UserTeamFollow, UserTeamFollow.team_id == Team.id)
         .where(UserTeamFollow.user_id == current_user.id)
+        .where(Team.league.in_(active_leagues))
         .order_by(Team.name.asc())
     ).all()
 
@@ -40,6 +43,7 @@ def list_current_follows(
     games = db.scalars(
         select(Game)
         .join(effective_game_ids, effective_game_ids.c.game_id == Game.id)
+        .where(Game.league.in_(active_leagues))
         .order_by(Game.scheduled_start_time.asc())
     ).all()
     return CurrentFollowsOut(

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.db.models import (
     Game,
     GameOddsCurrent,
+    LeagueSetting,
     SentAlert,
     Team,
     User,
@@ -14,6 +15,7 @@ from app.db.models import (
     UserGameUnfollow,
     UserTeamFollow,
 )
+from app.services.leagues import ensure_league_settings
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import MoneylineOdds
 from worker.planner import FetchPlan, build_live_requests
@@ -676,6 +678,24 @@ def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
     assert result["has_live_games"] == "false"
     assert result["mode"] == "no_upcoming"
     assert result["next_scheduled_start_at"] is None
+
+
+def test_catalog_sync_fails_for_disabled_league(db_session):
+    class DisabledProvider:
+        def fetch_games(self, league, requests):
+            return []
+
+        def expected_call_count(self, requests):
+            return len(requests)
+
+    ensure_league_settings(db_session)
+    row = db_session.get(LeagueSetting, "MLB")
+    assert row is not None
+    row.is_enabled = False
+    db_session.commit()
+
+    result = run_catalog_sync(DisabledProvider(), league="MLB")
+    assert result["status"] == "failed"
 
 
 def test_live_sync_promotes_scheduled_game_to_live(db_session):
