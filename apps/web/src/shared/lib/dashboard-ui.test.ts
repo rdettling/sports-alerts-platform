@@ -86,6 +86,29 @@ describe("dashboard utilities", () => {
     expect(label).toBe("67'");
   });
 
+  it("formats scheduled games as time only", () => {
+    const label = formatGameTime({
+      id: 5,
+      external_game_id: "e",
+      league: "MLB",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: "2026-06-12T20:40:00Z",
+      context_label: null,
+      status: "scheduled",
+      home_score: null,
+      away_score: null,
+      period: null,
+      clock: null,
+      is_final: false,
+      last_ingested_at: null,
+      odds: null,
+    });
+
+    expect(label).toMatch(/:\d{2}/);
+    expect(label).not.toMatch(/\d+\/\d+/);
+  });
+
   it("skips no-vig probabilities for three-way odds", () => {
     const result = noVigProbabilities({
       id: 4,

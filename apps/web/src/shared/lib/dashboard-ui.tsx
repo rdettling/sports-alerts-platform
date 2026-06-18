@@ -101,7 +101,7 @@ export function deliveryStatusClass(status: string): string {
 }
 
 export function formatTipoff(dateIso: string): string {
-  return new Date(dateIso).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(dateIso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function formatPeriod(period: number | null): string {

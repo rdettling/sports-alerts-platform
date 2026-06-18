@@ -69,7 +69,9 @@ This document describes what the app currently does in production code.
 
 ## Worker Behavior
 
-- Polls NBA provider schedule and updates.
+- Polls enabled league schedules from the provider.
+- Catalog sync keeps each enabled league populated from yesterday through 7 days ahead.
+- Live sync stays narrow and updates only live or imminent games.
 - Upserts teams/games state into Postgres.
 - Evaluates alert rules for followers.
 - Writes pending alerts to `sent_alerts` with dedupe keys.
@@ -77,6 +79,11 @@ This document describes what the app currently does in production code.
   - `log`
   - `email` (Resend)
 - Records outbound call telemetry for ESPN, Odds, and Resend.
+
+## Game Retention
+
+- API and cleanup retention are separate from schedule discovery.
+- Games are retained from roughly 36 hours in the past through 7 days ahead.
 
 ## Odds Behavior
 

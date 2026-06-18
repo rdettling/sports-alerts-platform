@@ -256,6 +256,27 @@ class ContextLabelProvider:
         return len(requests)
 
 
+class RecordingCatalogProvider:
+    def __init__(self, scheduled_start_time: datetime):
+        self.scheduled_start_time = scheduled_start_time
+        self.requests: list[ScoreboardRequest] = []
+
+    def fetch_games(self, league, requests):
+        self.requests = list(requests)
+        return [
+            ProviderGame(
+                external_game_id=f"{league.lower()}-catalog-game",
+                home_external_team_id="10" if league == "MLB" else "660",
+                away_external_team_id="4" if league == "MLB" else "203",
+                scheduled_start_time=self.scheduled_start_time,
+                status="scheduled",
+            )
+        ]
+
+    def expected_call_count(self, requests):
+        return len(requests)
+
+
 def test_ingest_run_success(db_session):
     provider = SuccessProvider()
     result = run_ingest_cycle(provider)
@@ -715,6 +736,42 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
     assert second["status"] == "success"
     assert first["odds_snapshots_created"] == 1
     assert second["odds_snapshots_created"] == 0
+
+
+def test_catalog_sync_uses_fixed_horizon_even_with_existing_games(db_session, monkeypatch):
+    now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
+    mlb_teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc())).all()
+    db_session.add(
+        Game(
+            external_game_id="mlb-existing",
+            league="MLB",
+            home_team_id=mlb_teams[0].id,
+            away_team_id=mlb_teams[1].id,
+            scheduled_start_time=now + timedelta(days=2),
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    provider = RecordingCatalogProvider(now + timedelta(days=3))
+    monkeypatch.setattr("worker.ingest.datetime", type("FixedDateTime", (), {"now": staticmethod(lambda tz=None: now)}))
+    monkeypatch.setattr("worker.planner.datetime", type("FixedDateTime", (), {"now": staticmethod(lambda tz=None: now)}))
+
+    result = run_catalog_sync(provider, league="MLB")
+
+    assert result["status"] == "success"
+    assert [request.date for request in provider.requests] == [
+        "20260617",
+        "20260618",
+        "20260619",
+        "20260620",
+        "20260621",
+        "20260622",
+        "20260623",
+        "20260624",
+        "20260625",
+    ]
 
 
 def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):

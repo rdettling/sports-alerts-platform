@@ -35,11 +35,19 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _sync_job_targets_disabled_league(job: WorkerJob, active_leagues: set[str]) -> bool:
+    return (
+        job.job_type in {CATALOG_SYNC_JOB, LIVE_SYNC_JOB}
+        and job.league is not None
+        and job.league not in active_leagues
+    )
+
+
 def _bootstrap_jobs() -> None:
     db = SessionLocal()
     try:
         now = _utcnow()
-        active_leagues = get_active_leagues(db)
+        active_leagues = set(get_active_leagues(db))
         # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
         db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
         db.execute(delete(WorkerJob).where(WorkerJob.job_type.in_(("updates_sync", "updates_classify"))))
@@ -84,6 +92,7 @@ def _bootstrap_jobs() -> None:
 def _next_due_job(now: datetime) -> WorkerJob | None:
     db = SessionLocal()
     try:
+        active_leagues = set(get_active_leagues(db))
         row = db.scalar(
             select(WorkerJob)
             .where(
@@ -95,6 +104,10 @@ def _next_due_job(now: datetime) -> WorkerJob | None:
         )
         if not row:
             return None
+        if _sync_job_targets_disabled_league(row, active_leagues):
+            db.delete(row)
+            db.commit()
+            return None
         db.expunge(row)
         return row
     finally:
@@ -104,9 +117,19 @@ def _next_due_job(now: datetime) -> WorkerJob | None:
 def _next_due_seconds(now: datetime) -> float:
     db = SessionLocal()
     try:
+        active_leagues = set(get_active_leagues(db))
         row = db.scalar(
             select(WorkerJob)
-            .where(WorkerJob.status == "queued")
+            .where(
+                WorkerJob.status == "queued",
+                (
+                    WorkerJob.job_type == DELIVERY_JOB
+                )
+                | (
+                    WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB))
+                    & WorkerJob.league.in_(sorted(active_leagues))
+                ),
+            )
             .order_by(WorkerJob.next_run_at.asc(), WorkerJob.id.asc())
             .limit(1)
         )

@@ -79,7 +79,7 @@ describe("GameRowCard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Alert settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Unfollow" }));
 
     expect(onOpenAlertSettings).toHaveBeenCalledTimes(1);
@@ -97,7 +97,7 @@ describe("GameRowCard", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Alert settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Unfollow" })).toBeNull();
   });
 

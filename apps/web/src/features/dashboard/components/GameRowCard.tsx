@@ -1,5 +1,6 @@
 import { type Game, type Team } from "../../../shared/api";
 import { TeamLogo, drawOdds, formatMoneyline, isThreeWayOdds, leagueBadgeLabel, leagueLogoUrl, oddsOutcomeByTeamSide } from "../../../shared/lib/dashboard-ui";
+import { GameStatePill, type GameStateTone } from "./GameStatePill";
 
 type GameRowCardProps = {
   game: Game;
@@ -47,6 +48,7 @@ export function GameRowCard({
   const league = leagueBadgeLabel(game.league);
   const logoUrl = leagueLogoUrl(game.league);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
+  const statusTone: GameStateTone = isLive ? "live" : isFinal ? "final" : game.status === "postponed" ? "postponed" : "scheduled";
 
   return (
     <article className="games-card-row" role="listitem">
@@ -87,18 +89,16 @@ export function GameRowCard({
               <span className="games-league-logo-fallback">{league}</span>
             )}
 
-            <span className={`games-status-pill ${isLive ? "live" : isFinal ? "final" : "scheduled"}`.trim()}>
-              {statusLabel}
-            </span>
+            <GameStatePill text={statusLabel} tone={statusTone} />
           </div>
 
           <div className="games-card-actions">
             {isFollowed && !isFinal ? (
               <div className="following-game-actions following-game-actions-stacked">
-                <button className="btn btn-secondary games-action-cell" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
-                  Alert settings
+                <button className="btn btn-secondary games-action-cell games-inline-action" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
+                  Settings
                 </button>
-                <button className="btn btn-secondary games-action-cell" type="button" onClick={onUnfollow} disabled={actionsDisabled || !onUnfollow}>
+                <button className="btn btn-secondary games-action-cell games-inline-action" type="button" onClick={onUnfollow} disabled={actionsDisabled || !onUnfollow}>
                   Unfollow
                 </button>
               </div>

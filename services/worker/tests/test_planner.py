@@ -64,34 +64,28 @@ def test_planner_off_mode_and_interval(db_session):
     plan = build_fetch_plan(db_session, "NBA", now=now)
     assert plan.mode == "off"
     assert plan.next_ingest_seconds == 43200
-    assert len(plan.espn_requests) == 3
+    assert len(plan.espn_requests) == 9
 
 
-def test_planner_always_includes_yesterday_today_tomorrow(db_session):
+def test_planner_catalog_horizon_spans_yesterday_through_seven_days_ahead(db_session):
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
     plan = build_fetch_plan(db_session, "NBA", now=now)
     dates = [request.date for request in plan.espn_requests]
     assert "20260502" in dates
     assert "20260503" in dates
     assert "20260504" in dates
-
-
-def test_planner_cold_start_extends_date_window(db_session):
-    now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
-    plan = build_fetch_plan(db_session, "NBA", now=now)
-    dates = [request.date for request in plan.espn_requests]
-    assert "20260501" in dates
     assert "20260510" in dates
-    assert len(dates) == 10
+    assert len(dates) == 9
 
 
-def test_planner_does_not_use_cold_start_window_when_games_exist(db_session):
+def test_planner_catalog_horizon_does_not_shrink_when_games_exist(db_session):
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
     _seed_game(db_session, external_id="g-existing", status="scheduled", scheduled_start=now + timedelta(days=4))
     plan = build_fetch_plan(db_session, "NBA", now=now)
     dates = [request.date for request in plan.espn_requests]
-    assert "20260501" not in dates
-    assert "20260510" not in dates
+    assert "20260502" in dates
+    assert "20260510" in dates
+    assert len(dates) == 9
 
 
 def test_planner_odds_refresh_disabled(db_session):
@@ -122,12 +116,13 @@ def test_planner_odds_refresh_when_snapshot_missing(db_session, monkeypatch):
     assert plan.expected_odds_calls == 0
 
 
-def test_build_catalog_requests_returns_wide_window_for_cold_start(db_session):
+def test_build_catalog_requests_returns_fixed_horizon(db_session):
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
     requests = build_catalog_requests(db_session, "NBA", now=now)
     dates = [request.date for request in requests]
-    assert "20260501" in dates
+    assert "20260502" in dates
     assert "20260510" in dates
+    assert len(dates) == 9
 
 
 def test_build_live_requests_tracks_live_and_imminent_scheduled_games(db_session):

@@ -16,8 +16,8 @@ INGEST_PREGAME_COLD_INTERVAL_SECONDS = 3600
 INGEST_OFF_INTERVAL_SECONDS = 43200
 INGEST_PREGAME_HOT_WINDOW_MINUTES = 90
 INGEST_PREGAME_COLD_WINDOW_HOURS = 24
-INGEST_COLD_START_LOOKBACK_DAYS = 2
-INGEST_COLD_START_LOOKAHEAD_DAYS = 7
+INGEST_CATALOG_LOOKBACK_DAYS = 1
+INGEST_CATALOG_LOOKAHEAD_DAYS = 7
 INGEST_LIVE_SYNC_LOOKBACK_HOURS = 2
 INGEST_LIVE_SYNC_LOOKAHEAD_HOURS = 6
 
@@ -73,57 +73,16 @@ def _mode_interval_seconds(mode: str) -> int:
     return max(900, INGEST_OFF_INTERVAL_SECONDS)
 
 
-def _tracked_dates(db: Session, now: datetime, league: str) -> set[str]:
-    rows = db.execute(
-        select(Game.scheduled_start_time, Game.status).where(
-            Game.league == league,
-            Game.is_final.is_(False),
-            or_(
-                Game.status.in_(("in_progress", "live")),
-                and_(
-                    Game.scheduled_start_time >= now - timedelta(hours=6),
-                    Game.scheduled_start_time <= now + timedelta(hours=36),
-                ),
-            ),
-        )
-    ).all()
-    dates: set[str] = set()
-    for start_time, _status in rows:
-        dt = start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)
-        dates.add(dt.strftime("%Y%m%d"))
-    return dates
-
-
 def _default_dates_for_mode(_mode: str, now: datetime) -> set[str]:
     today = now.date()
     return {
-        (today - timedelta(days=1)).strftime("%Y%m%d"),
-        today.strftime("%Y%m%d"),
-        (today + timedelta(days=1)).strftime("%Y%m%d"),
-    }
-
-
-def _cold_start_dates(now: datetime) -> set[str]:
-    today = now.date()
-    lookback = max(0, INGEST_COLD_START_LOOKBACK_DAYS)
-    lookahead = max(0, INGEST_COLD_START_LOOKAHEAD_DAYS)
-    return {
         (today + timedelta(days=offset)).strftime("%Y%m%d")
-        for offset in range(-lookback, lookahead + 1)
+        for offset in range(-max(0, INGEST_CATALOG_LOOKBACK_DAYS), max(0, INGEST_CATALOG_LOOKAHEAD_DAYS) + 1)
     }
 
 
-def _is_cold_start(db: Session, league: str) -> bool:
-    existing_games = db.scalar(select(func.count(Game.id)).where(Game.league == league)) or 0
-    return existing_games == 0
-
-
-def _build_espn_requests(db: Session, mode: str, now: datetime, league: str) -> list[ScoreboardRequest]:
+def _build_espn_requests(_db: Session, mode: str, now: datetime, _league: str) -> list[ScoreboardRequest]:
     dates = _default_dates_for_mode(mode, now)
-    tracked_dates = _tracked_dates(db, now, league)
-    dates.update(tracked_dates)
-    if not tracked_dates and _is_cold_start(db, league):
-        dates.update(_cold_start_dates(now))
     return [ScoreboardRequest(date=value) for value in sorted(dates)]
 
 

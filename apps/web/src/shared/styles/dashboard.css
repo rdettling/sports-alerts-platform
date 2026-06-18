@@ -302,27 +302,40 @@
 }
 
 .games-status-pill {
+  --games-state-pill-font-size: 0.72rem;
+  --games-state-pill-padding-y: 0.24rem;
+  --games-state-pill-padding-x: 0.52rem;
   border-radius: var(--radius-pill);
-  padding: 0.34rem 0.7rem;
+  padding: var(--games-state-pill-padding-y) var(--games-state-pill-padding-x);
   min-height: 0;
-  font-size: 0.9rem;
-  font-weight: 700;
+  border: 1px solid transparent;
+  font-size: var(--games-state-pill-font-size);
+  font-weight: 650;
   letter-spacing: 0.01em;
 }
 
 .games-status-pill.scheduled {
-  color: #1d355e;
-  background: #e7eefb;
+  color: #46597f;
+  background: #f3f7ff;
+  border: 1px solid #d9e4f6;
 }
 
 .games-status-pill.final {
   color: #166534;
   background: #dcfce7;
+  border-color: #b7dfc0;
+}
+
+.games-status-pill.postponed {
+  color: #7c2d12;
+  background: #ffedd5;
+  border-color: #fdba74;
 }
 
 .games-status-pill.live {
   color: #b91c1c;
   background: #fee2e2;
+  border-color: #fecaca;
 }
 
 .team-logo {
@@ -339,8 +352,11 @@
 }
 
 .games-card-footer {
-  display: grid;
-  gap: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  justify-content: space-between;
 }
 
 .games-card-meta {
@@ -348,11 +364,17 @@
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .games-card-actions {
-  display: grid;
-  gap: 0.32rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.38rem;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .games-league-logo-plain {
@@ -476,7 +498,9 @@
   display: inline-flex;
   align-items: center;
   padding: 2px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .alert-toggle-thumb {
@@ -604,10 +628,37 @@
 }
 
 .following-game-actions-stacked {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.38rem;
-  width: 100%;
+  width: auto;
+  justify-content: flex-end;
+}
+
+.following-game-actions-stacked .games-action-cell {
+  width: auto;
+  min-width: 0;
+  padding: 0.38rem 0.68rem;
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.games-inline-action {
+  border-radius: 10px;
+  padding: 0.34rem 0.62rem;
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+@media (min-width: 520px) {
+  .games-card-footer {
+    flex-wrap: nowrap;
+  }
+
+  .games-card-actions {
+    flex-wrap: nowrap;
+    gap: 0.32rem;
+  }
 }
 
 .overlay-sheet {
@@ -743,12 +794,6 @@
     max-width: 960px;
   }
 
-  .games-card-footer {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-    justify-items: stretch;
-  }
-
   .games-card-actions {
     min-width: 0;
   }
@@ -814,14 +859,12 @@
 
 @media (min-width: 1100px) {
   .games-card-main {
-    grid-template-columns: minmax(0, 1fr) 240px;
-    align-items: start;
-    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
   }
 
   .games-card-footer {
     width: 100%;
-    justify-self: end;
   }
 
   .games-card-meta {
@@ -829,7 +872,7 @@
   }
 
   .games-card-actions {
-    justify-items: stretch;
+    justify-content: flex-end;
   }
 }
 
@@ -866,8 +909,9 @@
   }
 
   .games-status-pill {
-    padding: 0.34rem 0.72rem;
-    font-size: 0.88rem;
+    --games-state-pill-font-size: 0.72rem;
+    --games-state-pill-padding-y: 0.24rem;
+    --games-state-pill-padding-x: 0.52rem;
   }
 
   .alert-rule-row {

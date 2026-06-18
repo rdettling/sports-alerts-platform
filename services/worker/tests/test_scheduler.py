@@ -40,6 +40,29 @@ def test_bootstrap_jobs_skips_disabled_leagues(db_session):
     ]
 
 
+def test_bootstrap_jobs_removes_stale_disabled_league_jobs(db_session):
+    ensure_league_settings(db_session)
+    db_session.add_all(
+        [
+            WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=datetime.now(timezone.utc), attempt_count=0, max_attempts=5),
+            WorkerJob(job_type="live_sync", league="MLB", status="queued", next_run_at=datetime.now(timezone.utc), attempt_count=0, max_attempts=5),
+        ]
+    )
+    db_session.commit()
+
+    row = db_session.get(LeagueSetting, "MLB")
+    assert row is not None
+    row.is_enabled = False
+    db_session.commit()
+
+    scheduler._bootstrap_jobs()
+
+    jobs = db_session.scalars(
+        select(WorkerJob).where(WorkerJob.league == "MLB").order_by(WorkerJob.job_type.asc())
+    ).all()
+    assert jobs == []
+
+
 def test_bootstrap_jobs_removes_legacy_cleanup_job(db_session):
     db_session.add(
         WorkerJob(
@@ -79,6 +102,26 @@ def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
     assert live is not None
     assert before <= catalog.next_run_at.replace(tzinfo=timezone.utc) <= after
     assert live.next_run_at.replace(tzinfo=timezone.utc) == stale
+
+
+def test_next_due_job_discards_disabled_league_sync_jobs(db_session):
+    ensure_league_settings(db_session)
+    due_at = datetime.now(timezone.utc) - timedelta(seconds=5)
+    db_session.add(
+        WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=due_at, attempt_count=0, max_attempts=5)
+    )
+    db_session.commit()
+
+    row = db_session.get(LeagueSetting, "MLB")
+    assert row is not None
+    row.is_enabled = False
+    db_session.commit()
+
+    due_job = scheduler._next_due_job(datetime.now(timezone.utc))
+    assert due_job is None
+    db_session.expire_all()
+    remaining = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "catalog_sync", WorkerJob.league == "MLB"))
+    assert remaining is None
 
 
 def test_mark_job_failed_applies_backoff(db_session):
