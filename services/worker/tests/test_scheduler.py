@@ -202,8 +202,9 @@ def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
 def test_run_delivery_job_uses_empty_backoff(db_session, monkeypatch):
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
-    next_seconds = scheduler._run_delivery_job()
+    next_seconds, result = scheduler._run_delivery_job()
     assert next_seconds == scheduler.DELIVERY_DEEP_IDLE_BACKOFF_SECONDS
+    assert result["delivery_mode"] == "deep_idle"
 
 
 def test_run_delivery_job_uses_empty_backoff_when_imminent_game(db_session, monkeypatch):
@@ -227,15 +228,17 @@ def test_run_delivery_job_uses_empty_backoff_when_imminent_game(db_session, monk
 
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
-    next_seconds = scheduler._run_delivery_job()
+    next_seconds, result = scheduler._run_delivery_job()
     assert next_seconds == scheduler.DELIVERY_EMPTY_BACKOFF_SECONDS
+    assert result["delivery_mode"] == "idle"
 
 
 def test_run_delivery_job_uses_active_backoff_when_pending(db_session, monkeypatch):
     monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
     monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 5)
-    next_seconds = scheduler._run_delivery_job()
+    next_seconds, result = scheduler._run_delivery_job()
     assert next_seconds == scheduler.DELIVERY_ACTIVE_BACKOFF_SECONDS
+    assert result["delivery_mode"] == "backlog"
 
 
 def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
@@ -252,8 +255,9 @@ def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
             "next_poll_seconds": 1,
         },
     )
-    next_seconds = scheduler._run_live_sync_job("MLB")
+    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert 41 * 60 <= next_seconds <= 42 * 60
+    assert result["mode"] == "waiting_for_start"
 
 
 def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
@@ -268,8 +272,9 @@ def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
             "next_scheduled_start_at": None,
         },
     )
-    next_seconds = scheduler._run_live_sync_job("MLB")
+    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+    assert result["mode"] == "waiting_for_start"
 
 
 def test_run_live_sync_job_uses_pregame_retry_when_start_is_past(monkeypatch):
@@ -285,8 +290,9 @@ def test_run_live_sync_job_uses_pregame_retry_when_start_is_past(monkeypatch):
             "next_scheduled_start_at": target.isoformat(),
         },
     )
-    next_seconds = scheduler._run_live_sync_job("MLB")
+    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+    assert result["mode"] == "waiting_for_start"
 
 
 def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
@@ -301,8 +307,9 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
             "next_poll_seconds": scheduler.settings.catalog_sync_interval_seconds,
         },
     )
-    next_seconds = scheduler._run_live_sync_job("MLB")
+    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
+    assert result["mode"] == "no_upcoming"
 
 
 def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
@@ -317,8 +324,9 @@ def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
         },
     )
 
-    next_seconds = scheduler._run_live_sync_job("WORLD_CUP")
+    next_seconds, result = scheduler._run_live_sync_job("WORLD_CUP")
     assert next_seconds == scheduler.settings.world_cup_live_sync_interval_seconds
+    assert result["has_live_games"] == "true"
 
 
 def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):
@@ -337,9 +345,10 @@ def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):
     called = {"nudged": 0}
     monkeypatch.setattr("worker.scheduler._nudge_delivery_job_now", lambda: called.__setitem__("nudged", called["nudged"] + 1))
 
-    next_seconds = scheduler._run_live_sync_job("MLB")
+    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == 123
     assert called["nudged"] == 1
+    assert result["alerts_created"] == 2
 
 
 def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
@@ -361,9 +370,30 @@ def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
     monkeypatch.setattr("worker.scheduler.cleanup_games_outside_window", fake_cleanup)
     monkeypatch.setattr("worker.scheduler._pull_live_sync_forward", lambda _league: None)
 
-    next_seconds = scheduler._run_catalog_sync_job("MLB")
+    next_seconds, result = scheduler._run_catalog_sync_job("MLB")
     assert next_seconds == 123
     assert called["cleanup"] == 1
+    assert result["job_type"] == "catalog_sync"
+
+
+def test_log_job_success_emits_compact_summary(caplog):
+    with caplog.at_level("INFO", logger="worker.scheduler"):
+        scheduler._log_job_success(
+            job_type="live_sync",
+            league="MLB",
+            result={
+                "status": "success",
+                "games_checked": 23,
+                "games_updated": 2,
+                "alerts_created": 1,
+                "has_live_games": "true",
+                "mode": "live",
+            },
+            next_run_seconds=300,
+            duration_ms=145,
+        )
+
+    assert "Job completed job_type=live_sync league=MLB status=success duration_ms=145 next_run_seconds=300 games_checked=23 games_updated=2 alerts_created=1 has_live_games=true mode=live" in caplog.text
 
 
 def test_pull_live_sync_forward_to_next_scheduled_start(db_session):

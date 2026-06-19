@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
+from time import monotonic
 
 from sqlalchemy import delete, func, select
 
@@ -194,7 +195,30 @@ def _mark_job_failed(job_id: int, error_message: str, now: datetime) -> None:
         db.close()
 
 
-def _run_catalog_sync_job(league: str) -> int:
+def _log_job_success(
+    *,
+    job_type: str,
+    league: str | None,
+    result: dict[str, int | str | None],
+    next_run_seconds: int,
+    duration_ms: int,
+) -> None:
+    logger.info(
+        "Job completed job_type=%s league=%s status=%s duration_ms=%s next_run_seconds=%s games_checked=%s games_updated=%s alerts_created=%s has_live_games=%s mode=%s",
+        job_type,
+        league,
+        result.get("status", "success"),
+        duration_ms,
+        next_run_seconds,
+        result.get("games_checked"),
+        result.get("games_updated"),
+        result.get("alerts_created"),
+        result.get("has_live_games"),
+        result.get("mode"),
+    )
+
+
+def _run_catalog_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     provider = get_provider()
     result = run_catalog_sync(provider=provider, league=league)
     db = SessionLocal()
@@ -212,7 +236,7 @@ def _run_catalog_sync_job(league: str) -> int:
         _pull_live_sync_forward(league)
     fallback = settings.catalog_sync_interval_seconds
     next_poll = int(result.get("next_poll_seconds", fallback))
-    return max(1, next_poll)
+    return max(1, next_poll), result
 
 
 def _pull_live_sync_forward(league: str) -> None:
@@ -263,7 +287,7 @@ def _pull_live_sync_forward(league: str) -> None:
         db.close()
 
 
-def _run_live_sync_job(league: str) -> int:
+def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     provider = get_provider()
     result = run_live_sync(provider=provider, league=league)
     if int(result.get("alerts_created", 0)) > 0:
@@ -277,7 +301,7 @@ def _run_live_sync_job(league: str) -> int:
         else:
             fallback = settings.world_cup_live_sync_interval_seconds
         next_poll = int(result.get("next_poll_seconds", fallback))
-        return max(1, next_poll)
+        return max(1, next_poll), result
 
     mode = str(result.get("mode", "no_upcoming"))
     if mode == "waiting_for_start":
@@ -289,15 +313,15 @@ def _run_live_sync_job(league: str) -> int:
                     next_scheduled = next_scheduled.replace(tzinfo=timezone.utc)
                 seconds_until_start = int((next_scheduled - _utcnow()).total_seconds())
                 if seconds_until_start > 0:
-                    return max(1, seconds_until_start)
-                return max(1, settings.live_sync_pregame_retry_seconds)
+                    return max(1, seconds_until_start), result
+                return max(1, settings.live_sync_pregame_retry_seconds), result
             except ValueError:
                 pass
-        return max(1, settings.live_sync_pregame_retry_seconds)
+        return max(1, settings.live_sync_pregame_retry_seconds), result
 
     # no_upcoming or unknown
     next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))
-    return max(1, next_poll)
+    return max(1, next_poll), result
 
 
 def _nudge_delivery_job_now() -> None:
@@ -314,19 +338,32 @@ def _nudge_delivery_job_now() -> None:
         db.close()
 
 
-def _run_delivery_job() -> int:
+def _run_delivery_job() -> tuple[int, dict[str, int | str | None]]:
     db = SessionLocal()
     try:
         sent_count, failed_count = process_pending_alerts(db, ingest_run_id=None)
         db.commit()
         has_activity = (sent_count + failed_count) > 0
         if has_activity:
-            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
+            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS), {
+                "status": "success",
+                "job_type": DELIVERY_JOB,
+                "alerts_sent": sent_count,
+                "alerts_failed": failed_count,
+                "delivery_mode": "active",
+            }
 
         # If queue is empty, sleep longer; if queue has pending, keep short cadence.
         pending_count = count_pending_alerts(db)
         if pending_count > 0:
-            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS)
+            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS), {
+                "status": "success",
+                "job_type": DELIVERY_JOB,
+                "alerts_sent": sent_count,
+                "alerts_failed": failed_count,
+                "pending_alerts": pending_count,
+                "delivery_mode": "backlog",
+            }
         has_live_or_imminent = bool(
             db.scalar(
                 select(func.count(Game.id)).where(
@@ -346,8 +383,22 @@ def _run_delivery_job() -> int:
             or 0
         )
         if not has_live_or_imminent:
-            return max(1, DELIVERY_DEEP_IDLE_BACKOFF_SECONDS)
-        return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS)
+            return max(1, DELIVERY_DEEP_IDLE_BACKOFF_SECONDS), {
+                "status": "success",
+                "job_type": DELIVERY_JOB,
+                "alerts_sent": sent_count,
+                "alerts_failed": failed_count,
+                "pending_alerts": pending_count,
+                "delivery_mode": "deep_idle",
+            }
+        return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS), {
+            "status": "success",
+            "job_type": DELIVERY_JOB,
+            "alerts_sent": sent_count,
+            "alerts_failed": failed_count,
+            "pending_alerts": pending_count,
+            "delivery_mode": "idle",
+        }
     except Exception:
         db.rollback()
         raise
@@ -367,14 +418,23 @@ def run(stop_event: threading.Event) -> None:
 
         _mark_job_running(due_job.id, now)
         try:
+            started_at = monotonic()
             if due_job.job_type == CATALOG_SYNC_JOB:
-                next_run = _run_catalog_sync_job((due_job.league or "NBA").upper())
+                next_run, result = _run_catalog_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == LIVE_SYNC_JOB:
-                next_run = _run_live_sync_job((due_job.league or "NBA").upper())
+                next_run, result = _run_live_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == DELIVERY_JOB:
-                next_run = _run_delivery_job()
+                next_run, result = _run_delivery_job()
             else:
                 raise RuntimeError(f"unsupported job type: {due_job.job_type}")
+            duration_ms = int((monotonic() - started_at) * 1000)
+            _log_job_success(
+                job_type=due_job.job_type,
+                league=due_job.league,
+                result=result,
+                next_run_seconds=next_run,
+                duration_ms=duration_ms,
+            )
             _mark_job_success(due_job.id, next_run, _utcnow())
         except Exception as exc:  # pragma: no cover - exercised through integration behavior
             logger.exception("Worker job failed job_type=%s", due_job.job_type)

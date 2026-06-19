@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from time import monotonic
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -17,19 +18,28 @@ from app.routers.leagues import router as leagues_router
 from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
 from app.routers.ops import router as ops_router
+from app.logging_filters import SuppressLowSignalAccessLogsFilter
 from app.services.seed import ensure_bootstrap_admin, seed_teams_if_empty
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+access_logger = logging.getLogger("uvicorn.access")
+if not any(isinstance(log_filter, SuppressLowSignalAccessLogsFilter) for log_filter in access_logger.filters):
+    access_logger.addFilter(SuppressLowSignalAccessLogsFilter())
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    started_at = monotonic()
+    logger.info("Startup seed begin")
     db = SessionLocal()
     try:
         seed_teams_if_empty(db)
         ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
-        logger.info("Startup seed complete")
+        elapsed_ms = int((monotonic() - started_at) * 1000)
+        logger.info("Startup seed complete elapsed_ms=%s", elapsed_ms)
     finally:
         db.close()
     yield
