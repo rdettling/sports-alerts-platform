@@ -1,9 +1,7 @@
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from datetime import datetime, timedelta, timezone
-
-from app.db.models import Game, SentAlert, User, WorkerJob
+from app.db.models import Game, SentAlert, User
 from app.db.session import SessionLocal
 
 
@@ -36,7 +34,7 @@ def test_admin_test_email_endpoint_forbidden_for_non_admin(client):
     assert response.status_code == 403
 
 
-def test_admin_test_email_endpoint_creates_pending_alert(client):
+def test_admin_test_email_endpoint_sends_inline_alert(client):
     headers = _auth_headers(client, email="dev-alerts-on@example.com", role="admin")
 
     response = client.post(
@@ -49,14 +47,15 @@ def test_admin_test_email_endpoint_creates_pending_alert(client):
     assert isinstance(body["game_id"], int)
     assert body["league"] == "NBA"
     assert body["alert_type"] == "final_result"
-    assert body["delivery_status"] == "pending"
+    assert body["delivery_status"] == "sent"
 
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "dev-alerts-on@example.com"))
         alerts = db.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
         assert len(alerts) == 1
-        assert alerts[0].delivery_status == "pending"
+        assert alerts[0].delivery_status == "sent"
+        assert alerts[0].provider_message_id is not None
         assert alerts[0].alert_type == "final_result"
         assert alerts[0].metadata_json["source"] == "dev_test"
         game = db.get(Game, alerts[0].game_id)
@@ -132,38 +131,12 @@ def test_admin_test_email_endpoint_rejects_invalid_league_alert_combo(client):
     assert "Invalid alert type" in response.json()["detail"]
 
 
-def test_admin_test_email_endpoint_nudges_delivery_job(client):
-    headers = _auth_headers(client, email="dev-alerts-delivery-nudge@example.com", role="admin")
-    db = SessionLocal()
-    try:
-        db.add(
-            WorkerJob(
-                job_type="delivery",
-                league=None,
-                status="queued",
-                next_run_at=datetime.now(timezone.utc) + timedelta(minutes=30),
-                attempt_count=0,
-                max_attempts=5,
-            )
-        )
-        db.commit()
-    finally:
-        db.close()
-
-    before = datetime.now(timezone.utc)
+def test_admin_test_email_endpoint_returns_final_delivery_status_immediately(client):
+    headers = _auth_headers(client, email="dev-alerts-inline@example.com", role="admin")
     response = client.post(
         "/alerts/admin/test-email",
         headers=headers,
         json={"league": "MLB", "alert_type": "game_start"},
     )
-    after = datetime.now(timezone.utc)
     assert response.status_code == 200
-
-    db = SessionLocal()
-    try:
-        delivery_job = db.scalar(select(WorkerJob).where(WorkerJob.job_type == "delivery", WorkerJob.league.is_(None)))
-        assert delivery_job is not None
-        scheduled = delivery_job.next_run_at.replace(tzinfo=timezone.utc)
-        assert before <= scheduled <= after
-    finally:
-        db.close()
+    assert response.json()["delivery_status"] == "sent"

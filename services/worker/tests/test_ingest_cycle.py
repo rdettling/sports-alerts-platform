@@ -324,7 +324,7 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
-    assert all(row.delivery_status == "pending" for row in sent)
+    assert all(row.delivery_status == "sent" for row in sent)
 
 
 def test_ingest_creates_final_result_alert(db_session):
@@ -347,7 +347,35 @@ def test_ingest_creates_final_result_alert(db_session):
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
-    assert sent[0].delivery_status == "pending"
+    assert sent[0].delivery_status == "sent"
+
+
+def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
+    user = User(email="inline-fail@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
+    db_session.commit()
+
+    def fake_deliver(db, *, alert, user, game, home, away, service, ingest_run_id=None):
+        alert.delivery_status = "failed"
+        alert.metadata_json = {**(alert.metadata_json or {}), "error": "synthetic_failure"}
+        return "failed"
+
+    monkeypatch.setattr("worker.ingest.deliver_alert_now", fake_deliver)
+
+    result = run_ingest_cycle(LiveCloseProvider())
+    assert result["status"] == "success"
+    assert result["alerts_created"] == 2
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert len(sent) == 2
+    assert all(row.delivery_status == "failed" for row in sent)
+    assert all(row.metadata_json["error"] == "synthetic_failure" for row in sent)
 
 
 def test_live_sync_persists_long_clock_values(db_session):

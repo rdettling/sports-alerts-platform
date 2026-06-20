@@ -5,21 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import Game, SentAlert, Team, User, WorkerJob
+from app.db.models import Game, SentAlert, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
+from app.services.alert_delivery import deliver_alert_now
 from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
-
-
-def _nudge_delivery_job_now(db: Session) -> None:
-    row = db.scalar(select(WorkerJob).where(WorkerJob.job_type == "delivery", WorkerJob.league.is_(None)))
-    if row is None or row.status == "running":
-        return
-    row.status = "queued"
-    row.next_run_at = datetime.now(timezone.utc)
 
 
 def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
@@ -171,7 +164,7 @@ def create_admin_test_alert(
         game_id=target_game.id,
         alert_type=payload.alert_type,
         delivery_channel="email",
-        delivery_status="pending",
+        delivery_status="sent",
         sent_at=datetime.now(timezone.utc),
         dedupe_key=f"dev-test:{current_user.id}:{target_game.id}:{payload.alert_type}:{uuid4()}",
         metadata_json=(
@@ -192,7 +185,16 @@ def create_admin_test_alert(
         ),
     )
     db.add(sent_alert)
-    _nudge_delivery_job_now(db)
+    db.flush()
+    deliver_alert_now(
+        db,
+        alert=sent_alert,
+        user=current_user,
+        game=target_game,
+        home=home_team,
+        away=away_team,
+        service="api",
+    )
     db.commit()
     db.refresh(sent_alert)
     return DevTestAlertResponse(

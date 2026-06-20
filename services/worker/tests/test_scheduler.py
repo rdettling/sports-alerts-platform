@@ -7,14 +7,13 @@ from app.services.leagues import ensure_league_settings
 from worker import scheduler
 
 
-def test_bootstrap_jobs_creates_sync_and_delivery_jobs(db_session):
+def test_bootstrap_jobs_creates_sync_jobs_only(db_session):
     scheduler._bootstrap_jobs()
     jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "MLB"),
         ("catalog_sync", "NBA"),
         ("catalog_sync", "WORLD_CUP"),
-        ("delivery", None),
         ("live_sync", "MLB"),
         ("live_sync", "NBA"),
         ("live_sync", "WORLD_CUP"),
@@ -34,7 +33,6 @@ def test_bootstrap_jobs_skips_disabled_leagues(db_session):
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "NBA"),
         ("catalog_sync", "WORLD_CUP"),
-        ("delivery", None),
         ("live_sync", "NBA"),
         ("live_sync", "WORLD_CUP"),
     ]
@@ -79,6 +77,24 @@ def test_bootstrap_jobs_removes_legacy_cleanup_job(db_session):
     scheduler._bootstrap_jobs()
     cleanup_job = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "cleanup_games"))
     assert cleanup_job is None
+
+
+def test_bootstrap_jobs_removes_legacy_delivery_job(db_session):
+    db_session.add(
+        WorkerJob(
+            job_type="delivery",
+            league=None,
+            status="queued",
+            next_run_at=datetime.now(timezone.utc),
+            attempt_count=0,
+            max_attempts=5,
+        )
+    )
+    db_session.commit()
+
+    scheduler._bootstrap_jobs()
+    delivery_job = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "delivery"))
+    assert delivery_job is None
 
 
 def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
@@ -153,7 +169,8 @@ def test_mark_job_failed_applies_backoff(db_session):
 def test_mark_job_failed_requeues_after_max_attempts(db_session):
     now = datetime.now(timezone.utc)
     job = WorkerJob(
-        job_type="delivery",
+        job_type="live_sync",
+        league="MLB",
         status="queued",
         next_run_at=now,
         attempt_count=1,
@@ -179,7 +196,8 @@ def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
     monkeypatch.setattr(scheduler, "JOB_RETRY_MAX_BACKOFF_SECONDS", 120)
     now = datetime.now(timezone.utc)
     job = WorkerJob(
-        job_type="delivery",
+        job_type="catalog_sync",
+        league="MLB",
         status="queued",
         next_run_at=now,
         attempt_count=3,
@@ -197,48 +215,6 @@ def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
     assert updated.backoff_until is not None
     delta = (updated.backoff_until.replace(tzinfo=timezone.utc) - now).total_seconds()
     assert delta <= 120
-
-
-def test_run_delivery_job_uses_empty_backoff(db_session, monkeypatch):
-    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
-    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
-    next_seconds, result = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.DELIVERY_DEEP_IDLE_BACKOFF_SECONDS
-    assert result["delivery_mode"] == "deep_idle"
-
-
-def test_run_delivery_job_uses_empty_backoff_when_imminent_game(db_session, monkeypatch):
-    now = datetime.now(timezone.utc)
-    team_a = Team(external_team_id="imminent1", league="NBA", name="Imminent A", abbreviation="IA")
-    team_b = Team(external_team_id="imminent2", league="NBA", name="Imminent B", abbreviation="IB")
-    db_session.add_all([team_a, team_b])
-    db_session.flush()
-    db_session.add(
-        Game(
-            external_game_id="imminent-game-1",
-            league="NBA",
-            home_team_id=team_a.id,
-            away_team_id=team_b.id,
-            scheduled_start_time=now + timedelta(minutes=45),
-            status="scheduled",
-            is_final=False,
-        )
-    )
-    db_session.commit()
-
-    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
-    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 0)
-    next_seconds, result = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.DELIVERY_EMPTY_BACKOFF_SECONDS
-    assert result["delivery_mode"] == "idle"
-
-
-def test_run_delivery_job_uses_active_backoff_when_pending(db_session, monkeypatch):
-    monkeypatch.setattr("worker.scheduler.process_pending_alerts", lambda db, ingest_run_id=None: (0, 0))
-    monkeypatch.setattr("worker.scheduler.count_pending_alerts", lambda db: 5)
-    next_seconds, result = scheduler._run_delivery_job()
-    assert next_seconds == scheduler.DELIVERY_ACTIVE_BACKOFF_SECONDS
-    assert result["delivery_mode"] == "backlog"
 
 
 def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
@@ -329,7 +305,7 @@ def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
     assert result["has_live_games"] == "true"
 
 
-def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):
+def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
     monkeypatch.setattr(
         "worker.scheduler.run_live_sync",
         lambda provider, league: {
@@ -342,12 +318,9 @@ def test_run_live_sync_job_nudges_delivery_when_alerts_created(monkeypatch):
             "next_poll_seconds": 123,
         },
     )
-    called = {"nudged": 0}
-    monkeypatch.setattr("worker.scheduler._nudge_delivery_job_now", lambda: called.__setitem__("nudged", called["nudged"] + 1))
 
     next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == 123
-    assert called["nudged"] == 1
     assert result["alerts_created"] == 2
 
 

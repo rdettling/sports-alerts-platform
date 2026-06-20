@@ -3,12 +3,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db.models import ApiCallRollupHourly, Game, SentAlert, Team, User
+from app.services import alert_delivery
+from app.services.alert_delivery import deliver_alert_now
 from app.services.email_branding import APP_BRAND_NAME
-from worker import delivery
-from worker.delivery import process_pending_alerts
 
 
-def _seed_pending_alert(db_session) -> SentAlert:
+def _seed_alert(db_session) -> SentAlert:
     user = User(email="delivery@example.com")
     db_session.add(user)
     db_session.commit()
@@ -34,7 +34,7 @@ def _seed_pending_alert(db_session) -> SentAlert:
         game_id=game.id,
         alert_type="game_start",
         delivery_channel="email",
-        delivery_status="pending",
+        delivery_status="sent",
         dedupe_key=f"{user.id}:{game.id}:game_start",
         metadata_json={"status": "in_progress"},
     )
@@ -45,35 +45,50 @@ def _seed_pending_alert(db_session) -> SentAlert:
 
 
 def test_email_delivery_success_marks_sent(db_session, monkeypatch):
-    alert = _seed_pending_alert(db_session)
+    alert = _seed_alert(db_session)
 
-    def fake_post(url, json, headers, timeout):
-        class Response:
-            is_success = True
-            status_code = 200
-            text = '{"id":"email_123"}'
+    class Response:
+        status = 200
 
-            @staticmethod
-            def json():
-                return {"id": "email_123"}
+        def __enter__(self):
+            return self
 
-        assert "api.resend.com" in url
-        assert json["to"] == ["delivery@example.com"]
-        assert json["subject"].startswith("Tip-off ·")
-        assert "html" in json
-        assert APP_BRAND_NAME in json["html"]
-        assert "text" in json
-        assert "Bearer test-key" in headers["Authorization"]
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self):
+            return b'{"id":"email_123"}'
+
+    def fake_urlopen(request, timeout):
+        assert "api.resend.com" in request.full_url
+        body = request.data.decode("utf-8")
+        assert "delivery@example.com" in body
+        assert "Tip-off" in body
+        assert APP_BRAND_NAME in body
+        assert request.headers["Authorization"] == "Bearer test-key"
         assert timeout == 15.0
         return Response()
 
-    monkeypatch.setattr(delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(delivery.settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(delivery.httpx, "post", fake_post)
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
-    sent_count, failed_count = process_pending_alerts(db_session)
-    assert sent_count == 1
-    assert failed_count == 0
+    user = db_session.get(User, alert.user_id)
+    game = db_session.get(Game, alert.game_id)
+    assert user is not None
+    assert game is not None
+    home = db_session.get(Team, game.home_team_id)
+    away = db_session.get(Team, game.away_team_id)
+    status = deliver_alert_now(
+        db_session,
+        alert=alert,
+        user=user,
+        game=game,
+        home=home,
+        away=away,
+        service="worker",
+    )
+    assert status == "sent"
 
     updated = db_session.get(SentAlert, alert.id)
     assert updated is not None
@@ -86,27 +101,38 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
 
 
 def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monkeypatch):
-    alert = _seed_pending_alert(db_session)
+    alert = _seed_alert(db_session)
 
-    def fake_post(url, json, headers, timeout):
-        class Response:
-            is_success = False
-            status_code = 401
-            text = "unauthorized"
+    class ErrorResponse:
+        def read(self):
+            return b"unauthorized"
 
-            @staticmethod
-            def json():
-                return {"message": "unauthorized"}
+        def close(self):
+            return None
 
-        return Response()
+    def fake_urlopen(request, timeout):
+        raise alert_delivery.HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=ErrorResponse())
 
-    monkeypatch.setattr(delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(delivery.settings, "resend_api_key", "bad-key")
-    monkeypatch.setattr(delivery.httpx, "post", fake_post)
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "bad-key")
+    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
-    sent_count, failed_count = process_pending_alerts(db_session)
-    assert sent_count == 0
-    assert failed_count == 1
+    user = db_session.get(User, alert.user_id)
+    game = db_session.get(Game, alert.game_id)
+    assert user is not None
+    assert game is not None
+    home = db_session.get(Team, game.home_team_id)
+    away = db_session.get(Team, game.away_team_id)
+    status = deliver_alert_now(
+        db_session,
+        alert=alert,
+        user=user,
+        game=game,
+        home=home,
+        away=away,
+        service="worker",
+    )
+    assert status == "failed"
 
     updated = db_session.get(SentAlert, alert.id)
     assert updated is not None
@@ -148,7 +174,7 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
         game_id=game.id,
         alert_type="score_changed",
         delivery_channel="email",
-        delivery_status="pending",
+        delivery_status="sent",
         dedupe_key=f"{user.id}:{game.id}:score_changed:2-2",
         metadata_json={
             "status": "in_progress",
@@ -165,25 +191,37 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
     db_session.add(alert)
     db_session.commit()
 
-    def fake_post(url, json, headers, timeout):
-        class Response:
-            is_success = True
-            status_code = 200
-            text = '{"id":"email_456"}'
+    class Response:
+        status = 200
 
-            @staticmethod
-            def json():
-                return {"id": "email_456"}
+        def __enter__(self):
+            return self
 
-        assert json["subject"] == "Score update · USA 2–2 MEX"
-        assert "Score update · USA 2–2 MEX" in json["text"]
-        assert "68'" in json["text"]
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self):
+            return b'{"id":"email_456"}'
+
+    def fake_urlopen(request, timeout):
+        body = request.data.decode("utf-8")
+        assert "Score update \\u00b7 USA 2\\u20132 MEX" in body
+        assert "68'" in body
         return Response()
 
-    monkeypatch.setattr(delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(delivery.settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(delivery.httpx, "post", fake_post)
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
-    sent_count, failed_count = process_pending_alerts(db_session)
-    assert sent_count == 1
-    assert failed_count == 0
+    persisted = db_session.scalar(select(SentAlert).where(SentAlert.id == alert.id))
+    assert persisted is not None
+    status = deliver_alert_now(
+        db_session,
+        alert=persisted,
+        user=user,
+        game=game,
+        home=db_session.get(Team, game.home_team_id),
+        away=db_session.get(Team, game.away_team_id),
+        service="worker",
+    )
+    assert status == "sent"

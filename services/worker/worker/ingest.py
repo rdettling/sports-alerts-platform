@@ -15,6 +15,7 @@ from app.db.models import (
     GameOddsOutcomeCurrent,
     SentAlert,
     Team,
+    User,
     UserAlertDefault,
     UserGameAlertOverride,
     UserGameFollow,
@@ -22,6 +23,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from app.services.alert_defaults import get_alert_default_values
+from app.services.alert_delivery import deliver_alert_now
 from app.services.leagues import get_active_leagues, get_alert_types, league_supports_odds, list_supported_leagues
 from worker.db import SessionLocal
 from worker.config import settings
@@ -344,7 +346,7 @@ def _evaluate_and_record_alerts_batched(
                             game_id=game.id,
                             alert_type="game_start",
                             delivery_channel="email",
-                            delivery_status="pending",
+                            delivery_status="sent",
                             dedupe_key=key,
                             metadata_json={"status": game.status},
                         )
@@ -363,7 +365,7 @@ def _evaluate_and_record_alerts_batched(
                             game_id=game.id,
                             alert_type="final_result",
                             delivery_channel="email",
-                            delivery_status="pending",
+                            delivery_status="sent",
                             dedupe_key=key,
                             metadata_json={"status": game.status},
                         )
@@ -383,7 +385,7 @@ def _evaluate_and_record_alerts_batched(
                             game_id=game.id,
                             alert_type="score_changed",
                             delivery_channel="email",
-                            delivery_status="pending",
+                            delivery_status="sent",
                             dedupe_key=key,
                             metadata_json={
                                 "status": score_change_event.status,
@@ -412,7 +414,7 @@ def _evaluate_and_record_alerts_batched(
                             game_id=game.id,
                             alert_type="close_game_late",
                             delivery_channel="email",
-                            delivery_status="pending",
+                            delivery_status="sent",
                             dedupe_key=key,
                             metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
                         )
@@ -431,7 +433,7 @@ def _evaluate_and_record_alerts_batched(
                             game_id=game.id,
                             alert_type="inning_start",
                             delivery_channel="email",
-                            delivery_status="pending",
+                            delivery_status="sent",
                             dedupe_key=key,
                             metadata_json={"period": game.period or 0, "status": game.status},
                         )
@@ -448,6 +450,38 @@ def _evaluate_and_record_alerts_batched(
     if to_insert:
         db.add_all(to_insert)
         db.flush()
+        users_by_id = {
+            user.id: user
+            for user in db.scalars(select(User).where(User.id.in_(sorted({alert.user_id for alert in to_insert})))).all()
+        }
+        games_by_id = {game.id: game for game in games}
+        teams_by_id = {
+            team.id: team
+            for team in db.scalars(
+                select(Team).where(
+                    Team.id.in_(
+                        sorted(
+                            {
+                                team_id
+                                for game in games_by_id.values()
+                                for team_id in (game.home_team_id, game.away_team_id)
+                            }
+                        )
+                    )
+                )
+            ).all()
+        }
+        for alert in to_insert:
+            game = games_by_id.get(alert.game_id)
+            deliver_alert_now(
+                db,
+                alert=alert,
+                user=users_by_id.get(alert.user_id),
+                game=game,
+                home=teams_by_id.get(game.home_team_id) if game else None,
+                away=teams_by_id.get(game.away_team_id) if game else None,
+                service="worker",
+            )
     return len(to_insert)
 
 
@@ -757,6 +791,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
             "games_updated": updated,
             "odds_candidates": len(odds_candidates),
             "odds_snapshots_created": odds_snapshots_created,
+            "alerts_created": alerts_created,
             "next_poll_seconds": _catalog_interval_seconds(league),
         }
     except Exception:
@@ -857,6 +892,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
             ),
             "games_checked": len(provider_games),
             "games_updated": updated,
+            "alerts_created": alerts_created,
             "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(league),
             "mode": "live" if has_live_games else ("waiting_for_start" if next_scheduled is not None else "no_upcoming"),
         }

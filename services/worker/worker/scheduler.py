@@ -12,7 +12,6 @@ from app.services.leagues import get_active_leagues
 from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
-from worker.delivery import count_pending_alerts, process_pending_alerts
 from worker.ingest import run_catalog_sync, run_live_sync
 from worker.providers.factory import get_provider
 
@@ -22,13 +21,8 @@ SCHEDULER_IDLE_MAX_SLEEP_SECONDS = max(60, settings.scheduler_idle_max_sleep_sec
 JOB_MAX_RETRIES = 5
 JOB_RETRY_BASE_SECONDS = 30
 JOB_RETRY_MAX_BACKOFF_SECONDS = 3600
-DELIVERY_EMPTY_BACKOFF_SECONDS = settings.delivery_idle_seconds
-DELIVERY_ACTIVE_BACKOFF_SECONDS = settings.delivery_active_seconds
-DELIVERY_DEEP_IDLE_BACKOFF_SECONDS = settings.delivery_deep_idle_seconds
-DELIVERY_DEEP_IDLE_IMMINENT_WINDOW_HOURS = max(1, settings.delivery_deep_idle_imminent_window_hours)
 CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
-DELIVERY_JOB = "delivery"
 CLEANUP_JOB = "cleanup_games"
 
 
@@ -52,6 +46,7 @@ def _bootstrap_jobs() -> None:
         # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
         db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
         db.execute(delete(WorkerJob).where(WorkerJob.job_type.in_(("updates_sync", "updates_classify"))))
+        db.execute(delete(WorkerJob).where(WorkerJob.job_type == "delivery"))
         disabled_sync_jobs = delete(WorkerJob).where(
             WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB)),
             WorkerJob.league.is_not(None),
@@ -60,7 +55,7 @@ def _bootstrap_jobs() -> None:
             disabled_sync_jobs = disabled_sync_jobs.where(WorkerJob.league.not_in(active_leagues))
         db.execute(disabled_sync_jobs)
 
-        jobs_to_ensure: list[tuple[str, str | None]] = [(DELIVERY_JOB, None)]
+        jobs_to_ensure: list[tuple[str, str | None]] = []
         for league in active_leagues:
             jobs_to_ensure.extend(((CATALOG_SYNC_JOB, league), (LIVE_SYNC_JOB, league)))
 
@@ -123,13 +118,8 @@ def _next_due_seconds(now: datetime) -> float:
             select(WorkerJob)
             .where(
                 WorkerJob.status == "queued",
-                (
-                    WorkerJob.job_type == DELIVERY_JOB
-                )
-                | (
-                    WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB))
-                    & WorkerJob.league.in_(sorted(active_leagues))
-                ),
+                WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB)),
+                WorkerJob.league.in_(sorted(active_leagues)),
             )
             .order_by(WorkerJob.next_run_at.asc(), WorkerJob.id.asc())
             .limit(1)
@@ -290,8 +280,6 @@ def _pull_live_sync_forward(league: str) -> None:
 def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     provider = get_provider()
     result = run_live_sync(provider=provider, league=league)
-    if int(result.get("alerts_created", 0)) > 0:
-        _nudge_delivery_job_now()
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:
         if league == "NBA":
@@ -323,88 +311,6 @@ def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))
     return max(1, next_poll), result
 
-
-def _nudge_delivery_job_now() -> None:
-    now = _utcnow()
-    db = SessionLocal()
-    try:
-        row = db.scalar(select(WorkerJob).where(WorkerJob.job_type == DELIVERY_JOB, WorkerJob.league.is_(None)))
-        if row is None or row.status == "running":
-            return
-        row.status = "queued"
-        row.next_run_at = now
-        db.commit()
-    finally:
-        db.close()
-
-
-def _run_delivery_job() -> tuple[int, dict[str, int | str | None]]:
-    db = SessionLocal()
-    try:
-        sent_count, failed_count = process_pending_alerts(db, ingest_run_id=None)
-        db.commit()
-        has_activity = (sent_count + failed_count) > 0
-        if has_activity:
-            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS), {
-                "status": "success",
-                "job_type": DELIVERY_JOB,
-                "alerts_sent": sent_count,
-                "alerts_failed": failed_count,
-                "delivery_mode": "active",
-            }
-
-        # If queue is empty, sleep longer; if queue has pending, keep short cadence.
-        pending_count = count_pending_alerts(db)
-        if pending_count > 0:
-            return max(1, DELIVERY_ACTIVE_BACKOFF_SECONDS), {
-                "status": "success",
-                "job_type": DELIVERY_JOB,
-                "alerts_sent": sent_count,
-                "alerts_failed": failed_count,
-                "pending_alerts": pending_count,
-                "delivery_mode": "backlog",
-            }
-        has_live_or_imminent = bool(
-            db.scalar(
-                select(func.count(Game.id)).where(
-                    Game.is_final.is_(False),
-                    (
-                        Game.status.in_(("in_progress", "live"))
-                        | (
-                            (Game.status == "scheduled")
-                            & (
-                                Game.scheduled_start_time
-                                <= _utcnow() + timedelta(hours=DELIVERY_DEEP_IDLE_IMMINENT_WINDOW_HOURS)
-                            )
-                        )
-                    ),
-                )
-            )
-            or 0
-        )
-        if not has_live_or_imminent:
-            return max(1, DELIVERY_DEEP_IDLE_BACKOFF_SECONDS), {
-                "status": "success",
-                "job_type": DELIVERY_JOB,
-                "alerts_sent": sent_count,
-                "alerts_failed": failed_count,
-                "pending_alerts": pending_count,
-                "delivery_mode": "deep_idle",
-            }
-        return max(1, DELIVERY_EMPTY_BACKOFF_SECONDS), {
-            "status": "success",
-            "job_type": DELIVERY_JOB,
-            "alerts_sent": sent_count,
-            "alerts_failed": failed_count,
-            "pending_alerts": pending_count,
-            "delivery_mode": "idle",
-        }
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
 def run(stop_event: threading.Event) -> None:
     _bootstrap_jobs()
     logger.info("Scheduler loop started max_sleep=%ss", SCHEDULER_MAX_SLEEP_SECONDS)
@@ -423,8 +329,6 @@ def run(stop_event: threading.Event) -> None:
                 next_run, result = _run_catalog_sync_job((due_job.league or "NBA").upper())
             elif due_job.job_type == LIVE_SYNC_JOB:
                 next_run, result = _run_live_sync_job((due_job.league or "NBA").upper())
-            elif due_job.job_type == DELIVERY_JOB:
-                next_run, result = _run_delivery_job()
             else:
                 raise RuntimeError(f"unsupported job type: {due_job.job_type}")
             duration_ms = int((monotonic() - started_at) * 1000)

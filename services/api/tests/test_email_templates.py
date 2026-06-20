@@ -10,7 +10,7 @@ def _mk_alert(alert_type: str) -> SentAlert:
         game_id=1,
         alert_type=alert_type,
         delivery_channel="email",
-        delivery_status="pending",
+        delivery_status="sent",
         dedupe_key=f"1:1:{alert_type}",
     )
 
