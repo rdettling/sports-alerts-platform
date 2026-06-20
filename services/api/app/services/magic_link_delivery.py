@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from app.config import settings
 from app.services.api_usage import record_api_call_event
+from app.services.delivery_settings import delivery_settings
 from app.services.email_templates import build_magic_link_email
 from sqlalchemy.orm import Session
 
@@ -17,21 +18,21 @@ logger = logging.getLogger(__name__)
 def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = None) -> None:
     subject, text_body, html_body = build_magic_link_email(magic_link, settings.magic_link_ttl_minutes)
 
-    if settings.delivery_mode == "log":
+    if delivery_settings.delivery_mode == "log":
         logger.info("Magic link email to=%s subject=%s link=%s", to_email, subject, magic_link)
         return
 
-    if settings.delivery_mode != "email":
-        logger.warning("Unsupported delivery mode=%s while sending magic links", settings.delivery_mode)
+    if delivery_settings.delivery_mode != "email":
+        logger.warning("Unsupported delivery mode=%s while sending magic links", delivery_settings.delivery_mode)
         return
 
-    if not settings.resend_api_key:
+    if not delivery_settings.resend_api_key:
         logger.warning("Missing RESEND_API_KEY while sending magic link to=%s", to_email)
         return
 
     payload = json.dumps(
         {
-            "from": settings.from_email,
+            "from": delivery_settings.from_email,
             "to": [to_email],
             "subject": subject,
             "text": text_body,
@@ -40,11 +41,11 @@ def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = N
     ).encode("utf-8")
 
     request = Request(
-        settings.resend_api_url,
+        delivery_settings.resend_api_url,
         method="POST",
         data=payload,
         headers={
-            "Authorization": f"Bearer {settings.resend_api_key}",
+            "Authorization": f"Bearer {delivery_settings.resend_api_key}",
             "Content-Type": "application/json",
             "User-Agent": "sports-alerts-api/1.0",
         },

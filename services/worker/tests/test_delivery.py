@@ -69,8 +69,8 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
         assert timeout == 15.0
         return Response()
 
-    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
     monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
     user = db_session.get(User, alert.user_id)
@@ -113,8 +113,8 @@ def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monk
     def fake_urlopen(request, timeout):
         raise alert_delivery.HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=ErrorResponse())
 
-    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "bad-key")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "bad-key")
     monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
     user = db_session.get(User, alert.user_id)
@@ -209,8 +209,8 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
         assert "68'" in body
         return Response()
 
-    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "email")
-    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "email")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
     monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
 
     persisted = db_session.scalar(select(SentAlert).where(SentAlert.id == alert.id))

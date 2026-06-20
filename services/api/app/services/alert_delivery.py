@@ -9,9 +9,9 @@ from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.models import Game, SentAlert, Team, User
 from app.services.api_usage import record_api_call_event
+from app.services.delivery_settings import delivery_settings
 from app.services.email_templates import build_alert_email_content, build_alert_subject
 
 logger = logging.getLogger(__name__)
@@ -32,12 +32,12 @@ def _send_email_resend(
     html_body: str,
     ingest_run_id: int | None,
 ) -> tuple[bool, str | None, dict[str, object] | None]:
-    if not settings.resend_api_key:
+    if not delivery_settings.resend_api_key:
         return False, None, {"error": "missing_resend_api_key"}
 
     payload = json.dumps(
         {
-            "from": settings.from_email,
+            "from": delivery_settings.from_email,
             "to": [to_email],
             "subject": subject,
             "text": text_body,
@@ -45,11 +45,11 @@ def _send_email_resend(
         }
     ).encode("utf-8")
     request = Request(
-        settings.resend_api_url,
+        delivery_settings.resend_api_url,
         method="POST",
         data=payload,
         headers={
-            "Authorization": f"Bearer {settings.resend_api_key}",
+            "Authorization": f"Bearer {delivery_settings.resend_api_key}",
             "Content-Type": "application/json",
             "User-Agent": "sports-alerts-api/1.0",
         },
@@ -136,7 +136,7 @@ def deliver_alert_now(
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
 
-    if settings.delivery_mode == "log":
+    if delivery_settings.delivery_mode == "log":
         logger.info(
             "Simulated alert delivery service=%s to=%s subject=%s alert_id=%s body=%s",
             service,
@@ -150,9 +150,9 @@ def deliver_alert_now(
         db.flush()
         return alert.delivery_status
 
-    if settings.delivery_mode != "email":
+    if delivery_settings.delivery_mode != "email":
         alert.delivery_status = "failed"
-        merge_alert_metadata(alert, {"error": f"unsupported_delivery_mode={settings.delivery_mode}"})
+        merge_alert_metadata(alert, {"error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"})
         db.flush()
         return alert.delivery_status
 
