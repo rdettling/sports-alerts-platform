@@ -1,83 +1,100 @@
-# Runbook (Troubleshooting)
+# Runbook
 
-## API unreachable from frontend
+## API Unreachable From The Frontend
 
 Symptoms:
 
-- Magic-link login fails with "Unable to reach API..."
+- sign-in fails because the browser cannot reach the API
+- dashboard data requests fail immediately
 
 Checks:
 
-1. Verify `VITE_API_BASE_URL` points to the correct API domain.
-2. Verify API service is healthy (`/healthz`).
-3. Verify `CORS_ALLOW_ORIGINS` includes frontend origin.
-4. Check `make logs SERVICE=api` for startup/config errors.
+1. Confirm `VITE_API_BASE_URL` points at the correct API origin
+2. Confirm `GET /healthz` is healthy
+3. Confirm `CORS_ALLOW_ORIGINS` includes the frontend origin
+4. Check `make logs SERVICE=api` for startup or config failures
 
-## Frontend route 404 on hard refresh
+## Frontend Route 404 On Hard Refresh
 
 Symptoms:
 
-- Direct refresh on nested route returns `Not Found`.
+- direct browser refresh on a nested route returns `404`
 
 Fix:
 
-- Ensure static hosting rewrite/fallback is configured for SPA routing on your frontend host.
+- configure SPA fallback / rewrites on the frontend host
 
-## Odds not showing
-
-Checks:
-
-1. Confirm `ODDS_ENABLED=true`.
-2. Confirm `ODDS_API_KEY` is valid (no 401s in worker logs).
-3. Check worker logs for odds fetch failures during catalog sync.
-
-If intentionally disabled:
-
-- `ODDS_ENABLED=false` means game rows can show no odds by design.
-
-## Worker starts but no alerts are sent
+## Magic-Link Auth Issues
 
 Checks:
 
-1. Confirm users follow teams/games.
-2. Confirm alert preferences are enabled.
-3. Confirm worker logs show ingest cycles and alert evaluation.
-4. For email delivery:
-   - `DELIVERY_MODE=email`
-   - valid `RESEND_API_KEY`
-   - verified `FROM_EMAIL`
+1. Confirm the API is reachable and healthy
+2. Confirm `WEB_BASE_URL` points at the frontend origin users should land on
+3. Confirm delivery mode is intentional:
+   - `DELIVERY_MODE=log` for local inspection
+   - `DELIVERY_MODE=email` for real delivery
+4. For email mode, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
+5. Check API logs for magic-link rate limiting or delivery warnings
 
-## Bad local state / stale data
+## Odds Not Showing
 
-Use carefully:
+Checks:
 
-- `make down` (stop, keep DB)
-- `make rebuild` (rebuild and restart)
-- `make reset` (wipe DB volume)
+1. Confirm `ODDS_ENABLED=true` if you expect odds
+2. Confirm `ODDS_API_KEY` is valid
+3. Confirm the worker is running
+4. Check worker logs for odds fetch failures during catalog sync
 
-`make reset` deletes local DB data and requires signing in again with a new magic link.
+Expected behavior:
 
-## Full sports data reset + reseed (identity migration)
+- when `ODDS_ENABLED=false`, games still load but odds values can be empty
 
-Use this during a maintenance window when you want a clean sports-domain reset.
+## Worker Running But Alerts Not Arriving
 
-1. Pause worker and hold API traffic briefly.
-2. Run migrations:
-`cd services/api && uv run alembic upgrade head`
-3. Reset sports-domain tables and reseed teams:
-`cd services/api && uv run python scripts/reset_sports_data.py --yes`
-4. Restart API and worker.
-5. Verify worker logs do not show missing-team ingest skips.
-6. Verify team mapping health:
-`GET /ops/db/team-mapping-health?date=YYYYMMDD`
-Expected: `ok=true` and empty `missing_team_ids` for MLB and NBA.
+Checks:
 
-## Strict env startup failures
+1. Confirm the worker is running and logging sync activity
+2. Confirm a relevant league is enabled in `league_settings`
+3. Confirm users follow teams or games that should produce alert candidates
+4. Confirm league defaults or game overrides have the alert type enabled
+5. For real email delivery, confirm `DELIVERY_MODE=email` and valid Resend settings
+6. Inspect `sent_alerts` and worker logs for dedupe or delivery failures
+
+## Bad Local State
+
+Escalation path:
+
+1. `make down`
+2. `make up`
+3. `make rebuild`
+4. `make reset`
+
+`make reset` deletes local DB data, including local sign-in/session state in the database.
+
+## Sports Data Reset And Reseed
+
+Use this when you want to keep the repo shape but clear sports-domain state.
+
+1. Stop or pause the worker
+2. Run:
+
+```sh
+cd services/api
+uv run alembic upgrade head
+uv run python scripts/reset_sports_data.py --yes
+```
+
+3. Restart API and worker
+4. Confirm teams were reseeded and ingest resumes cleanly
+5. Confirm user identity/auth data still looks correct before resuming normal use
+
+## Strict Env Startup Failures
 
 Symptoms:
 
-- startup validation errors for missing env vars
+- API or worker exits during startup with settings validation errors
 
 Fix:
 
-- Ensure all required variables in `docs/environment-variables.md` exist in `.env` (local) or service env settings (Render).
+- make sure required values exist in `.env` or your deployed service environment
+- use [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md) as the source of truth

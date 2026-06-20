@@ -79,6 +79,7 @@ class Game(Base):
     period: Mapped[int | None] = mapped_column(Integer, nullable=True)
     clock: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_final: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False)
     last_ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

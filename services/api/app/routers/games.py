@@ -31,6 +31,7 @@ def list_games(
     stmt = (
         select(Game)
         .where(Game.league.in_(active_leagues))
+        .where(Game.is_test.is_(False))
         .where(Game.scheduled_start_time >= lower, Game.scheduled_start_time <= upper)
         .order_by(Game.scheduled_start_time.asc())
         .limit(limit)

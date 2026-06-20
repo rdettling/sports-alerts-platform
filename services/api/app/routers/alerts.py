@@ -155,6 +155,7 @@ def create_admin_test_alert(
         period=period,
         clock=clock,
         is_final=is_final,
+        is_test=True,
     )
     db.add(target_game)
     db.flush()

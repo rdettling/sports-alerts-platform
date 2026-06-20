@@ -251,3 +251,40 @@ def test_games_return_context_label(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["context_label"] == "NBA Finals - Game 5 · NY leads series 3-1"
+
+
+def test_games_exclude_test_games(client):
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        db.add_all(
+            [
+                Game(
+                    external_game_id="real-game",
+                    league="NBA",
+                    home_team_id=teams[0].id,
+                    away_team_id=teams[1].id,
+                    scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+                    status="scheduled",
+                    is_final=False,
+                ),
+                Game(
+                    external_game_id="test-game",
+                    league="NBA",
+                    home_team_id=teams[0].id,
+                    away_team_id=teams[1].id,
+                    scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=3),
+                    status="scheduled",
+                    is_final=False,
+                    is_test=True,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games?league=NBA&limit=200")
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["external_game_id"] for row in payload] == ["real-game"]

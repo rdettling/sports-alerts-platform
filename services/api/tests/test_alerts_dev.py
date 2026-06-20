@@ -62,6 +62,7 @@ def test_admin_test_email_endpoint_sends_inline_alert(client):
         assert game is not None
         assert game.external_game_id.startswith("admin-test-game-")
         assert game.league == "NBA"
+        assert game.is_test is True
     finally:
         db.close()
 

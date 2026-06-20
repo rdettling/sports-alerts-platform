@@ -2,37 +2,62 @@
 
 ## Prerequisites
 
-- Docker Desktop (running)
+- Docker Desktop
 - `uv`
 - Node.js 20+
 
+The standard local path is the Docker-based stack defined in `infra/docker-compose.yml`.
+
 ## First-Time Setup
 
-1. `make setup`
-2. Edit `.env` (required variables documented in `docs/environment-variables.md`)
-3. `make rebuild`
+1. Run `make setup`
+2. Review and edit `.env`
+3. Run `make rebuild`
+
+The generated `.env` template and required config groups are documented in [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md).
+
+## Local URLs
+
+- Web: `http://localhost:5173`
+- API docs: `http://localhost:8000/docs`
+- API health: `http://localhost:8000/healthz`
 
 ## Daily Workflow
 
-- Start: `make up`
-- Stop: `make down`
-- Logs: `make logs` (or `make logs SERVICE=worker`)
-- Tests: `make test`
+- Start the stack: `make up`
+- Rebuild and restart app containers: `make rebuild`
+- Stop the stack: `make down`
+- Tail all logs: `make logs`
+- Tail one service: `make logs SERVICE=worker`
+- Wipe local DB volumes: `make reset`
 
-Use `make rebuild` when Dockerfiles/dependencies change.
-Use `make reset` only when you intentionally want to wipe local DB data.
+Use `make reset` only when you intentionally want to discard local database state.
+
+## Testing
+
+Primary repo check:
+
+- `make test`
+
+If you want narrower service checks:
+
+- API: `cd services/api && uv run pytest -q`
+- Worker: `cd services/worker && uv run pytest -q`
+- Web build: `cd apps/web && npm run build`
 
 ## Local Verification Checklist
 
-- API health responds: `GET http://localhost:8000/healthz`
-- API docs open: `http://localhost:8000/docs`
-- Frontend opens: `http://localhost:5173`
-- Magic-link sign-in works
-- Games/follows load
-- Worker logs show ingest cycles
+- `GET /healthz` returns `200`
+- `/docs` loads for the API
+- the web app loads at `:5173`
+- magic-link sign-in works
+- the `Games`, `Following`, and `Alerts` sections load
+- worker logs show ingest activity
+- admin tools appear only for an admin user
 
-## Notes
+## Local Behavior Notes
 
-- API root (`/`) returns `404` by design.
-- If `ODDS_ENABLED=false`, games still load but odds columns show empty values.
-- Admin-only tools are available in the `Admin` tab and are gated by `users.role='admin'`.
+- API root `/` returns `404` by design
+- The API seeds teams and ensures the bootstrap admin user on startup
+- If `ODDS_ENABLED=false`, games still ingest and alerts still evaluate; only odds fetches are skipped
+- Local development is safest with `DELIVERY_MODE=log` unless you explicitly want real email delivery

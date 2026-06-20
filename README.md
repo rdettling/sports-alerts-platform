@@ -1,52 +1,74 @@
 # Sports Alerts Platform
 
-Sports Alerts is a production-style NBA alerts app with a separated web/API/worker architecture.
+Sports Alerts is a personal project for following live games and sending rule-based email alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-Production site: [https://livegamealerts.com](https://livegamealerts.com)
+The current product surface is centered on three leagues: `NBA`, `MLB`, and `WORLD_CUP`.
 
-## What Works Today
+The live production site is [livegamealerts.com](https://livegamealerts.com).
 
-- Email magic-link auth with JWT session.
-- **Games** view with live/today/following filters.
-- Moneyline odds display (book + no-vig win %) when odds are available.
-- **Following** view for teams and games, including recently completed games.
-- **Alerts** view for rule toggles, close-game threshold settings, and alert history filters.
-- Background worker ingest, rule evaluation, and email/log delivery pipeline.
-- Optional **Test** tab (when `DEV_MODE=true`) for manual dev email triggers.
+## What The App Does Today
 
-## Stack
+- Email magic-link sign-in with JWT-backed API sessions.
+- `Games` dashboard with league/day filters, live status, follow/unfollow actions, and game-level alert settings.
+- `Following` dashboard for team follows and derived game follows.
+- `Alerts` dashboard for league defaults plus alert history.
+- Admin-only runtime area for provider telemetry, DB stats, league enable/disable controls, and test tools.
+- Background ingest and alert evaluation worker with persisted game state and alert delivery history.
+- Optional moneyline odds display when odds snapshots are available.
 
-- `apps/web`: React + Vite
-- `services/api`: FastAPI + SQLAlchemy + Alembic
-- `services/worker`: polling, odds ingest, alert evaluation, delivery
-- `infra/docker-compose.yml`: local orchestration
+League-specific alert types are:
 
-## Quick Start (Local)
+- `NBA`: `game_start`, `close_game_late`, `final_result`
+- `MLB`: `game_start`, `inning_start`, `final_result`
+- `WORLD_CUP`: `game_start`, `score_changed`, `final_result`
 
-1. `make setup`
-2. Fill required values in `.env`
-3. `make rebuild`
+## Repo Layout
+
+- `apps/web` — React + Vite frontend
+- `services/api` — FastAPI API, auth, reads/writes, admin endpoints, Alembic migrations
+- `services/worker` — schedule ingest, odds snapshots, alert evaluation, and delivery
+- `infra/docker-compose.yml` — local multi-service stack
+- `docs` — focused support docs for architecture, local development, configuration, deployment, and troubleshooting
+
+## Quick Start
+
+1. Run `make setup`
+2. Fill in required values in `.env`
+3. Run `make rebuild`
 4. Open:
    - Web: `http://localhost:5173`
    - API docs: `http://localhost:8000/docs`
    - API health: `http://localhost:8000/healthz`
 
-## Core Commands
+For the exact env shape, see [docs/configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md).
 
-- `make setup` — bootstrap `.env` + local deps
-- `make up` — start existing images/containers
-- `make rebuild` — rebuild images and start fresh app containers
-- `make down` — stop stack, keep DB volume
-- `make reset` — stop stack and remove DB volume
-- `make logs` — tail all logs (`SERVICE=api|worker|web|db` optional)
-- `make test` — run API + worker + web checks
+## Day-To-Day Commands
 
-## Docs
+- `make setup` — create `.env` if missing and install local dependencies
+- `make up` — start the existing Docker stack
+- `make rebuild` — rebuild app images and restart the stack
+- `make down` — stop the stack and keep DB data
+- `make reset` — stop the stack and remove DB volumes
+- `make logs` — tail logs for all services
+- `make logs SERVICE=api` — tail a single service
+- `make test` — run API tests, worker tests, and the web build
 
-- App functionality: `docs/functionality.md`
-- Architecture: `docs/architecture.md`
-- Local development: `docs/local-development.md`
-- Environment variables: `docs/environment-variables.md`
-- Render deployment: `docs/deployment-render.md`
-- Troubleshooting runbook: `docs/runbook.md`
-- Product roadmap: `docs/roadmap.md`
+## Architecture At A Glance
+
+- The web app talks only to the API.
+- The API owns auth, user-facing reads/writes, admin endpoints, and startup seeding.
+- The worker owns schedule sync, odds snapshots, alert evaluation, and delivery execution.
+- Postgres stores users, teams, games, follows, alert settings, sent alerts, odds snapshots, and lightweight ops data.
+- League runtime is DB-backed through `league_settings`, so a league can be disabled without redeploying.
+
+## Canonical Docs
+
+- [docs/architecture.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/architecture.md) — services, flows, and persisted state
+- [docs/local-development.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/local-development.md) — setup, daily workflow, and local verification
+- [docs/configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md) — env vars and config groups
+- [docs/deployment.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/deployment.md) — deployment shape and post-deploy checks
+- [docs/runbook.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/runbook.md) — troubleshooting and recovery
+
+## Deployment Note
+
+The project has a production-style deployment shape and can be hosted on services like Render plus a managed Postgres provider such as Neon. See [docs/deployment.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/deployment.md) for the reference model.
