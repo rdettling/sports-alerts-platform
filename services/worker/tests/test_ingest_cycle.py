@@ -376,6 +376,43 @@ def test_ingest_creates_final_result_alert(db_session):
     assert sent[0].delivery_status == "sent"
 
 
+def test_following_live_game_after_start_does_not_send_game_start_alert(db_session):
+    user = User(email="late-follow@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-live-late-follow",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                scheduled_start_time=datetime.now(timezone.utc) - timedelta(minutes=10),
+                status="in_progress",
+                home_score=100,
+                away_score=98,
+                period=4,
+                clock="01:30",
+            )
+        ]
+    )
+    assert run_ingest_cycle(provider)["status"] == "success"
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live-late-follow"))
+    assert game is not None
+
+    db_session.add(UserGameFollow(user_id=user.id, game_id=game.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
+    db_session.commit()
+
+    result = run_ingest_cycle(provider)
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert all(row.alert_type != "game_start" for row in sent)
+
+
 def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
     user = User(email="inline-fail@example.com")
     db_session.add(user)
@@ -392,7 +429,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
         alert.metadata_json = {**(alert.metadata_json or {}), "error": "synthetic_failure"}
         return "failed"
 
-    monkeypatch.setattr("worker.ingest.deliver_alert_now", fake_deliver)
+    monkeypatch.setattr("worker.alerts.deliver_alert_now", fake_deliver)
 
     result = run_ingest_cycle(make_live_close_provider())
     assert result["status"] == "success"
