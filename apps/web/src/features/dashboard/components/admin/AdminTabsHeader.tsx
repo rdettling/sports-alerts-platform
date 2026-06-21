@@ -1,6 +1,6 @@
 import { type OpsAdminOverviewWindow } from "../../../../shared/api";
 
-import { type AdminTabsHeaderProps } from "./admin-view-types";
+import { ADMIN_TABS, type AdminTabsHeaderProps } from "./admin-tabs";
 
 function WindowSelect({
   value,
@@ -30,11 +30,17 @@ export function AdminTabsHeader({
     <section className="card admin-simple-panel">
       <div className="admin-tabs-header">
         <div className="admin-tab-list" role="tablist" aria-label="Admin tabs">
-          <button className={`admin-tab-button ${tab === "espn" ? "active" : ""}`} type="button" aria-selected={tab === "espn"} onClick={() => onTabChange("espn")}>ESPN</button>
-          <button className={`admin-tab-button ${tab === "odds" ? "active" : ""}`} type="button" aria-selected={tab === "odds"} onClick={() => onTabChange("odds")}>Odds API</button>
-          <button className={`admin-tab-button ${tab === "resend" ? "active" : ""}`} type="button" aria-selected={tab === "resend"} onClick={() => onTabChange("resend")}>Resend</button>
-          <button className={`admin-tab-button ${tab === "db" ? "active" : ""}`} type="button" aria-selected={tab === "db"} onClick={() => onTabChange("db")}>DB Stats</button>
-          <button className={`admin-tab-button ${tab === "tools" ? "active" : ""}`} type="button" aria-selected={tab === "tools"} onClick={() => onTabChange("tools")}>Test Tools</button>
+          {ADMIN_TABS.map((item) => (
+            <button
+              key={item.key}
+              className={`admin-tab-button ${tab === item.key ? "active" : ""}`}
+              type="button"
+              aria-selected={tab === item.key}
+              onClick={() => onTabChange(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
         <div className="admin-tab-controls">
           <label>

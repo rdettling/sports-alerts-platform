@@ -33,6 +33,17 @@ vi.mock("../../../shared/api", () => ({
 
 describe("DevToolsView", () => {
   it("switches visible alert actions by league", async () => {
+    listTeamsMock.mockImplementationOnce(async () => [
+      { id: 1, external_team_id: "1610612737", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
+      { id: 2, external_team_id: "1610612738", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
+      { id: 3, external_team_id: "ATH", league: "MLB", name: "Athletics", abbreviation: "ATH" },
+      { id: 4, external_team_id: "ARI", league: "MLB", name: "Arizona Diamondbacks", abbreviation: "ARI" },
+      { id: 5, external_team_id: "TOR", league: "MLB", name: "Toronto Blue Jays", abbreviation: "TOR" },
+      { id: 6, external_team_id: "MIA", league: "MLB", name: "Miami Marlins", abbreviation: "MIA" },
+      { id: 7, external_team_id: "203", league: "WORLD_CUP", name: "Mexico", abbreviation: "MEX" },
+      { id: 8, external_team_id: "660", league: "WORLD_CUP", name: "United States", abbreviation: "USA" },
+    ]);
+
     render(<DevToolsView token="token" />);
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());

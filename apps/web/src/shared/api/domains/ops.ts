@@ -1,7 +1,7 @@
 import { apiRequest } from "../client";
 import type {
   LeagueSetting,
-  OpsAdminOverviewResponse,
+  OpsAdminSummaryResponse,
   OpsAdminOverviewWindow,
   OpsIngestHealthResponse,
   OpsLeagueSettingsResponse,
@@ -26,16 +26,11 @@ export function getOpsIngestHealth(token: string, eventLimit: number = 20): Prom
   });
 }
 
-export function getOpsAdminOverview(
+export function getOpsAdminSummary(
   token: string,
   window: OpsAdminOverviewWindow,
-  options?: { provider?: string; limit?: number },
-): Promise<OpsAdminOverviewResponse> {
-  const params = new URLSearchParams();
-  params.set("window", window);
-  if (options?.provider) params.set("provider", options.provider);
-  if (options?.limit !== undefined) params.set("limit", String(options.limit));
-  return apiRequest<OpsAdminOverviewResponse>(`/ops/admin/overview?${params.toString()}`, { token });
+): Promise<OpsAdminSummaryResponse> {
+  return apiRequest<OpsAdminSummaryResponse>(`/ops/admin/summary?window=${encodeURIComponent(window)}`, { token });
 }
 
 export function getOpsNeonUsage(token: string): Promise<OpsNeonUsageResponse> {

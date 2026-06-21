@@ -80,66 +80,73 @@ class IngestHealthResponseOut(BaseModel):
     events: list[IngestHealthEventOut]
 
 
-class OpsAdminRiskThresholdsOut(BaseModel):
-    utilization_watch_pct: float
-    utilization_risk_pct: float
-    error_watch_pct: float
-    error_risk_pct: float
-
-
-class OpsAdminGlobalHealthOut(BaseModel):
-    status: str
-    providers_at_risk: int
-    providers_on_watch: int
-
-
-class OpsAdminRiskCardOut(BaseModel):
-    key: str
-    label: str
-    value: int
-    status: str
+class OpsAdminSummaryOverviewOut(BaseModel):
+    window: str
+    total_provider_calls: int
+    provider_errors: int
+    provider_rate_limits: int
+    total_emails_attempted: int
+    emails_sent: int
+    emails_failed: int
+    total_alerts_created: int
+    last_updated_at: datetime
 
 
 class OpsAdminProviderOut(BaseModel):
     provider: str
-    quota_limit_24h: int | None
-    quota_limit_window: int | None
     total_calls: int
     success_calls: int
     error_calls: int
     rate_limited_calls: int
-    utilization_pct: float | None
-    remaining_budget: int | None
     calls_per_hour: float
-    error_pct: float
-    trend_delta_calls: int
-    trend_direction: str
+    quota_limit_window: int | None
+    utilization_pct: float | None
+    most_used_endpoint: str | None
+
+
+class OpsAdminDeliveryStatsOut(BaseModel):
+    attempted: int
+    sent: int
+    failed: int
+
+
+class OpsAdminResendStatsOut(BaseModel):
+    total_calls: int
+    success_calls: int
+    error_calls: int
+    rate_limited_calls: int
+
+
+class OpsAdminDeliveryOut(BaseModel):
+    alerts: OpsAdminDeliveryStatsOut
+    magic_links: OpsAdminDeliveryStatsOut
+    resend: OpsAdminResendStatsOut
+
+
+class OpsAdminRuntimeJobOut(BaseModel):
+    job_type: str
+    league: str | None
     status: str
-    reasons: list[str]
+    next_run_at: datetime | None
+    last_success_at: datetime | None
+    backoff_until: datetime | None
+    last_error: str | None
 
 
-class OpsAdminIncidentOut(BaseModel):
-    id: str
-    occurred_at: datetime
-    provider: str | None
-    type: str
-    severity: str
-    title: str
-    detail: str
+class OpsAdminRuntimeOut(BaseModel):
+    scheduler_mode: str
+    next_run_at: datetime | None
+    last_success_at: datetime | None
+    active_leagues: list[str]
+    league_settings: list[LeagueSettingOut]
+    jobs: list[OpsAdminRuntimeJobOut]
 
 
-class OpsAdminMetaOut(BaseModel):
-    last_updated_at: datetime
-    window: str
-
-
-class OpsAdminOverviewOut(BaseModel):
-    global_health: OpsAdminGlobalHealthOut
-    thresholds: OpsAdminRiskThresholdsOut
-    risk_cards: list[OpsAdminRiskCardOut]
+class OpsAdminSummaryOut(BaseModel):
+    overview: OpsAdminSummaryOverviewOut
     providers: list[OpsAdminProviderOut]
-    incidents: list[OpsAdminIncidentOut]
-    meta: OpsAdminMetaOut
+    delivery: OpsAdminDeliveryOut
+    runtime: OpsAdminRuntimeOut
 
 
 class NeonUsageOut(BaseModel):

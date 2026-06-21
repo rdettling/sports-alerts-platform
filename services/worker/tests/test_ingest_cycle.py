@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import (
+    ApiCallRollupHourly,
     Game,
     GameOddsCurrent,
     GameOddsOutcomeCurrent,
@@ -16,10 +17,11 @@ from app.db.models import (
     UserGameUnfollow,
     UserTeamFollow,
 )
+from app.services.api_usage import record_api_call_event
 from app.services.leagues import ensure_league_settings
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import OddsOutcome, OddsSnapshot
-from worker.planner import FetchPlan, build_live_requests
+from worker.planner import build_live_requests
 from worker.providers.base import ProviderGame, ScoreboardRequest
 
 
@@ -49,112 +51,44 @@ def make_snapshot(
     )
 
 
-class SuccessProvider:
+def make_game(
+    *,
+    external_game_id: str,
+    home_external_team_id: str,
+    away_external_team_id: str,
+    status: str,
+    scheduled_start_time: datetime | None = None,
+    home_score: int | None = None,
+    away_score: int | None = None,
+    period: int | None = None,
+    clock: str | None = None,
+    is_final: bool = False,
+    context_label: str | None = None,
+) -> ProviderGame:
+    return ProviderGame(
+        external_game_id=external_game_id,
+        home_external_team_id=home_external_team_id,
+        away_external_team_id=away_external_team_id,
+        scheduled_start_time=scheduled_start_time or datetime.now(timezone.utc),
+        status=status,
+        context_label=context_label,
+        home_score=home_score,
+        away_score=away_score,
+        period=period,
+        clock=clock,
+        is_final=is_final,
+    )
+
+
+class StaticProvider:
+    def __init__(self, games: list[ProviderGame] | None = None, *, error: Exception | None = None):
+        self.games = games or []
+        self.error = error
+
     def fetch_games(self, league, requests):
-        return [
-            ProviderGame(
-                external_game_id="game-1",
-                home_external_team_id="1",
-                away_external_team_id="2",
-                scheduled_start_time=datetime.now(timezone.utc),
-                status="scheduled",
-            )
-        ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
-
-
-class FailingProvider:
-    def fetch_games(self, league, requests):
-        raise RuntimeError("boom")
-
-    def expected_call_count(self, requests):
-        return len(requests)
-
-
-class LiveCloseProvider:
-    def fetch_games(self, league, requests):
-        return [
-            ProviderGame(
-                external_game_id="game-live",
-                home_external_team_id="1",
-                away_external_team_id="2",
-                scheduled_start_time=datetime.now(timezone.utc),
-                status="in_progress",
-                home_score=100,
-                away_score=98,
-                period=4,
-                clock="01:30",
-                is_final=False,
-            )
-        ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
-
-
-class FinalProvider:
-    def fetch_games(self, league, requests):
-        return [
-            ProviderGame(
-                external_game_id="game-final",
-                home_external_team_id="1",
-                away_external_team_id="2",
-                scheduled_start_time=datetime.now(timezone.utc),
-                status="final",
-                home_score=110,
-                away_score=104,
-                period=4,
-                clock="00:00",
-                is_final=True,
-            )
-        ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
-
-
-class MlbInningProvider:
-    def fetch_games(self, league, requests):
-        return [
-            ProviderGame(
-                external_game_id="game-mlb-live",
-                home_external_team_id="2",
-                away_external_team_id="10",
-                scheduled_start_time=datetime.now(timezone.utc),
-                status="in_progress",
-                home_score=2,
-                away_score=1,
-                period=7,
-                clock="Top 7th",
-                is_final=False,
-            )
-        ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
-
-
-class WorldCupProvider:
-    def fetch_games(self, league, requests):
-        return [
-            ProviderGame(
-                external_game_id="game-world-cup-live",
-                home_external_team_id="660",
-                away_external_team_id="203",
-                scheduled_start_time=datetime.now(timezone.utc),
-                status="in_progress",
-                home_score=1,
-                away_score=0,
-                period=2,
-                clock="65'",
-                is_final=False,
-            )
-        ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
+        if self.error is not None:
+            raise self.error
+        return list(self.games)
 
 
 class SequenceWorldCupProvider:
@@ -166,11 +100,10 @@ class SequenceWorldCupProvider:
         snapshot = self._snapshots[min(self._index, len(self._snapshots) - 1)]
         self._index += 1
         return [
-            ProviderGame(
+            make_game(
                 external_game_id="game-world-cup-live",
                 home_external_team_id="660",
                 away_external_team_id="203",
-                scheduled_start_time=datetime.now(timezone.utc),
                 status="in_progress",
                 home_score=snapshot["home_score"],
                 away_score=snapshot["away_score"],
@@ -180,9 +113,6 @@ class SequenceWorldCupProvider:
             )
         ]
 
-    def expected_call_count(self, requests):
-        return len(requests)
-
 
 class LongClockProvider:
     def __init__(self, *, home_external_team_id: str, away_external_team_id: str):
@@ -191,11 +121,10 @@ class LongClockProvider:
 
     def fetch_games(self, league, requests):
         return [
-            ProviderGame(
+            make_game(
                 external_game_id="game-long-clock",
                 home_external_team_id=self.home_external_team_id,
                 away_external_team_id=self.away_external_team_id,
-                scheduled_start_time=datetime.now(timezone.utc),
                 status="in_progress",
                 home_score=2,
                 away_score=1,
@@ -205,9 +134,6 @@ class LongClockProvider:
             )
         ]
 
-    def expected_call_count(self, requests):
-        return len(requests)
-
 
 class RepeatMatchupProvider:
     def __init__(self, first_start: datetime, second_start: datetime):
@@ -216,14 +142,14 @@ class RepeatMatchupProvider:
 
     def fetch_games(self, league, requests):
         return [
-            ProviderGame(
+            make_game(
                 external_game_id="game-repeat-1",
                 home_external_team_id="1",
                 away_external_team_id="2",
                 scheduled_start_time=self.first_start,
                 status="scheduled",
             ),
-            ProviderGame(
+            make_game(
                 external_game_id="game-repeat-2",
                 home_external_team_id="1",
                 away_external_team_id="2",
@@ -232,9 +158,6 @@ class RepeatMatchupProvider:
             ),
         ]
 
-    def expected_call_count(self, requests):
-        return len(requests)
-
 
 class ContextLabelProvider:
     def __init__(self, context_label: str | None):
@@ -242,18 +165,14 @@ class ContextLabelProvider:
 
     def fetch_games(self, league, requests):
         return [
-            ProviderGame(
+            make_game(
                 external_game_id="game-context",
                 home_external_team_id="1",
                 away_external_team_id="2",
-                scheduled_start_time=datetime.now(timezone.utc),
                 status="scheduled",
                 context_label=self.context_label,
             )
         ]
-
-    def expected_call_count(self, requests):
-        return len(requests)
 
 
 class RecordingCatalogProvider:
@@ -264,7 +183,7 @@ class RecordingCatalogProvider:
     def fetch_games(self, league, requests):
         self.requests = list(requests)
         return [
-            ProviderGame(
+            make_game(
                 external_game_id=f"{league.lower()}-catalog-game",
                 home_external_team_id="10" if league == "MLB" else "660",
                 away_external_team_id="4" if league == "MLB" else "203",
@@ -273,12 +192,93 @@ class RecordingCatalogProvider:
             )
         ]
 
-    def expected_call_count(self, requests):
-        return len(requests)
+
+class TelemetryRecordingProvider:
+    def __init__(self):
+        self.contexts: list[bool] = []
+        self._db = None
+
+    def set_telemetry_context(self, db, ingest_run_id):
+        self._db = db
+        self.contexts.append(db is not None)
+
+    def fetch_games(self, league, requests):
+        assert self._db is not None
+        record_api_call_event(
+            self._db,
+            service="worker",
+            provider="espn",
+            endpoint_key="scoreboard",
+            attempt_status="success",
+        )
+        return [
+            make_game(
+                external_game_id="game-telemetry",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="scheduled",
+            )
+        ]
+
+
+def make_success_provider() -> StaticProvider:
+    return StaticProvider([make_game(external_game_id="game-1", home_external_team_id="1", away_external_team_id="2", status="scheduled")])
+
+
+def make_live_close_provider() -> StaticProvider:
+    return StaticProvider(
+        [
+            make_game(
+                external_game_id="game-live",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="in_progress",
+                home_score=100,
+                away_score=98,
+                period=4,
+                clock="01:30",
+            )
+        ]
+    )
+
+
+def make_final_provider() -> StaticProvider:
+    return StaticProvider(
+        [
+            make_game(
+                external_game_id="game-final",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="final",
+                home_score=110,
+                away_score=104,
+                period=4,
+                clock="00:00",
+                is_final=True,
+            )
+        ]
+    )
+
+
+def make_mlb_inning_provider() -> StaticProvider:
+    return StaticProvider(
+        [
+            make_game(
+                external_game_id="game-mlb-live",
+                home_external_team_id="2",
+                away_external_team_id="10",
+                status="in_progress",
+                home_score=2,
+                away_score=1,
+                period=7,
+                clock="Top 7th",
+            )
+        ]
+    )
 
 
 def test_ingest_run_success(db_session):
-    provider = SuccessProvider()
+    provider = make_success_provider()
     result = run_ingest_cycle(provider)
     assert result["status"] == "success"
     assert result["games_checked"] == 1
@@ -290,9 +290,25 @@ def test_ingest_run_success(db_session):
 
 
 def test_ingest_run_failure(db_session):
-    result = run_ingest_cycle(FailingProvider())
+    result = run_ingest_cycle(StaticProvider(error=RuntimeError("boom")))
     assert result["status"] == "failed"
     assert result["next_poll_seconds"] > 0
+
+
+def test_ingest_attaches_provider_telemetry_context(db_session, monkeypatch):
+    provider = TelemetryRecordingProvider()
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
+
+    result = run_ingest_cycle(provider)
+
+    assert result["status"] == "success"
+    assert provider.contexts == [True, False]
+
+    rollups = db_session.scalars(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "espn")).all()
+    assert len(rollups) == 1
+    assert rollups[0].endpoint_key == "scoreboard"
+    assert rollups[0].attempt_status == "success"
+    assert rollups[0].call_count == 1
 
 
 def test_ingest_creates_deduped_live_alerts(db_session):
@@ -316,9 +332,9 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     )
     db_session.commit()
 
-    first = run_ingest_cycle(LiveCloseProvider())
+    first = run_ingest_cycle(make_live_close_provider())
     assert first["status"] == "success"
-    second = run_ingest_cycle(LiveCloseProvider())
+    second = run_ingest_cycle(make_live_close_provider())
     assert second["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
@@ -333,7 +349,7 @@ def test_ingest_creates_final_result_alert(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    run_ingest_cycle(FinalProvider())
+    run_ingest_cycle(make_final_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-final"))
     assert game is not None
 
@@ -341,7 +357,7 @@ def test_ingest_creates_final_result_alert(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="final_result", is_enabled=True))
     db_session.commit()
 
-    result = run_ingest_cycle(FinalProvider())
+    result = run_ingest_cycle(make_final_provider())
     assert result["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
@@ -368,7 +384,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
 
     monkeypatch.setattr("worker.ingest.deliver_alert_now", fake_deliver)
 
-    result = run_ingest_cycle(LiveCloseProvider())
+    result = run_ingest_cycle(make_live_close_provider())
     assert result["status"] == "success"
     assert result["alerts_created"] == 2
 
@@ -424,7 +440,7 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    run_ingest_cycle(LiveCloseProvider())
+    run_ingest_cycle(make_live_close_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
     assert game is not None
 
@@ -441,7 +457,7 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     db_session.query(SentAlert).delete()
     db_session.commit()
 
-    run_ingest_cycle(LiveCloseProvider())
+    run_ingest_cycle(make_live_close_provider())
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert all(row.alert_type != "game_start" for row in sent)
 
@@ -457,7 +473,7 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    run_ingest_cycle(LiveCloseProvider())
+    run_ingest_cycle(make_live_close_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
     assert game is not None
 
@@ -467,7 +483,7 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     db_session.query(SentAlert).delete()
     db_session.commit()
 
-    run_ingest_cycle(LiveCloseProvider())
+    run_ingest_cycle(make_live_close_provider())
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 0
 
@@ -492,7 +508,7 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
     )
     db_session.commit()
 
-    result = run_catalog_sync(MlbInningProvider(), league="MLB")
+    result = run_catalog_sync(make_mlb_inning_provider(), league="MLB")
     assert result["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
@@ -587,18 +603,7 @@ def test_world_cup_score_changed_ignores_score_decreases(db_session):
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):
-    monkeypatch.setattr(
-        "worker.ingest.build_fetch_plan",
-        lambda db: FetchPlan(
-            mode="active",
-            next_ingest_seconds=300,
-            espn_requests=[ScoreboardRequest(date="20260416")],
-            odds_refresh=True,
-            odds_refresh_reason="forced_for_test",
-            expected_espn_calls=1,
-            expected_odds_calls=1,
-        ),
-    )
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
         lambda league: {
@@ -612,7 +617,7 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
         },
     )
 
-    result = run_ingest_cycle(SuccessProvider())
+    result = run_ingest_cycle(make_success_provider())
     assert result["status"] == "success"
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-1"))
@@ -627,19 +632,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
-    monkeypatch.setattr(
-        "worker.ingest.build_fetch_plan",
-        lambda db: FetchPlan(
-            mode="active",
-            next_ingest_seconds=300,
-            espn_requests=[ScoreboardRequest(date="20260416"), ScoreboardRequest(date="20260417")],
-            odds_refresh=True,
-            odds_refresh_reason="forced_for_test",
-            expected_espn_calls=2,
-            expected_odds_calls=1,
-        ),
-    )
-
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
         lambda league: {
@@ -670,19 +663,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
-    monkeypatch.setattr(
-        "worker.ingest.build_fetch_plan",
-        lambda db: FetchPlan(
-            mode="active",
-            next_ingest_seconds=300,
-            espn_requests=[ScoreboardRequest(date="20260416"), ScoreboardRequest(date="20260417")],
-            odds_refresh=True,
-            odds_refresh_reason="forced_for_test",
-            expected_espn_calls=2,
-            expected_odds_calls=1,
-        ),
-    )
-
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
         lambda league: {
@@ -707,21 +688,10 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
 
 
 def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypatch):
-    monkeypatch.setattr(
-        "worker.ingest.build_fetch_plan",
-        lambda db: FetchPlan(
-            mode="active",
-            next_ingest_seconds=300,
-            espn_requests=[ScoreboardRequest(date="20260416")],
-            odds_refresh=True,
-            odds_refresh_reason="forced_for_test",
-            expected_espn_calls=1,
-            expected_odds_calls=1,
-        ),
-    )
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr("worker.ingest.fetch_odds_index", lambda league: {})
 
-    result = run_ingest_cycle(SuccessProvider())
+    result = run_ingest_cycle(make_success_provider())
     assert result["status"] == "success"
 
     assert result["next_poll_seconds"] > 0
@@ -729,21 +699,9 @@ def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypa
 
 def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
-
-    class CatalogProvider:
-        def fetch_games(self, league, requests):
-            return [
-                ProviderGame(
-                    external_game_id="game-catalog",
-                    home_external_team_id="1",
-                    away_external_team_id="2",
-                    scheduled_start_time=now + timedelta(hours=4),
-                    status="scheduled",
-                )
-            ]
-
-        def expected_call_count(self, requests):
-            return len(requests)
+    provider = StaticProvider(
+        [make_game(external_game_id="game-catalog", home_external_team_id="1", away_external_team_id="2", scheduled_start_time=now + timedelta(hours=4), status="scheduled")]
+    )
 
     odds_fetch_count = {"count": 0}
 
@@ -757,8 +715,8 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
 
     monkeypatch.setattr("worker.ingest.fetch_odds_index", _fake_odds_index)
 
-    first = run_catalog_sync(CatalogProvider())
-    second = run_catalog_sync(CatalogProvider())
+    first = run_catalog_sync(provider)
+    second = run_catalog_sync(provider)
 
     assert first["status"] == "success"
     assert second["status"] == "success"
@@ -818,52 +776,37 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
     )
     db_session.commit()
 
-    class LiveProvider:
-        def fetch_games(self, league, requests):
-            return [
-                ProviderGame(
-                    external_game_id="game-live-only",
-                    home_external_team_id="1",
-                    away_external_team_id="2",
-                    scheduled_start_time=now,
-                    status="in_progress",
-                    home_score=101,
-                    away_score=99,
-                    period=4,
-                    clock="01:15",
-                )
-            ]
-
-        def expected_call_count(self, requests):
-            return len(requests)
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-live-only",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                scheduled_start_time=now,
+                status="in_progress",
+                home_score=101,
+                away_score=99,
+                period=4,
+                clock="01:15",
+            )
+        ]
+    )
 
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
         lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched in live sync")),
     )
 
-    result = run_live_sync(LiveProvider())
+    result = run_live_sync(provider)
     assert result["status"] == "success"
     assert result["games_updated"] >= 1
 
 
 def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
-
-    class CatalogProvider:
-        def fetch_games(self, league, requests):
-            return [
-                ProviderGame(
-                    external_game_id="game-no-odds",
-                    home_external_team_id="1",
-                    away_external_team_id="2",
-                    scheduled_start_time=now + timedelta(hours=4),
-                    status="scheduled",
-                )
-            ]
-
-        def expected_call_count(self, requests):
-            return len(requests)
+    provider = StaticProvider(
+        [make_game(external_game_id="game-no-odds", home_external_team_id="1", away_external_team_id="2", scheduled_start_time=now + timedelta(hours=4), status="scheduled")]
+    )
 
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
     monkeypatch.setattr(
@@ -871,7 +814,7 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
         lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
     )
 
-    result = run_catalog_sync(CatalogProvider())
+    result = run_catalog_sync(provider)
     assert result["status"] == "success"
     assert result["odds_candidates"] == 0
     assert result["odds_snapshots_created"] == 0
@@ -879,22 +822,18 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
 
 def test_world_cup_catalog_sync_persists_three_way_odds(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
-
-    class ScheduledWorldCupProvider:
-        def fetch_games(self, league, requests):
-            return [
-                ProviderGame(
-                    external_game_id="game-world-cup-scheduled",
-                    home_external_team_id="660",
-                    away_external_team_id="203",
-                    scheduled_start_time=now + timedelta(hours=3),
-                    status="scheduled",
-                    is_final=False,
-                )
-            ]
-
-        def expected_call_count(self, requests):
-            return len(requests)
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-world-cup-scheduled",
+                home_external_team_id="660",
+                away_external_team_id="203",
+                scheduled_start_time=now + timedelta(hours=3),
+                status="scheduled",
+                is_final=False,
+            )
+        ]
+    )
 
     monkeypatch.setattr(
         "worker.ingest.fetch_odds_index",
@@ -913,7 +852,7 @@ def test_world_cup_catalog_sync_persists_three_way_odds(db_session, monkeypatch)
         },
     )
 
-    result = run_catalog_sync(ScheduledWorldCupProvider(), league="WORLD_CUP")
+    result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
     assert result["odds_snapshots_created"] == 1
 
@@ -944,14 +883,7 @@ def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
     )
     db_session.commit()
 
-    class EmptyProvider:
-        def fetch_games(self, league, requests):
-            return []
-
-        def expected_call_count(self, requests):
-            return len(requests)
-
-    result = run_live_sync(EmptyProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), league="MLB")
     assert result["status"] == "success"
     assert result["has_live_games"] == "false"
     assert result["mode"] == "waiting_for_start"
@@ -959,14 +891,7 @@ def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
 
 
 def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
-    class EmptyProvider:
-        def fetch_games(self, league, requests):
-            return []
-
-        def expected_call_count(self, requests):
-            return len(requests)
-
-    result = run_live_sync(EmptyProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), league="MLB")
     assert result["status"] == "success"
     assert result["has_live_games"] == "false"
     assert result["mode"] == "no_upcoming"
@@ -989,14 +914,7 @@ def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
     )
     db_session.commit()
 
-    class EmptyProvider:
-        def fetch_games(self, league, requests):
-            return []
-
-        def expected_call_count(self, requests):
-            return len(requests)
-
-    result = run_live_sync(EmptyProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), league="MLB")
     assert result["status"] == "success"
     assert result["has_live_games"] == "false"
     assert result["mode"] == "waiting_for_start"
@@ -1004,20 +922,13 @@ def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
 
 
 def test_catalog_sync_fails_for_disabled_league(db_session):
-    class DisabledProvider:
-        def fetch_games(self, league, requests):
-            return []
-
-        def expected_call_count(self, requests):
-            return len(requests)
-
     ensure_league_settings(db_session)
     row = db_session.get(LeagueSetting, "MLB")
     assert row is not None
     row.is_enabled = False
     db_session.commit()
 
-    result = run_catalog_sync(DisabledProvider(), league="MLB")
+    result = run_catalog_sync(StaticProvider(), league="MLB")
     assert result["status"] == "failed"
 
 
@@ -1037,27 +948,24 @@ def test_live_sync_promotes_scheduled_game_to_live(db_session):
     )
     db_session.commit()
 
-    class PromoteProvider:
-        def fetch_games(self, league, requests):
-            return [
-                ProviderGame(
-                    external_game_id="mlb-angels-like",
-                    home_external_team_id=teams[0].external_team_id,
-                    away_external_team_id=teams[1].external_team_id,
-                    scheduled_start_time=now - timedelta(minutes=15),
-                    status="in_progress",
-                    home_score=1,
-                    away_score=0,
-                    period=2,
-                    clock="Top 2nd",
-                    is_final=False,
-                )
-            ]
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="mlb-angels-like",
+                home_external_team_id=teams[0].external_team_id,
+                away_external_team_id=teams[1].external_team_id,
+                scheduled_start_time=now - timedelta(minutes=15),
+                status="in_progress",
+                home_score=1,
+                away_score=0,
+                period=2,
+                clock="Top 2nd",
+                is_final=False,
+            )
+        ]
+    )
 
-        def expected_call_count(self, requests):
-            return len(requests)
-
-    result = run_live_sync(PromoteProvider(), league="MLB")
+    result = run_live_sync(provider, league="MLB")
     assert result["status"] == "success"
     assert result["has_live_games"] == "true"
     assert result["mode"] == "live"

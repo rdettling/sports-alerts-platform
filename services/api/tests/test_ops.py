@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.db.models import ApiCallRollupHourly, User, WorkerJob
+from app.db.models import ApiCallRollupHourly, SentAlert, User, WorkerJob
 from app.db.session import SessionLocal
 
 
@@ -45,10 +45,63 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
             ApiCallRollupHourly(
                 bucket_start=now,
                 service="worker",
+                provider="the_odds_api",
+                endpoint_key="h2h",
+                attempt_status="success",
+                call_count=2,
+            )
+        )
+        db.add(
+            ApiCallRollupHourly(
+                bucket_start=now,
+                service="worker",
                 provider="odds",
                 endpoint_key="h2h",
                 attempt_status="rate_limited",
                 call_count=1,
+            )
+        )
+        db.add(
+            ApiCallRollupHourly(
+                bucket_start=now,
+                service="worker",
+                provider="resend",
+                endpoint_key="resend_send_email",
+                attempt_status="success",
+                call_count=2,
+            )
+        )
+        db.add(
+            ApiCallRollupHourly(
+                bucket_start=now,
+                service="api",
+                provider="resend",
+                endpoint_key="resend_send_email",
+                attempt_status="error",
+                call_count=1,
+            )
+        )
+        db.add(
+            SentAlert(
+                user_id=user.id,
+                game_id=1,
+                alert_type="game_start",
+                delivery_channel="email",
+                delivery_status="sent",
+                dedupe_key="sent-alert-1",
+                provider_message_id="msg-1",
+                sent_at=now,
+            )
+        )
+        db.add(
+            SentAlert(
+                user_id=user.id,
+                game_id=1,
+                alert_type="final_result",
+                delivery_channel="email",
+                delivery_status="failed",
+                dedupe_key="sent-alert-2",
+                sent_at=now,
             )
         )
         db.commit()
@@ -59,7 +112,7 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     summary = client.get("/ops/api-usage/summary?window=24h", headers=headers)
     assert summary.status_code == 200
     summary_json = summary.json()
-    assert summary_json["totals"]["actual_calls"] == 4
+    assert summary_json["totals"]["actual_calls"] == 9
     assert summary_json["expected_vs_actual"]["espn"]["expected"] == 0
 
     timeseries = client.get("/ops/api-usage/timeseries?window=24h&bucket=hour", headers=headers)
@@ -79,13 +132,29 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         {"league": "WORLD_CUP", "label": "World Cup", "badge_label": "WC", "alert_types": ["game_start", "score_changed", "final_result"], "is_enabled": True},
     ]
 
-    overview = client.get("/ops/admin/overview?window=24h&limit=10", headers=headers)
-    assert overview.status_code == 200
-    overview_json = overview.json()
-    assert "global_health" in overview_json
-    assert "providers" in overview_json
-    assert "risk_cards" in overview_json
-    assert len(overview_json["providers"]) >= 1
+    summary = client.get("/ops/admin/summary?window=24h", headers=headers)
+    assert summary.status_code == 200
+    summary_json = summary.json()
+    assert summary_json["overview"]["total_provider_calls"] == 9
+    assert summary_json["overview"]["provider_errors"] == 1
+    assert summary_json["overview"]["provider_rate_limits"] == 1
+    assert summary_json["overview"]["total_emails_attempted"] == 3
+    assert summary_json["overview"]["emails_sent"] == 2
+    assert summary_json["overview"]["emails_failed"] == 1
+    assert summary_json["overview"]["total_alerts_created"] == 2
+    assert [item["provider"] for item in summary_json["providers"]] == ["espn", "odds", "resend"]
+    assert summary_json["providers"][1]["total_calls"] == 3
+    assert summary_json["providers"][1]["most_used_endpoint"] == "h2h"
+    assert summary_json["delivery"]["alerts"] == {"attempted": 2, "sent": 1, "failed": 1}
+    assert summary_json["delivery"]["magic_links"] == {"attempted": 1, "sent": 1, "failed": 0}
+    assert summary_json["delivery"]["resend"] == {
+        "total_calls": 3,
+        "success_calls": 2,
+        "error_calls": 1,
+        "rate_limited_calls": 0,
+    }
+    assert summary_json["runtime"]["active_leagues"] == ["NBA", "MLB", "WORLD_CUP"]
+    assert len(summary_json["runtime"]["league_settings"]) == 3
 
 
 def test_team_mapping_health_endpoint(client, monkeypatch):

@@ -7,6 +7,12 @@ import {
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 
+const DEFAULT_TEST_MATCHUPS: Record<League, { away: string; home: string }> = {
+  NBA: { away: "ATL", home: "BOS" },
+  MLB: { away: "MIA", home: "TOR" },
+  WORLD_CUP: { away: "MEX", home: "USA" },
+};
+
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
@@ -15,7 +21,6 @@ export function DevToolsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -47,9 +52,8 @@ export function DevToolsView({ token }: { token: string }) {
     setBusyAlertType(alertType);
     try {
       const response = await sendDevTestEmail(token, { league: activeLeague, alert_type: alertType });
-      const message = `Queued ${response.league} ${response.alert_type} alert on synthetic game #${response.game_id}. Status: ${response.delivery_status}.`;
+      const message = `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} sent for ${response.league.replace("_", " ")}.`;
       setResult(message);
-      setHistory((current) => [message, ...current].slice(0, 10));
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
     } finally {
@@ -61,6 +65,13 @@ export function DevToolsView({ token }: { token: string }) {
     const leagueTeams = teams.filter((team) => (team.league || "").toUpperCase() === activeLeague);
     if (leagueTeams.length < 2) {
       return { away: null, home: null };
+    }
+    const matchup = DEFAULT_TEST_MATCHUPS[activeLeague];
+    const byAbbreviation = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team] as const));
+    const away = byAbbreviation.get(matchup.away);
+    const home = byAbbreviation.get(matchup.home);
+    if (away && home && away.id !== home.id) {
+      return { away, home };
     }
     return { away: leagueTeams[0], home: leagueTeams[1] };
   }, [teams, activeLeague]);
@@ -89,7 +100,7 @@ export function DevToolsView({ token }: { token: string }) {
 
         <div className="admin-tools-matchup">
           <span className="admin-tools-label">Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})</span>
-          <span className="team-row">
+          <span className="admin-tools-matchup-row">
             {syntheticTeams.away ? <TeamLogo team={syntheticTeams.away} size={20} /> : null}
             <strong>{syntheticTeams.away?.abbreviation ?? "AWAY"}</strong>
             <span className="muted">@</span>
@@ -116,20 +127,6 @@ export function DevToolsView({ token }: { token: string }) {
         {loading ? <p>Loading test tool data...</p> : null}
         {error ? <p className="error">{error}</p> : null}
         {result ? <p className="admin-result">{result}</p> : null}
-        {history.length > 0 ? (
-          <section className="admin-panel admin-panel-scroll">
-            <h3>Recent actions</h3>
-            <div className="admin-scroll-body">
-              <ul className="list">
-                {history.map((entry, index) => (
-                  <li key={`${entry}-${index}`} className="admin-action-history-row">
-                    {entry}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        ) : null}
       </div>
     </section>
   );

@@ -171,8 +171,3 @@ class EspnScoreboardProvider(SportsProvider):
         events = self._fetch_events_for_dates(league, request_dates)
         games = [self._parse_event(league, event) for event in events]
         return [game for game in games if game]
-
-    def expected_call_count(self, requests: list[ScoreboardRequest]) -> int:
-        if not requests:
-            return 1
-        return len({request.date for request in requests})

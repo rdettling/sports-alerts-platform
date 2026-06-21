@@ -27,8 +27,8 @@ from app.services.alert_delivery import deliver_alert_now
 from app.services.leagues import get_active_leagues, get_alert_types, league_supports_odds, list_supported_leagues
 from worker.db import SessionLocal
 from worker.config import settings
-from worker.odds import OddsSnapshot, fetch_odds_index, game_key
-from worker.planner import build_catalog_requests, build_fetch_plan, build_live_requests
+from worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
+from worker.planner import build_catalog_requests, build_live_requests
 from worker.providers.base import ProviderGame, SportsProvider
 
 logger = logging.getLogger(__name__)
@@ -737,11 +737,19 @@ def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> 
     return [game for game in rows if game.id not in existing_ids]
 
 
+def _set_fetch_telemetry_context(provider: SportsProvider, db: Session | None) -> None:
+    provider_context = getattr(provider, "set_telemetry_context", None)
+    if callable(provider_context):
+        provider_context(db, None)
+    set_odds_telemetry_context(db, None)
+
+
 def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
     league = _normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
+        _set_fetch_telemetry_context(provider, db)
         _assert_league_enabled(db, league)
         requests = build_catalog_requests(db, league, now=now)
         team_map = _team_id_map(db, league)
@@ -806,6 +814,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
             "next_poll_seconds": _catalog_interval_seconds(league),
         }
     finally:
+        _set_fetch_telemetry_context(provider, None)
         db.close()
 
 
@@ -814,6 +823,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
+        _set_fetch_telemetry_context(provider, db)
         _assert_league_enabled(db, league)
         requests = build_live_requests(db, league)
         if not requests:
@@ -911,6 +921,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
             "mode": "live",
         }
     finally:
+        _set_fetch_telemetry_context(provider, None)
         db.close()
 
 

@@ -1,8 +1,14 @@
 import { type OpsAdminOverviewWindow } from "../../../../shared/api";
 
-export type AdminTab = "espn" | "odds" | "resend" | "db" | "tools";
+export const ADMIN_TABS = [
+  { key: "database", label: "Database" },
+  { key: "providers", label: "Providers" },
+  { key: "delivery", label: "Delivery" },
+  { key: "jobs", label: "Jobs" },
+  { key: "tools", label: "Tools" },
+] as const;
 
-export type ProviderKey = "espn" | "odds" | "resend";
+export type AdminTab = (typeof ADMIN_TABS)[number]["key"];
 
 export type AdminTabsHeaderProps = {
   tab: AdminTab;

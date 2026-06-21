@@ -181,46 +181,63 @@ export type OpsIngestHealthResponse = {
   }>;
 };
 
-export type OpsAdminOverviewResponse = {
-  global_health: {
-    status: "healthy" | "watch" | "at_risk";
-    providers_at_risk: number;
-    providers_on_watch: number;
+export type OpsAdminSummaryResponse = {
+  overview: {
+    window: OpsAdminOverviewWindow;
+    total_provider_calls: number;
+    provider_errors: number;
+    provider_rate_limits: number;
+    total_emails_attempted: number;
+    emails_sent: number;
+    emails_failed: number;
+    total_alerts_created: number;
+    last_updated_at: string;
   };
-  thresholds: {
-    utilization_watch_pct: number;
-    utilization_risk_pct: number;
-    error_watch_pct: number;
-    error_risk_pct: number;
-  };
-  risk_cards: Array<{ key: string; label: string; value: number; status: "ok" | "medium" | "high" }>;
   providers: Array<{
     provider: string;
-    quota_limit_24h: number | null;
-    quota_limit_window: number | null;
     total_calls: number;
     success_calls: number;
     error_calls: number;
     rate_limited_calls: number;
-    utilization_pct: number | null;
-    remaining_budget: number | null;
     calls_per_hour: number;
-    error_pct: number;
-    trend_delta_calls: number;
-    trend_direction: "up" | "down" | "flat";
-    status: "healthy" | "watch" | "at_risk";
-    reasons: string[];
+    quota_limit_window: number | null;
+    utilization_pct: number | null;
+    most_used_endpoint: string | null;
   }>;
-  incidents: Array<{
-    id: string;
-    occurred_at: string;
-    provider: string | null;
-    type: string;
-    severity: "low" | "medium" | "high";
-    title: string;
-    detail: string;
-  }>;
-  meta: { last_updated_at: string; window: OpsAdminOverviewWindow };
+  delivery: {
+    alerts: {
+      attempted: number;
+      sent: number;
+      failed: number;
+    };
+    magic_links: {
+      attempted: number;
+      sent: number;
+      failed: number;
+    };
+    resend: {
+      total_calls: number;
+      success_calls: number;
+      error_calls: number;
+      rate_limited_calls: number;
+    };
+  };
+  runtime: {
+    scheduler_mode: string;
+    next_run_at: string | null;
+    last_success_at: string | null;
+    active_leagues: League[];
+    league_settings: LeagueSetting[];
+    jobs: Array<{
+      job_type: string;
+      league: string | null;
+      status: string;
+      next_run_at: string | null;
+      last_success_at: string | null;
+      backoff_until: string | null;
+      last_error: string | null;
+    }>;
+  };
 };
 
 export type OpsNeonUsageResponse = {
