@@ -22,8 +22,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop_worker)
 
     logger.info(
-        "Worker started provider=%s scheduler_max_sleep=%ss intervals(catalog=%ss nba_live=%ss mlb_live=%ss world_cup_live=%ss)",
-        settings.scoreboard_provider,
+        "Worker started scheduler_max_sleep=%ss intervals(catalog=%ss nba_live=%ss mlb_live=%ss world_cup_live=%ss)",
         settings.scheduler_tick_seconds,
         settings.catalog_sync_interval_seconds,
         settings.nba_live_sync_interval_seconds,

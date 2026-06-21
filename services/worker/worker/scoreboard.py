@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import monotonic
 from typing import Any, Callable
@@ -10,9 +11,23 @@ from sqlalchemy.orm import Session
 
 from app.services.api_usage import record_api_call_event
 from app.services.leagues import get_scoreboard_url
-from worker.providers.base import ProviderGame, ScoreboardRequest, SportsProvider
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ScoreboardGame:
+    external_game_id: str
+    home_external_team_id: str
+    away_external_team_id: str
+    scheduled_start_time: datetime
+    status: str
+    context_label: str | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    period: int | None = None
+    clock: str | None = None
+    is_final: bool = False
 
 
 def _clean_text(value: object) -> str | None:
@@ -37,7 +52,7 @@ def _format_world_cup_stage(slug: str | None) -> str | None:
     return mapping.get(slug)
 
 
-class EspnScoreboardProvider(SportsProvider):
+class EspnScoreboardClient:
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
         self._telemetry_db: Session | None = None
@@ -66,7 +81,7 @@ class EspnScoreboardProvider(SportsProvider):
         response.raise_for_status()
         return response.json()
 
-    def _parse_event(self, league: str, event: dict[str, Any]) -> ProviderGame | None:
+    def _parse_event(self, league: str, event: dict[str, Any]) -> ScoreboardGame | None:
         competition = (event.get("competitions") or [{}])[0]
         notes = competition.get("notes") or []
         for note in notes:
@@ -114,19 +129,14 @@ class EspnScoreboardProvider(SportsProvider):
         clock = status_payload.get("displayClock")
         short_detail = str(status_type.get("shortDetail") or "").strip()
         normalized_league = league.upper()
-        if normalized_league == "MLB" and short_detail:
-            clock = short_detail
-        elif normalized_league == "WORLD_CUP" and short_detail:
+        if normalized_league in {"MLB", "WORLD_CUP"} and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
         context_label: str | None = None
         if normalized_league == "NBA":
             round_label = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
             series_summary = _clean_text(((competition.get("series") or {}).get("summary")))
-            if round_label and series_summary:
-                context_label = f"{round_label} · {series_summary}"
-            else:
-                context_label = round_label or series_summary
+            context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary
         elif normalized_league == "WORLD_CUP":
             season = event.get("season") or {}
             season_slug = _clean_text(season.get("slug"))
@@ -134,7 +144,7 @@ class EspnScoreboardProvider(SportsProvider):
             season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
             context_label = _format_world_cup_stage(season_slug) or season_type_name
 
-        return ProviderGame(
+        return ScoreboardGame(
             external_game_id=str(event.get("id")),
             home_external_team_id=home_external_team_id,
             away_external_team_id=away_external_team_id,
@@ -162,12 +172,8 @@ class EspnScoreboardProvider(SportsProvider):
                     by_id[event_id] = event
         return list(by_id.values())
 
-    def fetch_games(self, league: str, requests: list[ScoreboardRequest]) -> list[ProviderGame]:
-        if not requests:
-            today = datetime.now(UTC).date().strftime("%Y%m%d")
-            request_dates = [today]
-        else:
-            request_dates = sorted({request.date for request in requests})
+    def fetch_games(self, league: str, dates: list[str]) -> list[ScoreboardGame]:
+        request_dates = sorted(set(dates)) or [datetime.now(UTC).date().strftime("%Y%m%d")]
         events = self._fetch_events_for_dates(league, request_dates)
         games = [self._parse_event(league, event) for event in events]
         return [game for game in games if game]

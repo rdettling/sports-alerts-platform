@@ -6,12 +6,12 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game
-from worker.providers.base import ScoreboardRequest
 
 INGEST_CATALOG_LOOKBACK_DAYS = 1
 INGEST_CATALOG_LOOKAHEAD_DAYS = 7
 INGEST_LIVE_SYNC_LOOKBACK_HOURS = 2
 INGEST_LIVE_SYNC_LOOKAHEAD_HOURS = 6
+
 
 def _default_catalog_dates(now: datetime) -> set[str]:
     today = now.date()
@@ -21,17 +21,17 @@ def _default_catalog_dates(now: datetime) -> set[str]:
     }
 
 
-def _build_catalog_requests(now: datetime) -> list[ScoreboardRequest]:
+def _build_catalog_requests(now: datetime) -> list[str]:
     dates = _default_catalog_dates(now)
-    return [ScoreboardRequest(date=value) for value in sorted(dates)]
+    return sorted(dates)
 
 
-def build_catalog_requests(db: Session, league: str, now: datetime | None = None) -> list[ScoreboardRequest]:
+def build_catalog_requests(db: Session, league: str, now: datetime | None = None) -> list[str]:
     at = now or datetime.now(timezone.utc)
     return _build_catalog_requests(at)
 
 
-def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[ScoreboardRequest]:
+def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[str]:
     at = now or datetime.now(timezone.utc)
     candidate_rows = db.execute(
         select(Game.scheduled_start_time).where(
@@ -58,4 +58,4 @@ def build_live_requests(db: Session, league: str, now: datetime | None = None) -
     dates.add((at - timedelta(days=1)).strftime("%Y%m%d"))
     # Include current day to absorb provider status lag around day boundaries.
     dates.add(at.strftime("%Y%m%d"))
-    return [ScoreboardRequest(date=value) for value in sorted(dates)]
+    return sorted(dates)

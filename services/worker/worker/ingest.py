@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Protocol
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -29,12 +28,16 @@ from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
 from worker.planner import build_catalog_requests, build_live_requests
-from worker.providers.base import ProviderGame, SportsProvider
+from worker.scoreboard import ScoreboardGame
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 LIVE_STATUS_RECHECK_GRACE = timedelta(hours=2)
 SUPPORTED_LEAGUES = tuple(list_supported_leagues())
+
+
+class ScoreboardFetcher(Protocol):
+    def fetch_games(self, league: str, dates: list[str]) -> list[ScoreboardGame]: ...
 
 
 @dataclass(frozen=True)
@@ -93,14 +96,12 @@ def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime |
     )
 
 
-def _team_id_map(db: Session, league: str) -> dict[str, int]:
+def _league_team_maps(db: Session, league: str) -> tuple[dict[str, int], dict[int, str]]:
     rows = db.scalars(select(Team).where(Team.league == league)).all()
-    return {team.external_team_id: team.id for team in rows}
-
-
-def _team_name_map(db: Session, league: str) -> dict[int, str]:
-    rows = db.scalars(select(Team).where(Team.league == league)).all()
-    return {team.id: team.name for team in rows}
+    return (
+        {team.external_team_id: team.id for team in rows},
+        {team.id: team.name for team in rows},
+    )
 
 
 def _parse_clock_seconds(clock: str | None) -> int | None:
@@ -159,15 +160,19 @@ def _load_game_watchers(db: Session, games: list[Game]) -> dict[int, set[int]]:
     return by_game
 
 
-def _load_defaults_by_user_league(db: Session, user_ids: set[int], leagues: set[str]) -> dict[tuple[int, str, str], UserAlertDefault]:
+def _load_user_alert_defaults(db: Session, user_ids: set[int], leagues: set[str]) -> list[UserAlertDefault]:
     if not user_ids or not leagues:
-        return {}
-    rows = db.scalars(
+        return []
+    return db.scalars(
         select(UserAlertDefault).where(
             UserAlertDefault.user_id.in_(sorted(user_ids)),
             UserAlertDefault.league.in_(sorted(leagues)),
         )
     ).all()
+
+
+def _load_defaults_by_user_league(db: Session, user_ids: set[int], leagues: set[str]) -> dict[tuple[int, str, str], UserAlertDefault]:
+    rows = _load_user_alert_defaults(db, user_ids, leagues)
     return {(row.user_id, row.league, row.alert_type): row for row in rows}
 
 
@@ -176,12 +181,7 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
         return
     existing = {
         (row.user_id, row.league, row.alert_type)
-        for row in db.scalars(
-            select(UserAlertDefault).where(
-                UserAlertDefault.user_id.in_(sorted(user_ids)),
-                UserAlertDefault.league.in_(sorted(leagues)),
-            )
-        ).all()
+        for row in _load_user_alert_defaults(db, user_ids, leagues)
     }
     now = datetime.now(timezone.utc)
     created = False
@@ -242,6 +242,20 @@ def _effective_alert_settings(
     return enabled, margin, seconds, inning
 
 
+def _alert_settings_for(
+    defaults_by_key: dict[tuple[int, str, str], UserAlertDefault],
+    overrides_by_key: dict[tuple[int, int, str], UserGameAlertOverride],
+    *,
+    user_id: int,
+    game: Game,
+    alert_type: str,
+) -> tuple[bool, int | None, int | None, int | None]:
+    return _effective_alert_settings(
+        defaults_by_key.get((user_id, game.league, alert_type)),
+        overrides_by_key.get((user_id, game.id, alert_type)),
+    )
+
+
 def _should_trigger_close_game_late(game: Game, is_enabled: bool, margin_threshold: int | None, time_threshold: int | None) -> bool:
     if not is_enabled:
         return False
@@ -273,7 +287,7 @@ def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold:
     return game.period >= (inning_threshold or 7)
 
 
-def _classify_world_cup_score_change(previous: Game | None, payload: ProviderGame, league: str) -> ScoreChangeEvent | None:
+def _classify_world_cup_score_change(previous: Game | None, payload: ScoreboardGame, league: str) -> ScoreChangeEvent | None:
     if league != "WORLD_CUP" or previous is None:
         return None
     if payload.status not in {"in_progress", "live"}:
@@ -312,6 +326,32 @@ def _classify_world_cup_score_change(previous: Game | None, payload: ProviderGam
     )
 
 
+def _append_candidate_alert(
+    candidate_alerts: list[SentAlert],
+    candidate_dedupe_keys: set[str],
+    *,
+    user_id: int,
+    game_id: int,
+    alert_type: str,
+    dedupe_key: str,
+    metadata_json: dict[str, object],
+) -> None:
+    if dedupe_key in candidate_dedupe_keys:
+        return
+    candidate_dedupe_keys.add(dedupe_key)
+    candidate_alerts.append(
+        SentAlert(
+            user_id=user_id,
+            game_id=game_id,
+            alert_type=alert_type,
+            delivery_channel="email",
+            delivery_status="sent",
+            dedupe_key=dedupe_key,
+            metadata_json=metadata_json,
+        )
+    )
+
+
 def _evaluate_and_record_alerts_batched(
     db: Session,
     games: list[Game],
@@ -333,111 +373,106 @@ def _evaluate_and_record_alerts_batched(
     for game in games:
         user_ids = watchers_by_game.get(game.id, set())
         for user_id in user_ids:
-            default_game_start = defaults_by_key.get((user_id, game.league, "game_start"))
-            override_game_start = overrides_by_key.get((user_id, game.id, "game_start"))
-            game_start_enabled, _, _, _ = _effective_alert_settings(default_game_start, override_game_start)
+            game_start_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key,
+                overrides_by_key,
+                user_id=user_id,
+                game=game,
+                alert_type="game_start",
+            )
             if game_start_enabled and game.status in {"in_progress", "live"}:
-                key = f"{user_id}:{game.id}:game_start"
-                if key not in candidate_dedupe_keys:
-                    candidate_dedupe_keys.add(key)
-                    candidate_alerts.append(
-                        SentAlert(
-                            user_id=user_id,
-                            game_id=game.id,
-                            alert_type="game_start",
-                            delivery_channel="email",
-                            delivery_status="sent",
-                            dedupe_key=key,
-                            metadata_json={"status": game.status},
-                        )
-                    )
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="game_start",
+                    dedupe_key=f"{user_id}:{game.id}:game_start",
+                    metadata_json={"status": game.status},
+                )
 
-            default_final = defaults_by_key.get((user_id, game.league, "final_result"))
-            override_final = overrides_by_key.get((user_id, game.id, "final_result"))
-            final_enabled, _, _, _ = _effective_alert_settings(default_final, override_final)
+            final_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key,
+                overrides_by_key,
+                user_id=user_id,
+                game=game,
+                alert_type="final_result",
+            )
             if final_enabled and (game.is_final or game.status == "final"):
-                key = f"{user_id}:{game.id}:final_result"
-                if key not in candidate_dedupe_keys:
-                    candidate_dedupe_keys.add(key)
-                    candidate_alerts.append(
-                        SentAlert(
-                            user_id=user_id,
-                            game_id=game.id,
-                            alert_type="final_result",
-                            delivery_channel="email",
-                            delivery_status="sent",
-                            dedupe_key=key,
-                            metadata_json={"status": game.status},
-                        )
-                    )
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="final_result",
+                    dedupe_key=f"{user_id}:{game.id}:final_result",
+                    metadata_json={"status": game.status},
+                )
 
             score_change_event = score_change_events.get(game.id)
-            default_score_changed = defaults_by_key.get((user_id, game.league, "score_changed"))
-            override_score_changed = overrides_by_key.get((user_id, game.id, "score_changed"))
-            score_changed_enabled, _, _, _ = _effective_alert_settings(default_score_changed, override_score_changed)
+            score_changed_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key,
+                overrides_by_key,
+                user_id=user_id,
+                game=game,
+                alert_type="score_changed",
+            )
             if score_change_event and score_changed_enabled:
-                key = f"{user_id}:{game.id}:score_changed:{score_change_event.new_away_score}-{score_change_event.new_home_score}"
-                if key not in candidate_dedupe_keys:
-                    candidate_dedupe_keys.add(key)
-                    candidate_alerts.append(
-                        SentAlert(
-                            user_id=user_id,
-                            game_id=game.id,
-                            alert_type="score_changed",
-                            delivery_channel="email",
-                            delivery_status="sent",
-                            dedupe_key=key,
-                            metadata_json={
-                                "status": score_change_event.status,
-                                "period": score_change_event.period,
-                                "clock": score_change_event.clock or "",
-                                "previous_home_score": score_change_event.previous_home_score,
-                                "previous_away_score": score_change_event.previous_away_score,
-                                "new_home_score": score_change_event.new_home_score,
-                                "new_away_score": score_change_event.new_away_score,
-                                "scoring_side": score_change_event.scoring_side,
-                                "is_inferred_goal": score_change_event.is_inferred_goal,
-                            },
-                        )
-                    )
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="score_changed",
+                    dedupe_key=f"{user_id}:{game.id}:score_changed:{score_change_event.new_away_score}-{score_change_event.new_home_score}",
+                    metadata_json={
+                        "status": score_change_event.status,
+                        "period": score_change_event.period,
+                        "clock": score_change_event.clock or "",
+                        "previous_home_score": score_change_event.previous_home_score,
+                        "previous_away_score": score_change_event.previous_away_score,
+                        "new_home_score": score_change_event.new_home_score,
+                        "new_away_score": score_change_event.new_away_score,
+                        "scoring_side": score_change_event.scoring_side,
+                        "is_inferred_goal": score_change_event.is_inferred_goal,
+                    },
+                )
 
-            default_close = defaults_by_key.get((user_id, game.league, "close_game_late"))
-            override_close = overrides_by_key.get((user_id, game.id, "close_game_late"))
-            close_enabled, close_margin, close_seconds, _ = _effective_alert_settings(default_close, override_close)
+            close_enabled, close_margin, close_seconds, _ = _alert_settings_for(
+                defaults_by_key,
+                overrides_by_key,
+                user_id=user_id,
+                game=game,
+                alert_type="close_game_late",
+            )
             if _should_trigger_close_game_late(game, close_enabled, close_margin, close_seconds):
-                key = f"{user_id}:{game.id}:close_game_late"
-                if key not in candidate_dedupe_keys:
-                    candidate_dedupe_keys.add(key)
-                    candidate_alerts.append(
-                        SentAlert(
-                            user_id=user_id,
-                            game_id=game.id,
-                            alert_type="close_game_late",
-                            delivery_channel="email",
-                            delivery_status="sent",
-                            dedupe_key=key,
-                            metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
-                        )
-                    )
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="close_game_late",
+                    dedupe_key=f"{user_id}:{game.id}:close_game_late",
+                    metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
+                )
 
-            default_inning = defaults_by_key.get((user_id, game.league, "inning_start"))
-            override_inning = overrides_by_key.get((user_id, game.id, "inning_start"))
-            inning_enabled, _, _, inning_threshold = _effective_alert_settings(default_inning, override_inning)
+            inning_enabled, _, _, inning_threshold = _alert_settings_for(
+                defaults_by_key,
+                overrides_by_key,
+                user_id=user_id,
+                game=game,
+                alert_type="inning_start",
+            )
             if _should_trigger_inning_start(game, inning_enabled, inning_threshold):
-                key = f"{user_id}:{game.id}:inning_start"
-                if key not in candidate_dedupe_keys:
-                    candidate_dedupe_keys.add(key)
-                    candidate_alerts.append(
-                        SentAlert(
-                            user_id=user_id,
-                            game_id=game.id,
-                            alert_type="inning_start",
-                            delivery_channel="email",
-                            delivery_status="sent",
-                            dedupe_key=key,
-                            metadata_json={"period": game.period or 0, "status": game.status},
-                        )
-                    )
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="inning_start",
+                    dedupe_key=f"{user_id}:{game.id}:inning_start",
+                    metadata_json={"period": game.period or 0, "status": game.status},
+                )
 
     if not candidate_alerts:
         return 0
@@ -485,7 +520,7 @@ def _evaluate_and_record_alerts_batched(
     return len(to_insert)
 
 
-def _upsert_game(db: Session, league: str, payload: ProviderGame, team_map: dict[str, int]) -> GameUpdateResult:
+def _upsert_game(db: Session, league: str, payload: ScoreboardGame, team_map: dict[str, int]) -> GameUpdateResult:
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
     if not home_id or not away_id:
@@ -563,6 +598,19 @@ def _stored_odds_signature(row: GameOddsCurrent) -> tuple[tuple[str, str | None,
     )
 
 
+def _build_current_odds_outcomes(odds: OddsSnapshot) -> list[GameOddsOutcomeCurrent]:
+    return [
+        GameOddsOutcomeCurrent(
+            outcome_key=outcome.outcome_key,
+            outcome_label=outcome.outcome_label,
+            outcome_order=outcome.outcome_order,
+            price_american=outcome.price_american,
+            team_side=outcome.team_side,
+        )
+        for outcome in odds.outcomes
+    ]
+
+
 def _upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
     row = db.scalar(
         select(GameOddsCurrent).where(
@@ -579,18 +627,7 @@ def _upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
         row.bookmaker = odds.bookmaker
         row.fetched_at = odds.last_update or datetime.now(timezone.utc)
         row.outcomes.clear()
-        row.outcomes.extend(
-            [
-                GameOddsOutcomeCurrent(
-                    outcome_key=outcome.outcome_key,
-                    outcome_label=outcome.outcome_label,
-                    outcome_order=outcome.outcome_order,
-                    price_american=outcome.price_american,
-                    team_side=outcome.team_side,
-                )
-                for outcome in odds.outcomes
-            ]
-        )
+        row.outcomes.extend(_build_current_odds_outcomes(odds))
         return True
 
     row = GameOddsCurrent(
@@ -600,35 +637,9 @@ def _upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
         bookmaker=odds.bookmaker,
         fetched_at=odds.last_update or datetime.now(timezone.utc),
     )
-    row.outcomes.extend(
-        [
-            GameOddsOutcomeCurrent(
-                outcome_key=outcome.outcome_key,
-                outcome_label=outcome.outcome_label,
-                outcome_order=outcome.outcome_order,
-                price_american=outcome.price_american,
-                team_side=outcome.team_side,
-            )
-            for outcome in odds.outcomes
-        ]
-    )
+    row.outcomes.extend(_build_current_odds_outcomes(odds))
     db.add(row)
     return True
-
-
-def _delete_game_odds(db: Session, game_id: int) -> bool:
-    row = db.scalar(
-        select(GameOddsCurrent).where(
-            GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
-        )
-    )
-    if not row:
-        return False
-    db.delete(row)
-    return True
-
 
 def _select_best_odds_for_game(
     options: list[OddsSnapshot] | OddsSnapshot | None,
@@ -655,31 +666,10 @@ def _select_best_odds_for_game(
     return closest
 
 
-def _serialize_games(games: list[ProviderGame]) -> str:
-    payload = [
-        {
-            "id": game.external_game_id,
-            "status": game.status,
-            "home": game.home_score,
-            "away": game.away_score,
-            "period": game.period,
-            "clock": game.clock,
-            "final": game.is_final,
-            "start": game.scheduled_start_time.isoformat(),
-        }
-        for game in sorted(games, key=lambda item: item.external_game_id)
-    ]
-    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
-
-
-def _hash_payload(payload: str) -> str:
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
 def _upsert_games_and_collect(
     db: Session,
     league: str,
-    provider_games: list[ProviderGame],
+    scoreboard_games: list[ScoreboardGame],
     team_map: dict[str, int],
     team_names: dict[int, str],
     *,
@@ -689,16 +679,16 @@ def _upsert_games_and_collect(
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}
     score_change_events: dict[int, ScoreChangeEvent] = {}
-    for provider_game in provider_games:
-        if only_external_ids is not None and provider_game.external_game_id not in only_external_ids:
+    for scoreboard_game in scoreboard_games:
+        if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
-        result = _upsert_game(db, league, provider_game, team_map)
+        result = _upsert_game(db, league, scoreboard_game, team_map)
         if result.did_update:
             updated += 1
         if result.game_id:
             touched_game_ids.append(result.game_id)
-            home_id = team_map.get(provider_game.home_external_team_id)
-            away_id = team_map.get(provider_game.away_external_team_id)
+            home_id = team_map.get(scoreboard_game.home_external_team_id)
+            away_id = team_map.get(scoreboard_game.away_external_team_id)
             home_name = team_names.get(home_id) if home_id else None
             away_name = team_names.get(away_id) if away_id else None
             if home_name and away_name:
@@ -737,14 +727,14 @@ def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> 
     return [game for game in rows if game.id not in existing_ids]
 
 
-def _set_fetch_telemetry_context(provider: SportsProvider, db: Session | None) -> None:
+def _set_fetch_telemetry_context(provider: ScoreboardFetcher, db: Session | None) -> None:
     provider_context = getattr(provider, "set_telemetry_context", None)
     if callable(provider_context):
         provider_context(db, None)
     set_odds_telemetry_context(db, None)
 
 
-def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
+def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
     league = _normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
@@ -752,8 +742,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
         _set_fetch_telemetry_context(provider, db)
         _assert_league_enabled(db, league)
         requests = build_catalog_requests(db, league, now=now)
-        team_map = _team_id_map(db, league)
-        team_names = _team_name_map(db, league)
+        team_map, team_names = _league_team_maps(db, league)
         all_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, game_key_by_id, score_change_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
@@ -818,7 +807,7 @@ def run_catalog_sync(provider: SportsProvider, league: str = "NBA") -> dict[str,
         db.close()
 
 
-def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, int | str]:
+def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
     league = _normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
@@ -846,8 +835,7 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
                 "mode": mode,
             }
 
-        team_map = _team_id_map(db, league)
-        team_names = _team_name_map(db, league)
+        team_map, team_names = _league_team_maps(db, league)
         provider_games = provider.fetch_games(league, requests)
         candidate_ids = {
             external_id
@@ -925,6 +913,6 @@ def run_live_sync(provider: SportsProvider, league: str = "NBA") -> dict[str, in
         db.close()
 
 
-def run_ingest_cycle(provider: SportsProvider) -> dict[str, int | str]:
+def run_ingest_cycle(provider: ScoreboardFetcher) -> dict[str, int | str]:
     # Legacy compatibility path used by existing tests and tooling.
     return run_catalog_sync(provider, league="NBA")

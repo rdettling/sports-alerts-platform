@@ -1,5 +1,4 @@
-from worker.providers.espn import EspnScoreboardProvider
-from worker.providers.base import ScoreboardRequest
+from worker.scoreboard import EspnScoreboardClient
 
 
 def test_provider_parses_espn_payload_shape():
@@ -25,8 +24,8 @@ def test_provider_parses_espn_payload_shape():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260406")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", ["20260406"])
 
     assert len(schedule) == 1
     game = schedule[0]
@@ -65,8 +64,8 @@ def test_provider_builds_nba_context_label_from_round_and_series():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260613")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", ["20260613"])
     assert len(schedule) == 1
     assert schedule[0].context_label == "NBA Finals - Game 5 · NY leads series 3-1"
 
@@ -95,8 +94,8 @@ def test_provider_builds_world_cup_stage_context_label():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("WORLD_CUP", [ScoreboardRequest(date="20260612")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("WORLD_CUP", ["20260612"])
     assert len(schedule) == 1
     assert schedule[0].context_label == "Group Stage"
 
@@ -125,8 +124,8 @@ def test_provider_skips_if_necessary_playoff_games():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260525")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", ["20260525"])
 
     assert schedule == []
 
@@ -159,8 +158,8 @@ def test_provider_uses_mlb_short_detail_for_half_inning_clock():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260527")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", ["20260527"])
     assert len(schedule) == 1
     assert schedule[0].clock == "Top 6th"
 
@@ -188,8 +187,8 @@ def test_provider_uses_numeric_team_ids_for_mlb():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260528")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", ["20260528"])
     assert len(schedule) == 1
     assert schedule[0].home_external_team_id == "4"
     assert schedule[0].away_external_team_id == "11"
@@ -224,8 +223,8 @@ def test_provider_maps_status_postponed_payload_to_postponed():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("MLB", [ScoreboardRequest(date="20260611")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLB", ["20260611"])
     assert len(schedule) == 1
     assert schedule[0].status == "postponed"
     assert schedule[0].is_final is False
@@ -254,6 +253,6 @@ def test_provider_skips_events_with_invalid_placeholder_team_ids():
         ]
     }
 
-    provider = EspnScoreboardProvider(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("NBA", [ScoreboardRequest(date="20260528")])
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("NBA", ["20260528"])
     assert schedule == []

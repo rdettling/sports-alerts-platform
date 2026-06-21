@@ -13,7 +13,7 @@ from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
 from worker.ingest import run_catalog_sync, run_live_sync
-from worker.providers.factory import get_provider
+from worker.scoreboard import EspnScoreboardClient
 
 logger = logging.getLogger(__name__)
 SCHEDULER_MAX_SLEEP_SECONDS = settings.scheduler_tick_seconds
@@ -219,7 +219,7 @@ def _log_job_success(
 
 
 def _run_catalog_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
-    provider = get_provider()
+    provider = EspnScoreboardClient()
     result = run_catalog_sync(provider=provider, league=league)
     db = SessionLocal()
     try:
@@ -288,7 +288,7 @@ def _pull_live_sync_forward(league: str) -> None:
 
 
 def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
-    provider = get_provider()
+    provider = EspnScoreboardClient()
     result = run_live_sync(provider=provider, league=league)
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:

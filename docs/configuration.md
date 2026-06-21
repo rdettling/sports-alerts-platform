@@ -70,7 +70,7 @@ Notes:
 
 ## Worker Config
 
-The worker reads ingest cadence, odds, and provider settings.
+The worker reads ingest cadence and odds settings.
 
 Common values:
 

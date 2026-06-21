@@ -10,7 +10,6 @@ class WorkerSettings(BaseSettings):
     mlb_live_sync_interval_seconds: int = 300
     world_cup_live_sync_interval_seconds: int = 180
     odds_pregame_window_hours: int = 24
-    scoreboard_provider: str = "espn"
     odds_provider: str = "the_odds_api"
     odds_api_key: str
     odds_api_base_url: str = "https://api.the-odds-api.com/v4/sports"

@@ -22,7 +22,7 @@ from app.services.leagues import ensure_league_settings
 from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
 from worker.odds import OddsOutcome, OddsSnapshot
 from worker.planner import build_live_requests
-from worker.providers.base import ProviderGame, ScoreboardRequest
+from worker.scoreboard import ScoreboardGame
 
 
 def make_snapshot(
@@ -64,8 +64,8 @@ def make_game(
     clock: str | None = None,
     is_final: bool = False,
     context_label: str | None = None,
-) -> ProviderGame:
-    return ProviderGame(
+) -> ScoreboardGame:
+    return ScoreboardGame(
         external_game_id=external_game_id,
         home_external_team_id=home_external_team_id,
         away_external_team_id=away_external_team_id,
@@ -81,7 +81,7 @@ def make_game(
 
 
 class StaticProvider:
-    def __init__(self, games: list[ProviderGame] | None = None, *, error: Exception | None = None):
+    def __init__(self, games: list[ScoreboardGame] | None = None, *, error: Exception | None = None):
         self.games = games or []
         self.error = error
 
@@ -178,7 +178,7 @@ class ContextLabelProvider:
 class RecordingCatalogProvider:
     def __init__(self, scheduled_start_time: datetime):
         self.scheduled_start_time = scheduled_start_time
-        self.requests: list[ScoreboardRequest] = []
+        self.requests: list[str] = []
 
     def fetch_games(self, league, requests):
         self.requests = list(requests)
@@ -222,7 +222,17 @@ class TelemetryRecordingProvider:
 
 
 def make_success_provider() -> StaticProvider:
-    return StaticProvider([make_game(external_game_id="game-1", home_external_team_id="1", away_external_team_id="2", status="scheduled")])
+    return StaticProvider(
+        [
+            make_game(
+                external_game_id="game-1",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=1),
+                status="scheduled",
+            )
+        ]
+    )
 
 
 def make_live_close_provider() -> StaticProvider:
@@ -426,7 +436,7 @@ def test_build_live_requests_includes_previous_scoreboard_date_for_midnight_utc_
     db_session.commit()
 
     requests = build_live_requests(db_session, "NBA", now=now)
-    assert [request.date for request in requests] == ["20260610", "20260611"]
+    assert requests == ["20260610", "20260611"]
 
 
 def test_ingest_respects_game_override_over_league_default(db_session):
@@ -747,7 +757,7 @@ def test_catalog_sync_uses_fixed_horizon_even_with_existing_games(db_session, mo
     result = run_catalog_sync(provider, league="MLB")
 
     assert result["status"] == "success"
-    assert [request.date for request in provider.requests] == [
+    assert provider.requests == [
         "20260617",
         "20260618",
         "20260619",
