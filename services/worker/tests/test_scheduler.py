@@ -236,7 +236,7 @@ def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
     assert result["mode"] == "waiting_for_start"
 
 
-def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
+def test_run_live_sync_job_uses_league_live_interval_when_start_missing(monkeypatch):
     monkeypatch.setattr(
         "worker.scheduler.run_live_sync",
         lambda provider, league: {
@@ -249,11 +249,11 @@ def test_run_live_sync_job_uses_pregame_retry_when_start_missing(monkeypatch):
         },
     )
     next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+    assert next_seconds == scheduler.settings.mlb_live_sync_interval_seconds
     assert result["mode"] == "waiting_for_start"
 
 
-def test_run_live_sync_job_uses_pregame_retry_when_start_is_past(monkeypatch):
+def test_run_live_sync_job_uses_league_live_interval_when_start_is_past(monkeypatch):
     target = datetime.now(timezone.utc) - timedelta(minutes=5)
     monkeypatch.setattr(
         "worker.scheduler.run_live_sync",
@@ -267,7 +267,7 @@ def test_run_live_sync_job_uses_pregame_retry_when_start_is_past(monkeypatch):
         },
     )
     next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == scheduler.settings.live_sync_pregame_retry_seconds
+    assert next_seconds == scheduler.settings.mlb_live_sync_interval_seconds
     assert result["mode"] == "waiting_for_start"
 
 

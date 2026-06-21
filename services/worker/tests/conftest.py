@@ -38,7 +38,6 @@ os.environ.update(
         "LIVE_SYNC_INTERVAL_SECONDS": "120",
         "NBA_LIVE_SYNC_INTERVAL_SECONDS": "120",
         "MLB_LIVE_SYNC_INTERVAL_SECONDS": "300",
-        "LIVE_SYNC_PREGAME_RETRY_SECONDS": "600",
         "ODDS_PREGAME_WINDOW_HOURS": "24",
         "TELEMETRY_RAW_EVENTS_ENABLED": "true",
         "DEV_MODE": "false",

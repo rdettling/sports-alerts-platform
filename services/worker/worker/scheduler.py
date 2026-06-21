@@ -30,6 +30,16 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _league_live_interval_seconds(league: str) -> int:
+    if league == "NBA":
+        interval = settings.nba_live_sync_interval_seconds
+    elif league == "MLB":
+        interval = settings.mlb_live_sync_interval_seconds
+    else:
+        interval = settings.world_cup_live_sync_interval_seconds
+    return max(1, interval)
+
+
 def _sync_job_targets_disabled_league(job: WorkerJob, active_leagues: set[str]) -> bool:
     return (
         job.job_type in {CATALOG_SYNC_JOB, LIVE_SYNC_JOB}
@@ -282,13 +292,7 @@ def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     result = run_live_sync(provider=provider, league=league)
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:
-        if league == "NBA":
-            fallback = settings.nba_live_sync_interval_seconds
-        elif league == "MLB":
-            fallback = settings.mlb_live_sync_interval_seconds
-        else:
-            fallback = settings.world_cup_live_sync_interval_seconds
-        next_poll = int(result.get("next_poll_seconds", fallback))
+        next_poll = int(result.get("next_poll_seconds", _league_live_interval_seconds(league)))
         return max(1, next_poll), result
 
     mode = str(result.get("mode", "no_upcoming"))
@@ -302,10 +306,10 @@ def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
                 seconds_until_start = int((next_scheduled - _utcnow()).total_seconds())
                 if seconds_until_start > 0:
                     return max(1, seconds_until_start), result
-                return max(1, settings.live_sync_pregame_retry_seconds), result
+                return _league_live_interval_seconds(league), result
             except ValueError:
                 pass
-        return max(1, settings.live_sync_pregame_retry_seconds), result
+        return _league_live_interval_seconds(league), result
 
     # no_upcoming or unknown
     next_poll = int(result.get("next_poll_seconds", settings.catalog_sync_interval_seconds))

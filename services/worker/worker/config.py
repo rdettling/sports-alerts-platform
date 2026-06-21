@@ -9,7 +9,6 @@ class WorkerSettings(BaseSettings):
     nba_live_sync_interval_seconds: int = 120
     mlb_live_sync_interval_seconds: int = 300
     world_cup_live_sync_interval_seconds: int = 180
-    live_sync_pregame_retry_seconds: int = 600
     odds_pregame_window_hours: int = 24
     scoreboard_provider: str = "espn"
     odds_provider: str = "the_odds_api"
