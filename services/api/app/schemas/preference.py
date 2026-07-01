@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from app.services.leagues import list_supported_leagues
 
-ALERT_TYPES = ["game_start", "close_game_late", "inning_start", "score_changed", "final_result"]
+ALERT_TYPES = ["game_start", "close_game_late", "inning_start", "second_half_start", "score_changed", "final_result"]
 SUPPORTED_LEAGUES = list_supported_leagues()
 
 

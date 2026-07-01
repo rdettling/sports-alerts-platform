@@ -649,6 +649,66 @@ def test_world_cup_score_changed_ignores_score_decreases(db_session):
     assert len(sent) == 0
 
 
+def test_world_cup_second_half_start_alert_triggers_once_on_resume(db_session):
+    user = User(email="world-cup-second-half@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="second_half_start", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 0, "away_score": 0, "period": 1, "clock": "44'"},
+            {"home_score": 0, "away_score": 0, "period": 2, "clock": "HT"},
+            {"home_score": 0, "away_score": 0, "period": 2, "clock": "46'"},
+            {"home_score": 0, "away_score": 0, "period": 2, "clock": "48'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "second_half_start")).all()
+    assert len(sent) == 1
+    assert sent[0].metadata_json["period"] == 2
+    assert sent[0].metadata_json["clock"] == "46'"
+
+
+def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
+    user = User(email="world-cup-halftime@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="second_half_start", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 0, "away_score": 0, "period": 1, "clock": "44'"},
+            {"home_score": 0, "away_score": 0, "period": 2, "clock": "HT"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "second_half_start")).all()
+    assert len(sent) == 0
+
+
 def test_ingest_persists_current_odds(db_session, monkeypatch):
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(

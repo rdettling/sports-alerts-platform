@@ -185,3 +185,29 @@ def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
     assert subject == "Score update · MEX 2–2 USA"
     assert "Score update · MEX 2–2 USA" in text_body
     assert "68'" in text_body
+
+
+def test_world_cup_second_half_start_uses_resume_copy():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-4",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=0,
+        away_score=0,
+        period=2,
+        clock="46'",
+    )
+    alert = _mk_alert("second_half_start")
+    alert.metadata_json = {"status": "in_progress", "period": 2, "clock": "46'"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Second half · MEX 0–0 USA"
+    assert "Second half is live now · MEX 0–0 USA" in text_body
+    assert "46'" in text_body

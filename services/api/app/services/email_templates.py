@@ -10,6 +10,7 @@ ALERT_LABELS = {
     "game_start": "Game start",
     "close_game_late": "Close game late",
     "inning_start": "Inning start",
+    "second_half_start": "Second half start",
     "score_changed": "Score change",
     "final_result": "Final result",
 }
@@ -226,6 +227,8 @@ def _primary_status_line(alert: SentAlert, game: Game, away_abbr: str, home_abbr
             scorer = away_abbr if scoring_side == "away" else home_abbr if scoring_side == "home" else "A team"
             return f"Goal for {scorer} · {away_abbr} {scoreline} {home_abbr}"
         return f"Score update · {away_abbr} {scoreline} {home_abbr}"
+    if alert.alert_type == "second_half_start":
+        return f"Second half is live now · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
         period = _format_period(game, league)
@@ -264,6 +267,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
         scoreline = _scoreline_from_values(new_away_score, new_home_score)
         prefix = "Goal" if is_inferred_goal else "Score update"
         return f"{prefix} · {away_abbr} {scoreline} {home_abbr}"
+    if alert.alert_type == "second_half_start":
+        return f"Second half · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "inning_start":

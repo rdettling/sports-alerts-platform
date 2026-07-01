@@ -142,6 +142,13 @@ def create_admin_test_alert(
         period = 1
         clock = "18'"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(minutes=25)
+    elif payload.alert_type == "second_half_start":
+        game_status = "in_progress"
+        home_score = 0
+        away_score = 0
+        period = 2
+        clock = "46'"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=1)
 
     target_game = Game(
         external_game_id=f"admin-test-game-{uuid4()}",
@@ -182,7 +189,7 @@ def create_admin_test_alert(
                 "is_inferred_goal": True,
             }
             if payload.alert_type == "score_changed"
-            else {"source": "dev_test"}
+            else {"source": "dev_test", "status": game_status, "period": period, "clock": clock}
         ),
     )
     db.add(sent_alert)

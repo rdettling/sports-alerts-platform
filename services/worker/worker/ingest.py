@@ -15,7 +15,7 @@ from app.db.models import (
     Team,
 )
 from app.services.leagues import get_active_leagues, league_supports_odds, list_supported_leagues
-from worker.alerts import ScoreChangeEvent, evaluate_and_record_alerts
+from worker.alerts import ScoreChangeEvent, WorldCupDerivedEvents, evaluate_and_record_alerts
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
@@ -36,7 +36,7 @@ class ScoreboardFetcher(Protocol):
 class GameUpdateResult:
     did_update: bool
     game_id: int | None
-    score_change_event: ScoreChangeEvent | None = None
+    world_cup_events: WorldCupDerivedEvents | None = None
 
 
 def _normalize_league(league: str) -> str:
@@ -83,43 +83,59 @@ def _league_team_maps(db: Session, league: str) -> tuple[dict[str, int], dict[in
     )
 
 
-def _classify_world_cup_score_change(previous: Game | None, payload: ScoreboardGame, league: str) -> ScoreChangeEvent | None:
+def _is_world_cup_live_second_half(*, status: str, period: int | None, clock: str | None) -> bool:
+    if status not in {"in_progress", "live"}:
+        return False
+    if period != 2:
+        return False
+    normalized_clock = (clock or "").strip().upper()
+    return normalized_clock not in {"HT", "HALFTIME"}
+
+
+def _classify_world_cup_derived_events(previous: Game | None, payload: ScoreboardGame, league: str) -> WorldCupDerivedEvents | None:
     if league != "WORLD_CUP" or previous is None:
         return None
-    if payload.status not in {"in_progress", "live"}:
-        return None
-    if previous.home_score is None or previous.away_score is None:
-        return None
-    if payload.home_score is None or payload.away_score is None:
-        return None
+    score_change: ScoreChangeEvent | None = None
+    if (
+        payload.status in {"in_progress", "live"}
+        and previous.home_score is not None
+        and previous.away_score is not None
+        and payload.home_score is not None
+        and payload.away_score is not None
+    ):
+        home_delta = payload.home_score - previous.home_score
+        away_delta = payload.away_score - previous.away_score
+        if not (home_delta == 0 and away_delta == 0) and not (home_delta < 0 or away_delta < 0):
+            if home_delta == 0 and away_delta == 1:
+                scoring_side = "away"
+                is_inferred_goal = True
+            elif away_delta == 0 and home_delta == 1:
+                scoring_side = "home"
+                is_inferred_goal = True
+            else:
+                scoring_side = None
+                is_inferred_goal = False
 
-    home_delta = payload.home_score - previous.home_score
-    away_delta = payload.away_score - previous.away_score
-    if home_delta == 0 and away_delta == 0:
-        return None
-    if home_delta < 0 or away_delta < 0:
-        return None
-    if home_delta == 0 and away_delta == 1:
-        scoring_side = "away"
-        is_inferred_goal = True
-    elif away_delta == 0 and home_delta == 1:
-        scoring_side = "home"
-        is_inferred_goal = True
-    else:
-        scoring_side = None
-        is_inferred_goal = False
+            score_change = ScoreChangeEvent(
+                previous_home_score=previous.home_score,
+                previous_away_score=previous.away_score,
+                new_home_score=payload.home_score,
+                new_away_score=payload.away_score,
+                scoring_side=scoring_side,
+                is_inferred_goal=is_inferred_goal,
+                period=payload.period,
+                clock=payload.clock,
+                status=payload.status,
+            )
 
-    return ScoreChangeEvent(
-        previous_home_score=previous.home_score,
-        previous_away_score=previous.away_score,
-        new_home_score=payload.home_score,
-        new_away_score=payload.away_score,
-        scoring_side=scoring_side,
-        is_inferred_goal=is_inferred_goal,
-        period=payload.period,
-        clock=payload.clock,
-        status=payload.status,
+    second_half_started = (
+        not payload.is_final
+        and not _is_world_cup_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
+        and _is_world_cup_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
     )
+    if score_change is None and not second_half_started:
+        return None
+    return WorldCupDerivedEvents(score_change=score_change, second_half_started=second_half_started)
 
 
 
@@ -138,7 +154,7 @@ def _upsert_game(db: Session, league: str, payload: ScoreboardGame, team_map: di
 
     existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == league))
     if existing:
-        score_change_event = _classify_world_cup_score_change(existing, payload, league)
+        world_cup_events = _classify_world_cup_derived_events(existing, payload, league)
         before = (
             existing.context_label,
             existing.status,
@@ -165,7 +181,7 @@ def _upsert_game(db: Session, league: str, payload: ScoreboardGame, team_map: di
             existing.clock,
             existing.is_final,
         )
-        return GameUpdateResult(did_update=before != after, game_id=existing.id, score_change_event=score_change_event)
+        return GameUpdateResult(did_update=before != after, game_id=existing.id, world_cup_events=world_cup_events)
 
     created = Game(
         external_game_id=payload.external_game_id,
@@ -277,11 +293,11 @@ def _upsert_games_and_collect(
     team_names: dict[int, str],
     *,
     only_external_ids: set[str] | None = None,
-) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, ScoreChangeEvent]]:
+) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, WorldCupDerivedEvents]]:
     updated = 0
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}
-    score_change_events: dict[int, ScoreChangeEvent] = {}
+    world_cup_events: dict[int, WorldCupDerivedEvents] = {}
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
@@ -296,9 +312,9 @@ def _upsert_games_and_collect(
             away_name = team_names.get(away_id) if away_id else None
             if home_name and away_name:
                 game_key_by_id[result.game_id] = game_key(home_name, away_name)
-            if result.score_change_event is not None:
-                score_change_events[result.game_id] = result.score_change_event
-    return updated, touched_game_ids, game_key_by_id, score_change_events
+            if result.world_cup_events is not None:
+                world_cup_events[result.game_id] = result.world_cup_events
+    return updated, touched_game_ids, game_key_by_id, world_cup_events
 
 
 def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> list[Game]:
@@ -347,7 +363,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
         requests = build_catalog_requests(db, league, now=now)
         team_map, team_names = _league_team_maps(db, league)
         all_games = provider.fetch_games(league, requests)
-        updated, touched_game_ids, game_key_by_id, score_change_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
+        updated, touched_game_ids, game_key_by_id, world_cup_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
         odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
         odds_calls = 0
@@ -370,7 +386,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, score_change_events=score_change_events)
+        alerts_created = evaluate_and_record_alerts(db, touched_games, world_cup_events=world_cup_events)
         db.commit()
 
         logger.info(
@@ -450,7 +466,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
                 )
             ).all()
         }
-        updated, touched_game_ids, _, score_change_events = _upsert_games_and_collect(
+        updated, touched_game_ids, _, world_cup_events = _upsert_games_and_collect(
             db,
             league,
             provider_games,
@@ -460,7 +476,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
         )
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, score_change_events=score_change_events)
+        alerts_created = evaluate_and_record_alerts(db, touched_games, world_cup_events=world_cup_events)
         has_live_games = bool(
             db.scalar(
                 select(func.count(Game.id)).where(

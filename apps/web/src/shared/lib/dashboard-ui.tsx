@@ -14,6 +14,7 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   game_start: "Game start",
   close_game_late: "Close game late",
   inning_start: "Inning start",
+  second_half_start: "Second half start",
   score_changed: "Score change",
   final_result: "Final result",
 };

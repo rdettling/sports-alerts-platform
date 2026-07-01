@@ -153,7 +153,7 @@ def test_alert_preferences_get_and_update(client):
     assert len(nba_group["preferences"]) == 3
     assert {item["alert_type"] for item in nba_group["preferences"]} == {"game_start", "close_game_late", "final_result"}
     assert {item["alert_type"] for item in mlb_group["preferences"]} == {"game_start", "inning_start", "final_result"}
-    assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "score_changed", "final_result"}
+    assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "second_half_start", "score_changed", "final_result"}
 
     update_response = client.put(
         "/alert-preferences/leagues/NBA/close_game_late",

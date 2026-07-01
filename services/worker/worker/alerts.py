@@ -35,6 +35,12 @@ class ScoreChangeEvent:
     status: str
 
 
+@dataclass(frozen=True)
+class WorldCupDerivedEvents:
+    score_change: ScoreChangeEvent | None = None
+    second_half_started: bool = False
+
+
 def _parse_clock_seconds(clock: str | None) -> int | None:
     if not clock:
         return None
@@ -252,11 +258,11 @@ def evaluate_and_record_alerts(
     db: Session,
     games: list[Game],
     *,
-    score_change_events: dict[int, ScoreChangeEvent] | None = None,
+    world_cup_events: dict[int, WorldCupDerivedEvents] | None = None,
 ) -> int:
     if not games:
         return 0
-    score_change_events = score_change_events or {}
+    world_cup_events = world_cup_events or {}
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
     leagues = {game.league for game in games}
@@ -297,7 +303,8 @@ def evaluate_and_record_alerts(
                     metadata_json={"status": game.status},
                 )
 
-            score_change_event = score_change_events.get(game.id)
+            world_cup_event = world_cup_events.get(game.id)
+            score_change_event = world_cup_event.score_change if world_cup_event is not None else None
             score_changed_enabled, _, _, _ = _alert_settings_for(
                 defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="score_changed"
             )
@@ -320,6 +327,20 @@ def evaluate_and_record_alerts(
                         "scoring_side": score_change_event.scoring_side,
                         "is_inferred_goal": score_change_event.is_inferred_goal,
                     },
+                )
+
+            second_half_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="second_half_start"
+            )
+            if world_cup_event and world_cup_event.second_half_started and second_half_enabled:
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="second_half_start",
+                    dedupe_key=f"{user_id}:{game.id}:second_half_start",
+                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
             close_enabled, close_margin, close_seconds, _ = _alert_settings_for(
