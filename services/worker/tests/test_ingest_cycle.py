@@ -709,6 +709,103 @@ def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
     assert len(sent) == 0
 
 
+def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db_session, caplog):
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "90+5'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "ET"},
+        ]
+    )
+
+    with caplog.at_level("INFO", logger="worker.ingest"):
+        assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+        assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+
+    assert "World Cup state transition external_game_id=game-world-cup-live" in caplog.text
+    assert "period=2->3" in caplog.text
+    assert "90+5'" in caplog.text
+    assert "ET" in caplog.text
+    assert "extra_time=False->True" in caplog.text
+    assert "second_half_live=True->False" in caplog.text
+
+
+def test_world_cup_penalty_kicks_alert_triggers_once_in_late_tied_extra_time(db_session):
+    user = User(email="world-cup-penalties@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="penalty_kicks", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "116'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "117'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "118'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "penalty_kicks")).all()
+    assert len(sent) == 1
+    assert sent[0].metadata_json["period"] == 3
+    assert sent[0].metadata_json["clock"] == "117'"
+
+
+def test_world_cup_penalty_kicks_alert_does_not_trigger_before_threshold_or_without_tie(db_session):
+    user = User(email="world-cup-penalties-blocked@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="penalty_kicks", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "90+5'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "116'"},
+            {"home_score": 2, "away_score": 1, "period": 3, "clock": "117'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "penalty_kicks")).all()
+    assert len(sent) == 0
+
+
+def test_world_cup_transition_logging_marks_penalty_kicks_window(db_session, caplog):
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "116'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "117'"},
+        ]
+    )
+
+    with caplog.at_level("INFO", logger="worker.ingest"):
+        assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+        assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+
+    assert "World Cup state transition external_game_id=game-world-cup-live" in caplog.text
+    assert "period=3->3" in caplog.text
+    assert "penalty_kicks_window=False->True" in caplog.text
+
+
 def test_ingest_persists_current_odds(db_session, monkeypatch):
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(

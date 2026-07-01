@@ -134,6 +134,20 @@ def test_admin_test_email_endpoint_accepts_world_cup_second_half_start(client):
     assert body["alert_type"] == "second_half_start"
 
 
+def test_admin_test_email_endpoint_accepts_world_cup_penalty_kicks(client):
+    headers = _auth_headers(client, email="dev-alerts-world-cup-penalties@example.com", role="admin")
+
+    response = client.post(
+        "/alerts/admin/test-email",
+        headers=headers,
+        json={"league": "WORLD_CUP", "alert_type": "penalty_kicks"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["league"] == "WORLD_CUP"
+    assert body["alert_type"] == "penalty_kicks"
+
+
 def test_admin_test_email_endpoint_rejects_invalid_league_alert_combo(client):
     headers = _auth_headers(client, email="dev-alerts-invalid@example.com", role="admin")
 

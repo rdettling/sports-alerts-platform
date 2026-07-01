@@ -56,6 +56,19 @@ def _parse_clock_seconds(clock: str | None) -> int | None:
         return None
 
 
+def _parse_soccer_minute(clock: str | None) -> int | None:
+    if not clock:
+        return None
+    text = clock.strip().replace("'", "")
+    if not text:
+        return None
+    base_text = text.split("+", 1)[0].strip()
+    try:
+        return int(base_text)
+    except ValueError:
+        return None
+
+
 def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
@@ -224,6 +237,23 @@ def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold:
     return game.period >= (inning_threshold or 7)
 
 
+def _should_trigger_penalty_kicks(game: Game, is_enabled: bool) -> bool:
+    if not is_enabled:
+        return False
+    if game.league != "WORLD_CUP":
+        return False
+    if game.is_final or game.status not in {"in_progress", "live"}:
+        return False
+    if game.home_score is None or game.away_score is None:
+        return False
+    if game.home_score != game.away_score:
+        return False
+    if (game.period or 0) < 3:
+        return False
+    minute = _parse_soccer_minute(game.clock)
+    return minute is not None and minute >= 117
+
+
 def _append_candidate_alert(
     candidate_alerts: list[SentAlert],
     candidate_dedupe_keys: set[str],
@@ -340,6 +370,20 @@ def evaluate_and_record_alerts(
                     game_id=game.id,
                     alert_type="second_half_start",
                     dedupe_key=f"{user_id}:{game.id}:second_half_start",
+                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                )
+
+            penalty_kicks_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="penalty_kicks"
+            )
+            if _should_trigger_penalty_kicks(game, penalty_kicks_enabled):
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="penalty_kicks",
+                    dedupe_key=f"{user_id}:{game.id}:penalty_kicks",
                     metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 

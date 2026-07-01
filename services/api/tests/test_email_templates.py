@@ -211,3 +211,29 @@ def test_world_cup_second_half_start_uses_resume_copy():
     assert subject == "Second half · MEX 0–0 USA"
     assert "Second half is live now · MEX 0–0 USA" in text_body
     assert "46'" in text_body
+
+
+def test_world_cup_penalty_kicks_uses_anticipatory_copy():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-5",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=1,
+        away_score=1,
+        period=3,
+        clock="117'",
+    )
+    alert = _mk_alert("penalty_kicks")
+    alert.metadata_json = {"status": "in_progress", "period": 3, "clock": "117'"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Penalty kicks likely soon · MEX 1–1 USA"
+    assert "Match is still tied deep in extra time · MEX 1–1 USA" in text_body
+    assert "117'" in text_body
