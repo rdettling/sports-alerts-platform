@@ -179,9 +179,18 @@ def _classify_world_cup_derived_events(previous: Game | None, payload: Scoreboar
         and not _is_world_cup_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
         and _is_world_cup_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
     )
-    if score_change is None and not second_half_started:
+    extra_time_started = (
+        not payload.is_final
+        and not _is_world_cup_extra_time(status=previous.status, period=previous.period)
+        and _is_world_cup_extra_time(status=payload.status, period=payload.period)
+    )
+    if score_change is None and not second_half_started and not extra_time_started:
         return None
-    return WorldCupDerivedEvents(score_change=score_change, second_half_started=second_half_started)
+    return WorldCupDerivedEvents(
+        score_change=score_change,
+        second_half_started=second_half_started,
+        extra_time_started=extra_time_started,
+    )
 
 
 def _log_world_cup_transition(previous: WorldCupStateSnapshot, payload: ScoreboardGame, events: WorldCupDerivedEvents | None) -> None:
@@ -208,7 +217,7 @@ def _log_world_cup_transition(previous: WorldCupStateSnapshot, payload: Scoreboa
     logger.info(
         "World Cup state transition external_game_id=%s status=%s->%s period=%s->%s clock=%r->%r "
         "score=%s-%s->%s-%s is_final=%s->%s second_half_live=%s->%s extra_time=%s->%s "
-        "penalty_kicks_window=%s->%s second_half_started=%s score_changed=%s scoring_side=%s inferred_goal=%s context_label=%r->%r",
+        "penalty_kicks_window=%s->%s second_half_started=%s extra_time_started=%s score_changed=%s scoring_side=%s inferred_goal=%s context_label=%r->%r",
         previous.external_game_id,
         previous.status,
         payload.status,
@@ -229,6 +238,7 @@ def _log_world_cup_transition(previous: WorldCupStateSnapshot, payload: Scoreboa
         previous_penalty_kicks_window,
         new_penalty_kicks_window,
         events.second_half_started if events is not None else False,
+        events.extra_time_started if events is not None else False,
         score_change is not None,
         score_change.scoring_side if score_change is not None else None,
         score_change.is_inferred_goal if score_change is not None else False,

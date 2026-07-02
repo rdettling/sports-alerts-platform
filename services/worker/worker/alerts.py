@@ -39,6 +39,7 @@ class ScoreChangeEvent:
 class WorldCupDerivedEvents:
     score_change: ScoreChangeEvent | None = None
     second_half_started: bool = False
+    extra_time_started: bool = False
 
 
 def _parse_clock_seconds(clock: str | None) -> int | None:
@@ -370,6 +371,20 @@ def evaluate_and_record_alerts(
                     game_id=game.id,
                     alert_type="second_half_start",
                     dedupe_key=f"{user_id}:{game.id}:second_half_start",
+                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                )
+
+            extra_time_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_time_start"
+            )
+            if world_cup_event and world_cup_event.extra_time_started and extra_time_enabled:
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="extra_time_start",
+                    dedupe_key=f"{user_id}:{game.id}:extra_time_start",
                     metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 

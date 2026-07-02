@@ -709,6 +709,66 @@ def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
     assert len(sent) == 0
 
 
+def test_world_cup_extra_time_start_alert_triggers_once_on_period_three_transition(db_session):
+    user = User(email="world-cup-extra-time@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="extra_time_start", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 2, "away_score": 2, "period": 2, "clock": "90+5'"},
+            {"home_score": 2, "away_score": 2, "period": 2, "clock": "ET"},
+            {"home_score": 2, "away_score": 2, "period": 3, "clock": "91'"},
+            {"home_score": 2, "away_score": 2, "period": 3, "clock": "94'"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "extra_time_start")).all()
+    assert len(sent) == 1
+    assert sent[0].metadata_json["period"] == 3
+    assert sent[0].metadata_json["clock"] == "91'"
+
+
+def test_world_cup_extra_time_start_does_not_trigger_before_period_three(db_session):
+    user = User(email="world-cup-extra-time-blocked@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="WORLD_CUP", alert_type="extra_time_start", is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 2, "away_score": 2, "period": 2, "clock": "90+5'"},
+            {"home_score": 2, "away_score": 2, "period": 2, "clock": "ET"},
+        ]
+    )
+    assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
+    result = run_catalog_sync(provider, league="WORLD_CUP")
+    assert result["status"] == "success"
+
+    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "extra_time_start")).all()
+    assert len(sent) == 0
+
+
 def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db_session, caplog):
     provider = SequenceWorldCupProvider(
         [
@@ -726,6 +786,7 @@ def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db
     assert "90+5'" in caplog.text
     assert "ET" in caplog.text
     assert "extra_time=False->True" in caplog.text
+    assert "extra_time_started=True" in caplog.text
     assert "second_half_live=True->False" in caplog.text
 
 

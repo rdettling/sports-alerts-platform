@@ -213,6 +213,32 @@ def test_world_cup_second_half_start_uses_resume_copy():
     assert "46'" in text_body
 
 
+def test_world_cup_extra_time_start_uses_literal_copy():
+    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    game = Game(
+        external_game_id="world-cup-extra-time",
+        league="WORLD_CUP",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=2,
+        away_score=2,
+        period=3,
+        clock="91'",
+    )
+    alert = _mk_alert("extra_time_start")
+    alert.metadata_json = {"status": "in_progress", "period": 3, "clock": "91'"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Extra time · MEX 2–2 USA"
+    assert "Extra time is live now · MEX 2–2 USA" in text_body
+    assert "91'" in text_body
+
+
 def test_world_cup_penalty_kicks_uses_anticipatory_copy():
     away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
     home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")

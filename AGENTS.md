@@ -69,6 +69,18 @@ The database is a constrained resource. Worker and background code should avoid 
 
 Operational observability is useful only when it helps debug real issues. Keep telemetry and admin tooling compact; avoid high-volume or open-ended logging/storage without a clear use.
 
+## Production Access
+
+This repo often uses the Render CLI and Neon CLI for production inspection.
+
+When a task may involve production logs, deploy state, runtime debugging, or production database inspection:
+
+- First check whether Render CLI and Neon CLI are already authenticated.
+- If Render auth is missing or expired, run `render login` so the browser or device authorization flow opens for the user.
+- If Neon auth is missing, initiate the Neon login flow rather than asking the user to type auth commands manually.
+- Prefer setting up CLI auth proactively once production access is relevant, instead of waiting for a failed command later.
+- Do not ask the user to authenticate up front for tasks that do not require production access.
+
 ## Verification
 
 Run the narrowest relevant checks for the area changed, then broaden when the touched behavior is shared. If checks cannot be run, state that clearly and explain the residual risk.

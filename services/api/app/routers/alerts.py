@@ -149,6 +149,13 @@ def create_admin_test_alert(
         period = 2
         clock = "46'"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+    elif payload.alert_type == "extra_time_start":
+        game_status = "in_progress"
+        home_score = 1
+        away_score = 1
+        period = 3
+        clock = "91'"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
     elif payload.alert_type == "penalty_kicks":
         game_status = "in_progress"
         home_score = 1
