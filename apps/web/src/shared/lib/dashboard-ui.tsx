@@ -31,6 +31,7 @@ export function messageFromUnknown(error: unknown): string {
 export function leagueLogoUrl(league: string | null | undefined): string | null {
   const normalized = (league || "").toUpperCase();
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
+  if (normalized === "WNBA") return "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
   if (normalized === "MLS") {
     return "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg";
@@ -63,6 +64,9 @@ function teamLogoUrl(team: Team): string {
   }
   if (league === "NBA") {
     return `https://a.espncdn.com/i/teamlogos/nba/500/${abbr}.png`;
+  }
+  if (league === "WNBA") {
+    return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbr}.png`;
   }
   if (league === "WORLD_CUP") {
     return `https://a.espncdn.com/i/teamlogos/countries/500/${abbr}.png`;

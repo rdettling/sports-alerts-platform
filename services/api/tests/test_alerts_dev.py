@@ -92,6 +92,20 @@ def test_admin_test_email_endpoint_accepts_mlb_inning_start(client):
         db.close()
 
 
+def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
+    headers = _auth_headers(client, email="dev-alerts-wnba@example.com", role="admin")
+
+    for alert_type in ("game_start", "close_game_late", "final_result"):
+        response = client.post(
+            "/alerts/admin/test-email",
+            headers=headers,
+            json={"league": "WNBA", "alert_type": alert_type},
+        )
+        assert response.status_code == 200
+        assert response.json()["league"] == "WNBA"
+        assert response.json()["alert_type"] == alert_type
+
+
 def test_admin_test_email_endpoint_accepts_world_cup_game_start(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup@example.com", role="admin")
 

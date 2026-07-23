@@ -134,7 +134,7 @@ class EspnScoreboardClient:
             clock = short_detail
         completed = bool(status_type.get("completed"))
         context_label: str | None = None
-        if normalized_league == "NBA":
+        if sport == "basketball":
             round_label = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
             series_summary = _clean_text(((competition.get("series") or {}).get("summary")))
             context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary

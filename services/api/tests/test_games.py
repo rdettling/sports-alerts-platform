@@ -253,6 +253,31 @@ def test_games_return_context_label(client):
     assert payload[0]["context_label"] == "NBA Finals - Game 5 · NY leads series 3-1"
 
 
+def test_games_filter_by_wnba(client):
+    db = SessionLocal()
+    try:
+        teams = db.scalars(select(Team).where(Team.league == "WNBA").order_by(Team.id.asc()).limit(2)).all()
+        db.add(
+            Game(
+                external_game_id="test-wnba-game",
+                league="WNBA",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+                status="scheduled",
+                is_final=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/games?league=WNBA")
+
+    assert response.status_code == 200
+    assert [game["external_game_id"] for game in response.json()] == ["test-wnba-game"]
+
+
 def test_games_exclude_test_games(client):
     db = SessionLocal()
     try:

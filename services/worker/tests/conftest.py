@@ -64,6 +64,8 @@ from worker.ingest import SessionLocal  # noqa: E402
 TEST_TEAM_SEEDS = [
     ("1", "NBA", "Atlanta Hawks", "ATL"),
     ("2", "NBA", "Boston Celtics", "BOS"),
+    ("9", "WNBA", "New York Liberty", "NY"),
+    ("17", "WNBA", "Las Vegas Aces", "LV"),
     ("10", "MLB", "New York Yankees", "NYY"),
     ("2", "MLB", "Boston Red Sox", "BOS"),
     ("18966", "MLS", "LAFC", "LAFC"),

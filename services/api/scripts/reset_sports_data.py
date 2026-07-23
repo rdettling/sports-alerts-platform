@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.db.session import SessionLocal  # noqa: E402
-from app.services.seed import seed_teams_if_empty  # noqa: E402
+from app.services.seed import ensure_seeded_teams  # noqa: E402
 
 SPORTS_TABLES = [
     "sent_alerts",
@@ -51,7 +51,7 @@ def main() -> int:
                 continue
             db.execute(text(f"DELETE FROM {table}"))
         db.commit()
-        seed_teams_if_empty(db)
+        ensure_seeded_teams(db)
     finally:
         db.close()
 

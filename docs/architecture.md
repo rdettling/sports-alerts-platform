@@ -36,6 +36,7 @@ The dashboard contains four sections:
 Current supported leagues:
 
 - `NBA`
+- `WNBA`
 - `MLB`
 - `MLS`
 - `WORLD_CUP`

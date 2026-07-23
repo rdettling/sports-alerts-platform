@@ -66,6 +66,28 @@ def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
     assert "teamlogos/nba/500/lal.png" in html_body
 
 
+def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
+    away = Team(external_team_id="17", league="WNBA", name="Las Vegas Aces", abbreviation="LV")
+    home = Team(external_team_id="9", league="WNBA", name="New York Liberty", abbreviation="NY")
+    game = Game(
+        external_game_id="wnba-1",
+        league="WNBA",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=81,
+        away_score=79,
+    )
+
+    subject = build_alert_subject(_mk_alert("game_start"), game, home, away)
+    _, html_body = build_alert_email_content(_mk_alert("game_start"), game, home, away)
+
+    assert subject.startswith("Tip-off · LV @ NY")
+    assert "teamlogos/wnba/500/lv.png" in html_body
+    assert "teamlogos/wnba/500/ny.png" in html_body
+
+
 def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
     away = Team(external_team_id="X1", league="NHL", name="Away Team", abbreviation="AWY")
     home = Team(external_team_id="X2", league="NHL", name="Home Team", abbreviation="HOM")

@@ -37,6 +37,24 @@ NBA_TEAMS = [
     ("30", "Charlotte Hornets", "CHA"),
 ]
 
+WNBA_TEAMS = [
+    ("20", "Atlanta Dream", "ATL"),
+    ("19", "Chicago Sky", "CHI"),
+    ("18", "Connecticut Sun", "CON"),
+    ("3", "Dallas Wings", "DAL"),
+    ("129689", "Golden State Valkyries", "GS"),
+    ("5", "Indiana Fever", "IND"),
+    ("17", "Las Vegas Aces", "LV"),
+    ("6", "Los Angeles Sparks", "LA"),
+    ("8", "Minnesota Lynx", "MIN"),
+    ("9", "New York Liberty", "NY"),
+    ("11", "Phoenix Mercury", "PHX"),
+    ("132052", "Portland Fire", "POR"),
+    ("14", "Seattle Storm", "SEA"),
+    ("131935", "Toronto Tempo", "TOR"),
+    ("16", "Washington Mystics", "WSH"),
+]
+
 MLB_TEAMS = [
     ("1", "Baltimore Orioles", "BAL"),
     ("2", "Boston Red Sox", "BOS"),
@@ -156,26 +174,34 @@ WORLD_CUP_TEAMS = [
 
 TEAM_SEEDS_BY_LEAGUE = {
     "NBA": NBA_TEAMS,
+    "WNBA": WNBA_TEAMS,
     "MLB": MLB_TEAMS,
     "MLS": MLS_TEAMS,
     "WORLD_CUP": WORLD_CUP_TEAMS,
 }
 
 
-def seed_teams_if_empty(db: Session) -> None:
+def ensure_seeded_teams(db: Session) -> None:
     ensure_league_settings(db)
+    existing = {
+        (team.league, team.external_team_id): team
+        for team in db.scalars(select(Team).where(Team.league.in_(TEAM_SEEDS_BY_LEAGUE))).all()
+    }
     for league, teams in TEAM_SEEDS_BY_LEAGUE.items():
-        if db.scalar(select(Team.id).where(Team.league == league).limit(1)):
-            continue
         for external_team_id, name, abbreviation in teams:
-            db.add(
-                Team(
-                    external_team_id=external_team_id,
-                    league=league,
-                    name=name,
-                    abbreviation=abbreviation,
+            team = existing.get((league, external_team_id))
+            if team is None:
+                db.add(
+                    Team(
+                        external_team_id=external_team_id,
+                        league=league,
+                        name=name,
+                        abbreviation=abbreviation,
+                    )
                 )
-            )
+                continue
+            team.name = name
+            team.abbreviation = abbreviation
     db.commit()
 
 

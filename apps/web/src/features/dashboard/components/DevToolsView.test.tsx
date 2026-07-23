@@ -6,15 +6,17 @@ import { DevToolsView } from "./DevToolsView";
 const listTeamsMock = vi.fn(async () => [
   { id: 1, external_team_id: "1610612737", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
   { id: 2, external_team_id: "1610612738", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
-  { id: 3, external_team_id: "MIA", league: "MLB", name: "Miami Marlins", abbreviation: "MIA" },
-  { id: 4, external_team_id: "TOR", league: "MLB", name: "Toronto Blue Jays", abbreviation: "TOR" },
-  { id: 5, external_team_id: "18966", league: "MLS", name: "LAFC", abbreviation: "LAFC" },
-  { id: 6, external_team_id: "187", league: "MLS", name: "LA Galaxy", abbreviation: "LA" },
-  { id: 7, external_team_id: "203", league: "WORLD_CUP", name: "Mexico", abbreviation: "MEX" },
-  { id: 8, external_team_id: "660", league: "WORLD_CUP", name: "United States", abbreviation: "USA" },
+  { id: 3, external_team_id: "9", league: "WNBA", name: "New York Liberty", abbreviation: "NY" },
+  { id: 4, external_team_id: "17", league: "WNBA", name: "Las Vegas Aces", abbreviation: "LV" },
+  { id: 5, external_team_id: "MIA", league: "MLB", name: "Miami Marlins", abbreviation: "MIA" },
+  { id: 6, external_team_id: "TOR", league: "MLB", name: "Toronto Blue Jays", abbreviation: "TOR" },
+  { id: 7, external_team_id: "18966", league: "MLS", name: "LAFC", abbreviation: "LAFC" },
+  { id: 8, external_team_id: "187", league: "MLS", name: "LA Galaxy", abbreviation: "LA" },
+  { id: 9, external_team_id: "203", league: "WORLD_CUP", name: "Mexico", abbreviation: "MEX" },
+  { id: 10, external_team_id: "660", league: "WORLD_CUP", name: "United States", abbreviation: "USA" },
 ]);
 
-const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA" | "MLB" | "MLS" | "WORLD_CUP"; alert_type: string }) => ({
+const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA" | "WNBA" | "MLB" | "MLS" | "WORLD_CUP"; alert_type: string }) => ({
   id: 1,
   game_id: 100,
   league,
@@ -26,11 +28,12 @@ vi.mock("../../../shared/api", () => ({
   listTeams: () => listTeamsMock(),
   listLeagues: vi.fn(async () => [
     { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
+    { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["NY", "LV"], is_enabled: true },
     { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: ["game_start", "inning_start", "final_result"], live_sync_interval_seconds: 300, default_test_matchup: ["MIA", "TOR"], is_enabled: true },
     { league: "MLS", sport: "soccer", label: "MLS", badge_label: "MLS", alert_types: ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], live_sync_interval_seconds: 180, default_test_matchup: ["LAFC", "LA"], is_enabled: true },
     { league: "WORLD_CUP", sport: "soccer", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], live_sync_interval_seconds: 180, default_test_matchup: ["MEX", "USA"], is_enabled: true },
   ]),
-  sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB" | "MLS" | "WORLD_CUP"; alert_type: string }) =>
+  sendDevTestEmail: (_token: string, payload: { league: "NBA" | "WNBA" | "MLB" | "MLS" | "WORLD_CUP"; alert_type: string }) =>
     sendDevTestEmailMock(payload),
 }));
 
@@ -106,5 +109,17 @@ describe("DevToolsView", () => {
     expect(screen.getByText("Extra time start alert")).toBeInTheDocument();
     expect(screen.getByText("Penalty kicks alert")).toBeInTheDocument();
     expect(screen.getByText("Score change alert")).toBeInTheDocument();
+  });
+
+  it("shows the shared basketball alert set for WNBA", async () => {
+    render(<DevToolsView token="token" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "WNBA" }));
+
+    await waitFor(() => expect(screen.getByText("Synthetic matchup (WNBA)")).toBeInTheDocument());
+    expect(screen.getByText("NY")).toBeInTheDocument();
+    expect(screen.getByText("LV")).toBeInTheDocument();
+    expect(screen.getByText("Close game late alert")).toBeInTheDocument();
+    expect(screen.queryByText("Inning start alert")).toBeNull();
   });
 });

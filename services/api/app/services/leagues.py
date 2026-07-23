@@ -50,6 +50,16 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         live_sync_interval_seconds=120,
         odds_sport_key="basketball_nba",
     ),
+    "WNBA": LeagueProfile(
+        league="WNBA",
+        sport="basketball",
+        label="WNBA",
+        badge_label="WNBA",
+        default_test_matchup=("NY", "LV"),
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
+        live_sync_interval_seconds=120,
+        odds_sport_key="basketball_wnba",
+    ),
     "MLB": LeagueProfile(
         league="MLB",
         sport="baseball",

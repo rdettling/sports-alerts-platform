@@ -122,12 +122,13 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     ingest_health = client.get("/ops/db/ingest-health?event_limit=10", headers=headers)
     assert ingest_health.status_code == 200
     assert len(ingest_health.json()["states"]) >= 1
-    assert ingest_health.json()["active_leagues"] == ["NBA", "MLB", "MLS", "WORLD_CUP"]
+    assert ingest_health.json()["active_leagues"] == ["NBA", "WNBA", "MLB", "MLS", "WORLD_CUP"]
 
     league_settings = client.get("/ops/leagues", headers=headers)
     assert league_settings.status_code == 200
     assert league_settings.json()["items"] == [
         {"league": "NBA", "sport": "basketball", "label": "NBA", "badge_label": "NBA", "alert_types": ["game_start", "close_game_late", "final_result"], "live_sync_interval_seconds": 120, "default_test_matchup": ["ATL", "BOS"], "is_enabled": True},
+        {"league": "WNBA", "sport": "basketball", "label": "WNBA", "badge_label": "WNBA", "alert_types": ["game_start", "close_game_late", "final_result"], "live_sync_interval_seconds": 120, "default_test_matchup": ["NY", "LV"], "is_enabled": True},
         {"league": "MLB", "sport": "baseball", "label": "MLB", "badge_label": "MLB", "alert_types": ["game_start", "inning_start", "final_result"], "live_sync_interval_seconds": 300, "default_test_matchup": ["MIA", "TOR"], "is_enabled": True},
         {"league": "MLS", "sport": "soccer", "label": "MLS", "badge_label": "MLS", "alert_types": ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], "live_sync_interval_seconds": 180, "default_test_matchup": ["LAFC", "LA"], "is_enabled": True},
         {"league": "WORLD_CUP", "sport": "soccer", "label": "World Cup", "badge_label": "WC", "alert_types": ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], "live_sync_interval_seconds": 180, "default_test_matchup": ["MEX", "USA"], "is_enabled": True},
@@ -154,8 +155,8 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "error_calls": 1,
         "rate_limited_calls": 0,
     }
-    assert summary_json["runtime"]["active_leagues"] == ["NBA", "MLB", "MLS", "WORLD_CUP"]
-    assert len(summary_json["runtime"]["league_settings"]) == 4
+    assert summary_json["runtime"]["active_leagues"] == ["NBA", "WNBA", "MLB", "MLS", "WORLD_CUP"]
+    assert len(summary_json["runtime"]["league_settings"]) == 5
 
 
 def test_team_mapping_health_endpoint(client, monkeypatch):
@@ -192,6 +193,18 @@ def test_team_mapping_health_endpoint(client, monkeypatch):
 
         def get(self, url, params=None):
             _ = params
+            if "wnba" in url:
+                return _FakeResponse(
+                    {
+                        "events": [
+                            {
+                                "competitions": [
+                                    {"competitors": [{"team": {"id": "9"}}, {"team": {"id": "17"}}]}
+                                ]
+                            }
+                        ]
+                    }
+                )
             if "mlb" in url:
                 return _FakeResponse(
                     {
@@ -247,5 +260,5 @@ def test_team_mapping_health_endpoint(client, monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert len(payload["leagues"]) == 4
+    assert len(payload["leagues"]) == 5
     assert all(item["missing_team_ids"] == [] for item in payload["leagues"])

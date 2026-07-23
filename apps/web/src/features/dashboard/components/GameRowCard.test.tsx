@@ -215,4 +215,38 @@ describe("GameRowCard", () => {
       "https://a.espncdn.com/i/teamlogos/soccer/500/18966.png",
     );
   });
+
+  it("shows WNBA two-way odds and league and team logos", () => {
+    render(
+      <GameRowCard
+        game={makeGame({
+          league: "WNBA",
+          odds: {
+            market: "h2h",
+            bookmaker: null,
+            last_update: null,
+            outcomes: [
+              { outcome_key: "las_vegas_aces", outcome_label: "Las Vegas Aces", price_american: 125, team_side: "away" },
+              { outcome_key: "new_york_liberty", outcome_label: "New York Liberty", price_american: -145, team_side: "home" },
+            ],
+          },
+        })}
+        sport="basketball"
+        home={{ ...home, external_team_id: "9", league: "WNBA", abbreviation: "NY", name: "New York Liberty" }}
+        away={{ ...away, external_team_id: "17", league: "WNBA", abbreviation: "LV", name: "Las Vegas Aces" }}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.queryByText("Draw")).toBeNull();
+    expect(screen.getByRole("img", { name: "WNBA logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png",
+    );
+    expect(screen.getByRole("img", { name: "Las Vegas Aces logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/wnba/500/lv.png",
+    );
+  });
 });

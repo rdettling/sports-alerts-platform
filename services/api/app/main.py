@@ -19,7 +19,7 @@ from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
 from app.routers.ops import router as ops_router
 from app.logging_filters import SuppressLowSignalAccessLogsFilter
-from app.services.seed import ensure_bootstrap_admin, seed_teams_if_empty
+from app.services.seed import ensure_bootstrap_admin, ensure_seeded_teams
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -36,7 +36,7 @@ async def lifespan(_: FastAPI):
     logger.info("Startup seed begin")
     db = SessionLocal()
     try:
-        seed_teams_if_empty(db)
+        ensure_seeded_teams(db)
         ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
         elapsed_ms = int((monotonic() - started_at) * 1000)
         logger.info("Startup seed complete elapsed_ms=%s", elapsed_ms)

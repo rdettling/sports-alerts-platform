@@ -386,6 +386,72 @@ def test_ingest_creates_final_result_alert(db_session):
     assert sent[0].delivery_status == "sent"
 
 
+def test_wnba_reuses_deduped_basketball_alerts(db_session):
+    user = User(email="wnba-alerts@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "WNBA", Team.external_team_id == "9"))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    for alert_type in ("game_start", "close_game_late", "final_result"):
+        db_session.add(
+            UserAlertDefault(
+                user_id=user.id,
+                league="WNBA",
+                alert_type=alert_type,
+                is_enabled=True,
+                close_game_margin_threshold=5 if alert_type == "close_game_late" else None,
+                close_game_time_threshold_seconds=120 if alert_type == "close_game_late" else None,
+            )
+        )
+    db_session.commit()
+
+    start = datetime.now(timezone.utc) + timedelta(minutes=1)
+    live_provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-wnba-live",
+                home_external_team_id="9",
+                away_external_team_id="17",
+                scheduled_start_time=start,
+                status="in_progress",
+                home_score=82,
+                away_score=79,
+                period=4,
+                clock="01:12",
+            )
+        ]
+    )
+    assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
+    assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
+
+    final_provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-wnba-live",
+                home_external_team_id="9",
+                away_external_team_id="17",
+                scheduled_start_time=start,
+                status="final",
+                home_score=88,
+                away_score=80,
+                period=4,
+                clock="0:00",
+                is_final=True,
+            )
+        ]
+    )
+    assert run_catalog_sync(final_provider, league="WNBA")["status"] == "success"
+    assert run_catalog_sync(final_provider, league="WNBA")["status"] == "success"
+
+    sent = db_session.scalars(
+        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.alert_type.asc())
+    ).all()
+    assert [alert.alert_type for alert in sent] == ["close_game_late", "final_result", "game_start"]
+
+
 def test_following_live_game_after_start_does_not_send_game_start_alert(db_session):
     user = User(email="late-follow@example.com")
     db_session.add(user)

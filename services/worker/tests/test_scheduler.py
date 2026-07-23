@@ -15,10 +15,12 @@ def test_bootstrap_jobs_creates_sync_jobs_only(db_session):
         ("catalog_sync", "MLB"),
         ("catalog_sync", "MLS"),
         ("catalog_sync", "NBA"),
+        ("catalog_sync", "WNBA"),
         ("catalog_sync", "WORLD_CUP"),
         ("live_sync", "MLB"),
         ("live_sync", "MLS"),
         ("live_sync", "NBA"),
+        ("live_sync", "WNBA"),
         ("live_sync", "WORLD_CUP"),
     ]
     assert all(job.status == "queued" for job in jobs)
@@ -36,9 +38,11 @@ def test_bootstrap_jobs_skips_disabled_leagues(db_session):
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "MLS"),
         ("catalog_sync", "NBA"),
+        ("catalog_sync", "WNBA"),
         ("catalog_sync", "WORLD_CUP"),
         ("live_sync", "MLS"),
         ("live_sync", "NBA"),
+        ("live_sync", "WNBA"),
         ("live_sync", "WORLD_CUP"),
     ]
 

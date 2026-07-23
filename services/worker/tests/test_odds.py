@@ -1,4 +1,4 @@
-from worker.odds import game_key
+from worker.odds import _odds_sport_key_for_league, game_key
 
 
 def test_world_cup_name_aliases_match_seeded_names():
@@ -15,3 +15,12 @@ def test_mls_name_aliases_match_seeded_names():
     assert game_key("Columbus Crew SC", "Houston Dynamo") == game_key("Columbus Crew", "Houston Dynamo FC")
     assert game_key("New York Red Bulls", "Chicago Fire") == game_key("Red Bull New York", "Chicago Fire FC")
     assert game_key("Vancouver Whitecaps FC", "San Diego FC") == game_key("Vancouver Whitecaps", "San Diego FC")
+
+
+def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
+    assert _odds_sport_key_for_league("WNBA") == "basketball_wnba"
+    assert game_key("Las Vegas Aces", "New York Liberty") == ("las vegas aces", "new york liberty")
+    assert game_key("Golden State Valkyries", "Toronto Tempo") == (
+        "golden state valkyries",
+        "toronto tempo",
+    )

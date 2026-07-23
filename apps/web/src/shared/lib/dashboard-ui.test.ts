@@ -20,6 +20,12 @@ describe("dashboard utilities", () => {
     );
   });
 
+  it("uses the WNBA league mark", () => {
+    expect(leagueLogoUrl("WNBA")).toBe(
+      "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png",
+    );
+  });
+
   it("computes no-vig probabilities", () => {
     const result = noVigProbabilities({
       id: 1,
@@ -73,6 +79,28 @@ describe("dashboard utilities", () => {
     expect(label).toBe("Inning 8");
     expect(label.includes("OT")).toBe(false);
     expect(label).not.toBe("Halftime");
+  });
+
+  it("formats WNBA quarters with shared basketball rules", () => {
+    const label = formatGameTime({
+      id: 7,
+      external_game_id: "wnba-live",
+      league: "WNBA",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: new Date().toISOString(),
+      context_label: null,
+      status: "live",
+      home_score: 82,
+      away_score: 79,
+      period: 4,
+      clock: "01:12",
+      is_final: false,
+      last_ingested_at: null,
+      odds: null,
+    }, "basketball");
+
+    expect(label).toBe("Q4 01:12");
   });
 
   it("formats World Cup live clock", () => {

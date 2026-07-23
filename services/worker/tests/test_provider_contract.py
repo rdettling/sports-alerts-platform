@@ -70,6 +70,66 @@ def test_provider_builds_nba_context_label_from_round_and_series():
     assert schedule[0].context_label == "NBA Finals - Game 5 · NY leads series 3-1"
 
 
+def test_provider_parses_wnba_state_team_ids_and_postseason_context():
+    payload = {
+        "events": [
+            {
+                "id": "401999101",
+                "date": "2026-09-20T19:00Z",
+                "competitions": [
+                    {
+                        "notes": [{"headline": "WNBA Semifinals - Game 3"}],
+                        "series": {"summary": "NY leads series 2-0"},
+                        "status": {
+                            "period": 4,
+                            "displayClock": "01:12",
+                            "type": {"state": "in", "name": "STATUS_IN_PROGRESS", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "82", "team": {"id": "9", "abbreviation": "NY"}},
+                            {"homeAway": "away", "score": "79", "team": {"id": "17", "abbreviation": "LV"}},
+                        ],
+                    }
+                ],
+            },
+            {
+                "id": "401999102",
+                "date": "2026-09-18T19:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 4,
+                            "displayClock": "0:00",
+                            "type": {"state": "post", "name": "STATUS_FINAL", "completed": True},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "88", "team": {"id": "9", "abbreviation": "NY"}},
+                            {"homeAway": "away", "score": "80", "team": {"id": "17", "abbreviation": "LV"}},
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+
+    schedule = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("WNBA", ["20260920"])
+
+    assert len(schedule) == 2
+    live = next(game for game in schedule if game.external_game_id == "401999101")
+    final = next(game for game in schedule if game.external_game_id == "401999102")
+    assert (live.home_external_team_id, live.away_external_team_id) == ("9", "17")
+    assert (live.status, live.period, live.clock, live.home_score, live.away_score) == (
+        "in_progress",
+        4,
+        "01:12",
+        82,
+        79,
+    )
+    assert live.context_label == "WNBA Semifinals - Game 3 · NY leads series 2-0"
+    assert final.status == "final"
+    assert final.is_final is True
+
+
 def test_provider_builds_world_cup_stage_context_label():
     payload = {
         "events": [

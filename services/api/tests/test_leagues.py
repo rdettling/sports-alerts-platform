@@ -6,7 +6,7 @@ from app.services.leagues import get_alert_types, get_league_profile, list_suppo
 
 
 def test_league_profiles_are_the_single_source_of_sport_and_provider_configuration():
-    assert list_supported_leagues() == ["NBA", "MLB", "MLS", "WORLD_CUP"]
+    assert list_supported_leagues() == ["NBA", "WNBA", "MLB", "MLS", "WORLD_CUP"]
 
     nba = get_league_profile("NBA")
     assert (nba.sport, nba.live_sync_interval_seconds, nba.odds_sport_key) == (
@@ -14,6 +14,15 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
         120,
         "basketball_nba",
     )
+
+    wnba = get_league_profile("WNBA")
+    assert (wnba.sport, wnba.live_sync_interval_seconds, wnba.odds_sport_key) == (
+        "basketball",
+        120,
+        "basketball_wnba",
+    )
+    assert wnba.scoreboard_url.endswith("/sports/basketball/wnba/scoreboard")
+    assert get_alert_types("WNBA") == get_alert_types("NBA")
 
     mlb = get_league_profile("MLB")
     assert (mlb.sport, mlb.live_sync_interval_seconds, mlb.odds_sport_key) == (
@@ -53,6 +62,7 @@ def test_public_leagues_include_sport_and_live_cadence(client):
         for item in response.json()
     ] == [
         ("NBA", "basketball", 120, ["ATL", "BOS"]),
+        ("WNBA", "basketball", 120, ["NY", "LV"]),
         ("MLB", "baseball", 300, ["MIA", "TOR"]),
         ("MLS", "soccer", 180, ["LAFC", "LA"]),
         ("WORLD_CUP", "soccer", 180, ["MEX", "USA"]),
@@ -67,3 +77,19 @@ def test_mls_team_catalog_contains_all_current_clubs(client):
 
     assert count == 30
     assert {"LA", "LAFC", "MIA", "RBNY", "SD"} <= abbreviations
+
+
+def test_wnba_team_catalog_contains_all_current_clubs(client):
+    client.get("/leagues")
+    with SessionLocal() as db:
+        teams = db.scalars(select(Team).where(Team.league == "WNBA")).all()
+
+    assert len(teams) == 15
+    assert {
+        (team.external_team_id, team.abbreviation)
+        for team in teams
+    } >= {
+        ("129689", "GS"),
+        ("132052", "POR"),
+        ("131935", "TOR"),
+    }
