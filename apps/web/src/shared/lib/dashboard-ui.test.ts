@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   formatGameTime,
   formatMoneyline,
-  liveCadenceLabel,
-  liveStaleAfterMinutes,
   noVigProbabilities,
 } from "./dashboard-ui";
 
@@ -15,16 +13,11 @@ describe("dashboard utilities", () => {
     expect(formatMoneyline(null)).toBe("—");
   });
 
-  it("derives live cadence and stale threshold from the API interval", () => {
-    expect(liveCadenceLabel(180)).toBe("3m cadence");
-    expect(liveStaleAfterMinutes(180)).toBe(6);
-  });
-
   it("computes no-vig probabilities", () => {
     const result = noVigProbabilities({
       id: 1,
       external_game_id: "a",
-      league: "nba",
+      league: "NBA",
       home_team_id: 1,
       away_team_id: 2,
       scheduled_start_time: new Date().toISOString(),

@@ -13,10 +13,13 @@ export type UserProfile = {
   created_at: string;
 };
 
+export type League = "NBA" | "MLB" | "WORLD_CUP";
+export type Sport = "basketball" | "baseball" | "soccer";
+
 export type Team = {
   id: number;
   external_team_id: string;
-  league: string;
+  league: League;
   name: string;
   abbreviation: string;
 };
@@ -24,7 +27,7 @@ export type Team = {
 export type Game = {
   id: number;
   external_game_id: string;
-  league: string;
+  league: League;
   home_team_id: number;
   away_team_id: number;
   scheduled_start_time: string;
@@ -49,8 +52,6 @@ export type Game = {
   } | null;
 };
 
-export type League = "NBA" | "MLB" | "WORLD_CUP";
-export type Sport = "basketball" | "baseball" | "soccer";
 export type LeagueSetting = {
   league: League;
   sport: Sport;
@@ -58,6 +59,7 @@ export type LeagueSetting = {
   badge_label: string;
   alert_types: AlertType[];
   live_sync_interval_seconds: number;
+  default_test_matchup: [string, string];
   is_enabled: boolean;
 };
 

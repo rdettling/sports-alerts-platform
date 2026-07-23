@@ -31,10 +31,15 @@ def test_public_leagues_include_sport_and_live_cadence(client):
 
     assert response.status_code == 200
     assert [
-        (item["league"], item["sport"], item["live_sync_interval_seconds"])
+        (
+            item["league"],
+            item["sport"],
+            item["live_sync_interval_seconds"],
+            item["default_test_matchup"],
+        )
         for item in response.json()
     ] == [
-        ("NBA", "basketball", 120),
-        ("MLB", "baseball", 300),
-        ("WORLD_CUP", "soccer", 180),
+        ("NBA", "basketball", 120, ["ATL", "BOS"]),
+        ("MLB", "baseball", 300, ["MIA", "TOR"]),
+        ("WORLD_CUP", "soccer", 180, ["MEX", "USA"]),
     ]

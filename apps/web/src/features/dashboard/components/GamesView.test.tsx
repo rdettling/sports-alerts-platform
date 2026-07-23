@@ -51,16 +51,9 @@ vi.mock("../hooks/useGamesData", () => ({
         { id: 12, external_team_id: "12", league: "NBA", name: "Los Angeles Lakers", abbreviation: "LAL" },
         { id: 13, external_team_id: "13", league: "NBA", name: "New York Knicks", abbreviation: "NY" },
       ],
-      leagues: [{ league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, is_enabled: true }],
+      leagues: [{ league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true }],
     },
   })),
-}));
-
-vi.mock("../hooks/useDashboardSyncItems", () => ({
-  useDashboardSyncItems: vi.fn(() => [
-    { key: "catalog", label: "Catalog", value: "2m ago", tone: "fresh" },
-    { key: "nba", label: "NBA", value: "20m ago", tone: "stale" },
-  ]),
 }));
 
 vi.mock("../hooks/useGameAlertSettings", () => ({
@@ -99,6 +92,7 @@ describe("GamesView", () => {
   });
 
   it("shows league sync status inside the filters rail", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T18:20:00Z").getTime());
     render(<GamesView token="token" />, { wrapper });
 
     await waitFor(() => expect(screen.getByText("20m")).toBeInTheDocument());

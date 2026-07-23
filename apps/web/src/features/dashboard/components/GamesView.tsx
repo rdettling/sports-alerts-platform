@@ -3,14 +3,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { formatSyncAge } from "../utils/telemetry-format";
 import { useGamesData } from "../hooks/useGamesData";
-import { useDashboardSyncItems } from "../hooks/useDashboardSyncItems";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameRowCard } from "./GameRowCard";
 import { GamesFiltersPanel } from "./games/GamesFiltersPanel";
 import {
   buildDayOptions,
+  buildLeagueSyncRows,
   filterGamesByDay,
   filterGamesByLeague,
   gameStatusLabel,
@@ -22,7 +23,6 @@ import {
 export function GamesView({ token }: { token: string }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
-  const syncItems = useDashboardSyncItems();
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
@@ -55,6 +55,14 @@ export function GamesView({ token }: { token: string }) {
     () => new Map(activeLeagues.map((profile) => [profile.league, profile] as const)),
     [activeLeagues],
   );
+  const syncItems = useMemo(() => {
+    const labels = new Map(activeLeagues.map((profile) => [profile.league, profile.label] as const));
+    return buildLeagueSyncRows(games, activeLeagues).map((row) => ({
+      label: labels.get(row.league) ?? row.league,
+      value: formatSyncAge(row.lastAt),
+      tone: row.tone,
+    }));
+  }, [activeLeagues, games]);
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
@@ -117,7 +125,7 @@ export function GamesView({ token }: { token: string }) {
                       {group.items.map((game) => {
                         const home = teamMap.get(game.home_team_id);
                         const away = teamMap.get(game.away_team_id);
-                        const leagueProfile = leagueProfiles.get(game.league as League);
+                        const leagueProfile = leagueProfiles.get(game.league);
                         if (!home || !away || !leagueProfile) return null;
                         const isFollowed = followedGameIds.has(game.id);
 

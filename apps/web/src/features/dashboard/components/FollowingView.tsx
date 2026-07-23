@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   followTeam,
-  type League,
   type Team,
   unfollowGame,
   unfollowTeam,
@@ -147,7 +146,7 @@ export function FollowingView({ token }: { token: string }) {
               {followedGames.map((game) => {
                 const home = teamMap.get(game.home_team_id);
                 const away = teamMap.get(game.away_team_id);
-                const leagueProfile = leagueProfiles.get(game.league as League);
+                const leagueProfile = leagueProfiles.get(game.league);
                 if (!home || !away || !leagueProfile) return null;
 
                 return (

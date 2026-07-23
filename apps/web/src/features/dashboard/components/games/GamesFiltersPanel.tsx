@@ -1,6 +1,11 @@
 import { type League, type LeagueSetting } from "../../../../shared/api";
-import { type HeaderSyncItem } from "../../hooks/useDashboardSyncItems";
 import { type DayOption } from "./games-view-utils";
+
+type LeagueSyncItem = {
+  label: string;
+  value: string;
+  tone: "fresh" | "stale" | "idle";
+};
 
 function compactAgeLabel(value: string): string {
   return value.replace(" ago", "");
@@ -25,7 +30,7 @@ export function GamesFiltersPanel({
   isLoading: boolean;
   totalLeagueGames: number;
   dayOptions: DayOption[];
-  syncItems: HeaderSyncItem[];
+  syncItems: LeagueSyncItem[];
 }) {
   const syncByLabel = new Map(syncItems.map((item) => [item.label, item]));
   const leagueOptions = activeLeagues.map((league) => ({

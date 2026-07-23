@@ -76,6 +76,7 @@ def _league_setting_out(row: LeagueSetting) -> LeagueSettingOut:
         badge_label=profile.badge_label,
         alert_types=list(profile.alert_types),
         live_sync_interval_seconds=profile.live_sync_interval_seconds,
+        default_test_matchup=profile.default_test_matchup,
         is_enabled=row.is_enabled,
     )
 

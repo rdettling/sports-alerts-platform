@@ -1,5 +1,5 @@
 import { type Game, type League, type LeagueSetting, type Sport } from "../../../../shared/api";
-import { formatGameTime, liveCadenceLabel, liveStaleAfterMinutes } from "../../../../shared/lib/dashboard-ui";
+import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
 
 export type SyncTone = "fresh" | "stale" | "idle";
@@ -8,12 +8,9 @@ export type GameDayGroup = { label: string; items: Game[] };
 
 export type DayOption = { key: string; label: string; count: number };
 
-export type SyncRow = {
-  key: string;
-  label: string;
-  cadenceLabel: string;
+export type LeagueSyncRow = {
+  league: League;
   lastAt: Date | null;
-  detail: string;
   tone: SyncTone;
 };
 
@@ -31,7 +28,7 @@ export function sortGamesByStart(games: Game[]): Game[] {
 
 export function filterGamesByLeague(games: Game[], leagueFilter: "all" | League): Game[] {
   if (leagueFilter === "all") return games;
-  return games.filter((game) => (game.league || "").toUpperCase() === leagueFilter);
+  return games.filter((game) => game.league === leagueFilter);
 }
 
 export function buildDayOptions(games: Game[]): DayOption[] {
@@ -89,60 +86,18 @@ export function latestIngestAtFromGames(games: Game[]): Date | null {
   return latestIngestAt(games);
 }
 
-export function buildSyncRows(games: Game[], activeLeagues: LeagueSetting[]): SyncRow[] {
-  const byLeague = (league: League) => {
-    const leagueGames = games.filter((game) => (game.league || "").toUpperCase() === league);
+export function buildLeagueSyncRows(games: Game[], activeLeagues: LeagueSetting[]): LeagueSyncRow[] {
+  return activeLeagues.map((profile) => {
+    const league = profile.league;
+    const leagueGames = games.filter((game) => game.league === league);
     const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
-    const nextStartMs = leagueGames
-      .filter((game) => game.status === "scheduled")
-      .map((game) => new Date(game.scheduled_start_time).getTime())
-      .filter((ts) => !Number.isNaN(ts))
-      .sort((a, b) => a - b)[0];
-    return { liveCount, nextStartMs, lastAt: latestIngestAt(leagueGames) };
-  };
-
-  const catalogLastAt = latestIngestAt(games);
-
-  const leagueRow = (
-    label: string,
-    cadenceLabel: string,
-    info: { liveCount: number; nextStartMs?: number; lastAt: Date | null },
-    staleAfterMinutes: number,
-  ): SyncRow => {
-    const active = info.liveCount > 0;
-    const detail = active
-      ? `${info.liveCount} live`
-      : info.nextStartMs
-        ? `Next ${new Date(info.nextStartMs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-        : "No upcoming";
+    const lastAt = latestIngestAt(leagueGames);
     return {
-      key: label,
-      label,
-      cadenceLabel,
-      lastAt: info.lastAt,
-      detail,
-      tone: syncTone(info.lastAt, staleAfterMinutes, active),
+      league,
+      lastAt,
+      tone: syncTone(lastAt, Math.max(1, profile.live_sync_interval_seconds / 30), liveCount > 0),
     };
-  };
-
-  return [
-    {
-      key: "catalog",
-      label: "Catalog",
-      cadenceLabel: "12h cadence",
-      lastAt: catalogLastAt,
-      detail: "Schedule + odds snapshot",
-      tone: syncTone(catalogLastAt, 12 * 60 + 30, true),
-    },
-    ...activeLeagues.map((profile) =>
-      leagueRow(
-        `Live (${profile.league})`,
-        liveCadenceLabel(profile.live_sync_interval_seconds),
-        byLeague(profile.league),
-        liveStaleAfterMinutes(profile.live_sync_interval_seconds),
-      ),
-    ),
-  ];
+  });
 }
 
 export function gameStatusLabel(game: Game, sport: Sport): string {

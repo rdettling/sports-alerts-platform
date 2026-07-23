@@ -21,7 +21,6 @@ export function AdminLeagueSettingsPanel({
       await queryClient.invalidateQueries({ queryKey: ["admin-page", token] });
       await queryClient.invalidateQueries({ queryKey: ["games-page", token] });
       await queryClient.invalidateQueries({ queryKey: ["following-page", token] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard-sync-items"] });
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });

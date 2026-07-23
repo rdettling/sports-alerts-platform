@@ -42,14 +42,6 @@ export function leagueBadgeLabel(league: string | null | undefined): string {
   return normalized || "N/A";
 }
 
-export function liveCadenceLabel(intervalSeconds: number): string {
-  return `${Math.max(1, Math.round(intervalSeconds / 60))}m cadence`;
-}
-
-export function liveStaleAfterMinutes(intervalSeconds: number): number {
-  return Math.max(1, intervalSeconds / 30);
-}
-
 export function scoreSnippet(game: Game): string {
   if (game.home_score === null || game.away_score === null) {
     return "";
@@ -58,7 +50,7 @@ export function scoreSnippet(game: Game): string {
 }
 
 function teamLogoUrl(team: Team): string {
-  const league = (team.league || "").toUpperCase();
+  const league = team.league;
   const abbr = team.abbreviation.toLowerCase();
   if (league === "MLB") {
     return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbr}.png`;

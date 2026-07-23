@@ -7,12 +7,6 @@ import {
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 
-const DEFAULT_TEST_MATCHUPS: Record<League, { away: string; home: string }> = {
-  NBA: { away: "ATL", home: "BOS" },
-  MLB: { away: "MIA", home: "TOR" },
-  WORLD_CUP: { away: "MEX", home: "USA" },
-};
-
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
@@ -62,19 +56,19 @@ export function DevToolsView({ token }: { token: string }) {
   };
 
   const syntheticTeams = useMemo(() => {
-    const leagueTeams = teams.filter((team) => (team.league || "").toUpperCase() === activeLeague);
+    const leagueTeams = teams.filter((team) => team.league === activeLeague);
     if (leagueTeams.length < 2) {
       return { away: null, home: null };
     }
-    const matchup = DEFAULT_TEST_MATCHUPS[activeLeague];
+    const matchup = activeLeagues.find((item) => item.league === activeLeague)?.default_test_matchup;
     const byAbbreviation = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team] as const));
-    const away = byAbbreviation.get(matchup.away);
-    const home = byAbbreviation.get(matchup.home);
+    const away = matchup ? byAbbreviation.get(matchup[0]) : undefined;
+    const home = matchup ? byAbbreviation.get(matchup[1]) : undefined;
     if (away && home && away.id !== home.id) {
       return { away, home };
     }
     return { away: leagueTeams[0], home: leagueTeams[1] };
-  }, [teams, activeLeague]);
+  }, [teams, activeLeague, activeLeagues]);
   const activeLeagueItem = activeLeagues.find((item) => item.league === activeLeague) ?? null;
   const activeAlertTypes = (activeLeagueItem?.alert_types ?? []) as AlertType[];
 
