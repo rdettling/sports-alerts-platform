@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models import Game, LeagueSetting, Team, WorkerJob
@@ -368,6 +369,36 @@ def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
     assert next_seconds == 123
     assert called["cleanup"] == 1
     assert result["job_type"] == "catalog_sync"
+
+
+def test_run_catalog_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_catalog_sync",
+        lambda provider, league: {
+            "status": "failed",
+            "job_type": "catalog_sync",
+            "league": league,
+            "error": "No MLS games could be mapped to catalog teams",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="No MLS games could be mapped to catalog teams"):
+        scheduler._run_catalog_sync_job("MLS")
+
+
+def test_run_live_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "failed",
+            "job_type": "live_sync",
+            "league": league,
+            "error": "scoreboard unavailable",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="scoreboard unavailable"):
+        scheduler._run_live_sync_job("MLS")
 
 
 def test_log_job_success_emits_compact_summary(caplog):

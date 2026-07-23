@@ -215,6 +215,8 @@ def _log_job_success(
 def _run_catalog_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     provider = EspnScoreboardClient()
     result = run_catalog_sync(provider=provider, league=league)
+    if str(result.get("status", "")) != "success":
+        raise RuntimeError(str(result.get("error") or f"Catalog sync failed for {league}"))
     db = SessionLocal()
     try:
         removed = cleanup_games_outside_window(db)
@@ -226,8 +228,7 @@ def _run_catalog_sync_job(league: str) -> tuple[int, dict[str, int | str | None]
         raise
     finally:
         db.close()
-    if str(result.get("status", "")) == "success":
-        _pull_live_sync_forward(league)
+    _pull_live_sync_forward(league)
     fallback = settings.catalog_sync_interval_seconds
     next_poll = int(result.get("next_poll_seconds", fallback))
     return max(1, next_poll), result
@@ -284,6 +285,8 @@ def _pull_live_sync_forward(league: str) -> None:
 def _run_live_sync_job(league: str) -> tuple[int, dict[str, int | str | None]]:
     provider = EspnScoreboardClient()
     result = run_live_sync(provider=provider, league=league)
+    if str(result.get("status", "")) != "success":
+        raise RuntimeError(str(result.get("error") or f"Live sync failed for {league}"))
     has_live_games = str(result.get("has_live_games", "false")).lower() == "true"
     if has_live_games:
         next_poll = int(result.get("next_poll_seconds", _league_live_interval_seconds(league)))

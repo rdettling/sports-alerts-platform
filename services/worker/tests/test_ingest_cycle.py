@@ -196,7 +196,7 @@ class RecordingCatalogProvider:
             make_game(
                 external_game_id=f"{league.lower()}-catalog-game",
                 home_external_team_id="10" if league == "MLB" else "660",
-                away_external_team_id="4" if league == "MLB" else "203",
+                away_external_team_id="2" if league == "MLB" else "203",
                 scheduled_start_time=self.scheduled_start_time,
                 status="scheduled",
             )
@@ -1339,6 +1339,53 @@ def test_catalog_sync_fails_for_disabled_league(db_session):
 
     result = run_catalog_sync(StaticProvider(), league="MLB")
     assert result["status"] == "failed"
+
+
+def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="mls-unmapped",
+                home_external_team_id="unknown-home",
+                away_external_team_id="unknown-away",
+                status="scheduled",
+            )
+        ]
+    )
+
+    result = run_catalog_sync(provider, league="MLS")
+
+    assert result["status"] == "failed"
+    assert result["error"] == "No MLS games could be mapped to catalog teams"
+    assert db_session.scalar(select(Game).where(Game.league == "MLS")) is None
+
+
+def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
+    monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="mls-mapped",
+                home_external_team_id="187",
+                away_external_team_id="18966",
+                status="scheduled",
+            ),
+            make_game(
+                external_game_id="mls-all-star",
+                home_external_team_id="unknown-home",
+                away_external_team_id="unknown-away",
+                status="scheduled",
+            ),
+        ]
+    )
+
+    result = run_catalog_sync(provider, league="MLS")
+
+    assert result["status"] == "success"
+    assert result["games_checked"] == 2
+    assert result["games_updated"] == 1
+    games = db_session.scalars(select(Game).where(Game.league == "MLS")).all()
+    assert [game.external_game_id for game in games] == ["mls-mapped"]
 
 
 def test_live_sync_promotes_scheduled_game_to_live(db_session):

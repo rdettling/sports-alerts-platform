@@ -476,6 +476,8 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
         team_map, team_names = _league_team_maps(db, league)
         all_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, game_key_by_id, soccer_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
+        if all_games and not touched_game_ids:
+            raise RuntimeError(f"No {league} games could be mapped to catalog teams")
 
         odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
         odds_calls = 0
@@ -522,13 +524,14 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
             "alerts_created": alerts_created,
             "next_poll_seconds": _catalog_interval_seconds(league),
         }
-    except Exception:
+    except Exception as exc:
         db.rollback()
         logger.exception("Catalog sync failed")
         return {
             "status": "failed",
             "job_type": "catalog_sync",
             "league": league,
+            "error": str(exc),
             "games_checked": 0,
             "games_updated": 0,
             "next_poll_seconds": _catalog_interval_seconds(league),
@@ -625,13 +628,14 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
             "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(league),
             "mode": "live" if has_live_games else ("waiting_for_start" if next_scheduled is not None else "no_upcoming"),
         }
-    except Exception:
+    except Exception as exc:
         db.rollback()
         logger.exception("Live sync failed")
         return {
             "status": "failed",
             "job_type": "live_sync",
             "league": league,
+            "error": str(exc),
             "has_live_games": "false",
             "next_scheduled_start_at": None,
             "games_checked": 0,
