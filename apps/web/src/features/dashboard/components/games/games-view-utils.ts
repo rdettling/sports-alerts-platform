@@ -1,4 +1,4 @@
-import { type Game, type League } from "../../../../shared/api";
+import { type Game, type League, type LeagueSetting, type Sport } from "../../../../shared/api";
 import { formatGameTime, liveCadenceLabel, liveStaleAfterMinutes } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
 
@@ -89,7 +89,7 @@ export function latestIngestAtFromGames(games: Game[]): Date | null {
   return latestIngestAt(games);
 }
 
-export function buildSyncRows(games: Game[], activeLeagues: League[]): SyncRow[] {
+export function buildSyncRows(games: Game[], activeLeagues: LeagueSetting[]): SyncRow[] {
   const byLeague = (league: League) => {
     const leagueGames = games.filter((game) => (game.league || "").toUpperCase() === league);
     const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
@@ -134,21 +134,21 @@ export function buildSyncRows(games: Game[], activeLeagues: League[]): SyncRow[]
       detail: "Schedule + odds snapshot",
       tone: syncTone(catalogLastAt, 12 * 60 + 30, true),
     },
-    ...activeLeagues.map((league) =>
+    ...activeLeagues.map((profile) =>
       leagueRow(
-        `Live (${league})`,
-        liveCadenceLabel(league),
-        byLeague(league),
-        liveStaleAfterMinutes(league),
+        `Live (${profile.league})`,
+        liveCadenceLabel(profile.live_sync_interval_seconds),
+        byLeague(profile.league),
+        liveStaleAfterMinutes(profile.live_sync_interval_seconds),
       ),
     ),
   ];
 }
 
-export function gameStatusLabel(game: Game): string {
+export function gameStatusLabel(game: Game, sport: Sport): string {
   return formatGameStatusLabel(
     game.status,
     game.status === "final" || game.is_final,
-    formatGameTime(game),
+    formatGameTime(game, sport),
   );
 }

@@ -19,11 +19,7 @@ CORS_ALLOW_ORIGINS=http://localhost:5173
 
 ODDS_API_KEY=replace-with-the-odds-api-key
 ODDS_ENABLED=false
-ODDS_API_SPORT_KEY_NBA=basketball_nba
-ODDS_API_SPORT_KEY_MLB=baseball_mlb
 CATALOG_SYNC_INTERVAL_SECONDS=43200
-NBA_LIVE_SYNC_INTERVAL_SECONDS=120
-MLB_LIVE_SYNC_INTERVAL_SECONDS=300
 
 RESEND_API_KEY=replace-with-resend-api-key
 
@@ -40,8 +36,6 @@ Optional local overrides you may want to add:
 ```env
 DELIVERY_MODE=log
 FROM_EMAIL=alerts@example.com
-ODDS_API_SPORT_KEY_WORLD_CUP=soccer_fifa_world_cup
-WORLD_CUP_LIVE_SYNC_INTERVAL_SECONDS=180
 ODDS_PREGAME_WINDOW_HOURS=24
 SCHEDULER_TICK_SECONDS=15
 BOOTSTRAP_ADMIN_EMAIL=you@example.com
@@ -76,20 +70,15 @@ Common values:
 
 - `DATABASE_URL`
 - `CATALOG_SYNC_INTERVAL_SECONDS`
-- `NBA_LIVE_SYNC_INTERVAL_SECONDS`
-- `MLB_LIVE_SYNC_INTERVAL_SECONDS`
-- `WORLD_CUP_LIVE_SYNC_INTERVAL_SECONDS`
 - `SCHEDULER_TICK_SECONDS`
 - `ODDS_ENABLED`
 - `ODDS_API_KEY`
-- `ODDS_API_SPORT_KEY_NBA`
-- `ODDS_API_SPORT_KEY_MLB`
-- `ODDS_API_SPORT_KEY_WORLD_CUP`
 - `ODDS_PREGAME_WINDOW_HOURS`
 
 Notes:
 
 - `ODDS_API_KEY` is still required by settings validation even when `ODDS_ENABLED=false`.
+- League-specific live cadences and odds provider sport keys are stable values in the league registry, not environment settings.
 - The worker always handles schedule ingest and alert evaluation; `ODDS_ENABLED=false` only disables odds fetches.
 
 ## Frontend Config

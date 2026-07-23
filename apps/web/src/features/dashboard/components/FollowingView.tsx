@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   followTeam,
+  type League,
   type Team,
   unfollowGame,
   unfollowTeam,
@@ -28,6 +29,10 @@ export function FollowingView({ token }: { token: string }) {
   const teams = data?.teams ?? [];
   const followedTeams = data?.follows.teams ?? [];
   const followedGames = data?.games ?? [];
+  const leagueProfiles = useMemo(
+    () => new Map((data?.leagues ?? []).map((profile) => [profile.league, profile] as const)),
+    [data?.leagues],
+  );
 
   useEffect(() => {
     if (queryError) setError(messageFromUnknown(queryError));
@@ -142,16 +147,18 @@ export function FollowingView({ token }: { token: string }) {
               {followedGames.map((game) => {
                 const home = teamMap.get(game.home_team_id);
                 const away = teamMap.get(game.away_team_id);
-                if (!home || !away) return null;
+                const leagueProfile = leagueProfiles.get(game.league as League);
+                if (!home || !away || !leagueProfile) return null;
 
                 return (
                   <GameRowCard
                     key={game.id}
                     game={game}
+                    sport={leagueProfile.sport}
                     home={home}
                     away={away}
                     isFollowed
-                    statusLabel={formatGameStatusLabel(game.status, game.status === "final" || game.is_final, formatGameTime(game))}
+                    statusLabel={formatGameStatusLabel(game.status, game.status === "final" || game.is_final, formatGameTime(game, leagueProfile.sport))}
                     actionsDisabled={busyGameId === game.id || unfollowGameMutation.isPending}
                     onOpenAlertSettings={() => {
                       openGameAlerts(game).catch(() => undefined);

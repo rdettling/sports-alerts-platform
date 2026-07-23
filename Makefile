@@ -33,13 +33,9 @@ setup:
 			'WEB_BASE_URL=http://localhost:5173' \
 			'CORS_ALLOW_ORIGINS=http://localhost:5173' \
 			'ODDS_API_KEY=replace-with-the-odds-api-key' \
-			'ODDS_API_SPORT_KEY_NBA=basketball_nba' \
-			'ODDS_API_SPORT_KEY_MLB=baseball_mlb' \
 			'ODDS_ENABLED=false' \
 			'RESEND_API_KEY=replace-with-resend-api-key' \
 			'CATALOG_SYNC_INTERVAL_SECONDS=43200' \
-			'NBA_LIVE_SYNC_INTERVAL_SECONDS=120' \
-			'MLB_LIVE_SYNC_INTERVAL_SECONDS=300' \
 			'ODDS_PREGAME_WINDOW_HOURS=24' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \

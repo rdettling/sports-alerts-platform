@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,44 +10,55 @@ from sqlalchemy.orm import Session
 from app.db.models import LeagueSetting
 
 
+Sport = Literal["basketball", "baseball", "soccer"]
+
+
 @dataclass(frozen=True)
 class LeagueProfile:
     league: str
+    sport: Sport
     label: str
     badge_label: str
     alert_types: tuple[str, ...]
     default_test_matchup: tuple[str, str]
     scoreboard_url: str
-    supports_odds: bool
+    live_sync_interval_seconds: int
+    odds_sport_key: str | None
 
 
 LEAGUE_PROFILES: dict[str, LeagueProfile] = {
     "NBA": LeagueProfile(
         league="NBA",
+        sport="basketball",
         label="NBA",
         badge_label="NBA",
         alert_types=("game_start", "close_game_late", "final_result"),
         default_test_matchup=("ATL", "BOS"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-        supports_odds=True,
+        live_sync_interval_seconds=120,
+        odds_sport_key="basketball_nba",
     ),
     "MLB": LeagueProfile(
         league="MLB",
+        sport="baseball",
         label="MLB",
         badge_label="MLB",
         alert_types=("game_start", "inning_start", "final_result"),
         default_test_matchup=("MIA", "TOR"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-        supports_odds=True,
+        live_sync_interval_seconds=300,
+        odds_sport_key="baseball_mlb",
     ),
     "WORLD_CUP": LeagueProfile(
         league="WORLD_CUP",
+        sport="soccer",
         label="World Cup",
         badge_label="WC",
         alert_types=("game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"),
         default_test_matchup=("MEX", "USA"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-        supports_odds=True,
+        live_sync_interval_seconds=180,
+        odds_sport_key="soccer_fifa_world_cup",
     ),
 }
 
@@ -81,7 +93,7 @@ def get_scoreboard_url(league: str) -> str:
 
 
 def league_supports_odds(league: str) -> bool:
-    return get_league_profile(league).supports_odds
+    return get_league_profile(league).odds_sport_key is not None
 
 
 def ensure_league_settings(db: Session) -> None:

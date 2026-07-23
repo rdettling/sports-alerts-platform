@@ -8,7 +8,7 @@ from time import monotonic
 from sqlalchemy import delete, func, select
 
 from app.db.models import Game, WorkerJob
-from app.services.leagues import get_active_leagues
+from app.services.leagues import get_active_leagues, get_league_profile
 from worker.cleanup import cleanup_games_outside_window
 from worker.config import settings
 from worker.db import SessionLocal
@@ -31,13 +31,7 @@ def _utcnow() -> datetime:
 
 
 def _league_live_interval_seconds(league: str) -> int:
-    if league == "NBA":
-        interval = settings.nba_live_sync_interval_seconds
-    elif league == "MLB":
-        interval = settings.mlb_live_sync_interval_seconds
-    else:
-        interval = settings.world_cup_live_sync_interval_seconds
-    return max(1, interval)
+    return max(1, get_league_profile(league).live_sync_interval_seconds)
 
 
 def _sync_job_targets_disabled_league(job: WorkerJob, active_leagues: set[str]) -> bool:

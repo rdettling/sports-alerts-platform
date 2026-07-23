@@ -781,7 +781,7 @@ def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
-    assert "World Cup state transition external_game_id=game-world-cup-live" in caplog.text
+    assert "Soccer state transition external_game_id=game-world-cup-live" in caplog.text
     assert "period=2->3" in caplog.text
     assert "90+5'" in caplog.text
     assert "ET" in caplog.text
@@ -862,7 +862,7 @@ def test_world_cup_transition_logging_marks_penalty_kicks_window(db_session, cap
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
-    assert "World Cup state transition external_game_id=game-world-cup-live" in caplog.text
+    assert "Soccer state transition external_game_id=game-world-cup-live" in caplog.text
     assert "period=3->3" in caplog.text
     assert "penalty_kicks_window=False->True" in caplog.text
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Game, type League, Team } from "../api";
+import { Game, type Sport, Team } from "../api";
 import worldCupMark from "../../assets/world-cup-mark.png";
 
 const GAME_STATUS_LABELS: Record<string, string> = {
@@ -42,16 +42,12 @@ export function leagueBadgeLabel(league: string | null | undefined): string {
   return normalized || "N/A";
 }
 
-export function liveCadenceLabel(league: League): string {
-  if (league === "NBA") return "2m cadence";
-  if (league === "MLB") return "5m cadence";
-  return "3m cadence";
+export function liveCadenceLabel(intervalSeconds: number): string {
+  return `${Math.max(1, Math.round(intervalSeconds / 60))}m cadence`;
 }
 
-export function liveStaleAfterMinutes(league: League): number {
-  if (league === "NBA") return 4;
-  if (league === "MLB") return 10;
-  return 6;
+export function liveStaleAfterMinutes(intervalSeconds: number): number {
+  return Math.max(1, intervalSeconds / 30);
 }
 
 export function scoreSnippet(game: Game): string {
@@ -141,25 +137,24 @@ function isClockAtZero(clock: string): boolean {
   return clock === "0" || clock === "0.0" || clock === "00:00" || clock === "0:00";
 }
 
-export function formatGameTime(game: Game): string {
+export function formatGameTime(game: Game, sport: Sport): string {
   if (game.status === "in_progress" || game.status === "live") {
-    const league = (game.league || "").toUpperCase();
     const period =
-      league === "MLB" ? formatBaseballPeriod(game.period) : league === "WORLD_CUP" ? formatSoccerPeriod(game.period) : formatPeriod(game.period);
+      sport === "baseball" ? formatBaseballPeriod(game.period) : sport === "soccer" ? formatSoccerPeriod(game.period) : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
-    if (league !== "MLB" && game.period === 2 && isClockAtZero(clock)) {
+    if (sport === "basketball" && game.period === 2 && isClockAtZero(clock)) {
       return "Halftime";
     }
-    if (league === "WORLD_CUP" && clock.toUpperCase() === "HT") {
+    if (sport === "soccer" && clock.toUpperCase() === "HT") {
       return "Halftime";
     }
-    if (league === "WORLD_CUP" && clock) {
+    if (sport === "soccer" && clock) {
       return clock;
     }
-    if (league === "MLB" && clock && !isClockAtZero(clock)) {
+    if (sport === "baseball" && clock && !isClockAtZero(clock)) {
       return clock;
     }
-    if (league === "MLB" && period && isClockAtZero(clock)) {
+    if (sport === "baseball" && period && isClockAtZero(clock)) {
       return period;
     }
     if (period && clock) {

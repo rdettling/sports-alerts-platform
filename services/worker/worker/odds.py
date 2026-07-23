@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from app.services.api_usage import record_api_call_event
+from app.services.leagues import get_league_profile
 from sqlalchemy.orm import Session
 from worker.config import settings
 
@@ -139,11 +140,10 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
 
 
 def _odds_sport_key_for_league(league: str) -> str:
-    if league == "MLB":
-        return settings.odds_api_sport_key_mlb
-    if league == "WORLD_CUP":
-        return settings.odds_api_sport_key_world_cup
-    return settings.odds_api_sport_key_nba
+    sport_key = get_league_profile(league).odds_sport_key
+    if sport_key is None:
+        raise ValueError(f"Odds are not supported for league: {league}")
+    return sport_key
 
 
 def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
@@ -237,7 +237,11 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
 
 def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     normalized = league.strip().upper()
-    if normalized not in {"NBA", "MLB", "WORLD_CUP"}:
+    try:
+        profile = get_league_profile(normalized)
+    except ValueError:
+        return {}
+    if profile.odds_sport_key is None:
         return {}
 
     now = monotonic()

@@ -19,9 +19,11 @@ def list_active_leagues(db: Session = Depends(get_db)) -> list[LeagueSettingOut]
         items.append(
             LeagueSettingOut(
                 league=row.league,
+                sport=profile.sport,
                 label=profile.label,
                 badge_label=profile.badge_label,
                 alert_types=list(profile.alert_types),
+                live_sync_interval_seconds=profile.live_sync_interval_seconds,
                 is_enabled=row.is_enabled,
             )
         )

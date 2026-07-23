@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.services.api_usage import record_api_call_event
-from app.services.leagues import get_scoreboard_url
+from app.services.leagues import get_league_profile, get_scoreboard_url
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,8 @@ class EspnScoreboardClient:
         clock = status_payload.get("displayClock")
         short_detail = str(status_type.get("shortDetail") or "").strip()
         normalized_league = league.upper()
-        if normalized_league in {"MLB", "WORLD_CUP"} and short_detail:
+        sport = get_league_profile(normalized_league).sport
+        if sport in {"baseball", "soccer"} and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
         context_label: str | None = None

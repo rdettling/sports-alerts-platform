@@ -127,9 +127,9 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     league_settings = client.get("/ops/leagues", headers=headers)
     assert league_settings.status_code == 200
     assert league_settings.json()["items"] == [
-        {"league": "NBA", "label": "NBA", "badge_label": "NBA", "alert_types": ["game_start", "close_game_late", "final_result"], "is_enabled": True},
-        {"league": "MLB", "label": "MLB", "badge_label": "MLB", "alert_types": ["game_start", "inning_start", "final_result"], "is_enabled": True},
-        {"league": "WORLD_CUP", "label": "World Cup", "badge_label": "WC", "alert_types": ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], "is_enabled": True},
+        {"league": "NBA", "sport": "basketball", "label": "NBA", "badge_label": "NBA", "alert_types": ["game_start", "close_game_late", "final_result"], "live_sync_interval_seconds": 120, "is_enabled": True},
+        {"league": "MLB", "sport": "baseball", "label": "MLB", "badge_label": "MLB", "alert_types": ["game_start", "inning_start", "final_result"], "live_sync_interval_seconds": 300, "is_enabled": True},
+        {"league": "WORLD_CUP", "sport": "soccer", "label": "World Cup", "badge_label": "WC", "alert_types": ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], "live_sync_interval_seconds": 180, "is_enabled": True},
     ]
 
     summary = client.get("/ops/admin/summary?window=24h", headers=headers)

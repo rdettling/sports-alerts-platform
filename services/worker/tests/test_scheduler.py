@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import Game, LeagueSetting, Team, WorkerJob
-from app.services.leagues import ensure_league_settings
+from app.services.leagues import ensure_league_settings, get_league_profile
 from worker import scheduler
 
 
@@ -249,7 +249,7 @@ def test_run_live_sync_job_uses_league_live_interval_when_start_missing(monkeypa
         },
     )
     next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == scheduler.settings.mlb_live_sync_interval_seconds
+    assert next_seconds == get_league_profile("MLB").live_sync_interval_seconds
     assert result["mode"] == "waiting_for_start"
 
 
@@ -267,7 +267,7 @@ def test_run_live_sync_job_uses_league_live_interval_when_start_is_past(monkeypa
         },
     )
     next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == scheduler.settings.mlb_live_sync_interval_seconds
+    assert next_seconds == get_league_profile("MLB").live_sync_interval_seconds
     assert result["mode"] == "waiting_for_start"
 
 
@@ -296,12 +296,12 @@ def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
             "job_type": "live_sync",
             "league": league,
             "has_live_games": "true",
-            "next_poll_seconds": scheduler.settings.world_cup_live_sync_interval_seconds,
+            "next_poll_seconds": get_league_profile("WORLD_CUP").live_sync_interval_seconds,
         },
     )
 
     next_seconds, result = scheduler._run_live_sync_job("WORLD_CUP")
-    assert next_seconds == scheduler.settings.world_cup_live_sync_interval_seconds
+    assert next_seconds == get_league_profile("WORLD_CUP").live_sync_interval_seconds
     assert result["has_live_games"] == "true"
 
 

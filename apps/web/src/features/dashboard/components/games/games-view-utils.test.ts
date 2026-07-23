@@ -32,6 +32,7 @@ describe("gameStatusLabel", () => {
         period: 5,
         clock: "Top 5th",
       }),
+      "baseball",
     );
     expect(label).toBe("Top 5th");
   });
@@ -42,6 +43,7 @@ describe("gameStatusLabel", () => {
         status: "final",
         is_final: true,
       }),
+      "baseball",
     );
     expect(label).toBe("Final");
   });
@@ -52,6 +54,7 @@ describe("gameStatusLabel", () => {
         status: "postponed",
         is_final: false,
       }),
+      "baseball",
     );
     expect(label).toBe("Postponed");
   });

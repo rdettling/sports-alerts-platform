@@ -51,7 +51,7 @@ vi.mock("../hooks/useGamesData", () => ({
         { id: 12, external_team_id: "12", league: "NBA", name: "Los Angeles Lakers", abbreviation: "LAL" },
         { id: 13, external_team_id: "13", league: "NBA", name: "New York Knicks", abbreviation: "NY" },
       ],
-      leagues: [{ league: "NBA", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], is_enabled: true }],
+      leagues: [{ league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, is_enabled: true }],
     },
   })),
 }));

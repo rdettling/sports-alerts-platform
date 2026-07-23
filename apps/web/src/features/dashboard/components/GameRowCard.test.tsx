@@ -52,6 +52,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame()}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed={false}
@@ -70,6 +71,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame({ status: "scheduled", is_final: false })}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed
@@ -90,6 +92,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame({ status: "final", is_final: true, home_score: 100, away_score: 95 })}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed
@@ -105,6 +108,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 })}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed={false}
@@ -119,6 +123,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame({ context_label: "NBA Finals - Game 5 · Knicks lead series 3-1" })}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed={false}
@@ -134,6 +139,7 @@ describe("GameRowCard", () => {
     render(
       <GameRowCard
         game={makeGame({ context_label: "Group Stage" })}
+        sport="basketball"
         home={home}
         away={away}
         isFollowed={false}
@@ -160,6 +166,7 @@ describe("GameRowCard", () => {
             ],
           },
         })}
+        sport="soccer"
         home={{ ...home, league: "WORLD_CUP" }}
         away={{ ...away, league: "WORLD_CUP" }}
         isFollowed={false}

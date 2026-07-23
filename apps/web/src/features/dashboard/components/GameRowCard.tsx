@@ -1,9 +1,10 @@
-import { type Game, type Team } from "../../../shared/api";
+import { type Game, type Sport, type Team } from "../../../shared/api";
 import { TeamLogo, drawOdds, formatMoneyline, isThreeWayOdds, leagueBadgeLabel, leagueLogoUrl, oddsOutcomeByTeamSide } from "../../../shared/lib/dashboard-ui";
 import { GameStatePill, type GameStateTone } from "./GameStatePill";
 
 type GameRowCardProps = {
   game: Game;
+  sport: Sport;
   home: Team;
   away: Team;
   isFollowed: boolean;
@@ -17,6 +18,7 @@ type GameRowCardProps = {
 
 export function GameRowCard({
   game,
+  sport,
   home,
   away,
   isFollowed,
@@ -33,7 +35,7 @@ export function GameRowCard({
   const isLive = game.status === "in_progress" || game.status === "live";
   const isFinal = game.status === "final" || game.is_final;
   const showScoreValues = isLive || isFinal;
-  const showThreeWayOdds = !showScoreValues && game.league === "WORLD_CUP" && isThreeWayOdds(game);
+  const showThreeWayOdds = !showScoreValues && sport === "soccer" && isThreeWayOdds(game);
   const awayValueText = showScoreValues
     ? String(game.away_score ?? "—")
     : game.odds

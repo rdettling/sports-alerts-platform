@@ -23,9 +23,9 @@ const sendDevTestEmailMock = vi.fn(async ({ league, alert_type }: { league: "NBA
 vi.mock("../../../shared/api", () => ({
   listTeams: () => listTeamsMock(),
   listLeagues: vi.fn(async () => [
-    { league: "NBA", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], is_enabled: true },
-    { league: "MLB", label: "MLB", badge_label: "MLB", alert_types: ["game_start", "inning_start", "final_result"], is_enabled: true },
-    { league: "WORLD_CUP", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], is_enabled: true },
+    { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, is_enabled: true },
+    { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: ["game_start", "inning_start", "final_result"], live_sync_interval_seconds: 300, is_enabled: true },
+    { league: "WORLD_CUP", sport: "soccer", label: "World Cup", badge_label: "WC", alert_types: ["game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"], live_sync_interval_seconds: 180, is_enabled: true },
   ]),
   sendDevTestEmail: (_token: string, payload: { league: "NBA" | "MLB" | "WORLD_CUP"; alert_type: string }) =>
     sendDevTestEmailMock(payload),

@@ -51,6 +51,10 @@ export function GamesView({ token }: { token: string }) {
   const teams = data?.teams ?? [];
   const activeLeagues = data?.leagues ?? [];
   const activeLeagueKeys = activeLeagues.map((item) => item.league);
+  const leagueProfiles = useMemo(
+    () => new Map(activeLeagues.map((profile) => [profile.league, profile] as const)),
+    [activeLeagues],
+  );
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
@@ -76,7 +80,7 @@ export function GamesView({ token }: { token: string }) {
     if (hasAutoSelectedInitialDay.current) return;
     if (dayFilter !== "all") return;
     if (dayOptions.length === 0) return;
-    const todayKey = localDateKey(new Date().toISOString());
+    const todayKey = localDateKey(new Date(Date.now()).toISOString());
     const todayOption = dayOptions.find((day) => day.key === todayKey);
     if (todayOption) {
       hasAutoSelectedInitialDay.current = true;
@@ -113,17 +117,19 @@ export function GamesView({ token }: { token: string }) {
                       {group.items.map((game) => {
                         const home = teamMap.get(game.home_team_id);
                         const away = teamMap.get(game.away_team_id);
-                        if (!home || !away) return null;
+                        const leagueProfile = leagueProfiles.get(game.league as League);
+                        if (!home || !away || !leagueProfile) return null;
                         const isFollowed = followedGameIds.has(game.id);
 
                         return (
                           <GameRowCard
                             key={game.id}
                             game={game}
+                            sport={leagueProfile.sport}
                             home={home}
                             away={away}
                             isFollowed={isFollowed}
-                            statusLabel={gameStatusLabel(game)}
+                            statusLabel={gameStatusLabel(game, leagueProfile.sport)}
                             showContextLabel
                             actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
                             onFollow={() => toggleMutation.mutate({ gameId: game.id, isFollowed: false })}

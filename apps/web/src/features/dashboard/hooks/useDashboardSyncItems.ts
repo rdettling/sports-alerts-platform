@@ -24,7 +24,7 @@ export function useDashboardSyncItems() {
 
   return useMemo<HeaderSyncItem[]>(() => {
     const leagueItems = data?.leagues ?? [];
-    const rows = buildSyncRows(data?.games ?? [], leagueItems.map((item) => item.league));
+    const rows = buildSyncRows(data?.games ?? [], leagueItems);
     const labelByLeague = new Map(leagueItems.map((item) => [item.league, item.label]));
     return rows.map((row) => ({
       key: row.key,

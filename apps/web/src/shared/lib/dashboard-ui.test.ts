@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { formatGameTime, formatMoneyline, noVigProbabilities } from "./dashboard-ui";
+import {
+  formatGameTime,
+  formatMoneyline,
+  liveCadenceLabel,
+  liveStaleAfterMinutes,
+  noVigProbabilities,
+} from "./dashboard-ui";
 
 describe("dashboard utilities", () => {
   it("formats moneyline", () => {
     expect(formatMoneyline(120)).toBe("+120");
     expect(formatMoneyline(-105)).toBe("-105");
     expect(formatMoneyline(null)).toBe("—");
+  });
+
+  it("derives live cadence and stale threshold from the API interval", () => {
+    expect(liveCadenceLabel(180)).toBe("3m cadence");
+    expect(liveStaleAfterMinutes(180)).toBe(6);
   });
 
   it("computes no-vig probabilities", () => {
@@ -57,7 +68,7 @@ describe("dashboard utilities", () => {
       is_final: false,
       last_ingested_at: null,
       odds: null,
-    });
+    }, "baseball");
 
     expect(label).toBe("Inning 8");
     expect(label.includes("OT")).toBe(false);
@@ -81,7 +92,7 @@ describe("dashboard utilities", () => {
       is_final: false,
       last_ingested_at: null,
       odds: null,
-    });
+    }, "soccer");
 
     expect(label).toBe("67'");
   });
@@ -103,7 +114,7 @@ describe("dashboard utilities", () => {
       is_final: false,
       last_ingested_at: null,
       odds: null,
-    });
+    }, "baseball");
 
     expect(label).toMatch(/:\d{2}/);
     expect(label).not.toMatch(/\d+\/\d+/);

@@ -63,6 +63,10 @@ vi.mock("../../../shared/api", () => ({
     ],
   })),
   listTeams: vi.fn(async () => []),
+  listLeagues: vi.fn(async () => [
+    { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: [], live_sync_interval_seconds: 120, is_enabled: true },
+    { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: [], live_sync_interval_seconds: 300, is_enabled: true },
+  ]),
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {

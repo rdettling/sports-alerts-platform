@@ -14,8 +14,8 @@ from app.db.models import (
     GameOddsOutcomeCurrent,
     Team,
 )
-from app.services.leagues import get_active_leagues, league_supports_odds, list_supported_leagues
-from worker.alerts import ScoreChangeEvent, WorldCupDerivedEvents, evaluate_and_record_alerts
+from app.services.leagues import get_active_leagues, get_league_profile, league_supports_odds, list_supported_leagues
+from worker.alerts import ScoreChangeEvent, SoccerDerivedEvents, evaluate_and_record_alerts
 from worker.db import SessionLocal
 from worker.config import settings
 from worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
@@ -36,7 +36,7 @@ class ScoreboardFetcher(Protocol):
 class GameUpdateResult:
     did_update: bool
     game_id: int | None
-    world_cup_events: WorldCupDerivedEvents | None = None
+    soccer_events: SoccerDerivedEvents | None = None
 
 
 def _normalize_league(league: str) -> str:
@@ -56,13 +56,7 @@ def _catalog_interval_seconds(league: str) -> int:
 
 
 def _live_interval_seconds(league: str) -> int:
-    if league == "NBA":
-        interval = settings.nba_live_sync_interval_seconds
-    elif league == "MLB":
-        interval = settings.mlb_live_sync_interval_seconds
-    else:
-        interval = settings.world_cup_live_sync_interval_seconds
-    return max(1, interval)
+    return max(1, get_league_profile(league).live_sync_interval_seconds)
 
 def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
     return db.scalar(
@@ -83,7 +77,7 @@ def _league_team_maps(db: Session, league: str) -> tuple[dict[str, int], dict[in
     )
 
 
-def _is_world_cup_live_second_half(*, status: str, period: int | None, clock: str | None) -> bool:
+def _is_soccer_live_second_half(*, status: str, period: int | None, clock: str | None) -> bool:
     if status not in {"in_progress", "live"}:
         return False
     if period != 2:
@@ -92,12 +86,12 @@ def _is_world_cup_live_second_half(*, status: str, period: int | None, clock: st
     return normalized_clock not in {"HT", "HALFTIME"}
 
 
-def _is_world_cup_extra_time(*, status: str, period: int | None) -> bool:
+def _is_soccer_extra_time(*, status: str, period: int | None) -> bool:
     return status in {"in_progress", "live"} and (period or 0) >= 3
 
 
-def _is_world_cup_penalty_kicks_window(*, status: str, period: int | None, home_score: int | None, away_score: int | None, clock: str | None) -> bool:
-    if not _is_world_cup_extra_time(status=status, period=period):
+def _is_soccer_penalty_kicks_window(*, status: str, period: int | None, home_score: int | None, away_score: int | None, clock: str | None) -> bool:
+    if not _is_soccer_extra_time(status=status, period=period):
         return False
     if home_score is None or away_score is None or home_score != away_score:
         return False
@@ -114,7 +108,7 @@ def _is_world_cup_penalty_kicks_window(*, status: str, period: int | None, home_
 
 
 @dataclass(frozen=True)
-class WorldCupStateSnapshot:
+class SoccerStateSnapshot:
     external_game_id: str
     context_label: str | None
     status: str
@@ -125,8 +119,8 @@ class WorldCupStateSnapshot:
     is_final: bool
 
 
-def _world_cup_state_snapshot(game: Game) -> WorldCupStateSnapshot:
-    return WorldCupStateSnapshot(
+def _soccer_state_snapshot(game: Game) -> SoccerStateSnapshot:
+    return SoccerStateSnapshot(
         external_game_id=game.external_game_id,
         context_label=game.context_label,
         status=game.status,
@@ -138,8 +132,8 @@ def _world_cup_state_snapshot(game: Game) -> WorldCupStateSnapshot:
     )
 
 
-def _classify_world_cup_derived_events(previous: Game | None, payload: ScoreboardGame, league: str) -> WorldCupDerivedEvents | None:
-    if league != "WORLD_CUP" or previous is None:
+def _classify_soccer_derived_events(previous: Game | None, payload: ScoreboardGame) -> SoccerDerivedEvents | None:
+    if previous is None:
         return None
     score_change: ScoreChangeEvent | None = None
     if (
@@ -176,36 +170,36 @@ def _classify_world_cup_derived_events(previous: Game | None, payload: Scoreboar
 
     second_half_started = (
         not payload.is_final
-        and not _is_world_cup_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
-        and _is_world_cup_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
+        and not _is_soccer_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
+        and _is_soccer_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
     )
     extra_time_started = (
         not payload.is_final
-        and not _is_world_cup_extra_time(status=previous.status, period=previous.period)
-        and _is_world_cup_extra_time(status=payload.status, period=payload.period)
+        and not _is_soccer_extra_time(status=previous.status, period=previous.period)
+        and _is_soccer_extra_time(status=payload.status, period=payload.period)
     )
     if score_change is None and not second_half_started and not extra_time_started:
         return None
-    return WorldCupDerivedEvents(
+    return SoccerDerivedEvents(
         score_change=score_change,
         second_half_started=second_half_started,
         extra_time_started=extra_time_started,
     )
 
 
-def _log_world_cup_transition(previous: WorldCupStateSnapshot, payload: ScoreboardGame, events: WorldCupDerivedEvents | None) -> None:
-    previous_second_half = _is_world_cup_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
-    new_second_half = _is_world_cup_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
-    previous_extra_time = _is_world_cup_extra_time(status=previous.status, period=previous.period)
-    new_extra_time = _is_world_cup_extra_time(status=payload.status, period=payload.period)
-    previous_penalty_kicks_window = _is_world_cup_penalty_kicks_window(
+def _log_soccer_transition(previous: SoccerStateSnapshot, payload: ScoreboardGame, events: SoccerDerivedEvents | None) -> None:
+    previous_second_half = _is_soccer_live_second_half(status=previous.status, period=previous.period, clock=previous.clock)
+    new_second_half = _is_soccer_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
+    previous_extra_time = _is_soccer_extra_time(status=previous.status, period=previous.period)
+    new_extra_time = _is_soccer_extra_time(status=payload.status, period=payload.period)
+    previous_penalty_kicks_window = _is_soccer_penalty_kicks_window(
         status=previous.status,
         period=previous.period,
         home_score=previous.home_score,
         away_score=previous.away_score,
         clock=previous.clock,
     )
-    new_penalty_kicks_window = _is_world_cup_penalty_kicks_window(
+    new_penalty_kicks_window = _is_soccer_penalty_kicks_window(
         status=payload.status,
         period=payload.period,
         home_score=payload.home_score,
@@ -215,7 +209,7 @@ def _log_world_cup_transition(previous: WorldCupStateSnapshot, payload: Scoreboa
     score_change = events.score_change if events is not None else None
 
     logger.info(
-        "World Cup state transition external_game_id=%s status=%s->%s period=%s->%s clock=%r->%r "
+        "Soccer state transition external_game_id=%s status=%s->%s period=%s->%s clock=%r->%r "
         "score=%s-%s->%s-%s is_final=%s->%s second_half_live=%s->%s extra_time=%s->%s "
         "penalty_kicks_window=%s->%s second_half_started=%s extra_time_started=%s score_changed=%s scoring_side=%s inferred_goal=%s context_label=%r->%r",
         previous.external_game_id,
@@ -263,8 +257,9 @@ def _upsert_game(db: Session, league: str, payload: ScoreboardGame, team_map: di
 
     existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.league == league))
     if existing:
-        previous_snapshot = _world_cup_state_snapshot(existing) if league == "WORLD_CUP" else None
-        world_cup_events = _classify_world_cup_derived_events(existing, payload, league)
+        is_soccer = get_league_profile(league).sport == "soccer"
+        previous_snapshot = _soccer_state_snapshot(existing) if is_soccer else None
+        soccer_events = _classify_soccer_derived_events(existing, payload) if is_soccer else None
         before = (
             existing.context_label,
             existing.status,
@@ -292,8 +287,8 @@ def _upsert_game(db: Session, league: str, payload: ScoreboardGame, team_map: di
             existing.is_final,
         )
         if previous_snapshot is not None and before != after:
-            _log_world_cup_transition(previous_snapshot, payload, world_cup_events)
-        return GameUpdateResult(did_update=before != after, game_id=existing.id, world_cup_events=world_cup_events)
+            _log_soccer_transition(previous_snapshot, payload, soccer_events)
+        return GameUpdateResult(did_update=before != after, game_id=existing.id, soccer_events=soccer_events)
 
     created = Game(
         external_game_id=payload.external_game_id,
@@ -405,11 +400,11 @@ def _upsert_games_and_collect(
     team_names: dict[int, str],
     *,
     only_external_ids: set[str] | None = None,
-) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, WorldCupDerivedEvents]]:
+) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, SoccerDerivedEvents]]:
     updated = 0
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}
-    world_cup_events: dict[int, WorldCupDerivedEvents] = {}
+    soccer_events: dict[int, SoccerDerivedEvents] = {}
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
@@ -424,9 +419,9 @@ def _upsert_games_and_collect(
             away_name = team_names.get(away_id) if away_id else None
             if home_name and away_name:
                 game_key_by_id[result.game_id] = game_key(home_name, away_name)
-            if result.world_cup_events is not None:
-                world_cup_events[result.game_id] = result.world_cup_events
-    return updated, touched_game_ids, game_key_by_id, world_cup_events
+            if result.soccer_events is not None:
+                soccer_events[result.game_id] = result.soccer_events
+    return updated, touched_game_ids, game_key_by_id, soccer_events
 
 
 def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> list[Game]:
@@ -475,7 +470,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
         requests = build_catalog_requests(db, league, now=now)
         team_map, team_names = _league_team_maps(db, league)
         all_games = provider.fetch_games(league, requests)
-        updated, touched_game_ids, game_key_by_id, world_cup_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
+        updated, touched_game_ids, game_key_by_id, soccer_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
 
         odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
         odds_calls = 0
@@ -498,7 +493,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, world_cup_events=world_cup_events)
+        alerts_created = evaluate_and_record_alerts(db, touched_games, soccer_events=soccer_events)
         db.commit()
 
         logger.info(
@@ -578,7 +573,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
                 )
             ).all()
         }
-        updated, touched_game_ids, _, world_cup_events = _upsert_games_and_collect(
+        updated, touched_game_ids, _, soccer_events = _upsert_games_and_collect(
             db,
             league,
             provider_games,
@@ -588,7 +583,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
         )
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, world_cup_events=world_cup_events)
+        alerts_created = evaluate_and_record_alerts(db, touched_games, soccer_events=soccer_events)
         has_live_games = bool(
             db.scalar(
                 select(func.count(Game.id)).where(

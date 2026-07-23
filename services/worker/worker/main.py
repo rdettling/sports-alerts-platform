@@ -2,8 +2,10 @@ import logging
 import signal
 import threading
 
-from worker.config import settings
+from app.services.leagues import get_league_profile, list_supported_leagues
+
 from worker import scheduler
+from worker.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -21,13 +23,15 @@ def main() -> None:
     signal.signal(signal.SIGINT, _stop_worker)
     signal.signal(signal.SIGTERM, _stop_worker)
 
+    live_intervals = ", ".join(
+        f"{league.lower()}={get_league_profile(league).live_sync_interval_seconds}s"
+        for league in list_supported_leagues()
+    )
     logger.info(
-        "Worker started scheduler_max_sleep=%ss intervals(catalog=%ss nba_live=%ss mlb_live=%ss world_cup_live=%ss)",
+        "Worker started scheduler_max_sleep=%ss intervals(catalog=%ss live=%s)",
         settings.scheduler_tick_seconds,
         settings.catalog_sync_interval_seconds,
-        settings.nba_live_sync_interval_seconds,
-        settings.mlb_live_sync_interval_seconds,
-        settings.world_cup_live_sync_interval_seconds,
+        live_intervals,
     )
     scheduler.run(_stop_event)
     logger.info("Worker stopped")

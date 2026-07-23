@@ -41,6 +41,8 @@ Current supported leagues:
 
 League runtime is controlled by DB-backed `league_settings`, so disabled leagues disappear from user-facing reads and worker scope without a code change.
 
+Each supported league has one code-owned profile containing its sport, provider identifiers, live cadence, alert types, and display metadata. Shared game behavior is selected by sport: basketball, baseball, or soccer. League-specific presentation such as World Cup stage labels remains explicit.
+
 ## Main API Areas
 
 The API is split into a small set of route groups:

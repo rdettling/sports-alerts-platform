@@ -15,12 +15,13 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Admin-only runtime area for provider telemetry, DB stats, league enable/disable controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
+- Code-owned league profiles pair league-specific provider configuration with shared basketball, baseball, or soccer behavior.
 
 League-specific alert types are:
 
 - `NBA`: `game_start`, `close_game_late`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `final_result`
-- `WORLD_CUP`: `game_start`, `score_changed`, `final_result`
+- `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 
 ## Repo Layout
 

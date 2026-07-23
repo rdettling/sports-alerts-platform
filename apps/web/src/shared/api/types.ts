@@ -50,11 +50,14 @@ export type Game = {
 };
 
 export type League = "NBA" | "MLB" | "WORLD_CUP";
+export type Sport = "basketball" | "baseball" | "soccer";
 export type LeagueSetting = {
   league: League;
+  sport: Sport;
   label: string;
   badge_label: string;
   alert_types: AlertType[];
+  live_sync_interval_seconds: number;
   is_enabled: boolean;
 };
 

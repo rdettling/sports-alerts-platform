@@ -19,7 +19,7 @@ from app.db.models import (
 )
 from app.services.alert_defaults import get_alert_default_values
 from app.services.alert_delivery import deliver_alert_now
-from app.services.leagues import get_alert_types
+from app.services.leagues import get_alert_types, get_league_profile
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class ScoreChangeEvent:
 
 
 @dataclass(frozen=True)
-class WorldCupDerivedEvents:
+class SoccerDerivedEvents:
     score_change: ScoreChangeEvent | None = None
     second_half_started: bool = False
     extra_time_started: bool = False
@@ -241,7 +241,7 @@ def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold:
 def _should_trigger_penalty_kicks(game: Game, is_enabled: bool) -> bool:
     if not is_enabled:
         return False
-    if game.league != "WORLD_CUP":
+    if get_league_profile(game.league).sport != "soccer":
         return False
     if game.is_final or game.status not in {"in_progress", "live"}:
         return False
@@ -289,11 +289,11 @@ def evaluate_and_record_alerts(
     db: Session,
     games: list[Game],
     *,
-    world_cup_events: dict[int, WorldCupDerivedEvents] | None = None,
+    soccer_events: dict[int, SoccerDerivedEvents] | None = None,
 ) -> int:
     if not games:
         return 0
-    world_cup_events = world_cup_events or {}
+    soccer_events = soccer_events or {}
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
     leagues = {game.league for game in games}
@@ -334,8 +334,8 @@ def evaluate_and_record_alerts(
                     metadata_json={"status": game.status},
                 )
 
-            world_cup_event = world_cup_events.get(game.id)
-            score_change_event = world_cup_event.score_change if world_cup_event is not None else None
+            soccer_event = soccer_events.get(game.id)
+            score_change_event = soccer_event.score_change if soccer_event is not None else None
             score_changed_enabled, _, _, _ = _alert_settings_for(
                 defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="score_changed"
             )
@@ -363,7 +363,7 @@ def evaluate_and_record_alerts(
             second_half_enabled, _, _, _ = _alert_settings_for(
                 defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="second_half_start"
             )
-            if world_cup_event and world_cup_event.second_half_started and second_half_enabled:
+            if soccer_event and soccer_event.second_half_started and second_half_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_dedupe_keys,
@@ -377,7 +377,7 @@ def evaluate_and_record_alerts(
             extra_time_enabled, _, _, _ = _alert_settings_for(
                 defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_time_start"
             )
-            if world_cup_event and world_cup_event.extra_time_started and extra_time_enabled:
+            if soccer_event and soccer_event.extra_time_started and extra_time_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_dedupe_keys,

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiCallRollupHourly, SentAlert, Team, User, WorkerJob
+from app.db.models import ApiCallRollupHourly, LeagueSetting, SentAlert, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
@@ -67,6 +67,19 @@ def _canonical_provider_name(name: str) -> str:
     return normalized
 
 
+def _league_setting_out(row: LeagueSetting) -> LeagueSettingOut:
+    profile = get_league_profile(row.league)
+    return LeagueSettingOut(
+        league=row.league,
+        sport=profile.sport,
+        label=profile.label,
+        badge_label=profile.badge_label,
+        alert_types=list(profile.alert_types),
+        live_sync_interval_seconds=profile.live_sync_interval_seconds,
+        is_enabled=row.is_enabled,
+    )
+
+
 def _resolve_neon_dashboard_url(project_id: str) -> str:
     if settings.neon_dashboard_url.strip():
         return settings.neon_dashboard_url.strip()
@@ -94,16 +107,7 @@ def _build_runtime(db: Session) -> OpsAdminRuntimeOut:
         next_run_at=next_run_at,
         last_success_at=last_success_at,
         active_leagues=active_leagues,
-        league_settings=[
-            LeagueSettingOut(
-                league=row.league,
-                label=get_league_profile(row.league).label,
-                badge_label=get_league_profile(row.league).badge_label,
-                alert_types=list(get_league_profile(row.league).alert_types),
-                is_enabled=row.is_enabled,
-            )
-            for row in list_league_settings(db)
-        ],
+        league_settings=[_league_setting_out(row) for row in list_league_settings(db)],
         jobs=[
             OpsAdminRuntimeJobOut(
                 job_type=job.job_type,
@@ -269,16 +273,7 @@ def get_league_settings(
     db: Session = Depends(get_db),
 ) -> OpsLeagueSettingsResponseOut:
     return OpsLeagueSettingsResponseOut(
-        items=[
-            LeagueSettingOut(
-                league=row.league,
-                label=get_league_profile(row.league).label,
-                badge_label=get_league_profile(row.league).badge_label,
-                alert_types=list(get_league_profile(row.league).alert_types),
-                is_enabled=row.is_enabled,
-            )
-            for row in list_league_settings(db)
-        ]
+        items=[_league_setting_out(row) for row in list_league_settings(db)]
     )
 
 
@@ -296,14 +291,7 @@ def update_league_setting(
     row.is_enabled = payload.is_enabled
     db.commit()
     db.refresh(row)
-    profile = get_league_profile(row.league)
-    return LeagueSettingOut(
-        league=row.league,
-        label=profile.label,
-        badge_label=profile.badge_label,
-        alert_types=list(profile.alert_types),
-        is_enabled=row.is_enabled,
-    )
+    return _league_setting_out(row)
 
 
 @router.get("/admin/summary", response_model=OpsAdminSummaryOut)
