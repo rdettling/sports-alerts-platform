@@ -12,9 +12,11 @@ def test_bootstrap_jobs_creates_sync_jobs_only(db_session):
     jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
     assert [(job.job_type, job.league) for job in jobs] == [
         ("catalog_sync", "MLB"),
+        ("catalog_sync", "MLS"),
         ("catalog_sync", "NBA"),
         ("catalog_sync", "WORLD_CUP"),
         ("live_sync", "MLB"),
+        ("live_sync", "MLS"),
         ("live_sync", "NBA"),
         ("live_sync", "WORLD_CUP"),
     ]
@@ -31,8 +33,10 @@ def test_bootstrap_jobs_skips_disabled_leagues(db_session):
     scheduler._bootstrap_jobs()
     jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
     assert [(job.job_type, job.league) for job in jobs] == [
+        ("catalog_sync", "MLS"),
         ("catalog_sync", "NBA"),
         ("catalog_sync", "WORLD_CUP"),
+        ("live_sync", "MLS"),
         ("live_sync", "NBA"),
         ("live_sync", "WORLD_CUP"),
     ]
@@ -303,6 +307,23 @@ def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
     next_seconds, result = scheduler._run_live_sync_job("WORLD_CUP")
     assert next_seconds == get_league_profile("WORLD_CUP").live_sync_interval_seconds
     assert result["has_live_games"] == "true"
+
+
+def test_run_live_sync_job_uses_mls_interval(monkeypatch):
+    monkeypatch.setattr(
+        "worker.scheduler.run_live_sync",
+        lambda provider, league: {
+            "status": "success",
+            "job_type": "live_sync",
+            "league": league,
+            "has_live_games": "true",
+            "next_poll_seconds": get_league_profile("MLS").live_sync_interval_seconds,
+        },
+    )
+
+    next_seconds, result = scheduler._run_live_sync_job("MLS")
+    assert next_seconds == 180
+    assert result["league"] == "MLS"
 
 
 def test_run_live_sync_job_preserves_alerts_created(monkeypatch):

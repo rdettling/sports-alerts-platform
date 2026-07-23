@@ -329,6 +329,11 @@
   width: 1.6rem;
 }
 
+.admin-league-setting-logo.league-mls {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .admin-league-setting-logo.league-world_cup {
   width: 1.25rem;
   height: 1.25rem;
@@ -469,6 +474,11 @@
 
 .admin-jobs-league-logo.league-mlb {
   width: 1.6rem;
+}
+
+.admin-jobs-league-logo.league-mls {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 
 .admin-jobs-league-logo.league-world_cup {

@@ -146,13 +146,23 @@ def test_alert_preferences_get_and_update(client):
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert len(groups) == 3
+    assert len(groups) == 4
     nba_group = next(group for group in groups if group["league"] == "NBA")
     mlb_group = next(group for group in groups if group["league"] == "MLB")
+    mls_group = next(group for group in groups if group["league"] == "MLS")
     world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
     assert len(nba_group["preferences"]) == 3
     assert {item["alert_type"] for item in nba_group["preferences"]} == {"game_start", "close_game_late", "final_result"}
     assert {item["alert_type"] for item in mlb_group["preferences"]} == {"game_start", "inning_start", "final_result"}
+    assert {item["alert_type"] for item in mls_group["preferences"]} == {
+        "game_start",
+        "second_half_start",
+        "extra_time_start",
+        "penalty_kicks",
+        "score_changed",
+        "final_result",
+    }
+    assert all(item["is_enabled"] for item in mls_group["preferences"])
     assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"}
 
     update_response = client.put(
@@ -170,6 +180,30 @@ def test_alert_preferences_get_and_update(client):
     assert updated["alert_type"] == "close_game_late"
     assert updated["close_game_margin_threshold"] == 3
     assert updated["close_game_time_threshold_seconds"] == 90
+
+    mls_update = client.put(
+        "/alert-preferences/leagues/MLS/penalty_kicks",
+        headers=headers,
+        json={"is_enabled": False},
+    )
+    assert mls_update.status_code == 200
+    refreshed = client.get("/alert-preferences", headers=headers).json()
+    mls_penalties = next(
+        item
+        for group in refreshed
+        if group["league"] == "MLS"
+        for item in group["preferences"]
+        if item["alert_type"] == "penalty_kicks"
+    )
+    world_cup_penalties = next(
+        item
+        for group in refreshed
+        if group["league"] == "WORLD_CUP"
+        for item in group["preferences"]
+        if item["alert_type"] == "penalty_kicks"
+    )
+    assert mls_penalties["is_enabled"] is False
+    assert world_cup_penalties["is_enabled"] is True
 
 
 def test_game_alert_override_flow(client):

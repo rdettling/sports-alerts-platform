@@ -288,3 +288,8 @@ def test_games_exclude_test_games(client):
     assert response.status_code == 200
     payload = response.json()
     assert [row["external_game_id"] for row in payload] == ["real-game"]
+
+
+def test_games_accepts_raised_dashboard_limit(client):
+    assert client.get("/games?limit=500").status_code == 200
+    assert client.get("/games?limit=501").status_code == 422

@@ -32,6 +32,9 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   const normalized = (league || "").toUpperCase();
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
+  if (normalized === "MLS") {
+    return "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg";
+  }
   if (normalized === "WORLD_CUP") return worldCupMark;
   return null;
 }
@@ -52,6 +55,9 @@ export function scoreSnippet(game: Game): string {
 function teamLogoUrl(team: Team): string {
   const league = team.league;
   const abbr = team.abbreviation.toLowerCase();
+  if (league === "MLS") {
+    return `https://a.espncdn.com/i/teamlogos/soccer/500/${team.external_team_id}.png`;
+  }
   if (league === "MLB") {
     return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbr}.png`;
   }
@@ -121,6 +127,9 @@ function formatSoccerPeriod(period: number | null): string {
   }
   if (period === 2) {
     return "2H";
+  }
+  if (period >= 5) {
+    return "Penalties";
   }
   return `ET ${period - 2}`;
 }

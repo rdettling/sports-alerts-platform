@@ -249,7 +249,9 @@ def _should_trigger_penalty_kicks(game: Game, is_enabled: bool) -> bool:
         return False
     if game.home_score != game.away_score:
         return False
-    if (game.period or 0) < 3:
+    if (game.period or 0) >= 5:
+        return True
+    if game.period not in {3, 4}:
         return False
     minute = _parse_soccer_minute(game.clock)
     return minute is not None and minute >= 117

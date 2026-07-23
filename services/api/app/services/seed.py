@@ -70,6 +70,39 @@ MLB_TEAMS = [
     ("30", "Tampa Bay Rays", "TB"),
 ]
 
+MLS_TEAMS = [
+    ("18418", "Atlanta United FC", "ATL"),
+    ("20906", "Austin FC", "ATX"),
+    ("9720", "CF Montréal", "MTL"),
+    ("21300", "Charlotte FC", "CLT"),
+    ("182", "Chicago Fire FC", "CHI"),
+    ("184", "Colorado Rapids", "COL"),
+    ("183", "Columbus Crew", "CLB"),
+    ("193", "D.C. United", "DC"),
+    ("18267", "FC Cincinnati", "CIN"),
+    ("185", "FC Dallas", "DAL"),
+    ("6077", "Houston Dynamo FC", "HOU"),
+    ("20232", "Inter Miami CF", "MIA"),
+    ("187", "LA Galaxy", "LA"),
+    ("18966", "LAFC", "LAFC"),
+    ("17362", "Minnesota United FC", "MIN"),
+    ("18986", "Nashville SC", "NSH"),
+    ("189", "New England Revolution", "NE"),
+    ("17606", "New York City FC", "NYC"),
+    ("12011", "Orlando City SC", "ORL"),
+    ("10739", "Philadelphia Union", "PHI"),
+    ("9723", "Portland Timbers", "POR"),
+    ("4771", "Real Salt Lake", "RSL"),
+    ("190", "Red Bull New York", "RBNY"),
+    ("22529", "San Diego FC", "SD"),
+    ("191", "San Jose Earthquakes", "SJ"),
+    ("9726", "Seattle Sounders FC", "SEA"),
+    ("186", "Sporting Kansas City", "SKC"),
+    ("21812", "St. Louis CITY SC", "STL"),
+    ("7318", "Toronto FC", "TOR"),
+    ("9727", "Vancouver Whitecaps", "VAN"),
+]
+
 WORLD_CUP_TEAMS = [
     ("624", "Algeria", "ALG"),
     ("202", "Argentina", "ARG"),
@@ -124,6 +157,7 @@ WORLD_CUP_TEAMS = [
 TEAM_SEEDS_BY_LEAGUE = {
     "NBA": NBA_TEAMS,
     "MLB": MLB_TEAMS,
+    "MLS": MLS_TEAMS,
     "WORLD_CUP": WORLD_CUP_TEAMS,
 }
 

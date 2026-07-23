@@ -115,6 +115,34 @@ def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
     assert "Kickoff is live now" in text_body
 
 
+def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
+    away = Team(external_team_id="18966", league="MLS", name="LAFC", abbreviation="LAFC")
+    home = Team(external_team_id="187", league="MLS", name="LA Galaxy", abbreviation="LA")
+    game = Game(
+        external_game_id="mls-penalties",
+        league="MLS",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=1,
+        away_score=1,
+        period=5,
+        clock="Pens",
+    )
+    alert = _mk_alert("penalty_kicks")
+    alert.metadata_json = {"status": "in_progress", "period": 5, "clock": "Pens"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Penalty kicks · LAFC 1–1 LA"
+    assert "Penalty kicks are underway · LAFC 1–1 LA" in text_body
+    assert "Penalties" in text_body
+    assert "teamlogos/soccer/500/18966.png" in html_body
+    assert "teamlogos/soccer/500/187.png" in html_body
+
+
 def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
     away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
     home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")

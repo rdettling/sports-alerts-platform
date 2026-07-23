@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatGameTime,
   formatMoneyline,
+  leagueLogoUrl,
   noVigProbabilities,
 } from "./dashboard-ui";
 
@@ -11,6 +12,12 @@ describe("dashboard utilities", () => {
     expect(formatMoneyline(120)).toBe("+120");
     expect(formatMoneyline(-105)).toBe("-105");
     expect(formatMoneyline(null)).toBe("—");
+  });
+
+  it("uses the MLS crest instead of a text fallback", () => {
+    expect(leagueLogoUrl("MLS")).toBe(
+      "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg",
+    );
   });
 
   it("computes no-vig probabilities", () => {
@@ -88,6 +95,28 @@ describe("dashboard utilities", () => {
     }, "soccer");
 
     expect(label).toBe("67'");
+  });
+
+  it("formats an MLS shootout without an extra-time label", () => {
+    const label = formatGameTime({
+      id: 6,
+      external_game_id: "mls-shootout",
+      league: "MLS",
+      home_team_id: 1,
+      away_team_id: 2,
+      scheduled_start_time: new Date().toISOString(),
+      context_label: null,
+      status: "live",
+      home_score: 1,
+      away_score: 1,
+      period: 5,
+      clock: null,
+      is_final: false,
+      last_ingested_at: null,
+      odds: null,
+    }, "soccer");
+
+    expect(label).toBe("Penalties");
   });
 
   it("formats scheduled games as time only", () => {

@@ -194,6 +194,44 @@ def test_provider_uses_numeric_team_ids_for_mlb():
     assert schedule[0].away_external_team_id == "11"
 
 
+def test_provider_parses_mls_soccer_clock_and_team_ids():
+    payload = {
+        "events": [
+            {
+                "id": "401999100",
+                "date": "2026-03-15T02:30:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "period": 2,
+                            "displayClock": "67:12",
+                            "type": {
+                                "state": "in",
+                                "name": "STATUS_IN_PROGRESS",
+                                "completed": False,
+                                "shortDetail": "68'",
+                            },
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "1", "team": {"id": "187", "abbreviation": "LA"}},
+                            {"homeAway": "away", "score": "2", "team": {"id": "18966", "abbreviation": "LAFC"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
+    schedule = provider.fetch_games("MLS", ["20260314"])
+
+    assert len(schedule) == 1
+    assert schedule[0].home_external_team_id == "187"
+    assert schedule[0].away_external_team_id == "18966"
+    assert schedule[0].clock == "68'"
+    assert schedule[0].context_label is None
+
+
 def test_provider_maps_status_postponed_payload_to_postponed():
     payload = {
         "events": [

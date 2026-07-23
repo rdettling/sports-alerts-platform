@@ -66,6 +66,8 @@ TEST_TEAM_SEEDS = [
     ("2", "NBA", "Boston Celtics", "BOS"),
     ("10", "MLB", "New York Yankees", "NYY"),
     ("2", "MLB", "Boston Red Sox", "BOS"),
+    ("18966", "MLS", "LAFC", "LAFC"),
+    ("187", "MLS", "LA Galaxy", "LA"),
     ("203", "WORLD_CUP", "Mexico", "MEX"),
     ("660", "WORLD_CUP", "United States", "USA"),
 ]

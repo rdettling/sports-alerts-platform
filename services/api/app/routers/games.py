@@ -21,7 +21,7 @@ def list_games(
     league: str | None = Query(default=None, description="Filter by league, e.g. NBA or MLB"),
     include_finals: bool = Query(default=False, description="Include final games in results"),
     include_odds: bool = Query(default=True, description="Include moneyline odds when configured"),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
     active_leagues = get_active_leagues(db)

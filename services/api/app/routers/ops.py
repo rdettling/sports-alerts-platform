@@ -36,7 +36,14 @@ from app.schemas.ops import (
     TeamMappingLeagueHealthOut,
     OpsLeagueSettingsResponseOut,
 )
-from app.services.leagues import get_active_leagues, get_league_profile, get_scoreboard_url, list_league_settings, normalize_league
+from app.services.leagues import (
+    get_active_leagues,
+    get_alert_types,
+    get_league_profile,
+    get_scoreboard_url,
+    list_league_settings,
+    normalize_league,
+)
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -74,7 +81,7 @@ def _league_setting_out(row: LeagueSetting) -> LeagueSettingOut:
         sport=profile.sport,
         label=profile.label,
         badge_label=profile.badge_label,
-        alert_types=list(profile.alert_types),
+        alert_types=list(get_alert_types(row.league)),
         live_sync_interval_seconds=profile.live_sync_interval_seconds,
         default_test_matchup=profile.default_test_matchup,
         is_enabled=row.is_enabled,

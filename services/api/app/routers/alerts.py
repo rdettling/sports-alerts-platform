@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
 from app.services.alert_delivery import deliver_alert_now
-from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup
+from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup, get_league_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -129,7 +129,7 @@ def create_admin_test_alert(
             away_score = 3
             period = 9
             clock = "Final"
-        elif league == "WORLD_CUP":
+        elif get_league_profile(league).sport == "soccer":
             home_score = 2
             away_score = 1
             period = 2
@@ -160,8 +160,8 @@ def create_admin_test_alert(
         game_status = "in_progress"
         home_score = 1
         away_score = 1
-        period = 3
-        clock = "117'"
+        period = 5
+        clock = "Pens"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
 
     target_game = Game(

@@ -92,18 +92,28 @@ class StaticProvider:
 
 
 class SequenceWorldCupProvider:
-    def __init__(self, snapshots):
+    def __init__(
+        self,
+        snapshots,
+        *,
+        external_game_id="game-world-cup-live",
+        home_external_team_id="660",
+        away_external_team_id="203",
+    ):
         self._snapshots = list(snapshots)
         self._index = 0
+        self._external_game_id = external_game_id
+        self._home_external_team_id = home_external_team_id
+        self._away_external_team_id = away_external_team_id
 
     def fetch_games(self, league, requests):
         snapshot = self._snapshots[min(self._index, len(self._snapshots) - 1)]
         self._index += 1
         return [
             make_game(
-                external_game_id="game-world-cup-live",
-                home_external_team_id="660",
-                away_external_team_id="203",
+                external_game_id=self._external_game_id,
+                home_external_team_id=self._home_external_team_id,
+                away_external_team_id=self._away_external_team_id,
                 status="in_progress",
                 home_score=snapshot["home_score"],
                 away_score=snapshot["away_score"],
@@ -865,6 +875,140 @@ def test_world_cup_transition_logging_marks_penalty_kicks_window(db_session, cap
     assert "Soccer state transition external_game_id=game-world-cup-live" in caplog.text
     assert "period=3->3" in caplog.text
     assert "penalty_kicks_window=False->True" in caplog.text
+
+
+def test_mls_direct_shootout_triggers_penalties_without_extra_time_or_score_change(db_session):
+    user = User(email="mls-direct-penalties@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type="game_start", is_enabled=False))
+    for alert_type in ("extra_time_start", "penalty_kicks", "score_changed"):
+        db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "90+5'"},
+            {"home_score": 2, "away_score": 2, "period": 5, "clock": "93'"},
+            {"home_score": 2, "away_score": 2, "period": 5, "clock": "96'"},
+        ],
+        external_game_id="game-mls-direct-penalties",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+    )
+    for _ in range(3):
+        assert run_catalog_sync(provider, league="MLS")["status"] == "success"
+
+    alerts = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert [alert.alert_type for alert in alerts] == ["penalty_kicks"]
+    assert alerts[0].metadata_json["period"] == 5
+
+
+def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
+    user = User(email="mls-extra-time-penalties@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type="game_start", is_enabled=False))
+    for alert_type in ("extra_time_start", "penalty_kicks"):
+        db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 1, "away_score": 1, "period": 2, "clock": "90+5'"},
+            {"home_score": 1, "away_score": 1, "period": 3, "clock": "91'"},
+            {"home_score": 1, "away_score": 1, "period": 5, "clock": "Pens"},
+            {"home_score": 1, "away_score": 1, "period": 5, "clock": "Pens"},
+        ],
+        external_game_id="game-mls-extra-time-penalties",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+    )
+    for _ in range(4):
+        assert run_catalog_sync(provider, league="MLS")["status"] == "success"
+
+    alerts = db_session.scalars(
+        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in alerts] == ["extra_time_start", "penalty_kicks"]
+
+
+def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
+    user = User(email="mls-shared-soccer-events@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type="game_start", is_enabled=False))
+    for alert_type in ("second_half_start", "score_changed"):
+        db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled=True))
+    db_session.commit()
+
+    provider = SequenceWorldCupProvider(
+        [
+            {"home_score": 0, "away_score": 0, "period": 1, "clock": "45+2'"},
+            {"home_score": 0, "away_score": 0, "period": 2, "clock": "46'"},
+            {"home_score": 1, "away_score": 0, "period": 2, "clock": "52'"},
+        ],
+        external_game_id="game-mls-shared-soccer-events",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+    )
+    for _ in range(3):
+        assert run_catalog_sync(provider, league="MLS")["status"] == "success"
+
+    alerts = db_session.scalars(
+        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in alerts] == ["second_half_start", "score_changed"]
+    assert alerts[1].metadata_json["scoring_side"] == "home"
+
+
+def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
+    user = User(email="mls-final@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type="game_start", is_enabled=False))
+    db_session.add(UserAlertDefault(user_id=user.id, league="MLS", alert_type="final_result", is_enabled=True))
+    db_session.commit()
+
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-mls-final",
+                home_external_team_id="187",
+                away_external_team_id="18966",
+                status="final",
+                home_score=2,
+                away_score=1,
+                period=2,
+                clock="FT",
+                is_final=True,
+            )
+        ]
+    )
+    assert run_catalog_sync(provider, league="MLS")["status"] == "success"
+
+    alerts = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    assert [alert.alert_type for alert in alerts] == ["final_result"]
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):

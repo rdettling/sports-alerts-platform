@@ -102,6 +102,8 @@ def _sport_for_league(league: str) -> str | None:
 
 
 def _team_logo_url(team: Team | None, fallback_abbr: str, league: str) -> str:
+    if league == "MLS" and team and team.external_team_id:
+        return f"https://a.espncdn.com/i/teamlogos/soccer/500/{team.external_team_id}.png"
     abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
     if not abbr:
         return ""
@@ -193,6 +195,8 @@ def _format_period_value(period: int | None, sport: str | None) -> str:
             return "1H"
         if period == 2:
             return "2H"
+        if period >= 5:
+            return "Penalties"
         return f"ET {period - 2}"
     return ""
 
@@ -248,6 +252,8 @@ def _primary_status_line(
     if alert.alert_type == "extra_time_start":
         return f"Extra time is live now · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "penalty_kicks":
+        if (game.period or 0) >= 5:
+            return f"Penalty kicks are underway · {away_abbr} {_scoreline(game)} {home_abbr}"
         return f"Match is still tied deep in extra time · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
@@ -293,6 +299,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
     if alert.alert_type == "extra_time_start":
         return f"Extra time · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "penalty_kicks":
+        if (game.period or 0) >= 5:
+            return f"Penalty kicks · {away_abbr} {_scoreline(game)} {home_abbr}"
         return f"Penalty kicks likely soon · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"

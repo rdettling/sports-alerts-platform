@@ -178,4 +178,41 @@ describe("GameRowCard", () => {
     expect(screen.getByText("+210")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "WC logo" })).toBeInTheDocument();
   });
+
+  it("shows MLS draw odds and team and league logos", () => {
+    render(
+      <GameRowCard
+        game={makeGame({
+          league: "MLS",
+          odds: {
+            market: "h2h",
+            bookmaker: null,
+            last_update: null,
+            outcomes: [
+              { outcome_key: "los_angeles_fc", outcome_label: "Los Angeles FC", price_american: 180, team_side: "away" },
+              { outcome_key: "draw", outcome_label: "Draw", price_american: 225, team_side: null },
+              { outcome_key: "la_galaxy", outcome_label: "LA Galaxy", price_american: 150, team_side: "home" },
+            ],
+          },
+        })}
+        sport="soccer"
+        home={{ ...home, external_team_id: "187", league: "MLS", abbreviation: "LA", name: "LA Galaxy" }}
+        away={{ ...away, external_team_id: "18966", league: "MLS", abbreviation: "LAFC", name: "LAFC" }}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.getByText("Draw")).toBeInTheDocument();
+    expect(screen.getByText("+225")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "MLS logo" })).toHaveAttribute(
+      "src",
+      "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg",
+    );
+    expect(screen.queryByText("MLS")).toBeNull();
+    expect(screen.getByRole("img", { name: "LAFC logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/soccer/500/18966.png",
+    );
+  });
 });

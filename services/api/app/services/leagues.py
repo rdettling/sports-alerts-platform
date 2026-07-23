@@ -19,11 +19,24 @@ class LeagueProfile:
     sport: Sport
     label: str
     badge_label: str
-    alert_types: tuple[str, ...]
     default_test_matchup: tuple[str, str]
     scoreboard_url: str
     live_sync_interval_seconds: int
     odds_sport_key: str | None
+
+
+SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
+    "basketball": ("game_start", "close_game_late", "final_result"),
+    "baseball": ("game_start", "inning_start", "final_result"),
+    "soccer": (
+        "game_start",
+        "second_half_start",
+        "extra_time_start",
+        "penalty_kicks",
+        "score_changed",
+        "final_result",
+    ),
+}
 
 
 LEAGUE_PROFILES: dict[str, LeagueProfile] = {
@@ -32,7 +45,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="basketball",
         label="NBA",
         badge_label="NBA",
-        alert_types=("game_start", "close_game_late", "final_result"),
         default_test_matchup=("ATL", "BOS"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
         live_sync_interval_seconds=120,
@@ -43,18 +55,26 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="baseball",
         label="MLB",
         badge_label="MLB",
-        alert_types=("game_start", "inning_start", "final_result"),
         default_test_matchup=("MIA", "TOR"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
         live_sync_interval_seconds=300,
         odds_sport_key="baseball_mlb",
+    ),
+    "MLS": LeagueProfile(
+        league="MLS",
+        sport="soccer",
+        label="MLS",
+        badge_label="MLS",
+        default_test_matchup=("LAFC", "LA"),
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard",
+        live_sync_interval_seconds=180,
+        odds_sport_key="soccer_usa_mls",
     ),
     "WORLD_CUP": LeagueProfile(
         league="WORLD_CUP",
         sport="soccer",
         label="World Cup",
         badge_label="WC",
-        alert_types=("game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"),
         default_test_matchup=("MEX", "USA"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
         live_sync_interval_seconds=180,
@@ -81,7 +101,7 @@ def get_league_profile(league: str) -> LeagueProfile:
 
 
 def get_alert_types(league: str) -> tuple[str, ...]:
-    return get_league_profile(league).alert_types
+    return SPORT_ALERT_TYPES[get_league_profile(league).sport]
 
 
 def get_default_test_matchup(league: str) -> tuple[str, str]:

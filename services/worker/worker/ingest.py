@@ -87,13 +87,17 @@ def _is_soccer_live_second_half(*, status: str, period: int | None, clock: str |
 
 
 def _is_soccer_extra_time(*, status: str, period: int | None) -> bool:
-    return status in {"in_progress", "live"} and (period or 0) >= 3
+    return status in {"in_progress", "live"} and period in {3, 4}
 
 
 def _is_soccer_penalty_kicks_window(*, status: str, period: int | None, home_score: int | None, away_score: int | None, clock: str | None) -> bool:
-    if not _is_soccer_extra_time(status=status, period=period):
+    if status not in {"in_progress", "live"}:
         return False
     if home_score is None or away_score is None or home_score != away_score:
+        return False
+    if (period or 0) >= 5:
+        return True
+    if not _is_soccer_extra_time(status=status, period=period):
         return False
     if not clock:
         return False
@@ -138,6 +142,7 @@ def _classify_soccer_derived_events(previous: Game | None, payload: ScoreboardGa
     score_change: ScoreChangeEvent | None = None
     if (
         payload.status in {"in_progress", "live"}
+        and (payload.period or 0) < 5
         and previous.home_score is not None
         and previous.away_score is not None
         and payload.home_score is not None

@@ -21,10 +21,16 @@ logger = logging.getLogger(__name__)
 TEAM_NAME_ALIASES = {
     "la clippers": "los angeles clippers",
     "bosnia and herzegovina": "bosnia herzegovina",
+    "chicago fire fc": "chicago fire",
+    "columbus crew": "columbus crew sc",
     "czech republic": "czechia",
     "dr congo": "congo dr",
+    "houston dynamo fc": "houston dynamo",
+    "lafc": "los angeles fc",
+    "red bull new york": "new york red bulls",
     "turkey": "turkiye",
     "usa": "united states",
+    "vancouver whitecaps": "vancouver whitecaps fc",
 }
 
 _CACHE_LOCK = threading.Lock()

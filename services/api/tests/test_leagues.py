@@ -1,8 +1,12 @@
-from app.services.leagues import get_league_profile, list_supported_leagues
+from sqlalchemy import func, select
+
+from app.db.models import Team
+from app.db.session import SessionLocal
+from app.services.leagues import get_alert_types, get_league_profile, list_supported_leagues
 
 
 def test_league_profiles_are_the_single_source_of_sport_and_provider_configuration():
-    assert list_supported_leagues() == ["NBA", "MLB", "WORLD_CUP"]
+    assert list_supported_leagues() == ["NBA", "MLB", "MLS", "WORLD_CUP"]
 
     nba = get_league_profile("NBA")
     assert (nba.sport, nba.live_sync_interval_seconds, nba.odds_sport_key) == (
@@ -18,12 +22,21 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
         "baseball_mlb",
     )
 
+    mls = get_league_profile("MLS")
+    assert (mls.sport, mls.live_sync_interval_seconds, mls.odds_sport_key) == (
+        "soccer",
+        180,
+        "soccer_usa_mls",
+    )
+    assert mls.scoreboard_url.endswith("/sports/soccer/usa.1/scoreboard")
+
     world_cup = get_league_profile("WORLD_CUP")
     assert (world_cup.sport, world_cup.live_sync_interval_seconds, world_cup.odds_sport_key) == (
         "soccer",
         180,
         "soccer_fifa_world_cup",
     )
+    assert get_alert_types("MLS") == get_alert_types("WORLD_CUP")
 
 
 def test_public_leagues_include_sport_and_live_cadence(client):
@@ -41,5 +54,16 @@ def test_public_leagues_include_sport_and_live_cadence(client):
     ] == [
         ("NBA", "basketball", 120, ["ATL", "BOS"]),
         ("MLB", "baseball", 300, ["MIA", "TOR"]),
+        ("MLS", "soccer", 180, ["LAFC", "LA"]),
         ("WORLD_CUP", "soccer", 180, ["MEX", "USA"]),
     ]
+
+
+def test_mls_team_catalog_contains_all_current_clubs(client):
+    client.get("/leagues")
+    with SessionLocal() as db:
+        count = db.scalar(select(func.count()).select_from(Team).where(Team.league == "MLS"))
+        abbreviations = set(db.scalars(select(Team.abbreviation).where(Team.league == "MLS")))
+
+    assert count == 30
+    assert {"LA", "LAFC", "MIA", "RBNY", "SD"} <= abbreviations

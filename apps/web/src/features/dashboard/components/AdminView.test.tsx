@@ -88,10 +88,11 @@ vi.mock("../hooks/useAdminData", () => ({
           scheduler_mode: "live",
           next_run_at: "2026-06-20T08:05:00Z",
           last_success_at: "2026-06-20T08:04:00Z",
-          active_leagues: ["NBA", "MLB", "WORLD_CUP"],
+          active_leagues: ["NBA", "MLB", "MLS", "WORLD_CUP"],
           league_settings: [
             { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
             { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: ["game_start"], live_sync_interval_seconds: 300, default_test_matchup: ["MIA", "TOR"], is_enabled: true },
+            { league: "MLS", sport: "soccer", label: "MLS", badge_label: "MLS", alert_types: ["game_start"], live_sync_interval_seconds: 180, default_test_matchup: ["LAFC", "LA"], is_enabled: true },
             { league: "WORLD_CUP", sport: "soccer", label: "World Cup", badge_label: "WC", alert_types: ["game_start"], live_sync_interval_seconds: 180, default_test_matchup: ["MEX", "USA"], is_enabled: true },
           ],
           jobs: [
