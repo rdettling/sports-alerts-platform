@@ -2,13 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { me, startMagicLink, verifyMagicLink, type UserProfile } from "../../shared/api";
 
-type User = UserProfile;
-
 type AuthContextType = {
   isLoading: boolean;
   token: string | null;
-  user: User | null;
-  error: string | null;
+  user: UserProfile | null;
   sendMagicLink: (email: string) => Promise<{ message: string }>;
   verifyMagicLinkToken: (token: string) => Promise<void>;
   logout: () => void;
@@ -20,36 +17,53 @@ const AUTH_TOKEN_KEY = "sports_alerts_token";
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(localStorage.getItem(AUTH_TOKEN_KEY));
-  const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const run = async () => {
       if (!token) {
+        setUser(null);
         setIsLoading(false);
         return;
       }
       try {
         const profile = await me(token);
-        setUser(profile);
+        if (!cancelled) setUser(profile);
       } catch {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        setToken(null);
+        if (!cancelled) {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          setToken(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     run();
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
-  const sendMagicLink = useCallback(async (email: string): Promise<{ message: string }> => {
-    setError(null);
-    const response = await startMagicLink(email);
-    return { message: response.message };
+  useEffect(() => {
+    const syncToken = (event: StorageEvent) => {
+      if (event.storageArea !== localStorage || event.key !== AUTH_TOKEN_KEY) {
+        return;
+      }
+      setToken(event.newValue);
+      if (!event.newValue) {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener("storage", syncToken);
+    return () => window.removeEventListener("storage", syncToken);
   }, []);
 
+  const sendMagicLink = useCallback((email: string) => startMagicLink(email), []);
+
   const verifyMagicLinkToken = useCallback(async (tokenValue: string) => {
-    setError(null);
     const response = await verifyMagicLink(tokenValue);
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
     setToken(response.access_token);
@@ -67,12 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       token,
       user,
-      error,
       sendMagicLink,
       verifyMagicLinkToken,
       logout,
     }),
-    [isLoading, token, user, error, sendMagicLink, verifyMagicLinkToken],
+    [isLoading, token, user, sendMagicLink, verifyMagicLinkToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

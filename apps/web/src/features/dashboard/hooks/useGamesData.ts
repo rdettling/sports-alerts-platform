@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listAlertHistory, listFollows, listGames, listLeagues, listTeams } from "../../../shared/api";
+import { listFollows, listGames, listLeagues, listTeams, type CurrentFollows } from "../../../shared/api";
 
-export function useGamesData(token: string) {
+const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
+
+export function useGamesData(token: string | null) {
   return useQuery({
-    queryKey: ["games-page", token],
+    queryKey: ["games-page", token ?? "anonymous"],
     queryFn: async () => {
-      const [availableGames, follows, teams, alerts24h, leagues] = await Promise.all([
+      const [availableGames, follows, teams, leagues] = await Promise.all([
         listGames({ includeFinals: true, limit: 500 }),
-        listFollows(token),
+        token ? listFollows(token) : Promise.resolve(EMPTY_FOLLOWS),
         listTeams(),
-        listAlertHistory(token, { sinceHours: 24, limit: 200 }),
         listLeagues(),
       ]);
 
@@ -19,7 +20,6 @@ export function useGamesData(token: string) {
         follows,
         teams,
         leagues,
-        sentAlerts24h: alerts24h.items.filter((item) => item.delivery_status === "sent").length,
       };
     },
     refetchInterval: 120_000,

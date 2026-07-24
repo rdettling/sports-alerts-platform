@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/auth-context";
+import { SignInModal } from "../auth/SignInModal";
 import { AdminView } from "./components/AdminView";
 import { AlertsView } from "./components/AlertsView";
 import { FollowingView } from "./components/FollowingView";
@@ -58,17 +59,21 @@ function routeForPath(pathname: string): DashboardRouteMeta {
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
   const location = useLocation();
+  const [signInOpen, setSignInOpen] = useState(false);
 
-  const isAdmin = user?.role === "admin";
+  const isAuthenticated = Boolean(token && user);
+  const isAdmin = isAuthenticated && user?.role === "admin";
   const currentRoute = routeForPath(location.pathname);
   const navRoutes = useMemo(
-    () => DASHBOARD_ROUTES.filter((route) => (route.adminOnly ? isAdmin : true)),
-    [isAdmin],
+    () =>
+      DASHBOARD_ROUTES.filter((route) => {
+        if (route.key === "games") return true;
+        if (!isAuthenticated) return false;
+        return route.adminOnly ? isAdmin : true;
+      }),
+    [isAdmin, isAuthenticated],
   );
-
-  if (!user || !token) {
-    return <Navigate to="/auth" replace />;
-  }
+  const closeSignIn = useCallback(() => setSignInOpen(false), []);
 
   return (
     <div className="app-shell">
@@ -92,10 +97,18 @@ export function DashboardLayout() {
             ))}
           </nav>
           <div className="app-account">
-            <span className="user-email">{user.email}</span>
-            <button className="btn btn-secondary" onClick={logout}>
-              Logout
-            </button>
+            {token && user ? (
+              <>
+                <span className="user-email">{user.email}</span>
+                <button className="btn btn-secondary" onClick={logout}>
+                  Logout
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-secondary" type="button" onClick={() => setSignInOpen(true)}>
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -104,15 +117,27 @@ export function DashboardLayout() {
         <div className="app-content">
           <Routes>
             <Route path="/" element={<Navigate to="games" replace />} />
-            <Route path="games" element={<GamesView token={token} />} />
-            <Route path="following" element={<FollowingView token={token} />} />
-            <Route path="alerts" element={<AlertsView token={token} />} />
-            <Route path="admin" element={isAdmin ? <AdminView token={token} /> : <Navigate to="games" replace />} />
-            <Route path="ops" element={<Navigate to="admin" replace />} />
-            <Route path="test" element={<Navigate to="admin" replace />} />
+            <Route
+              path="games"
+              element={<GamesView token={token} onSignInRequired={() => setSignInOpen(true)} />}
+            />
+            <Route
+              path="following"
+              element={token && user ? <FollowingView token={token} /> : <Navigate to="/games" replace />}
+            />
+            <Route
+              path="alerts"
+              element={token && user ? <AlertsView token={token} /> : <Navigate to="/games" replace />}
+            />
+            <Route
+              path="admin"
+              element={isAdmin && token ? <AdminView token={token} /> : <Navigate to="/games" replace />}
+            />
+            <Route path="*" element={<Navigate to="/games" replace />} />
           </Routes>
         </div>
       </main>
+      <SignInModal isOpen={signInOpen} onClose={closeSignIn} />
     </div>
   );
 }

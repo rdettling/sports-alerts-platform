@@ -1,8 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GamesView } from "./GamesView";
+
+const apiMocks = vi.hoisted(() => ({
+  followGame: vi.fn(async () => ({ status: "ok" })),
+  unfollowGame: vi.fn(async () => ({ status: "ok" })),
+}));
+
+vi.mock("../../../shared/api", () => apiMocks);
 
 vi.mock("../hooks/useGamesData", () => ({
   useGamesData: vi.fn(() => ({
@@ -77,10 +84,15 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe("GamesView", () => {
+  beforeEach(() => {
+    apiMocks.followGame.mockClear();
+    apiMocks.unfollowGame.mockClear();
+  });
+
   it("keeps all-days selected when the user clicks the all day filter", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
 
-    render(<GamesView token="token" />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText("BOS")).toBeInTheDocument());
     expect(screen.queryByText("LAL")).toBeNull();
@@ -93,9 +105,19 @@ describe("GamesView", () => {
 
   it("shows league sync status inside the filters rail", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T18:20:00Z").getTime());
-    render(<GamesView token="token" />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText("20m")).toBeInTheDocument());
     expect(screen.queryByText("Catalog sync 2m")).toBeNull();
+  });
+
+  it("requests sign-in instead of following for a guest", async () => {
+    const onSignInRequired = vi.fn();
+    render(<GamesView token={null} onSignInRequired={onSignInRequired} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Follow" }));
+
+    expect(onSignInRequired).toHaveBeenCalledTimes(1);
+    expect(apiMocks.followGame).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,13 @@ import {
   sortGamesByStart,
 } from "./games/games-view-utils";
 
-export function GamesView({ token }: { token: string }) {
+export function GamesView({
+  token,
+  onSignInRequired,
+}: {
+  token: string | null;
+  onSignInRequired: () => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useGamesData(token);
 
@@ -34,6 +40,7 @@ export function GamesView({ token }: { token: string }) {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ gameId, isFollowed }: { gameId: number; isFollowed: boolean }) => {
+      if (!token) return;
       if (isFollowed) {
         await unfollowGame(token, gameId);
       } else {
@@ -140,7 +147,13 @@ export function GamesView({ token }: { token: string }) {
                             statusLabel={gameStatusLabel(game, leagueProfile.sport)}
                             showContextLabel
                             actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
-                            onFollow={() => toggleMutation.mutate({ gameId: game.id, isFollowed: false })}
+                            onFollow={() => {
+                              if (!token) {
+                                onSignInRequired();
+                                return;
+                              }
+                              toggleMutation.mutate({ gameId: game.id, isFollowed: false });
+                            }}
                             onUnfollow={async () => {
                               setBusyGameId(game.id);
                               try {

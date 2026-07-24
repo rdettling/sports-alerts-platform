@@ -1,16 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useGamesData } from "./useGamesData";
 
-vi.mock("../../../shared/api", () => ({
+const apiMocks = vi.hoisted(() => ({
   listGames: vi.fn(async () => []),
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
-  listAlertHistory: vi.fn(async () => ({ items: [] })),
-  listLeagues: vi.fn(async () => [{ league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true }]),
+  listLeagues: vi.fn(async () => []),
 }));
+
+vi.mock("../../../shared/api", () => apiMocks);
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -18,10 +19,25 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe("useGamesData", () => {
-  it("loads dashboard data", async () => {
+  beforeEach(() => {
+    Object.values(apiMocks).forEach((mock) => mock.mockClear());
+  });
+
+  it("loads public data without requesting follows for a guest", async () => {
+    const { result } = renderHook(() => useGamesData(null), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiMocks.listGames).toHaveBeenCalled();
+    expect(apiMocks.listTeams).toHaveBeenCalled();
+    expect(apiMocks.listLeagues).toHaveBeenCalled();
+    expect(apiMocks.listFollows).not.toHaveBeenCalled();
+    expect(result.current.data?.follows).toEqual({ teams: [], games: [] });
+  });
+
+  it("loads follows when authenticated", async () => {
     const { result } = renderHook(() => useGamesData("token"), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.sentAlerts24h).toBe(0);
+    expect(apiMocks.listFollows).toHaveBeenCalledWith("token");
   });
 });

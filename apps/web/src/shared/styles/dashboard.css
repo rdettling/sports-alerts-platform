@@ -712,6 +712,28 @@
   line-height: 1.1;
 }
 
+.sign-in-modal {
+  width: min(480px, 100%);
+}
+
+.sign-in-modal-subtitle {
+  margin: 0.4rem 0 0;
+}
+
+.sign-in-modal-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sign-in-modal-form label {
+  color: #24385f;
+  font-weight: 700;
+}
+
+.sign-in-modal-form input {
+  width: 100%;
+}
+
 .game-alert-modal-title {
   display: grid;
   gap: 0.4rem;
