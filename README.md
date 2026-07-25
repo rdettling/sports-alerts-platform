@@ -9,8 +9,9 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 ## What The App Does Today
 
 - Email magic-link sign-in with JWT-backed API sessions.
-- `Games` dashboard with league/day filters, live status, follow/unfollow actions, and game-level alert settings.
-- `Following` dashboard for team follows and derived game follows.
+- Public `Games` dashboard with league/day filters, live status, follow/unfollow actions, and game-level alert settings.
+- Public `Teams` directory with league/search filters and team follow controls.
+- Authenticated Games filter for direct and team-derived follows.
 - `Alerts` dashboard for league defaults plus alert history.
 - Admin-only runtime area for provider telemetry, DB stats, league enable/disable controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.

@@ -12,7 +12,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock("../../../shared/api", () => apiMocks);
 
 vi.mock("../hooks/useGamesData", () => ({
-  useGamesData: vi.fn(() => ({
+  useGamesData: vi.fn((token: string | null) => ({
     isLoading: false,
     data: {
       games: [
@@ -51,7 +51,28 @@ vi.mock("../hooks/useGamesData", () => ({
           odds: null,
         },
       ],
-      follows: { teams: [], games: [] },
+      follows: token ? {
+        teams: [],
+        games: [
+          {
+            id: 1,
+            external_game_id: "today-game",
+            league: "NBA",
+            home_team_id: 10,
+            away_team_id: 11,
+            scheduled_start_time: "2026-06-12T20:00:00Z",
+            context_label: null,
+            status: "scheduled",
+            home_score: null,
+            away_score: null,
+            period: null,
+            clock: null,
+            is_final: false,
+            last_ingested_at: "2026-06-12T18:00:00Z",
+            odds: null,
+          },
+        ],
+      } : { teams: [], games: [] },
       teams: [
         { id: 10, external_team_id: "10", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
         { id: 11, external_team_id: "11", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
@@ -111,6 +132,17 @@ describe("GamesView", () => {
     expect(screen.queryByText("Catalog sync 2m")).toBeNull();
   });
 
+  it("filters to effective followed games for an authenticated user", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Following 1/ }));
+    expect(screen.getByText("BOS")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "All days" }));
+    expect(screen.queryByText("LAL")).toBeNull();
+  });
+
   it("requests sign-in instead of following for a guest", async () => {
     const onSignInRequired = vi.fn();
     render(<GamesView token={null} onSignInRequired={onSignInRequired} />, { wrapper });
@@ -119,5 +151,6 @@ describe("GamesView", () => {
 
     expect(onSignInRequired).toHaveBeenCalledTimes(1);
     expect(apiMocks.followGame).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Following/ })).toBeNull();
   });
 });

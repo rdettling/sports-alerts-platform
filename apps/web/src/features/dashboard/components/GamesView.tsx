@@ -32,6 +32,7 @@ export function GamesView({
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
+  const [gameScope, setGameScope] = useState<"all" | "following">("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
   const hasAutoSelectedInitialDay = useRef(false);
@@ -75,10 +76,21 @@ export function GamesView({
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
 
   const sortedGames = useMemo(() => sortGamesByStart(games), [games]);
-  const leagueFilteredGames = useMemo(() => filterGamesByLeague(sortedGames, leagueFilter), [sortedGames, leagueFilter]);
+  const scopeFilteredGames = useMemo(
+    () => gameScope === "following" ? sortedGames.filter((game) => followedGameIds.has(game.id)) : sortedGames,
+    [followedGameIds, gameScope, sortedGames],
+  );
+  const leagueFilteredGames = useMemo(
+    () => filterGamesByLeague(scopeFilteredGames, leagueFilter),
+    [scopeFilteredGames, leagueFilter],
+  );
   const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
   const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
+  useEffect(() => {
+    if (!token && gameScope !== "all") setGameScope("all");
+  }, [gameScope, token]);
+
   useEffect(() => {
     if (leagueFilter !== "all" && !activeLeagueKeys.includes(leagueFilter)) {
       setLeagueFilter("all");
@@ -121,6 +133,10 @@ export function GamesView({
               totalLeagueGames={leagueFilteredGames.length}
               dayOptions={dayOptions}
               syncItems={syncItems}
+              showScopeFilter={Boolean(token)}
+              gameScope={gameScope}
+              onGameScopeChange={setGameScope}
+              followedGameCount={followedGameIds.size}
             />
 
             <div className="data-table-wrap">
@@ -176,7 +192,11 @@ export function GamesView({
           </div>
         ) : null}
 
-        {!isLoading && visibleGames.length === 0 ? <p className="muted">No games in this filter.</p> : null}
+        {!isLoading && visibleGames.length === 0 ? (
+          <p className="muted">
+            {gameScope === "following" ? "No followed games match this filter." : "No games in this filter."}
+          </p>
+        ) : null}
       </section>
 
       <GameAlertSettingsModal

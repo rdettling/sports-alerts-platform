@@ -87,6 +87,14 @@ Run the narrowest relevant checks for the area changed, then broaden when the to
 
 Docs-only changes usually do not need tests.
 
+## Git Workflow
+
+This is a single-developer personal repository.
+
+- When asked to commit and push, commit directly to `main` and push `origin/main`.
+- Do not create feature branches or pull requests unless explicitly requested.
+- Before committing, confirm the worktree contains only the intended changes and run the relevant checks.
+
 ## Working Style
 
 - Check the worktree before editing and do not revert unrelated user changes.

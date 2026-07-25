@@ -21,6 +21,10 @@ export function GamesFiltersPanel({
   totalLeagueGames,
   dayOptions,
   syncItems,
+  showScopeFilter,
+  gameScope,
+  onGameScopeChange,
+  followedGameCount,
 }: {
   activeLeagues: LeagueSetting[];
   leagueFilter: "all" | League;
@@ -31,6 +35,10 @@ export function GamesFiltersPanel({
   totalLeagueGames: number;
   dayOptions: DayOption[];
   syncItems: LeagueSyncItem[];
+  showScopeFilter: boolean;
+  gameScope: "all" | "following";
+  onGameScopeChange: (value: "all" | "following") => void;
+  followedGameCount: number;
 }) {
   const syncByLabel = new Map(syncItems.map((item) => [item.label, item]));
   const leagueOptions = activeLeagues.map((league) => ({
@@ -40,6 +48,24 @@ export function GamesFiltersPanel({
 
   return (
     <aside className="games-day-filter">
+      {showScopeFilter ? (
+        <div className="games-scope-filter" aria-label="Game scope">
+          <button
+            className={`games-scope-filter-btn ${gameScope === "all" ? "active" : ""}`.trim()}
+            type="button"
+            onClick={() => onGameScopeChange("all")}
+          >
+            All games
+          </button>
+          <button
+            className={`games-scope-filter-btn ${gameScope === "following" ? "active" : ""}`.trim()}
+            type="button"
+            onClick={() => onGameScopeChange("following")}
+          >
+            Following <span>{followedGameCount}</span>
+          </button>
+        </div>
+      ) : null}
       <div className="games-league-filter" role="tablist" aria-label="League filter">
         <button
           className={`games-league-filter-btn ${leagueFilter === "all" ? "active" : ""}`.trim()}

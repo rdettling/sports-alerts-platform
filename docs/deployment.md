@@ -90,7 +90,7 @@ After a deploy:
 1. Open the frontend
 2. Confirm `GET /healthz` is healthy
 3. Confirm sign-in works
-4. Confirm games and following data load
+4. Confirm public games and teams load, then verify authenticated follow controls
 5. Confirm worker logs show sync activity
 6. If email delivery is enabled, verify alert delivery in a controlled way
 7. If Neon integration is configured, confirm the admin DB stats view can load usage data

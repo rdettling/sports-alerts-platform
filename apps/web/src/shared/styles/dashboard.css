@@ -5,11 +5,9 @@
 .games-league-logo-wrap,
 .games-league-logo-fallback,
 .games-outcome-pill,
-.following-team-option,
-.following-followed-team-main,
-.following-game-actions,
-.alert-history-row-main,
-.following-alert-default-toggle {
+.games-follow-actions,
+.teams-row-main,
+.alert-history-row-main {
   display: inline-flex;
   align-items: center;
 }
@@ -62,6 +60,33 @@
   padding: 0.7rem;
   display: grid;
   gap: 0.42rem;
+}
+
+.games-scope-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #d9e4f5;
+}
+
+.games-scope-filter-btn {
+  border: 1px solid #c5d5f3;
+  border-radius: 12px;
+  background: #fff;
+  color: #2a4478;
+  padding: 0.45rem 0.55rem;
+}
+
+.games-scope-filter-btn.active {
+  border-color: #284d99;
+  background: #eaf1ff;
+  color: #173b82;
+}
+
+.games-scope-filter-btn span {
+  margin-left: 0.25rem;
+  color: var(--text-muted);
 }
 
 .games-league-filter {
@@ -559,83 +584,7 @@
   font-size: 0.92rem;
 }
 
-.following-simple-page {
-  min-height: 0;
-}
-
-.following-simple-section {
-  display: grid;
-  gap: 0.6rem;
-  align-content: start;
-}
-
-.following-team-autocomplete {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.following-team-options {
-  display: grid;
-  gap: 0.3rem;
-  max-height: 220px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.35rem;
-  background: #f9fbff;
-}
-
-.following-team-option {
-  gap: 0.45rem;
-  width: 100%;
-  text-align: left;
-  border: 1px solid transparent;
-  background: #fff;
-  border-radius: 9px;
-  padding: 0.4rem 0.5rem;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.following-team-option:hover:not(:disabled) {
-  border-color: #b8c8e0;
-  background: #f1f6ff;
-}
-
-.following-simple-team-list {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.following-followed-team-main {
-  gap: 0.55rem;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.following-followed-team-text {
-  display: inline-flex;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.following-followed-team-text strong {
-  letter-spacing: 0.01em;
-}
-
-.following-two-col-panels {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.8rem;
-  align-items: start;
-  min-height: 0;
-}
-
-.following-game-actions {
-  gap: 0.4rem;
-}
-
-.following-game-actions-stacked {
+.games-follow-actions {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 0.38rem;
@@ -643,12 +592,68 @@
   justify-content: flex-end;
 }
 
-.following-game-actions-stacked .games-action-cell {
+.games-follow-actions .games-action-cell {
   width: auto;
   min-width: 0;
   padding: 0.38rem 0.68rem;
   font-size: 0.84rem;
   white-space: nowrap;
+}
+
+.teams-page,
+.teams-panel {
+  min-height: 0;
+}
+
+.teams-panel {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.teams-header p {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+}
+
+.teams-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.teams-toolbar input {
+  width: min(320px, 100%);
+}
+
+.teams-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.teams-row-main {
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.teams-row-main > span:last-child {
+  min-width: 0;
+}
+
+.teams-row-main strong,
+.teams-abbreviation {
+  display: block;
+}
+
+.teams-abbreviation {
+  margin-top: 0.12rem;
+  font-size: 0.82rem;
 }
 
 .games-inline-action {
@@ -751,19 +756,16 @@
   gap: 0.75rem;
 }
 
-.following-alert-rule-row {
+.game-alert-row {
   display: grid;
   gap: 0.55rem;
-}
-
-.game-alert-row {
   padding: 0.85rem 1rem;
   border-radius: 16px;
   border: 1px solid #d6e0f0;
   background: #f8fbff;
 }
 
-.following-alert-rule-header {
+.game-alert-rule-header {
   display: grid;
   gap: 0.75rem;
 }
@@ -773,21 +775,14 @@
   letter-spacing: 0.01em;
 }
 
-.following-alert-default-toggle {
-  gap: 0.4rem;
-  font-size: 0.95rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.following-alert-rule-controls {
+.game-alert-rule-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.8rem;
 }
 
-.following-alert-rule-controls label {
+.game-alert-rule-controls label {
   display: inline-flex;
   white-space: nowrap;
   align-items: center;
@@ -796,7 +791,7 @@
   color: #2a3a59;
 }
 
-.following-alert-rule-controls select {
+.game-alert-rule-controls select {
   min-width: 66px;
 }
 
@@ -832,8 +827,8 @@
     grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
   }
 
-  .following-two-col-panels {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  .teams-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .alert-rule-header {
@@ -841,7 +836,7 @@
     align-items: start;
   }
 
-  .following-alert-rule-header {
+  .game-alert-rule-header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
@@ -850,7 +845,7 @@
 @media (min-width: 1024px) {
   .view-stack,
   .games-page,
-  .following-simple-page,
+  .teams-page,
   .alerts-skeleton-page {
     height: 100%;
     min-height: 0;
@@ -874,14 +869,14 @@
   }
 
   .alerts-layout,
-  .following-two-col-panels {
+  .teams-panel {
     height: 100%;
     min-height: 0;
   }
 
   .alerts-rules-panel,
   .alerts-history-panel,
-  .following-simple-section {
+  .teams-panel {
     min-height: 0;
     overflow: auto;
   }
@@ -914,7 +909,7 @@
   .games-panel,
   .alerts-rules-panel,
   .alerts-history-panel,
-  .following-simple-section,
+  .teams-panel,
   .overlay-card {
     padding: 0.95rem;
   }
@@ -950,17 +945,17 @@
 
   .alert-inline-field,
   .alert-rule-controls label,
-  .following-alert-rule-controls label {
+  .game-alert-rule-controls label {
     white-space: normal;
   }
 
   .alerts-history-panel .row-card,
-  .following-simple-team-list .row-card {
+  .teams-row {
     align-items: flex-start;
     flex-wrap: wrap;
   }
 
-  .following-simple-team-list .btn {
+  .teams-row .btn {
     width: 100%;
   }
 
@@ -981,7 +976,7 @@
     border-bottom-right-radius: 0;
   }
 
-  .following-alert-rule-header {
+  .game-alert-rule-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.45rem;
@@ -992,12 +987,12 @@
     justify-content: space-between;
   }
 
-  .following-alert-rule-controls {
+  .game-alert-rule-controls {
     width: 100%;
     justify-content: flex-start;
   }
 
-  .following-alert-rule-controls label {
+  .game-alert-rule-controls label {
     white-space: normal;
   }
 

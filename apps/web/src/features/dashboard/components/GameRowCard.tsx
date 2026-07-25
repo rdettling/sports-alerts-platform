@@ -96,7 +96,7 @@ export function GameRowCard({
 
           <div className="games-card-actions">
             {isFollowed && !isFinal ? (
-              <div className="following-game-actions following-game-actions-stacked">
+              <div className="games-follow-actions">
                 <button className="btn btn-secondary games-action-cell games-inline-action" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
                   Settings
                 </button>

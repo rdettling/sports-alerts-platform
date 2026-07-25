@@ -30,8 +30,8 @@ vi.mock("./components/GamesView", () => ({
   ),
 }));
 
-vi.mock("./components/FollowingView", () => ({
-  FollowingView: () => <div>Following view</div>,
+vi.mock("./components/TeamsView", () => ({
+  TeamsView: () => <div>Teams view</div>,
 }));
 
 vi.mock("./components/AlertsView", () => ({
@@ -65,7 +65,7 @@ describe("DashboardLayout", () => {
     renderLayout();
 
     expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
-    expect(screen.getByRole("link", { name: /following/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /teams/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /alerts/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /admin/i })).toBeInTheDocument();
     expect(screen.getByText("user@example.com")).toBeInTheDocument();
@@ -74,12 +74,22 @@ describe("DashboardLayout", () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it("shows only Games and Sign in to a guest", () => {
+  it("navigates from Games to Teams", async () => {
+    renderLayout();
+
+    fireEvent.click(screen.getByRole("link", { name: /teams/i }));
+
+    expect(await screen.findByText("Teams view")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /teams/i })).toHaveClass("active");
+    expect(screen.getByRole("link", { name: /games/i })).not.toHaveClass("active");
+  });
+
+  it("shows public navigation and Sign in to a guest", () => {
     authState = { token: null, user: null };
     renderLayout();
 
     expect(screen.getByRole("link", { name: /games/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /following/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /teams/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /alerts/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
 
@@ -98,6 +108,11 @@ describe("DashboardLayout", () => {
   it("redirects a guest away from protected routes", async () => {
     authState = { token: null, user: null };
     renderLayout("/alerts");
+    expect(await screen.findByText("Games view")).toBeInTheDocument();
+  });
+
+  it("treats the removed Following route as unknown", async () => {
+    renderLayout("/following");
     expect(await screen.findByText("Games view")).toBeInTheDocument();
   });
 });

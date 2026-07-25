@@ -53,9 +53,9 @@ export function GameAlertSettingsModal({
                 <AlertRuleCard
                   key={item.alert_type}
                   title={PREFERENCE_LABELS[item.alert_type] ?? item.alert_type}
-                  cardClassName="following-alert-rule-row game-alert-row"
-                  headerClassName="following-alert-rule-header"
-                  controlsClassName="following-alert-rule-controls"
+                  cardClassName="game-alert-row"
+                  headerClassName="game-alert-rule-header"
+                  controlsClassName="game-alert-rule-controls"
                   endSlot={
                     <div className="alert-rule-header-end">
                       {inlineField ? (

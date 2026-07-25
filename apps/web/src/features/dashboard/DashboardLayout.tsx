@@ -5,10 +5,10 @@ import { useAuth } from "../auth/auth-context";
 import { SignInModal } from "../auth/SignInModal";
 import { AdminView } from "./components/AdminView";
 import { AlertsView } from "./components/AlertsView";
-import { FollowingView } from "./components/FollowingView";
 import { GamesView } from "./components/GamesView";
+import { TeamsView } from "./components/TeamsView";
 
-type DashboardRouteKey = "games" | "following" | "alerts" | "admin";
+type DashboardRouteKey = "games" | "teams" | "alerts" | "admin";
 
 type DashboardRouteMeta = {
   key: DashboardRouteKey;
@@ -19,7 +19,7 @@ type DashboardRouteMeta = {
 
 const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
   { key: "games", path: "games", label: "Games" },
-  { key: "following", path: "following", label: "Following" },
+  { key: "teams", path: "teams", label: "Teams" },
   { key: "alerts", path: "alerts", label: "Alerts" },
   { key: "admin", path: "admin", label: "Admin", adminOnly: true },
 ];
@@ -31,7 +31,7 @@ const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
       <path d="M7.5 9.2h9M7.5 14.8h9M12 4v16" />
     </svg>
   ),
-  following: (
+  teams: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 6.5h14M5 12h10M5 17.5h14" />
       <path d="M16.8 9.8l2.6 2.2-2.6 2.2" />
@@ -67,7 +67,7 @@ export function DashboardLayout() {
   const navRoutes = useMemo(
     () =>
       DASHBOARD_ROUTES.filter((route) => {
-        if (route.key === "games") return true;
+        if (route.key === "games" || route.key === "teams") return true;
         if (!isAuthenticated) return false;
         return route.adminOnly ? isAdmin : true;
       }),
@@ -86,7 +86,7 @@ export function DashboardLayout() {
             {navRoutes.map((route) => (
               <NavLink
                 key={route.key}
-                to={route.path}
+                to={`/${route.path}`}
                 className={({ isActive }) => `app-nav-link ${isActive ? "active" : ""}`.trim()}
               >
                 <span className="app-nav-icon" aria-hidden>
@@ -122,8 +122,8 @@ export function DashboardLayout() {
               element={<GamesView token={token} onSignInRequired={() => setSignInOpen(true)} />}
             />
             <Route
-              path="following"
-              element={token && user ? <FollowingView token={token} /> : <Navigate to="/games" replace />}
+              path="teams"
+              element={<TeamsView token={token} onSignInRequired={() => setSignInOpen(true)} />}
             />
             <Route
               path="alerts"

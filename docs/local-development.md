@@ -51,7 +51,8 @@ If you want narrower service checks:
 - `/docs` loads for the API
 - the web app loads at `:5173`
 - magic-link sign-in works
-- the `Games`, `Following`, and `Alerts` sections load
+- the public `Games` and `Teams` sections load
+- authenticated follow controls and the `Alerts` section load
 - worker logs show ingest activity
 - admin tools appear only for an admin user
 
