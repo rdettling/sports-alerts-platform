@@ -16,7 +16,8 @@ from app.db.session import SessionLocal  # noqa: E402
 from app.services.seed import ensure_seeded_teams  # noqa: E402
 
 SPORTS_TABLES = [
-    "sent_alerts",
+    "alert_deliveries",
+    "alerts",
     "user_game_alert_overrides",
     "user_game_unfollows",
     "user_game_follows",

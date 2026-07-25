@@ -59,7 +59,7 @@ Common values:
 Notes:
 
 - `BOOTSTRAP_ADMIN_EMAIL` defaults to `ryandettling1@gmail.com` in code if not overridden.
-- `DELIVERY_MODE` supports `email` and `log`.
+- `DELIVERY_MODE` supports `live` and `log`.
 - Magic-link behavior is configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
 
 ## Worker Config

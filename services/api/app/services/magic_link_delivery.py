@@ -22,7 +22,7 @@ def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = N
         logger.info("Magic link email to=%s subject=%s link=%s", to_email, subject, magic_link)
         return
 
-    if delivery_settings.delivery_mode != "email":
+    if delivery_settings.delivery_mode != "live":
         logger.warning("Unsupported delivery mode=%s while sending magic links", delivery_settings.delivery_mode)
         return
 

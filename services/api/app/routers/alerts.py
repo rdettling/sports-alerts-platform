@@ -5,11 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import Game, SentAlert, Team, User
+from app.db.models import Alert, AlertDelivery, Game, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
-from app.schemas.alert import AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
-from app.services.alert_delivery import deliver_alert_now
+from app.schemas.alert import AlertDeliveryOut, AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
+from app.services.alert_delivery import deliver_email_alert_now
 from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup, get_league_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -41,36 +41,49 @@ def get_alert_history(
     home_team = aliased(Team)
     away_team = aliased(Team)
     stmt = (
-        select(SentAlert, Game, home_team, away_team)
-        .join(Game, Game.id == SentAlert.game_id)
+        select(Alert, Game, home_team, away_team)
+        .join(Game, Game.id == Alert.game_id)
         .join(home_team, home_team.id == Game.home_team_id)
         .join(away_team, away_team.id == Game.away_team_id)
-        .where(SentAlert.user_id == current_user.id)
+        .where(Alert.user_id == current_user.id)
         .where(Game.league.in_(active_leagues))
     )
     if alert_type:
-        stmt = stmt.where(SentAlert.alert_type == alert_type)
+        stmt = stmt.where(Alert.alert_type == alert_type)
     if since_hours:
         since_ts = datetime.now(timezone.utc) - timedelta(hours=since_hours)
-        stmt = stmt.where(SentAlert.sent_at >= since_ts)
+        stmt = stmt.where(Alert.triggered_at >= since_ts)
 
-    rows = db.execute(stmt.order_by(SentAlert.sent_at.desc()).limit(limit)).all()
+    rows = db.execute(stmt.order_by(Alert.triggered_at.desc()).limit(limit)).all()
+    alert_ids = [alert.id for alert, _, _, _ in rows]
+    deliveries_by_alert: dict[int, list[AlertDeliveryOut]] = {alert_id: [] for alert_id in alert_ids}
+    if alert_ids:
+        deliveries = db.scalars(
+            select(AlertDelivery)
+            .where(AlertDelivery.alert_id.in_(alert_ids))
+            .order_by(AlertDelivery.alert_id.asc(), AlertDelivery.id.asc())
+        ).all()
+        for delivery in deliveries:
+            deliveries_by_alert[delivery.alert_id].append(
+                AlertDeliveryOut(
+                    channel=delivery.channel,
+                    status=delivery.status,
+                    attempted_at=delivery.attempted_at,
+                )
+            )
 
     items = [
         AlertHistoryItemOut(
-            id=sent_alert.id,
-            game_id=sent_alert.game_id,
-            alert_type=sent_alert.alert_type,
-            delivery_channel=sent_alert.delivery_channel,
-            delivery_status=sent_alert.delivery_status,
-            sent_at=sent_alert.sent_at,
-            provider_message_id=sent_alert.provider_message_id,
-            metadata_json=sent_alert.metadata_json,
+            id=alert.id,
+            game_id=alert.game_id,
+            alert_type=alert.alert_type,
+            triggered_at=alert.triggered_at,
             game_external_id=game.external_game_id,
             home_team_abbreviation=home.abbreviation,
             away_team_abbreviation=away.abbreviation,
+            deliveries=deliveries_by_alert[alert.id],
         )
-        for sent_alert, game, home, away in rows
+        for alert, game, home, away in rows
     ]
     return AlertHistoryResponse(items=items)
 
@@ -195,15 +208,12 @@ def create_admin_test_alert(
     db.add(target_game)
     db.flush()
 
-    sent_alert = SentAlert(
+    alert = Alert(
         user_id=current_user.id,
         game_id=target_game.id,
         alert_type=payload.alert_type,
-        delivery_channel="email",
-        delivery_status="sent",
-        sent_at=datetime.now(timezone.utc),
-        dedupe_key=f"dev-test:{current_user.id}:{target_game.id}:{payload.alert_type}:{uuid4()}",
-        metadata_json=(
+        event_key=f"dev-test:{current_user.id}:{target_game.id}:{payload.alert_type}:{uuid4()}",
+        event_data=(
             {
                 "source": "dev_test",
                 "status": game_status,
@@ -220,11 +230,15 @@ def create_admin_test_alert(
             else {"source": "dev_test", "status": game_status, "period": period, "clock": clock}
         ),
     )
-    db.add(sent_alert)
+    db.add(alert)
     db.flush()
-    deliver_alert_now(
+    delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
+    db.add(delivery)
+    db.flush()
+    deliver_email_alert_now(
         db,
-        alert=sent_alert,
+        alert=alert,
+        delivery=delivery,
         user=current_user,
         game=target_game,
         home=home_team,
@@ -232,11 +246,12 @@ def create_admin_test_alert(
         service="api",
     )
     db.commit()
-    db.refresh(sent_alert)
+    db.refresh(alert)
+    db.refresh(delivery)
     return DevTestAlertResponse(
-        id=sent_alert.id,
-        game_id=sent_alert.game_id,
+        id=alert.id,
+        game_id=alert.game_id,
         league=league,
-        alert_type=sent_alert.alert_type,
-        delivery_status=sent_alert.delivery_status,
+        alert_type=alert.alert_type,
+        delivery_status=delivery.status,
     )

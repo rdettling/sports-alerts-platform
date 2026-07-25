@@ -3,18 +3,21 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class AlertDeliveryOut(BaseModel):
+    channel: str
+    status: str
+    attempted_at: datetime | None = None
+
+
 class AlertHistoryItemOut(BaseModel):
     id: int
     game_id: int
     alert_type: str
-    delivery_channel: str
-    delivery_status: str
-    sent_at: datetime
-    provider_message_id: str | None = None
-    metadata_json: dict | None = None
+    triggered_at: datetime
     game_external_id: str
     home_team_abbreviation: str
     away_team_abbreviation: str
+    deliveries: list[AlertDeliveryOut]
 
 
 class AlertHistoryResponse(BaseModel):

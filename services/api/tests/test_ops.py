@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.db.models import ApiCallRollupHourly, SentAlert, User, WorkerJob
+from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, User, WorkerJob
 from app.db.session import SessionLocal
 
 
@@ -82,26 +82,30 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
             )
         )
         db.add(
-            SentAlert(
+            Alert(
                 user_id=user.id,
                 game_id=1,
                 alert_type="game_start",
-                delivery_channel="email",
-                delivery_status="sent",
-                dedupe_key="sent-alert-1",
-                provider_message_id="msg-1",
-                sent_at=now,
+                event_key="alert-1",
+                triggered_at=now,
+                deliveries=[
+                    AlertDelivery(
+                        channel="email",
+                        status="sent",
+                        provider_message_id="msg-1",
+                        attempted_at=now,
+                    )
+                ],
             )
         )
         db.add(
-            SentAlert(
+            Alert(
                 user_id=user.id,
                 game_id=1,
                 alert_type="final_result",
-                delivery_channel="email",
-                delivery_status="failed",
-                dedupe_key="sent-alert-2",
-                sent_at=now,
+                event_key="alert-2",
+                triggered_at=now,
+                deliveries=[AlertDelivery(channel="email", status="failed", attempted_at=now)],
             )
         )
         db.commit()

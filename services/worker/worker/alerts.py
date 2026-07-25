@@ -7,8 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
+    Alert,
+    AlertDelivery,
     Game,
-    SentAlert,
     Team,
     User,
     UserAlertDefault,
@@ -18,7 +19,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from app.services.alert_defaults import get_alert_default_values
-from app.services.alert_delivery import deliver_alert_now
+from app.services.alert_delivery import deliver_email_alert_now
 from app.services.leagues import get_alert_types, get_league_profile
 
 
@@ -278,27 +279,25 @@ def _should_trigger_penalty_kicks(game: Game, is_enabled: bool) -> bool:
 
 
 def _append_candidate_alert(
-    candidate_alerts: list[SentAlert],
-    candidate_dedupe_keys: set[str],
+    candidate_alerts: list[Alert],
+    candidate_event_keys: set[str],
     *,
     user_id: int,
     game_id: int,
     alert_type: str,
-    dedupe_key: str,
-    metadata_json: dict[str, object],
+    event_key: str,
+    event_data: dict[str, object],
 ) -> None:
-    if dedupe_key in candidate_dedupe_keys:
+    if event_key in candidate_event_keys:
         return
-    candidate_dedupe_keys.add(dedupe_key)
+    candidate_event_keys.add(event_key)
     candidate_alerts.append(
-        SentAlert(
+        Alert(
             user_id=user_id,
             game_id=game_id,
             alert_type=alert_type,
-            delivery_channel="email",
-            delivery_status="sent",
-            dedupe_key=dedupe_key,
-            metadata_json=metadata_json,
+            event_key=event_key,
+            event_data=event_data,
         )
     )
 
@@ -323,8 +322,8 @@ def evaluate_and_record_alerts(
     defaults_by_key = _load_defaults_by_user_league(db, all_user_ids, leagues)
     overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, [game.id for game in games])
 
-    candidate_alerts: list[SentAlert] = []
-    candidate_dedupe_keys: set[str] = set()
+    candidate_alerts: list[Alert] = []
+    candidate_event_keys: set[str] = set()
     for game in games:
         user_watch_times = watch_times_by_game.get(game.id, {})
         for user_id, followed_at in user_watch_times.items():
@@ -334,12 +333,12 @@ def evaluate_and_record_alerts(
             if game_start_enabled and game.status in {"in_progress", "live"} and _followed_by_game_start(followed_at, game):
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="game_start",
-                    dedupe_key=f"{user_id}:{game.id}:game_start",
-                    metadata_json={"status": game.status},
+                    event_key=f"{user_id}:{game.id}:game_start",
+                    event_data={"status": game.status},
                 )
 
             final_enabled, _, _, _ = _alert_settings_for(
@@ -348,12 +347,12 @@ def evaluate_and_record_alerts(
             if final_enabled and (game.is_final or game.status == "final"):
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="final_result",
-                    dedupe_key=f"{user_id}:{game.id}:final_result",
-                    metadata_json={"status": game.status},
+                    event_key=f"{user_id}:{game.id}:final_result",
+                    event_data={"status": game.status},
                 )
 
             soccer_event = soccer_events.get(game.id)
@@ -364,12 +363,12 @@ def evaluate_and_record_alerts(
             if score_change_event and score_changed_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="score_changed",
-                    dedupe_key=f"{user_id}:{game.id}:score_changed:{score_change_event.new_away_score}-{score_change_event.new_home_score}",
-                    metadata_json={
+                    event_key=f"{user_id}:{game.id}:score_changed:{score_change_event.new_away_score}-{score_change_event.new_home_score}",
+                    event_data={
                         "status": score_change_event.status,
                         "period": score_change_event.period,
                         "clock": score_change_event.clock or "",
@@ -388,12 +387,12 @@ def evaluate_and_record_alerts(
             if soccer_event and soccer_event.second_half_started and second_half_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="second_half_start",
-                    dedupe_key=f"{user_id}:{game.id}:second_half_start",
-                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                    event_key=f"{user_id}:{game.id}:second_half_start",
+                    event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
             extra_time_enabled, _, _, _ = _alert_settings_for(
@@ -402,12 +401,12 @@ def evaluate_and_record_alerts(
             if soccer_event and soccer_event.extra_time_started and extra_time_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="extra_time_start",
-                    dedupe_key=f"{user_id}:{game.id}:extra_time_start",
-                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                    event_key=f"{user_id}:{game.id}:extra_time_start",
+                    event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
             penalty_kicks_enabled, _, _, _ = _alert_settings_for(
@@ -416,12 +415,12 @@ def evaluate_and_record_alerts(
             if _should_trigger_penalty_kicks(game, penalty_kicks_enabled):
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="penalty_kicks",
-                    dedupe_key=f"{user_id}:{game.id}:penalty_kicks",
-                    metadata_json={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                    event_key=f"{user_id}:{game.id}:penalty_kicks",
+                    event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
             close_enabled, close_margin, close_seconds, _ = _alert_settings_for(
@@ -430,12 +429,12 @@ def evaluate_and_record_alerts(
             if _should_trigger_close_game_late(game, close_enabled, close_margin, close_seconds):
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="close_game_late",
-                    dedupe_key=f"{user_id}:{game.id}:close_game_late",
-                    metadata_json={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
+                    event_key=f"{user_id}:{game.id}:close_game_late",
+                    event_data={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
                 )
 
             overtime_enabled, _, _, _ = _alert_settings_for(
@@ -445,12 +444,12 @@ def evaluate_and_record_alerts(
                 period = game.period or 0
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="overtime_start",
-                    dedupe_key=f"{user_id}:{game.id}:overtime_start:{period}",
-                    metadata_json={"period": period, "clock": game.clock or "", "status": game.status},
+                    event_key=f"{user_id}:{game.id}:overtime_start:{period}",
+                    event_data={"period": period, "clock": game.clock or "", "status": game.status},
                 )
 
             extra_innings_enabled, _, _, _ = _alert_settings_for(
@@ -460,12 +459,12 @@ def evaluate_and_record_alerts(
                 inning = game.period or 0
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="extra_innings_start",
-                    dedupe_key=f"{user_id}:{game.id}:extra_innings_start:{inning}",
-                    metadata_json={"period": inning, "clock": game.clock or "", "status": game.status},
+                    event_key=f"{user_id}:{game.id}:extra_innings_start:{inning}",
+                    event_data={"period": inning, "clock": game.clock or "", "status": game.status},
                 )
 
             inning_enabled, _, _, inning_threshold = _alert_settings_for(
@@ -474,12 +473,12 @@ def evaluate_and_record_alerts(
             if _should_trigger_inning_start(game, inning_enabled, inning_threshold):
                 _append_candidate_alert(
                     candidate_alerts,
-                    candidate_dedupe_keys,
+                    candidate_event_keys,
                     user_id=user_id,
                     game_id=game.id,
                     alert_type="inning_start",
-                    dedupe_key=f"{user_id}:{game.id}:inning_start",
-                    metadata_json={"period": game.period or 0, "status": game.status},
+                    event_key=f"{user_id}:{game.id}:inning_start",
+                    event_data={"period": game.period or 0, "status": game.status},
                 )
 
     if not candidate_alerts:
@@ -487,9 +486,9 @@ def evaluate_and_record_alerts(
 
     existing = {
         row[0]
-        for row in db.execute(select(SentAlert.dedupe_key).where(SentAlert.dedupe_key.in_(sorted(candidate_dedupe_keys)))).all()
+        for row in db.execute(select(Alert.event_key).where(Alert.event_key.in_(sorted(candidate_event_keys)))).all()
     }
-    to_insert = [alert for alert in candidate_alerts if alert.dedupe_key not in existing]
+    to_insert = [alert for alert in candidate_alerts if alert.event_key not in existing]
     if not to_insert:
         return 0
 
@@ -510,9 +509,13 @@ def evaluate_and_record_alerts(
     }
     for alert in to_insert:
         game = games_by_id.get(alert.game_id)
-        deliver_alert_now(
+        delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
+        db.add(delivery)
+        db.flush()
+        deliver_email_alert_now(
             db,
             alert=alert,
+            delivery=delivery,
             user=users_by_id.get(alert.user_id),
             game=game,
             home=teams_by_id.get(game.home_team_id) if game else None,

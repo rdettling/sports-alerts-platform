@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, SentAlert, Team, User
+from app.db.models import Alert, AlertDelivery, Game, Team, User
 from app.db.session import SessionLocal
 
 
@@ -22,7 +22,7 @@ def _auth_headers(client, email: str = "history@example.com") -> dict[str, str]:
         db.close()
 
 
-def test_alert_history_returns_sent_alert_rows(client):
+def test_alert_history_returns_alert_events_with_deliveries(client):
     headers = _auth_headers(client)
     db = SessionLocal()
     try:
@@ -41,13 +41,12 @@ def test_alert_history_returns_sent_alert_rows(client):
         db.refresh(game)
 
         db.add(
-            SentAlert(
+            Alert(
                 user_id=user.id,
                 game_id=game.id,
                 alert_type="game_start",
-                delivery_channel="email",
-                delivery_status="sent",
-                dedupe_key=f"{user.id}:{game.id}:game_start",
+                event_key=f"{user.id}:{game.id}:game_start",
+                deliveries=[AlertDelivery(channel="email", status="sent", attempted_at=datetime.now(timezone.utc))],
             )
         )
         db.commit()
@@ -60,7 +59,11 @@ def test_alert_history_returns_sent_alert_rows(client):
     assert len(body["items"]) == 1
     item = body["items"][0]
     assert item["alert_type"] == "game_start"
-    assert item["delivery_status"] == "sent"
+    assert len(item["deliveries"]) == 1
+    assert item["deliveries"][0]["channel"] == "email"
+    assert item["deliveries"][0]["status"] == "sent"
+    assert item["deliveries"][0]["attempted_at"] is not None
+    assert item["triggered_at"]
     assert item["home_team_abbreviation"]
     assert item["away_team_abbreviation"]
 
@@ -83,23 +86,21 @@ def test_alert_history_filters_by_type_and_time(client):
         db.commit()
         db.refresh(game)
 
-        old_alert = SentAlert(
+        old_alert = Alert(
             user_id=user.id,
             game_id=game.id,
             alert_type="game_start",
-            delivery_channel="email",
-            delivery_status="sent",
-            dedupe_key=f"{user.id}:{game.id}:game_start:old",
-            sent_at=datetime.now(timezone.utc) - timedelta(days=8),
+            event_key=f"{user.id}:{game.id}:game_start:old",
+            triggered_at=datetime.now(timezone.utc) - timedelta(days=8),
+            deliveries=[AlertDelivery(channel="email", status="sent")],
         )
-        recent_alert = SentAlert(
+        recent_alert = Alert(
             user_id=user.id,
             game_id=game.id,
             alert_type="final_result",
-            delivery_channel="email",
-            delivery_status="sent",
-            dedupe_key=f"{user.id}:{game.id}:final_result:recent",
-            sent_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            event_key=f"{user.id}:{game.id}:final_result:recent",
+            triggered_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            deliveries=[AlertDelivery(channel="email", status="sent")],
         )
         db.add_all([old_alert, recent_alert])
         db.commit()

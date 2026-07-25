@@ -32,8 +32,8 @@ Checks:
 2. Confirm `WEB_BASE_URL` points at the frontend origin users should land on
 3. Confirm delivery mode is intentional:
    - `DELIVERY_MODE=log` for local inspection
-   - `DELIVERY_MODE=email` for real delivery
-4. For email mode, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
+   - `DELIVERY_MODE=live` for real delivery
+4. For live mode, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
 5. Check API logs for magic-link rate limiting or delivery warnings
 
 ## Odds Not Showing
@@ -57,8 +57,8 @@ Checks:
 2. Confirm a relevant league is enabled in `league_settings`
 3. Confirm users follow teams or games that should produce alert candidates
 4. Confirm league defaults or game overrides have the alert type enabled
-5. For real email delivery, confirm `DELIVERY_MODE=email` and valid Resend settings
-6. Inspect `sent_alerts` and worker logs for dedupe or delivery failures
+5. For real email delivery, confirm `DELIVERY_MODE=live` and valid Resend settings
+6. Inspect `alerts`, `alert_deliveries`, and worker logs for dedupe or delivery failures
 
 ## Bad Local State
 

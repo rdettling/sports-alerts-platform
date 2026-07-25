@@ -16,10 +16,6 @@ class Settings(BaseSettings):
     magic_link_max_requests_per_hour: int = 5
     web_base_url: str
     cors_allow_origins: str
-    delivery_mode: str = "email"
-    from_email: str = "alerts@livegamealerts.com"
-    resend_api_key: str
-    resend_api_url: str = "https://api.resend.com/emails"
     odds_provider: str = "the_odds_api"
     odds_api_market: str = "h2h"
     bootstrap_admin_email: str = "ryandettling1@gmail.com"

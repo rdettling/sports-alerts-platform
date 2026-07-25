@@ -77,7 +77,8 @@ Main persisted tables:
 - `user_game_unfollows`
 - `user_alert_defaults`
 - `user_game_alert_overrides`
-- `sent_alerts`
+- `alerts`
+- `alert_deliveries`
 - `api_call_rollups_hourly`
 - `worker_jobs`
 
@@ -86,7 +87,7 @@ Notable modeling decisions:
 - Games are retained as normalized rows and can carry live/final state, scores, context labels, and odds associations
 - Team follows can imply effective game follows, with explicit game unfollows stored separately
 - Alert settings exist at two levels: league defaults and per-game overrides
-- Sent alerts are deduped and also serve as delivery history
+- Alerts are deduped events; channel-specific attempts and outcomes are stored as alert deliveries
 
 ## Key Flows
 
@@ -108,8 +109,8 @@ Notable modeling decisions:
 
 1. Worker loads effective followers and alert settings for touched games
 2. Worker evaluates league-appropriate alert types
-3. Worker writes `sent_alerts` rows with dedupe keys
-4. Delivery executes through log mode or email mode
+3. Worker writes a deduplicated `alerts` event and its email `alert_deliveries` row
+4. Email delivery executes through log mode or live Resend mode
 5. Web reads alert history through `/alerts/history`
 
 ### Admin / Ops

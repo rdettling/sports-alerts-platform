@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, SentAlert, User
+from app.db.models import Alert, AlertDelivery, Game, User
 from app.db.session import SessionLocal
 
 
@@ -52,12 +52,14 @@ def test_admin_test_email_endpoint_sends_inline_alert(client):
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "dev-alerts-on@example.com"))
-        alerts = db.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+        alerts = db.scalars(select(Alert).where(Alert.user_id == user.id)).all()
         assert len(alerts) == 1
-        assert alerts[0].delivery_status == "sent"
-        assert alerts[0].provider_message_id is not None
+        delivery = db.scalar(select(AlertDelivery).where(AlertDelivery.alert_id == alerts[0].id))
+        assert delivery is not None
+        assert delivery.status == "sent"
+        assert delivery.provider_message_id is not None
         assert alerts[0].alert_type == "final_result"
-        assert alerts[0].metadata_json["source"] == "dev_test"
+        assert alerts[0].event_data["source"] == "dev_test"
         game = db.get(Game, alerts[0].game_id)
         assert game is not None
         assert game.external_game_id.startswith("admin-test-game-")
@@ -84,7 +86,7 @@ def test_admin_test_email_endpoint_accepts_mlb_alerts(client):
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "dev-alerts-mlb@example.com"))
-        alerts = db.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+        alerts = db.scalars(select(Alert).where(Alert.user_id == user.id)).all()
         assert len(alerts) == 2
         extra_innings_alert = next(alert for alert in alerts if alert.alert_type == "extra_innings_start")
         game = db.get(Game, extra_innings_alert.game_id)
@@ -112,7 +114,7 @@ def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
     try:
         user = db.scalar(select(User).where(User.email == "dev-alerts-wnba@example.com"))
         overtime_alert = db.scalar(
-            select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "overtime_start")
+            select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "overtime_start")
         )
         assert overtime_alert is not None
         overtime_game = db.get(Game, overtime_alert.game_id)

@@ -8,7 +8,7 @@ from app.db.models import (
     GameOddsCurrent,
     GameOddsOutcomeCurrent,
     LeagueSetting,
-    SentAlert,
+    Alert,
     Team,
     User,
     UserAlertDefault,
@@ -357,10 +357,10 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     second = run_catalog_sync(make_live_close_provider())
     assert second["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
+    sent = db_session.scalars(select(Alert).order_by(Alert.alert_type.asc())).all()
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
-    assert all(row.delivery_status == "sent" for row in sent)
+    assert all(row.deliveries[0].status == "sent" for row in sent)
 
 
 def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
@@ -416,22 +416,22 @@ def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
     assert run_catalog_sync(overtime_provider(7, status="final", is_final=True))["status"] == "success"
 
     alerts = db_session.scalars(
-        select(SentAlert)
-        .where(SentAlert.user_id == enabled_user.id, SentAlert.alert_type == "overtime_start")
-        .order_by(SentAlert.id.asc())
+        select(Alert)
+        .where(Alert.user_id == enabled_user.id, Alert.alert_type == "overtime_start")
+        .order_by(Alert.id.asc())
     ).all()
-    assert [alert.metadata_json["period"] for alert in alerts] == [5, 6]
-    assert [alert.metadata_json["clock"] for alert in alerts] == ["05:00", "05:00"]
-    assert [alert.metadata_json["status"] for alert in alerts] == ["in_progress", "in_progress"]
-    assert [alert.dedupe_key for alert in alerts] == [
+    assert [alert.event_data["period"] for alert in alerts] == [5, 6]
+    assert [alert.event_data["clock"] for alert in alerts] == ["05:00", "05:00"]
+    assert [alert.event_data["status"] for alert in alerts] == ["in_progress", "in_progress"]
+    assert [alert.event_key for alert in alerts] == [
         f"{enabled_user.id}:{alerts[0].game_id}:overtime_start:5",
         f"{enabled_user.id}:{alerts[1].game_id}:overtime_start:6",
     ]
 
     disabled_alerts = db_session.scalars(
-        select(SentAlert).where(
-            SentAlert.user_id == disabled_user.id,
-            SentAlert.alert_type == "overtime_start",
+        select(Alert).where(
+            Alert.user_id == disabled_user.id,
+            Alert.alert_type == "overtime_start",
         )
     ).all()
     assert disabled_alerts == []
@@ -454,10 +454,10 @@ def test_ingest_creates_final_result_alert(db_session):
     result = run_catalog_sync(make_final_provider())
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
-    assert sent[0].delivery_status == "sent"
+    assert sent[0].deliveries[0].status == "sent"
 
 
 def test_wnba_reuses_deduped_basketball_alerts(db_session):
@@ -539,7 +539,7 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
     assert run_catalog_sync(final_provider, league="WNBA")["status"] == "success"
 
     sent = db_session.scalars(
-        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.alert_type.asc())
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.alert_type.asc())
     ).all()
     assert [alert.alert_type for alert in sent] == [
         "close_game_late",
@@ -582,7 +582,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
     result = run_catalog_sync(provider)
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert all(row.alert_type != "game_start" for row in sent)
 
 
@@ -597,21 +597,21 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    def fake_deliver(db, *, alert, user, game, home, away, service, ingest_run_id=None):
-        alert.delivery_status = "failed"
-        alert.metadata_json = {**(alert.metadata_json or {}), "error": "synthetic_failure"}
+    def fake_deliver(db, *, alert, delivery, user, game, home, away, service, ingest_run_id=None):
+        delivery.status = "failed"
+        delivery.provider_data = {"error": "synthetic_failure"}
         return "failed"
 
-    monkeypatch.setattr("worker.alerts.deliver_alert_now", fake_deliver)
+    monkeypatch.setattr("worker.alerts.deliver_email_alert_now", fake_deliver)
 
     result = run_catalog_sync(make_live_close_provider())
     assert result["status"] == "success"
     assert result["alerts_created"] == 2
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 2
-    assert all(row.delivery_status == "failed" for row in sent)
-    assert all(row.metadata_json["error"] == "synthetic_failure" for row in sent)
+    assert all(row.deliveries[0].status == "failed" for row in sent)
+    assert all(row.deliveries[0].provider_data["error"] == "synthetic_failure" for row in sent)
 
 
 def test_live_sync_persists_long_clock_values(db_session):
@@ -674,11 +674,11 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     )
     db_session.commit()
 
-    db_session.query(SentAlert).delete()
+    db_session.query(Alert).delete()
     db_session.commit()
 
     run_catalog_sync(make_live_close_provider())
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert all(row.alert_type != "game_start" for row in sent)
 
 
@@ -700,11 +700,11 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     db_session.add(UserGameUnfollow(user_id=user.id, game_id=game.id))
     db_session.commit()
 
-    db_session.query(SentAlert).delete()
+    db_session.query(Alert).delete()
     db_session.commit()
 
     run_catalog_sync(make_live_close_provider())
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 0
 
 
@@ -731,7 +731,7 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
     result = run_catalog_sync(make_mlb_inning_provider(), league="MLB")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert any(row.alert_type == "inning_start" for row in sent)
 
 
@@ -796,22 +796,22 @@ def test_mlb_extra_innings_alerts_once_per_inning(db_session):
     )["status"] == "success"
 
     alerts = db_session.scalars(
-        select(SentAlert)
-        .where(SentAlert.user_id == enabled_user.id, SentAlert.alert_type == "extra_innings_start")
-        .order_by(SentAlert.id.asc())
+        select(Alert)
+        .where(Alert.user_id == enabled_user.id, Alert.alert_type == "extra_innings_start")
+        .order_by(Alert.id.asc())
     ).all()
-    assert [alert.metadata_json["period"] for alert in alerts] == [10, 11]
-    assert [alert.metadata_json["clock"] for alert in alerts] == ["Top 10th", "Top 11th"]
-    assert [alert.metadata_json["status"] for alert in alerts] == ["in_progress", "in_progress"]
-    assert [alert.dedupe_key for alert in alerts] == [
+    assert [alert.event_data["period"] for alert in alerts] == [10, 11]
+    assert [alert.event_data["clock"] for alert in alerts] == ["Top 10th", "Top 11th"]
+    assert [alert.event_data["status"] for alert in alerts] == ["in_progress", "in_progress"]
+    assert [alert.event_key for alert in alerts] == [
         f"{enabled_user.id}:{alerts[0].game_id}:extra_innings_start:10",
         f"{enabled_user.id}:{alerts[1].game_id}:extra_innings_start:11",
     ]
 
     disabled_alerts = db_session.scalars(
-        select(SentAlert).where(
-            SentAlert.user_id == disabled_user.id,
-            SentAlert.alert_type == "extra_innings_start",
+        select(Alert).where(
+            Alert.user_id == disabled_user.id,
+            Alert.alert_type == "extra_innings_start",
         )
     ).all()
     assert disabled_alerts == []
@@ -840,12 +840,12 @@ def test_world_cup_score_changed_creates_inferred_goal_alert(db_session):
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 1
-    assert sent[0].metadata_json["is_inferred_goal"] is True
-    assert sent[0].metadata_json["scoring_side"] == "away"
-    assert sent[0].metadata_json["new_away_score"] == 1
-    assert sent[0].metadata_json["new_home_score"] == 0
+    assert sent[0].event_data["is_inferred_goal"] is True
+    assert sent[0].event_data["scoring_side"] == "away"
+    assert sent[0].event_data["new_away_score"] == 1
+    assert sent[0].event_data["new_home_score"] == 0
 
 
 def test_world_cup_score_changed_creates_generic_alert_for_ambiguous_jump(db_session):
@@ -871,10 +871,10 @@ def test_world_cup_score_changed_creates_generic_alert_for_ambiguous_jump(db_ses
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 1
-    assert sent[0].metadata_json["is_inferred_goal"] is False
-    assert sent[0].metadata_json["scoring_side"] is None
+    assert sent[0].event_data["is_inferred_goal"] is False
+    assert sent[0].event_data["scoring_side"] is None
 
 
 def test_world_cup_score_changed_ignores_score_decreases(db_session):
@@ -900,7 +900,7 @@ def test_world_cup_score_changed_ignores_score_decreases(db_session):
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "score_changed")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 0
 
 
@@ -931,10 +931,10 @@ def test_world_cup_second_half_start_alert_triggers_once_on_resume(db_session):
     assert result["status"] == "success"
     assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "second_half_start")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "second_half_start")).all()
     assert len(sent) == 1
-    assert sent[0].metadata_json["period"] == 2
-    assert sent[0].metadata_json["clock"] == "46'"
+    assert sent[0].event_data["period"] == 2
+    assert sent[0].event_data["clock"] == "46'"
 
 
 def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
@@ -960,7 +960,7 @@ def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "second_half_start")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "second_half_start")).all()
     assert len(sent) == 0
 
 
@@ -991,10 +991,10 @@ def test_world_cup_extra_time_start_alert_triggers_once_on_period_three_transiti
     assert result["status"] == "success"
     assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "extra_time_start")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "extra_time_start")).all()
     assert len(sent) == 1
-    assert sent[0].metadata_json["period"] == 3
-    assert sent[0].metadata_json["clock"] == "91'"
+    assert sent[0].event_data["period"] == 3
+    assert sent[0].event_data["clock"] == "91'"
 
 
 def test_world_cup_extra_time_start_does_not_trigger_before_period_three(db_session):
@@ -1020,7 +1020,7 @@ def test_world_cup_extra_time_start_does_not_trigger_before_period_three(db_sess
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "extra_time_start")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "extra_time_start")).all()
     assert len(sent) == 0
 
 
@@ -1070,10 +1070,10 @@ def test_world_cup_penalty_kicks_alert_triggers_once_in_late_tied_extra_time(db_
     assert result["status"] == "success"
     assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "penalty_kicks")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "penalty_kicks")).all()
     assert len(sent) == 1
-    assert sent[0].metadata_json["period"] == 3
-    assert sent[0].metadata_json["clock"] == "117'"
+    assert sent[0].event_data["period"] == 3
+    assert sent[0].event_data["clock"] == "117'"
 
 
 def test_world_cup_penalty_kicks_alert_does_not_trigger_before_threshold_or_without_tie(db_session):
@@ -1101,7 +1101,7 @@ def test_world_cup_penalty_kicks_alert_does_not_trigger_before_threshold_or_with
     result = run_catalog_sync(provider, league="WORLD_CUP")
     assert result["status"] == "success"
 
-    sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "penalty_kicks")).all()
+    sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "penalty_kicks")).all()
     assert len(sent) == 0
 
 
@@ -1149,9 +1149,9 @@ def test_mls_direct_shootout_triggers_penalties_without_extra_time_or_score_chan
     for _ in range(3):
         assert run_catalog_sync(provider, league="MLS")["status"] == "success"
 
-    alerts = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert [alert.alert_type for alert in alerts] == ["penalty_kicks"]
-    assert alerts[0].metadata_json["period"] == 5
+    assert alerts[0].event_data["period"] == 5
 
 
 def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
@@ -1183,7 +1183,7 @@ def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
         assert run_catalog_sync(provider, league="MLS")["status"] == "success"
 
     alerts = db_session.scalars(
-        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.id.asc())
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
     ).all()
     assert [alert.alert_type for alert in alerts] == ["extra_time_start", "penalty_kicks"]
 
@@ -1216,10 +1216,10 @@ def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
         assert run_catalog_sync(provider, league="MLS")["status"] == "success"
 
     alerts = db_session.scalars(
-        select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.id.asc())
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
     ).all()
     assert [alert.alert_type for alert in alerts] == ["second_half_start", "score_changed"]
-    assert alerts[1].metadata_json["scoring_side"] == "home"
+    assert alerts[1].event_data["scoring_side"] == "home"
 
 
 def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
@@ -1252,7 +1252,7 @@ def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
     )
     assert run_catalog_sync(provider, league="MLS")["status"] == "success"
 
-    alerts = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
+    alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert [alert.alert_type for alert in alerts] == ["final_result"]
 
 

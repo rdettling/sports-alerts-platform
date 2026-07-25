@@ -5,11 +5,11 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import ApiCallRollupHourly, LeagueSetting, SentAlert, Team, User, WorkerJob
+from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, LeagueSetting, Team, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
@@ -367,15 +367,16 @@ def admin_summary(
             )
         )
 
-    alert_rows = db.scalars(
-        select(SentAlert).where(
-            SentAlert.sent_at >= start,
-            SentAlert.delivery_channel == "email",
+    alert_delivery_rows = db.scalars(
+        select(AlertDelivery).where(
+            AlertDelivery.attempted_at >= start,
+            AlertDelivery.channel == "email",
         )
     ).all()
-    alert_attempted = len(alert_rows)
-    alert_sent = sum(1 for row in alert_rows if row.delivery_status == "sent")
-    alert_failed = sum(1 for row in alert_rows if row.delivery_status == "failed")
+    alert_attempted = len(alert_delivery_rows)
+    alert_sent = sum(1 for row in alert_delivery_rows if row.status == "sent")
+    alert_failed = sum(1 for row in alert_delivery_rows if row.status == "failed")
+    alerts_created = db.scalar(select(func.count(Alert.id)).where(Alert.triggered_at >= start)) or 0
 
     magic_attempted = max(resend_metrics.get("total_calls", 0) - alert_attempted, 0)
     magic_sent = max(resend_metrics.get("success_calls", 0) - alert_sent, 0)
@@ -390,7 +391,7 @@ def admin_summary(
             total_emails_attempted=alert_attempted + magic_attempted,
             emails_sent=alert_sent + magic_sent,
             emails_failed=alert_failed + magic_failed,
-            total_alerts_created=alert_attempted,
+            total_alerts_created=alerts_created,
             last_updated_at=now,
         ),
         providers=providers_out,

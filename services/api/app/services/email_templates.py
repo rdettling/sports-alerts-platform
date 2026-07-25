@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 from datetime import datetime, timezone
 
-from app.db.models import Game, SentAlert, Team
+from app.db.models import Alert, Game, Team
 from app.services.email_branding import APP_BRAND_NAME
 from app.services.leagues import get_league_profile
 
@@ -130,8 +130,8 @@ def _scoreline_from_values(away_score: int | None, home_score: int | None) -> st
     return f"{away_score}\u2013{home_score}"
 
 
-def _alert_metadata(alert: SentAlert) -> dict[str, object]:
-    return alert.metadata_json if isinstance(alert.metadata_json, dict) else {}
+def _alert_metadata(alert: Alert) -> dict[str, object]:
+    return alert.event_data if isinstance(alert.event_data, dict) else {}
 
 
 def _metadata_int(metadata: dict[str, object], key: str) -> int | None:
@@ -144,7 +144,7 @@ def _metadata_text(metadata: dict[str, object], key: str) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
 
 
-def _score_changed_values(alert: SentAlert, game: Game) -> tuple[int | None, int | None, int | None, int | None, bool, str | None]:
+def _score_changed_values(alert: Alert, game: Game) -> tuple[int | None, int | None, int | None, int | None, bool, str | None]:
     metadata = _alert_metadata(alert)
     previous_away_score = _metadata_int(metadata, "previous_away_score")
     previous_home_score = _metadata_int(metadata, "previous_home_score")
@@ -203,7 +203,7 @@ def _format_period_value(period: int | None, sport: str | None) -> str:
     return ""
 
 
-def _event_status_details(alert: SentAlert, game: Game, sport: str | None) -> str:
+def _event_status_details(alert: Alert, game: Game, sport: str | None) -> str:
     metadata = _alert_metadata(alert)
     status = _metadata_text(metadata, "status") or game.status
     period = _metadata_int(metadata, "period")
@@ -225,12 +225,12 @@ def _event_status_details(alert: SentAlert, game: Game, sport: str | None) -> st
     return " \u2022 ".join(details_parts) if details_parts else "Live update"
 
 
-def _overtime_label(alert: SentAlert, game: Game, sport: str | None) -> str:
+def _overtime_label(alert: Alert, game: Game, sport: str | None) -> str:
     period = _metadata_int(_alert_metadata(alert), "period")
     return _format_period_value(period if period is not None else game.period, sport) or "Overtime"
 
 
-def _extra_inning_label(alert: SentAlert, game: Game) -> str:
+def _extra_inning_label(alert: Alert, game: Game) -> str:
     inning = _metadata_int(_alert_metadata(alert), "period")
     inning = inning if inning is not None else game.period
     if inning is None:
@@ -241,7 +241,7 @@ def _extra_inning_label(alert: SentAlert, game: Game) -> str:
 
 
 def _primary_status_line(
-    alert: SentAlert,
+    alert: Alert,
     game: Game,
     away_abbr: str,
     home_abbr: str,
@@ -295,7 +295,7 @@ def _primary_status_line(
     return f"Status: {game.status}"
 
 
-def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: Team | None) -> str:
+def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team | None) -> str:
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
     league = _normalize_league(game, home, away)
@@ -334,7 +334,7 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
     return f"{ALERT_LABELS.get(alert.alert_type, 'Alert')} · {away_abbr} @ {home_abbr}"
 
 
-def build_alert_email_content(alert: SentAlert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
+def build_alert_email_content(alert: Alert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
     home_name = home.name if home else f"Team {game.home_team_id}"
     away_name = away.name if away else f"Team {game.away_team_id}"
     away_abbr = _team_abbr(away, "AWAY")

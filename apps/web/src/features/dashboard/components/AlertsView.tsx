@@ -255,15 +255,23 @@ export function AlertsView({ token }: { token: string }) {
               {historyItems.map((item) => (
                 <li key={item.id} className="row-card">
                   <span className="alert-history-row-main alerts-history-simple-row">
-                    <span>{new Date(item.sent_at).toLocaleString()}</span>
+                    <span>{new Date(item.triggered_at).toLocaleString()}</span>
                     <span>
                       <strong>{item.away_team_abbreviation}</strong> @{" "}
                       <strong>{item.home_team_abbreviation}</strong>
                     </span>
                     <span>{PREFERENCE_LABELS[item.alert_type] ?? item.alert_type}</span>
                   </span>
-                  <span className={`chip ${deliveryStatusClass(item.delivery_status)}`}>
-                    {item.delivery_status}
+                  <span className="chip-row">
+                    {item.deliveries.map((delivery) => (
+                      <span
+                        key={delivery.channel}
+                        className={`chip ${deliveryStatusClass(delivery.status)}`}
+                      >
+                        {delivery.channel.charAt(0).toUpperCase() + delivery.channel.slice(1)}{" "}
+                        {delivery.status}
+                      </span>
+                    ))}
                   </span>
                 </li>
               ))}

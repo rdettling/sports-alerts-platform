@@ -105,14 +105,15 @@ export type AlertHistoryItem = {
   id: number;
   game_id: number;
   alert_type: string;
-  delivery_channel: string;
-  delivery_status: string;
-  sent_at: string;
-  provider_message_id: string | null;
-  metadata_json: Record<string, unknown> | null;
+  triggered_at: string;
   game_external_id: string;
   home_team_abbreviation: string;
   away_team_abbreviation: string;
+  deliveries: Array<{
+    channel: string;
+    status: string;
+    attempted_at: string | null;
+  }>;
 };
 
 export type AlertType =

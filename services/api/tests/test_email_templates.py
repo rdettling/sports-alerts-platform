@@ -1,17 +1,15 @@
 from datetime import datetime, timezone
 
-from app.db.models import Game, SentAlert, Team
+from app.db.models import Alert, Game, Team
 from app.services.email_templates import build_alert_email_content, build_alert_subject
 
 
-def _mk_alert(alert_type: str) -> SentAlert:
-    return SentAlert(
+def _mk_alert(alert_type: str) -> Alert:
+    return Alert(
         user_id=1,
         game_id=1,
         alert_type=alert_type,
-        delivery_channel="email",
-        delivery_status="sent",
-        dedupe_key=f"1:1:{alert_type}",
+        event_key=f"1:1:{alert_type}",
     )
 
 
@@ -59,10 +57,10 @@ def test_mlb_extra_innings_start_uses_ordinal_inning_copy():
         clock="Top 11th",
     )
     alert = _mk_alert("extra_innings_start")
-    alert.metadata_json = {"status": "in_progress", "period": 10, "clock": "Top 10th"}
+    alert.event_data = {"status": "in_progress", "period": 10, "clock": "Top 10th"}
     assert build_alert_subject(alert, game, home, away) == "10th inning · MIA 3–3 TOR"
 
-    alert.metadata_json = {"status": "in_progress", "period": 11, "clock": "Top 11th"}
+    alert.event_data = {"status": "in_progress", "period": 11, "clock": "Top 11th"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
@@ -135,7 +133,7 @@ def test_nba_overtime_start_uses_period_aware_copy():
         clock="05:00",
     )
     alert = _mk_alert("overtime_start")
-    alert.metadata_json = {"status": "in_progress", "period": 6, "clock": "05:00"}
+    alert.event_data = {"status": "in_progress", "period": 6, "clock": "05:00"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
@@ -212,7 +210,7 @@ def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
         clock="Pens",
     )
     alert = _mk_alert("penalty_kicks")
-    alert.metadata_json = {"status": "in_progress", "period": 5, "clock": "Pens"}
+    alert.event_data = {"status": "in_progress", "period": 5, "clock": "Pens"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
@@ -240,7 +238,7 @@ def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
         clock="20'",
     )
     alert = _mk_alert("score_changed")
-    alert.metadata_json = {
+    alert.event_data = {
         "status": "in_progress",
         "period": 1,
         "clock": "18'",
@@ -276,7 +274,7 @@ def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
         clock="70'",
     )
     alert = _mk_alert("score_changed")
-    alert.metadata_json = {
+    alert.event_data = {
         "status": "in_progress",
         "period": 2,
         "clock": "68'",
@@ -312,7 +310,7 @@ def test_world_cup_second_half_start_uses_resume_copy():
         clock="46'",
     )
     alert = _mk_alert("second_half_start")
-    alert.metadata_json = {"status": "in_progress", "period": 2, "clock": "46'"}
+    alert.event_data = {"status": "in_progress", "period": 2, "clock": "46'"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
@@ -338,7 +336,7 @@ def test_world_cup_extra_time_start_uses_literal_copy():
         clock="91'",
     )
     alert = _mk_alert("extra_time_start")
-    alert.metadata_json = {"status": "in_progress", "period": 3, "clock": "91'"}
+    alert.event_data = {"status": "in_progress", "period": 3, "clock": "91'"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
@@ -364,7 +362,7 @@ def test_world_cup_penalty_kicks_uses_anticipatory_copy():
         clock="117'",
     )
     alert = _mk_alert("penalty_kicks")
-    alert.metadata_json = {"status": "in_progress", "period": 3, "clock": "117'"}
+    alert.event_data = {"status": "in_progress", "period": 3, "clock": "117'"}
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)

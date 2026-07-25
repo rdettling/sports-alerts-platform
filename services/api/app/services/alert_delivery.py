@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, SentAlert, Team, User
+from app.db.models import Alert, AlertDelivery, Game, Team, User
 from app.services.api_usage import record_api_call_event
 from app.services.delivery_settings import delivery_settings
 from app.services.email_templates import build_alert_email_content, build_alert_subject
@@ -17,9 +17,9 @@ from app.services.email_templates import build_alert_email_content, build_alert_
 logger = logging.getLogger(__name__)
 
 
-def merge_alert_metadata(alert: SentAlert, updates: dict[str, object]) -> None:
-    existing = alert.metadata_json if isinstance(alert.metadata_json, dict) else {}
-    alert.metadata_json = {**existing, **updates}
+def merge_provider_data(delivery: AlertDelivery, updates: dict[str, object]) -> None:
+    existing = delivery.provider_data if isinstance(delivery.provider_data, dict) else {}
+    delivery.provider_data = {**existing, **updates}
 
 
 def _send_email_resend(
@@ -115,10 +115,11 @@ def _send_email_resend(
         return False, None, {"error": "resend_http_error", "detail": str(exc.reason)}
 
 
-def deliver_alert_now(
+def deliver_email_alert_now(
     db: Session,
     *,
-    alert: SentAlert,
+    alert: Alert,
+    delivery: AlertDelivery,
     user: User | None,
     game: Game | None,
     home: Team | None,
@@ -126,12 +127,12 @@ def deliver_alert_now(
     service: str,
     ingest_run_id: int | None = None,
 ) -> str:
-    alert.sent_at = datetime.now(timezone.utc)
+    delivery.attempted_at = datetime.now(timezone.utc)
     if user is None or game is None:
-        alert.delivery_status = "failed"
-        merge_alert_metadata(alert, {"error": "missing_user_or_game"})
+        delivery.status = "failed"
+        merge_provider_data(delivery, {"error": "missing_user_or_game"})
         db.flush()
-        return alert.delivery_status
+        return delivery.status
 
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
@@ -145,16 +146,16 @@ def deliver_alert_now(
             alert.id,
             text_body.replace("\n", " | "),
         )
-        alert.delivery_status = "sent"
-        alert.provider_message_id = f"log-{alert.id}"
+        delivery.status = "sent"
+        delivery.provider_message_id = f"log-{delivery.id}"
         db.flush()
-        return alert.delivery_status
+        return delivery.status
 
-    if delivery_settings.delivery_mode != "email":
-        alert.delivery_status = "failed"
-        merge_alert_metadata(alert, {"error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"})
+    if delivery_settings.delivery_mode != "live":
+        delivery.status = "failed"
+        merge_provider_data(delivery, {"error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"})
         db.flush()
-        return alert.delivery_status
+        return delivery.status
 
     sent, provider_message_id, error_metadata = _send_email_resend(
         db,
@@ -166,15 +167,15 @@ def deliver_alert_now(
         ingest_run_id=ingest_run_id,
     )
     if sent:
-        alert.delivery_status = "sent"
-        alert.provider_message_id = provider_message_id
+        delivery.status = "sent"
+        delivery.provider_message_id = provider_message_id
         if error_metadata:
-            merge_alert_metadata(alert, error_metadata)
+            merge_provider_data(delivery, error_metadata)
         db.flush()
-        return alert.delivery_status
+        return delivery.status
 
-    alert.delivery_status = "failed"
+    delivery.status = "failed"
     if error_metadata:
-        merge_alert_metadata(alert, error_metadata)
+        merge_provider_data(delivery, error_metadata)
     db.flush()
-    return alert.delivery_status
+    return delivery.status

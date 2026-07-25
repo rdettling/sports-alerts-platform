@@ -199,22 +199,36 @@ class UserGameAlertOverride(Base):
     game = relationship("Game")
 
 
-class SentAlert(Base):
-    __tablename__ = "sent_alerts"
+class Alert(Base):
+    __tablename__ = "alerts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
     alert_type: Mapped[str] = mapped_column(String(32))
-    delivery_channel: Mapped[str] = mapped_column(String(32))
-    delivery_status: Mapped[str] = mapped_column(String(32))
-    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    event_key: Mapped[str] = mapped_column(String(255), unique=True)
+    event_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    deliveries = relationship("AlertDelivery", back_populates="alert", cascade="all, delete-orphan")
+
+
+class AlertDelivery(Base):
+    __tablename__ = "alert_deliveries"
+    __table_args__ = (
+        UniqueConstraint("alert_id", "channel", name="uq_alert_deliveries_alert_channel"),
+        Index("ix_alert_deliveries_channel_attempted_at", "channel", "attempted_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    alert_id: Mapped[int] = mapped_column(ForeignKey("alerts.id", ondelete="CASCADE"), index=True)
+    channel: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    dedupe_key: Mapped[str] = mapped_column(String(255), unique=True)
-    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    provider_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-
-Index("ix_sent_alerts_delivery_status_sent_at", SentAlert.delivery_status, SentAlert.sent_at)
+    alert = relationship("Alert", back_populates="deliveries")
 
 
 class ApiCallRollupHourly(Base):

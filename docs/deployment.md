@@ -83,6 +83,8 @@ Requirements:
 
 The repo stores both user data and disposable sports-domain state in Postgres. User identity matters more than sports data, so operationally it is acceptable to reset sports-domain data if needed, but do not treat user/auth data casually.
 
+The current baseline is intentionally self-contained. Replacing it requires an explicit full schema reset during a maintenance window; do not point a rewritten baseline at an existing schema.
+
 ## Post-Deploy Checks
 
 After a deploy:

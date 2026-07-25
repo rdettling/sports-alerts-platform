@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, SentAlert, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
+from app.db.models import Alert, Game, GameOddsCurrent, GameOddsOutcomeCurrent, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
 
 GAMES_RETENTION_PAST_HOURS = 36
 GAMES_RETENTION_FUTURE_DAYS = 7
@@ -28,7 +28,7 @@ def cleanup_games_outside_window(db: Session, now: datetime | None = None) -> in
     if not game_ids:
         return 0
 
-    db.execute(delete(SentAlert).where(SentAlert.game_id.in_(game_ids)))
+    db.execute(delete(Alert).where(Alert.game_id.in_(game_ids)))
     db.execute(delete(UserGameAlertOverride).where(UserGameAlertOverride.game_id.in_(game_ids)))
     db.execute(delete(UserGameFollow).where(UserGameFollow.game_id.in_(game_ids)))
     db.execute(delete(UserGameUnfollow).where(UserGameUnfollow.game_id.in_(game_ids)))
