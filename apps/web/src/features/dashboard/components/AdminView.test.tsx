@@ -81,7 +81,8 @@ vi.mock("../hooks/useAdminData", () => ({
           },
         ],
         delivery: {
-          alerts: { attempted: 3, sent: 2, failed: 1 },
+          email_alerts: { attempted: 3, sent: 2, failed: 1 },
+          push_alerts: { attempted: 2, sent: 2, failed: 0 },
           magic_links: { attempted: 1, sent: 1, failed: 0 },
           resend: { total_calls: 4, success_calls: 3, error_calls: 1, rate_limited_calls: 0 },
         },

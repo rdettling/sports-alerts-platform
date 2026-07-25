@@ -94,5 +94,6 @@ After a deploy:
 3. Confirm sign-in works
 4. Confirm public games and teams load, then verify authenticated follow controls
 5. Confirm worker logs show sync activity
-6. If email delivery is enabled, verify alert delivery in a controlled way
-7. If Neon integration is configured, confirm the admin DB stats view can load usage data
+6. Verify controlled Email, Push, and Both test alerts for the admin account
+7. Confirm a push notification opens the Games page and history shows channel-specific delivery chips
+8. If Neon integration is configured, confirm the admin DB stats view can load usage data

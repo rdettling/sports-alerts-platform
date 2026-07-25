@@ -34,4 +34,4 @@ class DevTestAlertResponse(BaseModel):
     game_id: int
     league: str
     alert_type: str
-    delivery_status: str
+    deliveries: list[AlertDeliveryOut]

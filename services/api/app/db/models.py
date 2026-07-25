@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -12,10 +12,17 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "alert_delivery_mode IN ('email', 'push', 'both')",
+            name="ck_users_alert_delivery_mode",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     role: Mapped[str] = mapped_column(Enum("user", "admin", name="user_role"), default="user", index=True)
+    alert_delivery_mode: Mapped[str] = mapped_column(String(16), default="email", server_default="email")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -24,6 +31,7 @@ class User(Base):
     game_unfollows = relationship("UserGameUnfollow", back_populates="user")
     alert_defaults = relationship("UserAlertDefault", back_populates="user")
     game_alert_overrides = relationship("UserGameAlertOverride", back_populates="user")
+    push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
 
 
 class EmailLoginToken(Base):
@@ -229,6 +237,20 @@ class AlertDelivery(Base):
     provider_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     alert = relationship("Alert", back_populates="deliveries")
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(String(255))
+    auth: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="push_subscriptions")
 
 
 class ApiCallRollupHourly(Base):

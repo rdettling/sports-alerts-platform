@@ -4,7 +4,7 @@ UV_PROJECT_ENVIRONMENT ?= .venv-local
 COMPOSE_FILE := infra/docker-compose.yml
 ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
-ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY ODDS_API_KEY RESEND_API_KEY VITE_API_BASE_URL
+ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY ODDS_API_KEY RESEND_API_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT VITE_API_BASE_URL
 
 .PHONY: help setup up rebuild down reset logs test web web-fix _test-api _test-worker _test-web _check-docker _check-env
 
@@ -35,6 +35,10 @@ setup:
 			'ODDS_API_KEY=replace-with-the-odds-api-key' \
 			'ODDS_ENABLED=false' \
 			'RESEND_API_KEY=replace-with-resend-api-key' \
+			'DELIVERY_MODE=log' \
+			'VAPID_PUBLIC_KEY=' \
+			'VAPID_PRIVATE_KEY=' \
+			'VAPID_SUBJECT=mailto:you@example.com' \
 			'CATALOG_SYNC_INTERVAL_SECONDS=43200' \
 			'ODDS_PREGAME_WINDOW_HOURS=24' \
 			'VITE_API_BASE_URL=http://localhost:8000' \

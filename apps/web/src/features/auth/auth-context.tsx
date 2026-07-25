@@ -1,6 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { me, startMagicLink, verifyMagicLink, type UserProfile } from "../../shared/api";
+import {
+  deletePushSubscription,
+  me,
+  startMagicLink,
+  verifyMagicLink,
+  type UserProfile,
+} from "../../shared/api";
+import {
+  getCurrentPushSubscription,
+  pushSubscriptionPayload,
+} from "../../shared/lib/push-notifications";
 
 type AuthContextType = {
   isLoading: boolean;
@@ -8,7 +18,7 @@ type AuthContextType = {
   user: UserProfile | null;
   sendMagicLink: (email: string) => Promise<{ message: string }>;
   verifyMagicLinkToken: (token: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,7 +80,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(response.user);
   }, []);
 
-  const logout = () => {
+  const logout = async () => {
+    if (token) {
+      const subscription = await getCurrentPushSubscription().catch(() => null);
+      if (subscription) {
+        const endpoint = pushSubscriptionPayload(subscription).endpoint;
+        await deletePushSubscription(token, endpoint).catch(() => undefined);
+        await subscription.unsubscribe().catch(() => false);
+      }
+    }
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setToken(null);
     setUser(null);

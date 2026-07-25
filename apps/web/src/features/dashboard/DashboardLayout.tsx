@@ -101,7 +101,7 @@ export function DashboardLayout() {
             {token && user ? (
               <>
                 <span className="user-email">{user.email}</span>
-                <button className="btn btn-secondary" onClick={logout}>
+                <button className="btn btn-secondary" onClick={() => void logout()}>
                   Logout
                 </button>
               </>

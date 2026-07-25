@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, Game, Team, User
+from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, Game, PushSubscription, Team, User
 from app.services import alert_delivery
-from app.services.alert_delivery import deliver_email_alert_now
+from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.email_branding import APP_BRAND_NAME
 
 
@@ -281,3 +281,162 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
         service="worker",
     )
     assert status == "sent"
+
+
+def _push_delivery(db_session, alert: Alert) -> AlertDelivery:
+    delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
+    db_session.add(delivery)
+    db_session.commit()
+    return delivery
+
+
+def _deliver_push(db_session, alert: Alert, delivery: AlertDelivery) -> str:
+    game = db_session.get(Game, alert.game_id)
+    assert game is not None
+    return deliver_push_alert_now(
+        db_session,
+        alert=alert,
+        delivery=delivery,
+        user=db_session.get(User, alert.user_id),
+        game=game,
+        home=db_session.get(Team, game.home_team_id),
+        away=db_session.get(Team, game.away_team_id),
+        service="worker",
+    )
+
+
+def test_push_delivery_sends_every_device_and_aggregates_success(db_session, monkeypatch):
+    alert, _ = _seed_alert(db_session)
+    delivery = _push_delivery(db_session, alert)
+    db_session.add_all(
+        [
+            PushSubscription(
+                user_id=alert.user_id,
+                endpoint="https://push.example/one",
+                p256dh="p" * 43,
+                auth="a" * 22,
+            ),
+            PushSubscription(
+                user_id=alert.user_id,
+                endpoint="https://push.example/two",
+                p256dh="p" * 43,
+                auth="b" * 22,
+            ),
+        ]
+    )
+    db_session.commit()
+    sent_endpoints: list[str] = []
+
+    def fake_webpush(**kwargs):
+        sent_endpoints.append(kwargs["subscription_info"]["endpoint"])
+        assert kwargs["ttl"] == 300
+        assert kwargs["timeout"] == 10
+        assert kwargs["vapid_claims"] == {"sub": "mailto:alerts@example.com"}
+
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_subject", "mailto:alerts@example.com")
+    monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
+
+    assert _deliver_push(db_session, alert, delivery) == "sent"
+    assert sent_endpoints == ["https://push.example/one", "https://push.example/two"]
+    assert delivery.provider_data == {"attempted": 2, "sent": 2, "expired": 0}
+
+
+def test_push_delivery_keeps_success_and_deletes_expired_device(db_session, monkeypatch):
+    alert, _ = _seed_alert(db_session)
+    delivery = _push_delivery(db_session, alert)
+    db_session.add_all(
+        [
+            PushSubscription(
+                user_id=alert.user_id,
+                endpoint="https://push.example/gone",
+                p256dh="p" * 43,
+                auth="a" * 22,
+            ),
+            PushSubscription(
+                user_id=alert.user_id,
+                endpoint="https://push.example/active",
+                p256dh="p" * 43,
+                auth="b" * 22,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    class GoneResponse:
+        status_code = 410
+
+    def fake_webpush(**kwargs):
+        if kwargs["subscription_info"]["endpoint"].endswith("/gone"):
+            raise alert_delivery.WebPushException("gone", response=GoneResponse())
+
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
+    monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
+
+    assert _deliver_push(db_session, alert, delivery) == "sent"
+    assert delivery.provider_data == {"attempted": 2, "sent": 1, "expired": 1}
+    remaining = db_session.scalars(select(PushSubscription)).all()
+    assert [row.endpoint for row in remaining] == ["https://push.example/active"]
+
+
+def test_push_delivery_total_provider_failure_retains_subscription(db_session, monkeypatch):
+    alert, _ = _seed_alert(db_session)
+    delivery = _push_delivery(db_session, alert)
+    db_session.add(
+        PushSubscription(
+            user_id=alert.user_id,
+            endpoint="https://push.example/retry-later",
+            p256dh="p" * 43,
+            auth="a" * 22,
+        )
+    )
+    db_session.commit()
+
+    class FailureResponse:
+        status_code = 503
+
+    def fake_webpush(**kwargs):
+        raise alert_delivery.WebPushException("unavailable", response=FailureResponse())
+
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
+    monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
+
+    assert _deliver_push(db_session, alert, delivery) == "failed"
+    assert delivery.provider_data == {
+        "attempted": 1,
+        "sent": 0,
+        "expired": 0,
+        "errors": ["http_503"],
+    }
+    assert db_session.scalar(select(PushSubscription)) is not None
+
+
+def test_push_delivery_without_subscriptions_or_vapid_fails_only_delivery(db_session, monkeypatch):
+    alert, _ = _seed_alert(db_session)
+    no_subscription = _push_delivery(db_session, alert)
+    assert _deliver_push(db_session, alert, no_subscription) == "failed"
+    assert no_subscription.provider_data["error"] == "no_active_subscriptions"
+    assert alert.event_data == {"status": "in_progress"}
+
+    db_session.add(
+        PushSubscription(
+            user_id=alert.user_id,
+            endpoint="https://push.example/config",
+            p256dh="p" * 43,
+            auth="a" * 22,
+        )
+    )
+    db_session.delete(no_subscription)
+    db_session.flush()
+    missing_config = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
+    db_session.add(missing_config)
+    db_session.commit()
+    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "")
+
+    assert _deliver_push(db_session, alert, missing_config) == "failed"
+    assert missing_config.provider_data == {"error": "missing_vapid_private_key"}
+    assert alert.event_data == {"status": "in_progress"}

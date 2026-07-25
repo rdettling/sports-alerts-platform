@@ -7,15 +7,15 @@ import { useAuth } from "../features/auth/auth-context";
 
 const PAGE_METADATA = {
   games: {
-    title: "Live Game Alerts | Live Sports Scores & Email Alerts",
+    title: "Live Game Alerts | Live Sports Scores & Email and Push Alerts",
     description:
-      "Live scores and customizable email alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
+      "Live scores and customizable email and push alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
     canonical: "https://livegamealerts.com/",
   },
   teams: {
     title: "Sports Teams | Live Game Alerts",
     description:
-      "Browse NBA, WNBA, MLB, MLS, and World Cup teams and sign in to follow teams for live game email alerts.",
+      "Browse NBA, WNBA, MLB, MLS, and World Cup teams and sign in to follow teams for live game email and push alerts.",
     canonical: "https://livegamealerts.com/teams",
   },
 } as const;

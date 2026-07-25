@@ -200,7 +200,7 @@ describe("GamesView", () => {
 
     expect(
       screen.getByText(
-        "Live scores and customizable email alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
+        "Live scores and customizable email and push alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
       ),
     ).toBeInTheDocument();
   });

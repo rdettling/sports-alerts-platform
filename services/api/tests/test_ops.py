@@ -151,7 +151,8 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     assert [item["provider"] for item in summary_json["providers"]] == ["espn", "odds", "resend"]
     assert summary_json["providers"][1]["total_calls"] == 3
     assert summary_json["providers"][1]["most_used_endpoint"] == "h2h"
-    assert summary_json["delivery"]["alerts"] == {"attempted": 2, "sent": 1, "failed": 1}
+    assert summary_json["delivery"]["email_alerts"] == {"attempted": 2, "sent": 1, "failed": 1}
+    assert summary_json["delivery"]["push_alerts"] == {"attempted": 0, "sent": 0, "failed": 0}
     assert summary_json["delivery"]["magic_links"] == {"attempted": 1, "sent": 1, "failed": 0}
     assert summary_json["delivery"]["resend"] == {
         "total_calls": 3,

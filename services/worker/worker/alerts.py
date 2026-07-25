@@ -19,7 +19,7 @@ from app.db.models import (
     UserTeamFollow,
 )
 from app.services.alert_defaults import get_alert_default_values
-from app.services.alert_delivery import deliver_email_alert_now
+from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.leagues import get_alert_types, get_league_profile
 
 
@@ -509,17 +509,34 @@ def evaluate_and_record_alerts(
     }
     for alert in to_insert:
         game = games_by_id.get(alert.game_id)
-        delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
-        db.add(delivery)
-        db.flush()
-        deliver_email_alert_now(
-            db,
-            alert=alert,
-            delivery=delivery,
-            user=users_by_id.get(alert.user_id),
-            game=game,
-            home=teams_by_id.get(game.home_team_id) if game else None,
-            away=teams_by_id.get(game.away_team_id) if game else None,
-            service="worker",
-        )
+        user = users_by_id.get(alert.user_id)
+        mode = user.alert_delivery_mode if user else "email"
+        if mode in {"email", "both"}:
+            email_delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
+            db.add(email_delivery)
+            db.flush()
+            deliver_email_alert_now(
+                db,
+                alert=alert,
+                delivery=email_delivery,
+                user=user,
+                game=game,
+                home=teams_by_id.get(game.home_team_id) if game else None,
+                away=teams_by_id.get(game.away_team_id) if game else None,
+                service="worker",
+            )
+        if mode in {"push", "both"}:
+            push_delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
+            db.add(push_delivery)
+            db.flush()
+            deliver_push_alert_now(
+                db,
+                alert=alert,
+                delivery=push_delivery,
+                user=user,
+                game=game,
+                home=teams_by_id.get(game.home_team_id) if game else None,
+                away=teams_by_id.get(game.away_team_id) if game else None,
+                service="worker",
+            )
     return len(to_insert)

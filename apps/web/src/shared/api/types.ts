@@ -128,6 +128,22 @@ export type AlertType =
   | "score_changed"
   | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
+export type DeliveryMode = "email" | "push" | "both";
+
+export type NotificationSettings = {
+  delivery_mode: DeliveryMode;
+  subscription_count: number;
+  push_configured: boolean;
+  vapid_public_key: string | null;
+};
+
+export type PushSubscriptionPayload = {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+};
 
 export type OpsWindow = "24h" | "7d" | "30d";
 export type OpsTimeseriesWindow = "24h" | "7d";
@@ -221,7 +237,12 @@ export type OpsAdminSummaryResponse = {
     most_used_endpoint: string | null;
   }>;
   delivery: {
-    alerts: {
+    email_alerts: {
+      attempted: number;
+      sent: number;
+      failed: number;
+    };
+    push_alerts: {
       attempted: number;
       sent: number;
       failed: number;

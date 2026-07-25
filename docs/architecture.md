@@ -56,7 +56,8 @@ The API is split into a small set of route groups:
 - `/teams` — active team catalog
 - `/follows` — team follows and effective game follows
 - `/alert-preferences` — league defaults and game-level overrides
-- `/alerts` — alert history and admin test-email tools
+- `/alerts` — alert history and the admin test-alert tool
+- `/notification-settings` and `/push-subscriptions` — global delivery choice and browser subscriptions
 - `/leagues` — active league metadata for the UI
 - `/ops` — admin-only telemetry, DB stats, and league runtime controls
 - `/healthz` — health check
@@ -78,6 +79,8 @@ Main persisted tables:
 - `user_alert_defaults`
 - `user_game_alert_overrides`
 - `alerts`
+- `alert_deliveries`
+- `push_subscriptions`
 - `alert_deliveries`
 - `api_call_rollups_hourly`
 - `worker_jobs`

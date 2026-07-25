@@ -367,19 +367,28 @@ def admin_summary(
             )
         )
 
-    alert_delivery_rows = db.scalars(
+    email_delivery_rows = db.scalars(
         select(AlertDelivery).where(
             AlertDelivery.attempted_at >= start,
             AlertDelivery.channel == "email",
         )
     ).all()
-    alert_attempted = len(alert_delivery_rows)
-    alert_sent = sum(1 for row in alert_delivery_rows if row.status == "sent")
-    alert_failed = sum(1 for row in alert_delivery_rows if row.status == "failed")
+    push_delivery_rows = db.scalars(
+        select(AlertDelivery).where(
+            AlertDelivery.attempted_at >= start,
+            AlertDelivery.channel == "push",
+        )
+    ).all()
+    email_alert_attempted = len(email_delivery_rows)
+    email_alert_sent = sum(1 for row in email_delivery_rows if row.status == "sent")
+    email_alert_failed = sum(1 for row in email_delivery_rows if row.status == "failed")
+    push_alert_attempted = len(push_delivery_rows)
+    push_alert_sent = sum(1 for row in push_delivery_rows if row.status == "sent")
+    push_alert_failed = sum(1 for row in push_delivery_rows if row.status == "failed")
     alerts_created = db.scalar(select(func.count(Alert.id)).where(Alert.triggered_at >= start)) or 0
 
-    magic_attempted = max(resend_metrics.get("total_calls", 0) - alert_attempted, 0)
-    magic_sent = max(resend_metrics.get("success_calls", 0) - alert_sent, 0)
+    magic_attempted = max(resend_metrics.get("total_calls", 0) - email_alert_attempted, 0)
+    magic_sent = max(resend_metrics.get("success_calls", 0) - email_alert_sent, 0)
     magic_failed = max(magic_attempted - magic_sent, 0)
 
     return OpsAdminSummaryOut(
@@ -388,15 +397,24 @@ def admin_summary(
             total_provider_calls=sum(row.total_calls for row in providers_out),
             provider_errors=sum(row.error_calls for row in providers_out),
             provider_rate_limits=sum(row.rate_limited_calls for row in providers_out),
-            total_emails_attempted=alert_attempted + magic_attempted,
-            emails_sent=alert_sent + magic_sent,
-            emails_failed=alert_failed + magic_failed,
+            total_emails_attempted=email_alert_attempted + magic_attempted,
+            emails_sent=email_alert_sent + magic_sent,
+            emails_failed=email_alert_failed + magic_failed,
             total_alerts_created=alerts_created,
             last_updated_at=now,
         ),
         providers=providers_out,
         delivery=OpsAdminDeliveryOut(
-            alerts=OpsAdminDeliveryStatsOut(attempted=alert_attempted, sent=alert_sent, failed=alert_failed),
+            email_alerts=OpsAdminDeliveryStatsOut(
+                attempted=email_alert_attempted,
+                sent=email_alert_sent,
+                failed=email_alert_failed,
+            ),
+            push_alerts=OpsAdminDeliveryStatsOut(
+                attempted=push_alert_attempted,
+                sent=push_alert_sent,
+                failed=push_alert_failed,
+            ),
             magic_links=OpsAdminDeliveryStatsOut(attempted=magic_attempted, sent=magic_sent, failed=magic_failed),
             resend=OpsAdminResendStatsOut(
                 total_calls=resend_metrics.get("total_calls", 0),

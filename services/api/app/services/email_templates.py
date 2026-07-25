@@ -334,6 +334,17 @@ def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team 
     return f"{ALERT_LABELS.get(alert.alert_type, 'Alert')} · {away_abbr} @ {home_abbr}"
 
 
+def build_alert_push_content(alert: Alert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
+    away_abbr = _team_abbr(away, "AWAY")
+    home_abbr = _team_abbr(home, "HOME")
+    league = _normalize_league(game, home, away)
+    sport = _sport_for_league(league)
+    return (
+        build_alert_subject(alert, game, home, away),
+        _primary_status_line(alert, game, away_abbr, home_abbr, sport),
+    )
+
+
 def build_alert_email_content(alert: Alert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
     home_name = home.name if home else f"Team {game.home_team_id}"
     away_name = away.name if away else f"Team {game.away_team_id}"

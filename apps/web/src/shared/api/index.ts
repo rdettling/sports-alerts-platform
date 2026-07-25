@@ -5,4 +5,5 @@ export * from "./domains/teams";
 export * from "./domains/games";
 export * from "./domains/follows";
 export * from "./domains/alerts";
+export * from "./domains/notifications";
 export * from "./domains/ops";

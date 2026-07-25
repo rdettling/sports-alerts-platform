@@ -9,6 +9,7 @@ from app.db.models import (
     GameOddsOutcomeCurrent,
     LeagueSetting,
     Alert,
+    PushSubscription,
     Team,
     User,
     UserAlertDefault,
@@ -361,6 +362,41 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
     assert all(row.deliveries[0].status == "sent" for row in sent)
+
+
+def test_ingest_creates_email_and_push_deliveries_for_both_mode(db_session):
+    user = User(email="both@example.com", alert_delivery_mode="both")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "NBA").order_by(Team.id.asc()))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(
+        UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True)
+    )
+    db_session.add(
+        PushSubscription(
+            user_id=user.id,
+            endpoint="https://push.example/both",
+            p256dh="p" * 43,
+            auth="a" * 22,
+        )
+    )
+    db_session.commit()
+
+    first = run_catalog_sync(make_live_close_provider())
+    second = run_catalog_sync(make_live_close_provider())
+
+    assert first["alerts_created"] >= 1
+    assert second["alerts_created"] == 0
+    alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
+    game_start = next(alert for alert in alerts if alert.alert_type == "game_start")
+    assert [(row.channel, row.status) for row in game_start.deliveries] == [
+        ("email", "sent"),
+        ("push", "sent"),
+    ]
 
 
 def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):

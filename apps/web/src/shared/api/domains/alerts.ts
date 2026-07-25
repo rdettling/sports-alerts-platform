@@ -80,7 +80,7 @@ export function listAlertHistory(
   return apiRequest<{ items: AlertHistoryItem[] }>(`/alerts/history${suffix}`, { token });
 }
 
-export function sendDevTestEmail(
+export function sendDevTestAlert(
   token: string,
   payload: { league: League; alert_type: AlertType },
 ): Promise<{
@@ -88,15 +88,23 @@ export function sendDevTestEmail(
   game_id: number;
   league: League;
   alert_type: AlertType;
-  delivery_status: DeliveryStatus;
+  deliveries: Array<{
+    channel: string;
+    status: DeliveryStatus;
+    attempted_at: string | null;
+  }>;
 }> {
   return apiRequest<{
     id: number;
     game_id: number;
     league: League;
     alert_type: AlertType;
-    delivery_status: DeliveryStatus;
-  }>("/alerts/admin/test-email", {
+    deliveries: Array<{
+      channel: string;
+      status: DeliveryStatus;
+      attempted_at: string | null;
+    }>;
+  }>("/alerts/admin/test", {
     method: "POST",
     token,
     body: JSON.stringify(payload),

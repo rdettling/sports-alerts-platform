@@ -59,7 +59,8 @@ function DeliveryStatCard({
 }
 
 export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResponse }) {
-  const alertStats = summary.delivery.alerts;
+  const emailAlertStats = summary.delivery.email_alerts;
+  const pushAlertStats = summary.delivery.push_alerts;
   const magicLinkStats = summary.delivery.magic_links;
   const resendStats = summary.delivery.resend;
 
@@ -68,25 +69,39 @@ export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResp
       <div className="admin-section-head">
         <div>
           <h3>Delivery</h3>
-          <p className="muted">
-            Email activity across alert sends, auth emails, and Resend provider traffic.
-          </p>
+          <p className="muted">Alert delivery by channel, plus auth email and Resend traffic.</p>
         </div>
       </div>
       <div className="admin-delivery-grid">
         <DeliveryStatCard
           title="Alert emails"
-          description="User-facing game alerts recorded in sent alert history."
+          description="Email attempts for user-facing game alerts."
           primaryLabel="Sent"
-          primaryValue={formatNullableNumber(alertStats.sent)}
+          primaryValue={formatNullableNumber(emailAlertStats.sent)}
           secondaryLabel="Success rate"
-          secondaryValue={formatPercent(alertStats.sent, alertStats.attempted)}
+          secondaryValue={formatPercent(emailAlertStats.sent, emailAlertStats.attempted)}
           rows={[
-            { label: "Attempted", value: formatNullableNumber(alertStats.attempted) },
+            { label: "Attempted", value: formatNullableNumber(emailAlertStats.attempted) },
             {
               label: "Failed",
-              value: formatNullableNumber(alertStats.failed),
-              tone: alertStats.failed > 0 ? "danger" : "default",
+              value: formatNullableNumber(emailAlertStats.failed),
+              tone: emailAlertStats.failed > 0 ? "danger" : "default",
+            },
+          ]}
+        />
+        <DeliveryStatCard
+          title="Push alerts"
+          description="Web Push attempts aggregated across subscribed devices."
+          primaryLabel="Sent"
+          primaryValue={formatNullableNumber(pushAlertStats.sent)}
+          secondaryLabel="Success rate"
+          secondaryValue={formatPercent(pushAlertStats.sent, pushAlertStats.attempted)}
+          rows={[
+            { label: "Attempted", value: formatNullableNumber(pushAlertStats.attempted) },
+            {
+              label: "Failed",
+              value: formatNullableNumber(pushAlertStats.failed),
+              tone: pushAlertStats.failed > 0 ? "danger" : "default",
             },
           ]}
         />

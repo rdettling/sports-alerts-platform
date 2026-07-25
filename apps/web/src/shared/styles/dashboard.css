@@ -1104,3 +1104,30 @@
     font-size: 1.3rem;
   }
 }
+.alerts-delivery-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  grid-column: 1 / -1;
+}
+
+.alerts-delivery-panel h3,
+.alerts-delivery-panel p {
+  margin: 0;
+}
+
+.alerts-delivery-panel p {
+  margin-top: 0.25rem;
+}
+
+.alerts-delivery-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.alerts-device-status {
+  font-size: 0.82rem;
+}

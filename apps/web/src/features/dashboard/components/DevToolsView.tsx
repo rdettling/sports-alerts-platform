@@ -6,7 +6,7 @@ import {
   Team,
   listLeagues,
   listTeams,
-  sendDevTestEmail,
+  sendDevTestAlert,
   type LeagueSetting,
 } from "../../../shared/api";
 import { TeamLogo, PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
@@ -49,11 +49,14 @@ export function DevToolsView({ token }: { token: string }) {
     setResult(null);
     setBusyAlertType(alertType);
     try {
-      const response = await sendDevTestEmail(token, {
+      const response = await sendDevTestAlert(token, {
         league: activeLeague,
         alert_type: alertType,
       });
-      const message = `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} sent for ${response.league.replace("_", " ")}.`;
+      const statuses = response.deliveries
+        .map((delivery) => `${delivery.channel} ${delivery.status}`)
+        .join(", ");
+      const message = `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} created for ${response.league.replace("_", " ")}: ${statuses}.`;
       setResult(message);
     } catch (requestError) {
       setError(messageFromUnknown(requestError));

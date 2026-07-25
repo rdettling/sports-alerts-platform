@@ -33,7 +33,7 @@ Checks:
 3. Confirm delivery mode is intentional:
    - `DELIVERY_MODE=log` for local inspection
    - `DELIVERY_MODE=live` for real delivery
-4. For live mode, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
+4. For live email, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
 5. Check API logs for magic-link rate limiting or delivery warnings
 
 ## Odds Not Showing
@@ -57,8 +57,23 @@ Checks:
 2. Confirm a relevant league is enabled in `league_settings`
 3. Confirm users follow teams or games that should produce alert candidates
 4. Confirm league defaults or game overrides have the alert type enabled
-5. For real email delivery, confirm `DELIVERY_MODE=live` and valid Resend settings
-6. Inspect `alerts`, `alert_deliveries`, and worker logs for dedupe or delivery failures
+5. For real delivery, confirm `DELIVERY_MODE=live`
+6. For email failures, confirm the Resend settings
+7. For Push failures, confirm `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, then inspect the aggregate `provider_data`
+8. Inspect `alerts`, `alert_deliveries`, and worker logs for dedupe or delivery failures
+
+## Push Not Available Or Not Arriving
+
+Checks:
+
+1. Confirm the Alerts page reports Push as configured
+2. Confirm notification permission is granted for the site
+3. On iPhone or iPad, confirm the site was added to the Home Screen and opened from there
+4. Confirm the current device is subscribed on the Alerts page
+5. Confirm the user selected Push or Both
+6. Check the push delivery row; expired endpoints (`404` or `410`) are removed automatically
+
+Push has no email fallback. A Push-only alert remains failed if no active device accepts it.
 
 ## Bad Local State
 

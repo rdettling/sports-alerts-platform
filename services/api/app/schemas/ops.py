@@ -118,7 +118,8 @@ class OpsAdminResendStatsOut(BaseModel):
 
 
 class OpsAdminDeliveryOut(BaseModel):
-    alerts: OpsAdminDeliveryStatsOut
+    email_alerts: OpsAdminDeliveryStatsOut
+    push_alerts: OpsAdminDeliveryStatsOut
     magic_links: OpsAdminDeliveryStatsOut
     resend: OpsAdminResendStatsOut
 

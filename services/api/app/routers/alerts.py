@@ -9,7 +9,7 @@ from app.db.models import Alert, AlertDelivery, Game, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import AlertDeliveryOut, AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
-from app.services.alert_delivery import deliver_email_alert_now
+from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup, get_league_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -88,7 +88,7 @@ def get_alert_history(
     return AlertHistoryResponse(items=items)
 
 
-@router.post("/admin/test-email", response_model=DevTestAlertResponse)
+@router.post("/admin/test", response_model=DevTestAlertResponse)
 def create_admin_test_alert(
     payload: DevTestAlertRequest,
     current_user: User = Depends(require_admin_user),
@@ -232,26 +232,52 @@ def create_admin_test_alert(
     )
     db.add(alert)
     db.flush()
-    delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
-    db.add(delivery)
-    db.flush()
-    deliver_email_alert_now(
-        db,
-        alert=alert,
-        delivery=delivery,
-        user=current_user,
-        game=target_game,
-        home=home_team,
-        away=away_team,
-        service="api",
-    )
+    deliveries: list[AlertDelivery] = []
+    if current_user.alert_delivery_mode in {"email", "both"}:
+        email_delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
+        db.add(email_delivery)
+        db.flush()
+        deliver_email_alert_now(
+            db,
+            alert=alert,
+            delivery=email_delivery,
+            user=current_user,
+            game=target_game,
+            home=home_team,
+            away=away_team,
+            service="api",
+        )
+        deliveries.append(email_delivery)
+    if current_user.alert_delivery_mode in {"push", "both"}:
+        push_delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
+        db.add(push_delivery)
+        db.flush()
+        deliver_push_alert_now(
+            db,
+            alert=alert,
+            delivery=push_delivery,
+            user=current_user,
+            game=target_game,
+            home=home_team,
+            away=away_team,
+            service="api",
+        )
+        deliveries.append(push_delivery)
     db.commit()
     db.refresh(alert)
-    db.refresh(delivery)
+    for delivery in deliveries:
+        db.refresh(delivery)
     return DevTestAlertResponse(
         id=alert.id,
         game_id=alert.game_id,
         league=league,
         alert_type=alert.alert_type,
-        delivery_status=delivery.status,
+        deliveries=[
+            AlertDeliveryOut(
+                channel=delivery.channel,
+                status=delivery.status,
+                attempted_at=delivery.attempted_at,
+            )
+            for delivery in deliveries
+        ],
     )

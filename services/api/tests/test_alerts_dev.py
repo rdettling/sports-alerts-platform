@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Alert, AlertDelivery, Game, User
+from app.db.models import Alert, AlertDelivery, Game, PushSubscription, User
 from app.db.session import SessionLocal
 
 
@@ -23,22 +23,22 @@ def _auth_headers(client, email: str = "dev-alerts@example.com", role: str = "us
         db.close()
 
 
-def test_admin_test_email_endpoint_forbidden_for_non_admin(client):
+def test_admin_test_alert_endpoint_forbidden_for_non_admin(client):
     headers = _auth_headers(client, role="user")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "NBA", "alert_type": "game_start"},
     )
     assert response.status_code == 403
 
 
-def test_admin_test_email_endpoint_sends_inline_alert(client):
+def test_admin_test_alert_endpoint_sends_inline_alert(client):
     headers = _auth_headers(client, email="dev-alerts-on@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "NBA", "alert_type": "final_result"},
     )
@@ -47,7 +47,8 @@ def test_admin_test_email_endpoint_sends_inline_alert(client):
     assert isinstance(body["game_id"], int)
     assert body["league"] == "NBA"
     assert body["alert_type"] == "final_result"
-    assert body["delivery_status"] == "sent"
+    assert body["deliveries"][0]["channel"] == "email"
+    assert body["deliveries"][0]["status"] == "sent"
 
     db = SessionLocal()
     try:
@@ -69,12 +70,12 @@ def test_admin_test_email_endpoint_sends_inline_alert(client):
         db.close()
 
 
-def test_admin_test_email_endpoint_accepts_mlb_alerts(client):
+def test_admin_test_alert_endpoint_accepts_mlb_alerts(client):
     headers = _auth_headers(client, email="dev-alerts-mlb@example.com", role="admin")
 
     for alert_type in ("inning_start", "extra_innings_start"):
         response = client.post(
-            "/alerts/admin/test-email",
+            "/alerts/admin/test",
             headers=headers,
             json={"league": "MLB", "alert_type": alert_type},
         )
@@ -97,12 +98,12 @@ def test_admin_test_email_endpoint_accepts_mlb_alerts(client):
         db.close()
 
 
-def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
+def test_admin_test_alert_endpoint_accepts_wnba_basketball_alerts(client):
     headers = _auth_headers(client, email="dev-alerts-wnba@example.com", role="admin")
 
     for alert_type in ("game_start", "close_game_late", "overtime_start", "final_result"):
         response = client.post(
-            "/alerts/admin/test-email",
+            "/alerts/admin/test",
             headers=headers,
             json={"league": "WNBA", "alert_type": alert_type},
         )
@@ -125,11 +126,11 @@ def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
         db.close()
 
 
-def test_admin_test_email_endpoint_accepts_world_cup_game_start(client):
+def test_admin_test_alert_endpoint_accepts_world_cup_game_start(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "WORLD_CUP", "alert_type": "game_start"},
     )
@@ -139,11 +140,11 @@ def test_admin_test_email_endpoint_accepts_world_cup_game_start(client):
     assert body["alert_type"] == "game_start"
 
 
-def test_admin_test_email_endpoint_accepts_world_cup_score_changed(client):
+def test_admin_test_alert_endpoint_accepts_world_cup_score_changed(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup-score@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "WORLD_CUP", "alert_type": "score_changed"},
     )
@@ -153,11 +154,11 @@ def test_admin_test_email_endpoint_accepts_world_cup_score_changed(client):
     assert body["alert_type"] == "score_changed"
 
 
-def test_admin_test_email_endpoint_accepts_world_cup_second_half_start(client):
+def test_admin_test_alert_endpoint_accepts_world_cup_second_half_start(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup-second-half@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "WORLD_CUP", "alert_type": "second_half_start"},
     )
@@ -167,11 +168,11 @@ def test_admin_test_email_endpoint_accepts_world_cup_second_half_start(client):
     assert body["alert_type"] == "second_half_start"
 
 
-def test_admin_test_email_endpoint_accepts_world_cup_extra_time_start(client):
+def test_admin_test_alert_endpoint_accepts_world_cup_extra_time_start(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup-extra-time@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "WORLD_CUP", "alert_type": "extra_time_start"},
     )
@@ -181,11 +182,11 @@ def test_admin_test_email_endpoint_accepts_world_cup_extra_time_start(client):
     assert body["alert_type"] == "extra_time_start"
 
 
-def test_admin_test_email_endpoint_accepts_world_cup_penalty_kicks(client):
+def test_admin_test_alert_endpoint_accepts_world_cup_penalty_kicks(client):
     headers = _auth_headers(client, email="dev-alerts-world-cup-penalties@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "WORLD_CUP", "alert_type": "penalty_kicks"},
     )
@@ -195,7 +196,7 @@ def test_admin_test_email_endpoint_accepts_world_cup_penalty_kicks(client):
     assert body["alert_type"] == "penalty_kicks"
 
 
-def test_admin_test_email_endpoint_accepts_mls_soccer_alerts(client):
+def test_admin_test_alert_endpoint_accepts_mls_soccer_alerts(client):
     headers = _auth_headers(client, email="dev-alerts-mls@example.com", role="admin")
 
     for alert_type in (
@@ -207,7 +208,7 @@ def test_admin_test_email_endpoint_accepts_mls_soccer_alerts(client):
         "final_result",
     ):
         response = client.post(
-            "/alerts/admin/test-email",
+            "/alerts/admin/test",
             headers=headers,
             json={"league": "MLS", "alert_type": alert_type},
         )
@@ -216,11 +217,11 @@ def test_admin_test_email_endpoint_accepts_mls_soccer_alerts(client):
         assert response.json()["alert_type"] == alert_type
 
 
-def test_admin_test_email_endpoint_rejects_invalid_league_alert_combo(client):
+def test_admin_test_alert_endpoint_rejects_invalid_league_alert_combo(client):
     headers = _auth_headers(client, email="dev-alerts-invalid@example.com", role="admin")
 
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "MLB", "alert_type": "close_game_late"},
     )
@@ -228,12 +229,53 @@ def test_admin_test_email_endpoint_rejects_invalid_league_alert_combo(client):
     assert "Invalid alert type" in response.json()["detail"]
 
 
-def test_admin_test_email_endpoint_returns_final_delivery_status_immediately(client):
+def test_admin_test_alert_endpoint_returns_final_delivery_status_immediately(client):
     headers = _auth_headers(client, email="dev-alerts-inline@example.com", role="admin")
     response = client.post(
-        "/alerts/admin/test-email",
+        "/alerts/admin/test",
         headers=headers,
         json={"league": "MLB", "alert_type": "game_start"},
     )
     assert response.status_code == 200
-    assert response.json()["delivery_status"] == "sent"
+    assert response.json()["deliveries"][0]["status"] == "sent"
+
+
+def test_admin_test_alert_honors_both_delivery_mode(client):
+    headers = _auth_headers(client, email="dev-alerts-both@example.com", role="admin")
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "dev-alerts-both@example.com"))
+        user.alert_delivery_mode = "both"
+        db.add(
+            PushSubscription(
+                user_id=user.id,
+                endpoint="https://push.example/admin-test",
+                p256dh="p" * 43,
+                auth="a" * 22,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/alerts/admin/test",
+        headers=headers,
+        json={"league": "NBA", "alert_type": "game_start"},
+    )
+
+    assert response.status_code == 200
+    assert [(row["channel"], row["status"]) for row in response.json()["deliveries"]] == [
+        ("email", "sent"),
+        ("push", "sent"),
+    ]
+
+
+def test_old_admin_test_email_endpoint_is_removed(client):
+    headers = _auth_headers(client, email="dev-alerts-old-route@example.com", role="admin")
+    response = client.post(
+        "/alerts/admin/test-email",
+        headers=headers,
+        json={"league": "NBA", "alert_type": "game_start"},
+    )
+    assert response.status_code == 404

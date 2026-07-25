@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  getNotificationSettings,
   listAlertHistory,
   listAlertPreferences,
   listLeagues,
+  savePushSubscription,
+  updateNotificationSettings,
   updateAlertPreference,
+  type DeliveryMode,
   type League,
   type AlertPreference,
   type AlertPreferenceGroup,
   type AlertHistoryItem,
+  type NotificationSettings,
 } from "../../../shared/api";
+import {
+  getCurrentPushSubscription,
+  pushIsSupported,
+  pushSubscriptionPayload,
+  subscribeCurrentBrowser,
+} from "../../../shared/lib/push-notifications";
 import {
   PREFERENCE_LABELS,
   deliveryStatusClass,
@@ -29,6 +40,11 @@ export function AlertsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
+    null,
+  );
+  const [deviceSubscribed, setDeviceSubscribed] = useState(false);
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [activeLeagues, setActiveLeagues] = useState<
     Array<{ league: League; label: string; alert_types: string[] }>
   >([]);
@@ -52,6 +68,27 @@ export function AlertsView({ token }: { token: string }) {
 
   useEffect(() => {
     load().catch((loadError) => setError(messageFromUnknown(loadError)));
+  }, [token]);
+
+  const loadNotificationState = async () => {
+    const settings = await getNotificationSettings(token);
+    let currentSubscription: PushSubscription | null = null;
+    if (pushIsSupported()) {
+      currentSubscription = await getCurrentPushSubscription();
+      if (currentSubscription && settings.delivery_mode !== "email") {
+        await savePushSubscription(token, pushSubscriptionPayload(currentSubscription));
+      }
+    }
+    setDeviceSubscribed(Boolean(currentSubscription));
+    setNotificationSettings(
+      currentSubscription && settings.delivery_mode !== "email"
+        ? await getNotificationSettings(token)
+        : settings,
+    );
+  };
+
+  useEffect(() => {
+    loadNotificationState().catch((loadError) => setError(messageFromUnknown(loadError)));
   }, [token]);
 
   useEffect(() => {
@@ -104,6 +141,34 @@ export function AlertsView({ token }: { token: string }) {
     };
   }, [preferenceGroups, activeLeague, activeLeagues]);
 
+  const onDeliveryModeChange = async (mode: DeliveryMode) => {
+    if (!notificationSettings || mode === notificationSettings.delivery_mode) return;
+    setError(null);
+    setDeliveryBusy(true);
+    try {
+      if (mode === "email") {
+        const currentSubscription = await getCurrentPushSubscription().catch(() => null);
+        const settings = await updateNotificationSettings(token, "email");
+        await currentSubscription?.unsubscribe().catch(() => false);
+        setDeviceSubscribed(false);
+        setNotificationSettings(settings);
+        return;
+      }
+      if (!notificationSettings.push_configured || !notificationSettings.vapid_public_key) {
+        throw new Error("Push notifications are not configured yet.");
+      }
+      const subscription = await subscribeCurrentBrowser(notificationSettings.vapid_public_key);
+      await savePushSubscription(token, pushSubscriptionPayload(subscription));
+      const settings = await updateNotificationSettings(token, mode);
+      setDeviceSubscribed(true);
+      setNotificationSettings(settings);
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
+    } finally {
+      setDeliveryBusy(false);
+    }
+  };
+
   return (
     <section className="view-stack alerts-skeleton-page">
       {error ? <p className="error">{error}</p> : null}
@@ -111,6 +176,42 @@ export function AlertsView({ token }: { token: string }) {
 
       {!loading ? (
         <div className="alerts-layout">
+          <section className="panel alerts-delivery-panel">
+            <div>
+              <h3>Delivery</h3>
+              <p className="muted">Choose how you receive alerts. Email is the default.</p>
+            </div>
+            <div className="alerts-delivery-controls">
+              <div className="chip-row" aria-label="Alert delivery method">
+                {(["email", "push", "both"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    className={`chip-btn ${notificationSettings?.delivery_mode === mode ? "active" : ""}`.trim()}
+                    type="button"
+                    disabled={
+                      deliveryBusy ||
+                      !notificationSettings ||
+                      (mode !== "email" &&
+                        (!pushIsSupported() || !notificationSettings.push_configured))
+                    }
+                    onClick={() => onDeliveryModeChange(mode)}
+                  >
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <span className="muted alerts-device-status">
+                {!pushIsSupported()
+                  ? "Push is unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
+                  : !notificationSettings?.push_configured
+                    ? "Push is not configured yet."
+                    : deviceSubscribed
+                      ? `This device is subscribed · ${notificationSettings?.subscription_count ?? 0} total`
+                      : "This device is not subscribed"}
+              </span>
+            </div>
+          </section>
+
           <section className="panel alerts-rules-panel">
             <div className="section-header section-header-inline alerts-rules-header">
               <div>

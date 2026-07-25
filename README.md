@@ -1,6 +1,6 @@
 # Sports Alerts Platform
 
-Sports Alerts is a personal project for following live games and sending rule-based email alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
+Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
 The current product surface supports five leagues: `NBA`, `WNBA`, `MLB`, `MLS`, and `WORLD_CUP`.
 

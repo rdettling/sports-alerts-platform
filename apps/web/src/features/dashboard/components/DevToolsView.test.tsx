@@ -34,7 +34,7 @@ const listTeamsMock = vi.fn(async () => [
   },
 ]);
 
-const sendDevTestEmailMock = vi.fn(
+const sendDevTestAlertMock = vi.fn(
   async ({
     league,
     alert_type,
@@ -46,7 +46,7 @@ const sendDevTestEmailMock = vi.fn(
     game_id: 100,
     league,
     alert_type,
-    delivery_status: "pending",
+    deliveries: [{ channel: "email", status: "sent", attempted_at: new Date().toISOString() }],
   }),
 );
 
@@ -118,10 +118,10 @@ vi.mock("../../../shared/api", () => ({
       is_enabled: true,
     },
   ]),
-  sendDevTestEmail: (
+  sendDevTestAlert: (
     _token: string,
     payload: { league: "NBA" | "WNBA" | "MLB" | "MLS" | "WORLD_CUP"; alert_type: string },
-  ) => sendDevTestEmailMock(payload),
+  ) => sendDevTestAlertMock(payload),
 }));
 
 describe("DevToolsView", () => {
@@ -190,7 +190,7 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Close game late alert"));
     await waitFor(() =>
-      expect(sendDevTestEmailMock).toHaveBeenCalledWith({
+      expect(sendDevTestAlertMock).toHaveBeenCalledWith({
         league: "NBA",
         alert_type: "close_game_late",
       }),
@@ -200,7 +200,7 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(screen.getByText("Inning start alert")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Inning start alert"));
     await waitFor(() =>
-      expect(sendDevTestEmailMock).toHaveBeenCalledWith({
+      expect(sendDevTestAlertMock).toHaveBeenCalledWith({
         league: "MLB",
         alert_type: "inning_start",
       }),

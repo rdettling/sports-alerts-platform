@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings==2.5.2",
     "python-jose[cryptography]==3.5.0",
     "python-multipart==0.0.12",
+    "pywebpush==2.3.0",
     "sqlalchemy==2.0.35",
     "uvicorn[standard]==0.30.6",
 ]

@@ -62,6 +62,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         throw new Error(normalizeErrorDetail((body as { detail?: unknown }).detail));
       }
 
+      if (response.status === 204) {
+        return undefined as T;
+      }
       return response.json() as Promise<T>;
     } catch (error) {
       lastError = error;

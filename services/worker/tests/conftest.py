@@ -55,6 +55,9 @@ os.environ.update(
         "FROM_EMAIL": "alerts@test.local",
         "RESEND_API_KEY": "test-key",
         "RESEND_API_URL": "https://api.resend.com/emails",
+        "VAPID_PUBLIC_KEY": "test-public-key",
+        "VAPID_PRIVATE_KEY": "test-private-key",
+        "VAPID_SUBJECT": "mailto:alerts@example.com",
     }
 )
 

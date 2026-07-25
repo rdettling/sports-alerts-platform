@@ -7,12 +7,14 @@ from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from pywebpush import WebPushException, webpush
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Alert, AlertDelivery, Game, Team, User
+from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
 from app.services.api_usage import record_api_call_event
 from app.services.delivery_settings import delivery_settings
-from app.services.email_templates import build_alert_email_content, build_alert_subject
+from app.services.email_templates import build_alert_email_content, build_alert_push_content, build_alert_subject
 
 logger = logging.getLogger(__name__)
 
@@ -177,5 +179,110 @@ def deliver_email_alert_now(
     delivery.status = "failed"
     if error_metadata:
         merge_provider_data(delivery, error_metadata)
+    db.flush()
+    return delivery.status
+
+
+def deliver_push_alert_now(
+    db: Session,
+    *,
+    alert: Alert,
+    delivery: AlertDelivery,
+    user: User | None,
+    game: Game | None,
+    home: Team | None,
+    away: Team | None,
+    service: str,
+) -> str:
+    delivery.attempted_at = datetime.now(timezone.utc)
+    if user is None or game is None:
+        delivery.status = "failed"
+        merge_provider_data(delivery, {"error": "missing_user_or_game"})
+        db.flush()
+        return delivery.status
+
+    subscriptions = db.scalars(
+        select(PushSubscription)
+        .where(PushSubscription.user_id == user.id)
+        .order_by(PushSubscription.id.asc())
+    ).all()
+    if not subscriptions:
+        delivery.status = "failed"
+        merge_provider_data(
+            delivery,
+            {"error": "no_active_subscriptions", "attempted": 0, "sent": 0, "expired": 0},
+        )
+        db.flush()
+        return delivery.status
+
+    if delivery_settings.delivery_mode == "log":
+        logger.info(
+            "Simulated push delivery service=%s alert_id=%s subscriptions=%s",
+            service,
+            alert.id,
+            len(subscriptions),
+        )
+        delivery.status = "sent"
+        merge_provider_data(
+            delivery,
+            {"attempted": len(subscriptions), "sent": len(subscriptions), "expired": 0},
+        )
+        db.flush()
+        return delivery.status
+
+    if not delivery_settings.vapid_private_key.strip():
+        delivery.status = "failed"
+        merge_provider_data(delivery, {"error": "missing_vapid_private_key"})
+        db.flush()
+        return delivery.status
+
+    title, body = build_alert_push_content(alert, game, home, away)
+    payload = json.dumps(
+        {
+            "title": title,
+            "body": body,
+            "url": "/",
+            "tag": f"alert-{alert.id}",
+        }
+    )
+    sent = 0
+    expired = 0
+    errors: list[str] = []
+    for subscription in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": subscription.endpoint,
+                    "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
+                },
+                data=payload,
+                vapid_private_key=delivery_settings.vapid_private_key,
+                vapid_claims={"sub": delivery_settings.vapid_subject},
+                ttl=300,
+                timeout=10,
+            )
+            sent += 1
+        except WebPushException as exc:
+            status_code = getattr(exc.response, "status_code", None)
+            if status_code in {404, 410}:
+                db.delete(subscription)
+                expired += 1
+            else:
+                errors.append(f"http_{status_code}" if status_code else "web_push_error")
+        except Exception:
+            logger.exception("Unexpected push delivery error service=%s alert_id=%s", service, alert.id)
+            errors.append("unexpected_push_error")
+
+    delivery.status = "sent" if sent > 0 else "failed"
+    provider_data: dict[str, object] = {
+        "attempted": len(subscriptions),
+        "sent": sent,
+        "expired": expired,
+    }
+    if errors:
+        provider_data["errors"] = errors
+    if sent == 0 and not errors and expired > 0:
+        provider_data["error"] = "all_subscriptions_expired"
+    merge_provider_data(delivery, provider_data)
     db.flush()
     return delivery.status

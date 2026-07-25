@@ -22,6 +22,10 @@ ODDS_ENABLED=false
 CATALOG_SYNC_INTERVAL_SECONDS=43200
 
 RESEND_API_KEY=replace-with-resend-api-key
+DELIVERY_MODE=log
+VAPID_PUBLIC_KEY=replace-with-public-vapid-key
+VAPID_PRIVATE_KEY=replace-with-private-vapid-key
+VAPID_SUBJECT=mailto:you@example.com
 
 VITE_API_BASE_URL=http://localhost:8000
 
@@ -34,7 +38,6 @@ NEON_DASHBOARD_URL=
 Optional local overrides you may want to add:
 
 ```env
-DELIVERY_MODE=log
 FROM_EMAIL=alerts@example.com
 ODDS_PREGAME_WINDOW_HOURS=24
 SCHEDULER_TICK_SECONDS=15
@@ -54,12 +57,17 @@ Common values:
 - `RESEND_API_KEY`
 - `DELIVERY_MODE`
 - `FROM_EMAIL`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 - `BOOTSTRAP_ADMIN_EMAIL`
 
 Notes:
 
 - `BOOTSTRAP_ADMIN_EMAIL` defaults to `ryandettling1@gmail.com` in code if not overridden.
 - `DELIVERY_MODE` supports `live` and `log`.
+- The API needs both VAPID keys so it can report whether Push is available and return the public key to authenticated browsers.
+- The VAPID private key remains server-only. `VAPID_SUBJECT` must be an HTTPS URL or `mailto:` contact.
 - Magic-link behavior is configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
 
 ## Worker Config
@@ -74,6 +82,9 @@ Common values:
 - `ODDS_ENABLED`
 - `ODDS_API_KEY`
 - `ODDS_PREGAME_WINDOW_HOURS`
+- `DELIVERY_MODE`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 
 Notes:
 
@@ -105,4 +116,4 @@ If they are absent, the app still runs; the admin UI just shows Neon data as una
 - Do not commit real secrets.
 - Use local placeholders when a value is required structurally but not used in your current mode.
 - Keep local and deployed secrets separate.
-- For local development, `DELIVERY_MODE=log` is the safest default unless you explicitly want to send real email.
+- For local development, `DELIVERY_MODE=log` simulates both email and Push delivery. Browser subscription still requires a valid VAPID key pair.

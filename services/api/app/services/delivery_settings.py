@@ -10,6 +10,9 @@ class DeliverySettings(BaseSettings):
     from_email: str = "alerts@livegamealerts.com"
     resend_api_key: str
     resend_api_url: str = "https://api.resend.com/emails"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "https://livegamealerts.com"
 
 
 delivery_settings = DeliverySettings()
