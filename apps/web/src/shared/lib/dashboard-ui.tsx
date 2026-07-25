@@ -13,6 +13,7 @@ const GAME_STATUS_LABELS: Record<string, string> = {
 export const PREFERENCE_LABELS: Record<string, string> = {
   game_start: "Game start",
   close_game_late: "Close game late",
+  overtime_start: "Overtime start",
   inning_start: "Inning start",
   second_half_start: "Second half start",
   extra_time_start: "Extra time start",

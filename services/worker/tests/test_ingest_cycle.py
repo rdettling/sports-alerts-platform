@@ -363,6 +363,80 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     assert all(row.delivery_status == "sent" for row in sent)
 
 
+def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
+    enabled_user = User(email="overtime@example.com")
+    disabled_user = User(email="no-overtime@example.com")
+    db_session.add_all([enabled_user, disabled_user])
+    db_session.commit()
+    db_session.refresh(enabled_user)
+    db_session.refresh(disabled_user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "NBA", Team.external_team_id == "1"))
+    assert team is not None
+    for user, overtime_enabled in ((enabled_user, True), (disabled_user, False)):
+        db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+        db_session.add(
+            UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=False)
+        )
+        db_session.add(
+            UserAlertDefault(user_id=user.id, league="NBA", alert_type="close_game_late", is_enabled=False)
+        )
+        db_session.add(
+            UserAlertDefault(
+                user_id=user.id,
+                league="NBA",
+                alert_type="overtime_start",
+                is_enabled=overtime_enabled,
+            )
+        )
+    db_session.commit()
+
+    def overtime_provider(period: int, *, status: str = "in_progress", is_final: bool = False) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-overtime",
+                    home_external_team_id="1",
+                    away_external_team_id="2",
+                    status=status,
+                    home_score=112 + period,
+                    away_score=112 + period,
+                    period=period,
+                    clock="05:00",
+                    is_final=is_final,
+                )
+            ]
+        )
+
+    assert run_catalog_sync(overtime_provider(4))["status"] == "success"
+    assert run_catalog_sync(overtime_provider(5))["status"] == "success"
+    assert run_catalog_sync(overtime_provider(5))["status"] == "success"
+    assert run_catalog_sync(overtime_provider(6))["status"] == "success"
+    assert run_catalog_sync(overtime_provider(6))["status"] == "success"
+    assert run_catalog_sync(overtime_provider(7, status="final", is_final=True))["status"] == "success"
+
+    alerts = db_session.scalars(
+        select(SentAlert)
+        .where(SentAlert.user_id == enabled_user.id, SentAlert.alert_type == "overtime_start")
+        .order_by(SentAlert.id.asc())
+    ).all()
+    assert [alert.metadata_json["period"] for alert in alerts] == [5, 6]
+    assert [alert.metadata_json["clock"] for alert in alerts] == ["05:00", "05:00"]
+    assert [alert.metadata_json["status"] for alert in alerts] == ["in_progress", "in_progress"]
+    assert [alert.dedupe_key for alert in alerts] == [
+        f"{enabled_user.id}:{alerts[0].game_id}:overtime_start:5",
+        f"{enabled_user.id}:{alerts[1].game_id}:overtime_start:6",
+    ]
+
+    disabled_alerts = db_session.scalars(
+        select(SentAlert).where(
+            SentAlert.user_id == disabled_user.id,
+            SentAlert.alert_type == "overtime_start",
+        )
+    ).all()
+    assert disabled_alerts == []
+
+
 def test_ingest_creates_final_result_alert(db_session):
     user = User(email="final@example.com")
     db_session.add(user)
@@ -395,7 +469,7 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
     team = db_session.scalar(select(Team).where(Team.league == "WNBA", Team.external_team_id == "9"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    for alert_type in ("game_start", "close_game_late", "final_result"):
+    for alert_type in ("game_start", "close_game_late", "overtime_start", "final_result"):
         db_session.add(
             UserAlertDefault(
                 user_id=user.id,
@@ -427,6 +501,24 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
     assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
     assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
 
+    overtime_provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-wnba-live",
+                home_external_team_id="9",
+                away_external_team_id="17",
+                scheduled_start_time=start,
+                status="in_progress",
+                home_score=88,
+                away_score=88,
+                period=5,
+                clock="05:00",
+            )
+        ]
+    )
+    assert run_catalog_sync(overtime_provider, league="WNBA")["status"] == "success"
+    assert run_catalog_sync(overtime_provider, league="WNBA")["status"] == "success"
+
     final_provider = StaticProvider(
         [
             make_game(
@@ -449,7 +541,12 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
     sent = db_session.scalars(
         select(SentAlert).where(SentAlert.user_id == user.id).order_by(SentAlert.alert_type.asc())
     ).all()
-    assert [alert.alert_type for alert in sent] == ["close_game_late", "final_result", "game_start"]
+    assert [alert.alert_type for alert in sent] == [
+        "close_game_late",
+        "final_result",
+        "game_start",
+        "overtime_start",
+    ]
 
 
 def test_following_live_game_after_start_does_not_send_game_start_alert(db_session):

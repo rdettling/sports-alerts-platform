@@ -95,7 +95,7 @@ def test_admin_test_email_endpoint_accepts_mlb_inning_start(client):
 def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
     headers = _auth_headers(client, email="dev-alerts-wnba@example.com", role="admin")
 
-    for alert_type in ("game_start", "close_game_late", "final_result"):
+    for alert_type in ("game_start", "close_game_late", "overtime_start", "final_result"):
         response = client.post(
             "/alerts/admin/test-email",
             headers=headers,
@@ -104,6 +104,20 @@ def test_admin_test_email_endpoint_accepts_wnba_basketball_alerts(client):
         assert response.status_code == 200
         assert response.json()["league"] == "WNBA"
         assert response.json()["alert_type"] == alert_type
+
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == "dev-alerts-wnba@example.com"))
+        overtime_alert = db.scalar(
+            select(SentAlert).where(SentAlert.user_id == user.id, SentAlert.alert_type == "overtime_start")
+        )
+        assert overtime_alert is not None
+        overtime_game = db.get(Game, overtime_alert.game_id)
+        assert overtime_game is not None
+        assert (overtime_game.status, overtime_game.home_score, overtime_game.away_score) == ("in_progress", 112, 112)
+        assert (overtime_game.period, overtime_game.clock) == (5, "05:00")
+    finally:
+        db.close()
 
 
 def test_admin_test_email_endpoint_accepts_world_cup_game_start(client):

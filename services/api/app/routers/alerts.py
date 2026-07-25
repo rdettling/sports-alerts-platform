@@ -112,6 +112,13 @@ def create_admin_test_alert(
         period = 4
         clock = "01:42"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    elif payload.alert_type == "overtime_start":
+        game_status = "in_progress"
+        home_score = 112
+        away_score = 112
+        period = 5
+        clock = "05:00"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
     elif payload.alert_type == "inning_start":
         game_status = "in_progress"
         home_score = 2

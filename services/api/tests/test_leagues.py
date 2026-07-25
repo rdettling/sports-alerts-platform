@@ -23,6 +23,7 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
     )
     assert wnba.scoreboard_url.endswith("/sports/basketball/wnba/scoreboard")
     assert get_alert_types("WNBA") == get_alert_types("NBA")
+    assert get_alert_types("NBA") == ("game_start", "close_game_late", "overtime_start", "final_result")
 
     mlb = get_league_profile("MLB")
     assert (mlb.sport, mlb.live_sync_interval_seconds, mlb.odds_sport_key) == (
@@ -46,6 +47,8 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
         "soccer_fifa_world_cup",
     )
     assert get_alert_types("MLS") == get_alert_types("WORLD_CUP")
+    assert "overtime_start" not in get_alert_types("MLB")
+    assert "overtime_start" not in get_alert_types("MLS")
 
 
 def test_public_leagues_include_sport_and_live_cadence(client):

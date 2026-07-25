@@ -88,6 +88,34 @@ def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
     assert "teamlogos/wnba/500/ny.png" in html_body
 
 
+def test_nba_overtime_start_uses_period_aware_copy():
+    away = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
+    home = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
+    game = Game(
+        external_game_id="nba-overtime",
+        league="NBA",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=112,
+        away_score=112,
+        period=6,
+        clock="05:00",
+    )
+    alert = _mk_alert("overtime_start")
+    alert.metadata_json = {"status": "in_progress", "period": 6, "clock": "05:00"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "OT2 · LAL 112–112 BOS"
+    assert "Overtime start" in text_body
+    assert "OT2 is live now · LAL 112–112 BOS" in text_body
+    assert "In Progress • OT2 • 05:00 left" in text_body
+    assert "OT2 is live now · LAL 112–112 BOS" in html_body
+
+
 def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
     away = Team(external_team_id="X1", league="NHL", name="Away Team", abbreviation="AWY")
     home = Team(external_team_id="X2", league="NHL", name="Home Team", abbreviation="HOM")

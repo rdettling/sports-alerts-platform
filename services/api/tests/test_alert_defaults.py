@@ -18,7 +18,7 @@ def test_inning_start_defaults():
 
 
 def test_other_alert_types_default_to_enabled_without_thresholds():
-    for alert_type in ("game_start", "final_result", "unknown-alert-type"):
+    for alert_type in ("game_start", "overtime_start", "final_result", "unknown-alert-type"):
         defaults = get_alert_default_values(alert_type)
         assert defaults.is_enabled is True
         assert defaults.close_game_margin_threshold is None

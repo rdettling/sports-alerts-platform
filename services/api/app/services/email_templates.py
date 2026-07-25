@@ -10,6 +10,7 @@ from app.services.leagues import get_league_profile
 ALERT_LABELS = {
     "game_start": "Game start",
     "close_game_late": "Close game late",
+    "overtime_start": "Overtime start",
     "inning_start": "Inning start",
     "second_half_start": "Second half start",
     "extra_time_start": "Extra time start",
@@ -223,6 +224,11 @@ def _event_status_details(alert: SentAlert, game: Game, sport: str | None) -> st
     return " \u2022 ".join(details_parts) if details_parts else "Live update"
 
 
+def _overtime_label(alert: SentAlert, game: Game, sport: str | None) -> str:
+    period = _metadata_int(_alert_metadata(alert), "period")
+    return _format_period_value(period if period is not None else game.period, sport) or "Overtime"
+
+
 def _primary_status_line(
     alert: SentAlert,
     game: Game,
@@ -255,6 +261,8 @@ def _primary_status_line(
         if (game.period or 0) >= 5:
             return f"Penalty kicks are underway · {away_abbr} {_scoreline(game)} {home_abbr}"
         return f"Match is still tied deep in extra time · {away_abbr} {_scoreline(game)} {home_abbr}"
+    if alert.alert_type == "overtime_start":
+        return f"{_overtime_label(alert, game, sport)} is live now · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
         period = _format_period(game, sport)
@@ -302,6 +310,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
         if (game.period or 0) >= 5:
             return f"Penalty kicks · {away_abbr} {_scoreline(game)} {home_abbr}"
         return f"Penalty kicks likely soon · {away_abbr} {_scoreline(game)} {home_abbr}"
+    if alert.alert_type == "overtime_start":
+        return f"{_overtime_label(alert, game, sport)} · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "inning_start":

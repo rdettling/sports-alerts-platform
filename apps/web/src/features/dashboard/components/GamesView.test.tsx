@@ -99,8 +99,8 @@ vi.mock("../hooks/useGamesData", () => ({
         { id: 15, external_team_id: "15", league: "WNBA", name: "Seattle Storm", abbreviation: "SEA" },
       ],
       leagues: [
-        { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
-        { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["SEA", "LV"], is_enabled: true },
+        { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
+        { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["SEA", "LV"], is_enabled: true },
       ],
     },
   })),

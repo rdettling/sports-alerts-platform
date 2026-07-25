@@ -3,9 +3,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, Team
+from app.db.models import Game, Team, User, UserAlertDefault
 from app.db.session import SessionLocal
-from app.db.models import User
 
 
 def _auth_headers(client, email: str = "m2@example.com") -> dict[str, str]:
@@ -152,13 +151,20 @@ def test_alert_preferences_get_and_update(client):
     mlb_group = next(group for group in groups if group["league"] == "MLB")
     mls_group = next(group for group in groups if group["league"] == "MLS")
     world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
-    assert len(nba_group["preferences"]) == 3
-    assert {item["alert_type"] for item in nba_group["preferences"]} == {"game_start", "close_game_late", "final_result"}
+    assert len(nba_group["preferences"]) == 4
+    assert {item["alert_type"] for item in nba_group["preferences"]} == {
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "final_result",
+    }
     assert {item["alert_type"] for item in wnba_group["preferences"]} == {
         "game_start",
         "close_game_late",
+        "overtime_start",
         "final_result",
     }
+    assert next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")["is_enabled"] is True
     assert {item["alert_type"] for item in mlb_group["preferences"]} == {"game_start", "inning_start", "final_result"}
     assert {item["alert_type"] for item in mls_group["preferences"]} == {
         "game_start",
@@ -212,6 +218,32 @@ def test_alert_preferences_get_and_update(client):
     assert world_cup_penalties["is_enabled"] is True
 
 
+def test_alert_preferences_backfill_overtime_for_existing_user(client):
+    email = "existing-overtime-preference@example.com"
+    headers = _auth_headers(client, email=email)
+    assert client.get("/alert-preferences", headers=headers).status_code == 200
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email))
+        assert user is not None
+        preference = db.scalar(
+            select(UserAlertDefault).where(
+                UserAlertDefault.user_id == user.id,
+                UserAlertDefault.league == "NBA",
+                UserAlertDefault.alert_type == "overtime_start",
+            )
+        )
+        assert preference is not None
+        db.delete(preference)
+        db.commit()
+
+    response = client.get("/alert-preferences", headers=headers)
+    assert response.status_code == 200
+    nba_group = next(group for group in response.json() if group["league"] == "NBA")
+    overtime = next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")
+    assert overtime["is_enabled"] is True
+
+
 def test_game_alert_override_flow(client):
     headers = _auth_headers(client, email="m2-game-overrides@example.com")
     game_id = _create_game()
@@ -221,11 +253,14 @@ def test_game_alert_override_flow(client):
     payload = get_response.json()
     assert payload["game_id"] == game_id
     assert payload["league"] == "NBA"
-    assert len(payload["items"]) == 3
+    assert len(payload["items"]) == 4
     close_item = next(item for item in payload["items"] if item["alert_type"] == "close_game_late")
     assert close_item["use_league_default"] is True
     assert close_item["close_game_margin_threshold"] == 5
     assert close_item["close_game_time_threshold_seconds"] == 300
+    overtime_item = next(item for item in payload["items"] if item["alert_type"] == "overtime_start")
+    assert overtime_item["is_enabled"] is True
+    assert overtime_item["use_league_default"] is True
 
     update_response = client.put(
         f"/alert-preferences/games/{game_id}/close_game_late",
@@ -250,3 +285,17 @@ def test_game_alert_override_flow(client):
     assert cleared_item["is_enabled"] is True
     assert cleared_item["close_game_margin_threshold"] == 5
     assert cleared_item["close_game_time_threshold_seconds"] == 300
+
+    overtime_update = client.put(
+        f"/alert-preferences/games/{game_id}/overtime_start",
+        headers=headers,
+        json={"is_enabled_override": False},
+    )
+    assert overtime_update.status_code == 200
+    assert overtime_update.json()["is_enabled"] is False
+    assert overtime_update.json()["use_league_default"] is False
+
+    overtime_clear = client.delete(f"/alert-preferences/games/{game_id}/overtime_start", headers=headers)
+    assert overtime_clear.status_code == 200
+    assert overtime_clear.json()["is_enabled"] is True
+    assert overtime_clear.json()["use_league_default"] is True
