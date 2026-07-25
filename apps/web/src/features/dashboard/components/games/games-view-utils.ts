@@ -1,18 +1,10 @@
-import { type Game, type League, type LeagueSetting, type Sport } from "../../../../shared/api";
+import { type Game, type League, type Sport } from "../../../../shared/api";
 import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
 import { formatGameStatusLabel } from "../../utils/telemetry-format";
-
-export type SyncTone = "fresh" | "stale" | "idle";
 
 export type GameDayGroup = { label: string; items: Game[] };
 
 export type DayOption = { key: string; label: string; count: number };
-
-export type LeagueSyncRow = {
-  league: League;
-  lastAt: Date | null;
-  tone: SyncTone;
-};
 
 export function localDateKey(dateIso: string): string {
   const value = new Date(dateIso);
@@ -65,39 +57,6 @@ export function groupGamesByDay(games: Game[]): GameDayGroup[] {
     groups.set(label, current);
   });
   return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
-}
-
-function syncTone(lastAt: Date | null, maxStaleMinutes: number, active: boolean): SyncTone {
-  if (!lastAt) return "stale";
-  if (!active) return "idle";
-  const ageMinutes = (Date.now() - lastAt.getTime()) / 60_000;
-  return ageMinutes <= maxStaleMinutes ? "fresh" : "stale";
-}
-
-function latestIngestAt(games: Game[]): Date | null {
-  const lastMs = games
-    .map((game) => (game.last_ingested_at ? new Date(game.last_ingested_at).getTime() : Number.NaN))
-    .filter((ts) => !Number.isNaN(ts))
-    .reduce((max, ts) => Math.max(max, ts), 0);
-  return lastMs > 0 ? new Date(lastMs) : null;
-}
-
-export function latestIngestAtFromGames(games: Game[]): Date | null {
-  return latestIngestAt(games);
-}
-
-export function buildLeagueSyncRows(games: Game[], activeLeagues: LeagueSetting[]): LeagueSyncRow[] {
-  return activeLeagues.map((profile) => {
-    const league = profile.league;
-    const leagueGames = games.filter((game) => game.league === league);
-    const liveCount = leagueGames.filter((game) => game.status === "in_progress" || game.status === "live").length;
-    const lastAt = latestIngestAt(leagueGames);
-    return {
-      league,
-      lastAt,
-      tone: syncTone(lastAt, Math.max(1, profile.live_sync_interval_seconds / 30), liveCount > 0),
-    };
-  });
 }
 
 export function gameStatusLabel(game: Game, sport: Sport): string {

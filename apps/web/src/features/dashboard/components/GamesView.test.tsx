@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GamesView } from "./GamesView";
 
@@ -50,8 +50,25 @@ vi.mock("../hooks/useGamesData", () => ({
           last_ingested_at: "2026-06-12T18:00:00Z",
           odds: null,
         },
+        {
+          id: 3,
+          external_game_id: "tomorrow-wnba-game",
+          league: "WNBA",
+          home_team_id: 14,
+          away_team_id: 15,
+          scheduled_start_time: "2026-06-13T22:00:00Z",
+          context_label: null,
+          status: "scheduled",
+          home_score: null,
+          away_score: null,
+          period: null,
+          clock: null,
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
       ],
-      follows: token ? {
+      follows: token === "empty-token" ? { teams: [], games: [] } : token ? {
         teams: [],
         games: [
           {
@@ -78,8 +95,13 @@ vi.mock("../hooks/useGamesData", () => ({
         { id: 11, external_team_id: "11", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
         { id: 12, external_team_id: "12", league: "NBA", name: "Los Angeles Lakers", abbreviation: "LAL" },
         { id: 13, external_team_id: "13", league: "NBA", name: "New York Knicks", abbreviation: "NY" },
+        { id: 14, external_team_id: "14", league: "WNBA", name: "Las Vegas Aces", abbreviation: "LV" },
+        { id: 15, external_team_id: "15", league: "WNBA", name: "Seattle Storm", abbreviation: "SEA" },
       ],
-      leagues: [{ league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true }],
+      leagues: [
+        { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
+        { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start", "close_game_late", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["SEA", "LV"], is_enabled: true },
+      ],
     },
   })),
 }));
@@ -110,26 +132,64 @@ describe("GamesView", () => {
     apiMocks.unfollowGame.mockClear();
   });
 
-  it("keeps all-days selected when the user clicks the all day filter", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("selects today initially and supports selecting all dates", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
 
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
     await waitFor(() => expect(screen.getByText("BOS")).toBeInTheDocument());
     expect(screen.queryByText("LAL")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12");
+    expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "All dates (3)" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "All days" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
+      target: { value: "all" },
+    });
 
     await waitFor(() => expect(screen.getByText("LAL")).toBeInTheDocument());
     expect(screen.getByText("BOS")).toBeInTheDocument();
+    expect(screen.getByText("SEA")).toBeInTheDocument();
   });
 
-  it("shows league sync status inside the filters rail", async () => {
+  it("moves between dates and disables navigation at boundaries", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12"));
+    expect(screen.getByRole("button", { name: "Previous date" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next date" }));
+
+    expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-13");
+    expect(screen.queryByText("BOS")).toBeNull();
+    expect(screen.getByText("LAL")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next date" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous date" }));
+    expect(screen.getByText("BOS")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
+      target: { value: "all" },
+    });
+    expect(screen.getByRole("button", { name: "Previous date" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next date" })).toBeDisabled();
+  });
+
+  it("filters by league without showing sync telemetry", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T18:20:00Z").getTime());
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText("20m")).toBeInTheDocument());
-    expect(screen.queryByText("Catalog sync 2m")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "WNBA" }));
+
+    await waitFor(() => expect(screen.getByText("SEA")).toBeInTheDocument());
+    expect(screen.queryByText("BOS")).toBeNull();
+    expect(screen.queryByText("20m")).toBeNull();
+    expect(screen.getByRole("button", { name: "WNBA" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("filters to effective followed games for an authenticated user", async () => {
@@ -139,18 +199,30 @@ describe("GamesView", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Following 1/ }));
     expect(screen.getByText("BOS")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "All days" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
+      target: { value: "all" },
+    });
     expect(screen.queryByText("LAL")).toBeNull();
+    expect(screen.queryByText("SEA")).toBeNull();
   });
 
   it("requests sign-in instead of following for a guest", async () => {
     const onSignInRequired = vi.fn();
     render(<GamesView token={null} onSignInRequired={onSignInRequired} />, { wrapper });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Follow" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Follow" }))[0]);
 
     expect(onSignInRequired).toHaveBeenCalledTimes(1);
     expect(apiMocks.followGame).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Following/ })).toBeNull();
+  });
+
+  it("shows the followed-games empty state", async () => {
+    render(<GamesView token="empty-token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Following 0" }));
+
+    expect(screen.getByText("No followed games match this filter.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("all");
   });
 });

@@ -79,15 +79,3 @@ export function formatGameStatusLabel(status: string, isFinal: boolean, fallback
   }
   return fallbackTime;
 }
-
-export function formatSyncAge(value: Date | null): string {
-  if (!value) return "Never";
-  const diffMs = Date.now() - value.getTime();
-  if (diffMs < 60_000) return "Just now";
-  const mins = Math.round(diffMs / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}

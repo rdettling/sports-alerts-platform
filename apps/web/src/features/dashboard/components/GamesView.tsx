@@ -3,15 +3,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { formatSyncAge } from "../utils/telemetry-format";
 import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameRowCard } from "./GameRowCard";
-import { GamesFiltersPanel } from "./games/GamesFiltersPanel";
+import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import {
   buildDayOptions,
-  buildLeagueSyncRows,
   filterGamesByDay,
   filterGamesByLeague,
   gameStatusLabel,
@@ -63,14 +61,6 @@ export function GamesView({
     () => new Map(activeLeagues.map((profile) => [profile.league, profile] as const)),
     [activeLeagues],
   );
-  const syncItems = useMemo(() => {
-    const labels = new Map(activeLeagues.map((profile) => [profile.league, profile.label] as const));
-    return buildLeagueSyncRows(games, activeLeagues).map((row) => ({
-      label: labels.get(row.league) ?? row.league,
-      value: formatSyncAge(row.lastAt),
-      tone: row.tone,
-    }));
-  }, [activeLeagues, games]);
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
@@ -123,7 +113,7 @@ export function GamesView({
 
         {!isLoading ? (
           <div className="games-feed-grid">
-            <GamesFiltersPanel
+            <GamesFilterToolbar
               activeLeagues={activeLeagues}
               leagueFilter={leagueFilter}
               onLeagueFilterChange={setLeagueFilter}
@@ -132,7 +122,6 @@ export function GamesView({
               isLoading={isLoading}
               totalLeagueGames={leagueFilteredGames.length}
               dayOptions={dayOptions}
-              syncItems={syncItems}
               showScopeFilter={Boolean(token)}
               gameScope={gameScope}
               onGameScopeChange={setGameScope}
