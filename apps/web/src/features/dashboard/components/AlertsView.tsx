@@ -16,7 +16,11 @@ import {
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
-import { buildLeagueRulePayload, getLeagueFieldValue, ruleFieldsFor } from "./alerts/alert-rule-config";
+import {
+  buildLeagueRulePayload,
+  getLeagueFieldValue,
+  ruleFieldsFor,
+} from "./alerts/alert-rule-config";
 
 export function AlertsView({ token }: { token: string }) {
   const [activeLeague, setActiveLeague] = useState<League>("NBA");
@@ -25,7 +29,9 @@ export function AlertsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
-  const [activeLeagues, setActiveLeagues] = useState<Array<{ league: League; label: string; alert_types: string[] }>>([]);
+  const [activeLeagues, setActiveLeagues] = useState<
+    Array<{ league: League; label: string; alert_types: string[] }>
+  >([]);
 
   const load = async () => {
     setError(null);
@@ -64,7 +70,10 @@ export function AlertsView({ token }: { token: string }) {
 
   const onRuleFieldSettingChange = async (
     preference: AlertPreference,
-    fieldKey: "close_game_margin_threshold" | "close_game_time_threshold_seconds" | "inning_start_threshold",
+    fieldKey:
+      | "close_game_margin_threshold"
+      | "close_game_time_threshold_seconds"
+      | "inning_start_threshold",
     fieldValue: number,
   ) => {
     setError(null);
@@ -104,10 +113,19 @@ export function AlertsView({ token }: { token: string }) {
         <div className="alerts-layout">
           <section className="panel alerts-rules-panel">
             <div className="section-header section-header-inline alerts-rules-header">
-              <div><h3>Alert Rules</h3></div>
+              <div>
+                <h3>Alert Rules</h3>
+              </div>
               <div className="chip-row">
                 {activeLeagues.map((league) => (
-                  <button key={league.league} className={`chip-btn ${activeLeague === league.league ? "active" : ""}`.trim()} type="button" onClick={() => setActiveLeague(league.league)}>{league.label}</button>
+                  <button
+                    key={league.league}
+                    className={`chip-btn ${activeLeague === league.league ? "active" : ""}`.trim()}
+                    type="button"
+                    onClick={() => setActiveLeague(league.league)}
+                  >
+                    {league.label}
+                  </button>
                 ))}
               </div>
             </div>
@@ -125,18 +143,29 @@ export function AlertsView({ token }: { token: string }) {
                       endSlot={
                         <div className="alert-rule-header-end">
                           {inlineField ? (
-                            <label className="alert-inline-field">{inlineField.label}
+                            <label className="alert-inline-field">
+                              {inlineField.label}
                               <select
                                 className="alert-rule-select"
                                 value={getLeagueFieldValue(preference, inlineField)}
                                 onChange={(event) => {
-                                  onRuleFieldSettingChange(preference, inlineField.key, Number(event.target.value)).catch((requestError) =>
+                                  onRuleFieldSettingChange(
+                                    preference,
+                                    inlineField.key,
+                                    Number(event.target.value),
+                                  ).catch((requestError) =>
                                     setError(messageFromUnknown(requestError)),
                                   );
                                 }}
-                                disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
+                                disabled={
+                                  busyAlertType === `${preference.league}:${preference.alert_type}`
+                                }
                               >
-                                {inlineField.options.map((value) => <option key={value} value={value}>{value}</option>)}
+                                {inlineField.options.map((value) => (
+                                  <option key={value} value={value}>
+                                    {value}
+                                  </option>
+                                ))}
                               </select>
                             </label>
                           ) : null}
@@ -145,7 +174,9 @@ export function AlertsView({ token }: { token: string }) {
                             type="button"
                             role="switch"
                             aria-checked={preference.is_enabled}
-                            disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
+                            disabled={
+                              busyAlertType === `${preference.league}:${preference.alert_type}`
+                            }
                             onClick={async () => {
                               setError(null);
                               setBusyAlertType(`${preference.league}:${preference.alert_type}`);
@@ -154,7 +185,9 @@ export function AlertsView({ token }: { token: string }) {
                                   token,
                                   preference.league,
                                   preference.alert_type,
-                                  buildLeagueRulePayload(preference, { is_enabled: !preference.is_enabled }),
+                                  buildLeagueRulePayload(preference, {
+                                    is_enabled: !preference.is_enabled,
+                                  }),
                                 );
                                 await load();
                               } catch (requestError) {
@@ -164,35 +197,53 @@ export function AlertsView({ token }: { token: string }) {
                               }
                             }}
                           >
-                            <span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span>
+                            <span className="alert-toggle-track">
+                              <span className="alert-toggle-thumb" />
+                            </span>
                           </button>
                         </div>
                       }
                       controls={
                         <>
-                          {fields.filter((field) => field !== inlineField).map((field) => (
-                            <label key={field.key}>{field.label}
-                              <select
-                                className="alert-rule-select"
-                                value={getLeagueFieldValue(preference, field)}
-                                onChange={(event) => {
-                                  onRuleFieldSettingChange(preference, field.key, Number(event.target.value)).catch((requestError) =>
-                                    setError(messageFromUnknown(requestError)),
-                                  );
-                                }}
-                                disabled={busyAlertType === `${preference.league}:${preference.alert_type}`}
-                              >
-                                {field.options.map((value) => <option key={value} value={value}>{value}</option>)}
-                              </select>
-                            </label>
-                          ))}
+                          {fields
+                            .filter((field) => field !== inlineField)
+                            .map((field) => (
+                              <label key={field.key}>
+                                {field.label}
+                                <select
+                                  className="alert-rule-select"
+                                  value={getLeagueFieldValue(preference, field)}
+                                  onChange={(event) => {
+                                    onRuleFieldSettingChange(
+                                      preference,
+                                      field.key,
+                                      Number(event.target.value),
+                                    ).catch((requestError) =>
+                                      setError(messageFromUnknown(requestError)),
+                                    );
+                                  }}
+                                  disabled={
+                                    busyAlertType ===
+                                    `${preference.league}:${preference.alert_type}`
+                                  }
+                                >
+                                  {field.options.map((value) => (
+                                    <option key={value} value={value}>
+                                      {value}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
                         </>
                       }
                     />
                   );
                 })}
               </ul>
-            ) : <p className="muted">No rules for this league.</p>}
+            ) : (
+              <p className="muted">No rules for this league.</p>
+            )}
           </section>
 
           <section className="panel alerts-history-panel">
@@ -205,10 +256,15 @@ export function AlertsView({ token }: { token: string }) {
                 <li key={item.id} className="row-card">
                   <span className="alert-history-row-main alerts-history-simple-row">
                     <span>{new Date(item.sent_at).toLocaleString()}</span>
-                    <span><strong>{item.away_team_abbreviation}</strong> @ <strong>{item.home_team_abbreviation}</strong></span>
+                    <span>
+                      <strong>{item.away_team_abbreviation}</strong> @{" "}
+                      <strong>{item.home_team_abbreviation}</strong>
+                    </span>
                     <span>{PREFERENCE_LABELS[item.alert_type] ?? item.alert_type}</span>
                   </span>
-                  <span className={`chip ${deliveryStatusClass(item.delivery_status)}`}>{item.delivery_status}</span>
+                  <span className={`chip ${deliveryStatusClass(item.delivery_status)}`}>
+                    {item.delivery_status}
+                  </span>
                 </li>
               ))}
             </ul>

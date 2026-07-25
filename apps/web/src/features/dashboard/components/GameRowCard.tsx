@@ -1,5 +1,13 @@
 import { type Game, type Sport, type Team } from "../../../shared/api";
-import { TeamLogo, drawOdds, formatMoneyline, isThreeWayOdds, leagueBadgeLabel, leagueLogoUrl, oddsOutcomeByTeamSide } from "../../../shared/lib/dashboard-ui";
+import {
+  TeamLogo,
+  drawOdds,
+  formatMoneyline,
+  isThreeWayOdds,
+  leagueBadgeLabel,
+  leagueLogoUrl,
+  oddsOutcomeByTeamSide,
+} from "../../../shared/lib/dashboard-ui";
 import { GameStatePill, type GameStateTone } from "./GameStatePill";
 
 type GameRowCardProps = {
@@ -50,7 +58,13 @@ export function GameRowCard({
   const league = leagueBadgeLabel(game.league);
   const logoUrl = leagueLogoUrl(game.league);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
-  const statusTone: GameStateTone = isLive ? "live" : isFinal ? "final" : game.status === "postponed" ? "postponed" : "scheduled";
+  const statusTone: GameStateTone = isLive
+    ? "live"
+    : isFinal
+      ? "final"
+      : game.status === "postponed"
+        ? "postponed"
+        : "scheduled";
 
   return (
     <article className="games-card-row" role="listitem">
@@ -78,14 +92,20 @@ export function GameRowCard({
               </div>
             ) : null}
           </div>
-          {showContextLabel && game.context_label ? <div className="games-context-label">{game.context_label}</div> : null}
+          {showContextLabel && game.context_label ? (
+            <div className="games-context-label">{game.context_label}</div>
+          ) : null}
         </div>
 
         <div className="games-card-footer">
           <div className="games-card-meta">
             {logoUrl ? (
               <span className="games-league-logo-plain" aria-label={`${league} league`}>
-                <img src={logoUrl} alt={`${league} logo`} className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()} />
+                <img
+                  src={logoUrl}
+                  alt={`${league} logo`}
+                  className={`games-league-logo league-${(game.league || "").toLowerCase()}`.trim()}
+                />
               </span>
             ) : (
               <span className="games-league-logo-fallback">{league}</span>
@@ -97,15 +117,30 @@ export function GameRowCard({
           <div className="games-card-actions">
             {isFollowed && !isFinal ? (
               <div className="games-follow-actions">
-                <button className="btn btn-secondary games-action-cell games-inline-action" type="button" onClick={onOpenAlertSettings} disabled={actionsDisabled || !onOpenAlertSettings}>
+                <button
+                  className="btn btn-secondary games-action-cell games-inline-action"
+                  type="button"
+                  onClick={onOpenAlertSettings}
+                  disabled={actionsDisabled || !onOpenAlertSettings}
+                >
                   Settings
                 </button>
-                <button className="btn btn-secondary games-action-cell games-inline-action" type="button" onClick={onUnfollow} disabled={actionsDisabled || !onUnfollow}>
+                <button
+                  className="btn btn-secondary games-action-cell games-inline-action"
+                  type="button"
+                  onClick={onUnfollow}
+                  disabled={actionsDisabled || !onUnfollow}
+                >
                   Unfollow
                 </button>
               </div>
             ) : canFollow ? (
-              <button className="btn games-action-cell" type="button" disabled={actionsDisabled} onClick={onFollow}>
+              <button
+                className="btn games-action-cell"
+                type="button"
+                disabled={actionsDisabled}
+                onClick={onFollow}
+              >
                 Follow
               </button>
             ) : null}

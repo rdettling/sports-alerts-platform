@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { type LeagueSetting, updateOpsLeagueSetting } from "../../../../shared/api";
-import { leagueBadgeLabel, leagueLogoUrl, messageFromUnknown } from "../../../../shared/lib/dashboard-ui";
+import {
+  leagueBadgeLabel,
+  leagueLogoUrl,
+  messageFromUnknown,
+} from "../../../../shared/lib/dashboard-ui";
 
 export function AdminLeagueSettingsPanel({
   token,
@@ -30,7 +34,9 @@ export function AdminLeagueSettingsPanel({
       <div className="admin-section-head">
         <div>
           <h3>League Runtime</h3>
-          <p className="muted">Enable leagues that should consume sync resources and appear in user-facing UI.</p>
+          <p className="muted">
+            Enable leagues that should consume sync resources and appear in user-facing UI.
+          </p>
         </div>
       </div>
       {error ? <p className="error">{error}</p> : null}
@@ -44,7 +50,9 @@ export function AdminLeagueSettingsPanel({
               className="admin-league-setting-btn"
               type="button"
               disabled={busy}
-              onClick={() => toggleMutation.mutate({ league: item.league, isEnabled: !item.is_enabled })}
+              onClick={() =>
+                toggleMutation.mutate({ league: item.league, isEnabled: !item.is_enabled })
+              }
             >
               <span className="admin-league-setting-main">
                 <span className="admin-league-setting-mark" aria-hidden>
@@ -55,12 +63,16 @@ export function AdminLeagueSettingsPanel({
                       className={`admin-league-setting-logo league-${item.league.toLowerCase()}`.trim()}
                     />
                   ) : (
-                    <span className="admin-league-setting-fallback">{leagueBadgeLabel(item.league)}</span>
+                    <span className="admin-league-setting-fallback">
+                      {leagueBadgeLabel(item.league)}
+                    </span>
                   )}
                 </span>
                 <span className="admin-league-setting-copy">
                   <strong>{item.label}</strong>
-                  <span className="admin-test-btn-meta">{item.is_enabled ? "Enabled" : "Disabled"}</span>
+                  <span className="admin-test-btn-meta">
+                    {item.is_enabled ? "Enabled" : "Disabled"}
+                  </span>
                 </span>
               </span>
               <span className="admin-league-setting-action">

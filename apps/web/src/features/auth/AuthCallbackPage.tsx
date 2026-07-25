@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 
 import { useAuth } from "./auth-context";
 
@@ -18,7 +18,9 @@ export function AuthCallbackPage() {
     verifyMagicLinkToken(tokenFromUrl)
       .then(() => navigate("/games", { replace: true }))
       .catch((verifyError) => {
-        setError(verifyError instanceof Error ? verifyError.message : "Magic link verification failed");
+        setError(
+          verifyError instanceof Error ? verifyError.message : "Magic link verification failed",
+        );
       });
   }, [navigate, tokenFromUrl, verifyMagicLinkToken]);
 
@@ -31,7 +33,11 @@ export function AuthCallbackPage() {
         {error ? (
           <>
             <p className="error">{error}</p>
-            <button className="btn" type="button" onClick={() => navigate("/games", { replace: true })}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => navigate("/games", { replace: true })}
+            >
               Back to games
             </button>
           </>

@@ -15,7 +15,10 @@ type AlertOverridePayload = {
   inning_start_threshold_override?: number | null;
 };
 
-export function useGameAlertSettings(token: string | null, setError: (value: string | null) => void) {
+export function useGameAlertSettings(
+  token: string | null,
+  setError: (value: string | null) => void,
+) {
   const [alertGame, setAlertGame] = useState<Game | null>(null);
   const [gameAlertState, setGameAlertState] = useState<GameAlertPreferences | null>(null);
   const [alertsBusy, setAlertsBusy] = useState(false);
@@ -41,7 +44,11 @@ export function useGameAlertSettings(token: string | null, setError: (value: str
     setGameAlertState(null);
   };
 
-  const applyAlertOverride = async (gameId: number, alertType: string, payload: AlertOverridePayload) => {
+  const applyAlertOverride = async (
+    gameId: number,
+    alertType: string,
+    payload: AlertOverridePayload,
+  ) => {
     if (!token) return;
     setAlertsBusy(true);
     setError(null);

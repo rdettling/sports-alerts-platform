@@ -45,7 +45,10 @@ function DeliveryStatCard({
       </div>
       <div className="admin-delivery-stat-list">
         {rows.map((row) => (
-          <div key={row.label} className={`admin-delivery-stat-row ${row.tone === "danger" ? "is-danger" : ""}`}>
+          <div
+            key={row.label}
+            className={`admin-delivery-stat-row ${row.tone === "danger" ? "is-danger" : ""}`}
+          >
             <span className="muted">{row.label}</span>
             <strong>{row.value}</strong>
           </div>
@@ -65,7 +68,9 @@ export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResp
       <div className="admin-section-head">
         <div>
           <h3>Delivery</h3>
-          <p className="muted">Email activity across alert sends, auth emails, and Resend provider traffic.</p>
+          <p className="muted">
+            Email activity across alert sends, auth emails, and Resend provider traffic.
+          </p>
         </div>
       </div>
       <div className="admin-delivery-grid">
@@ -78,7 +83,11 @@ export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResp
           secondaryValue={formatPercent(alertStats.sent, alertStats.attempted)}
           rows={[
             { label: "Attempted", value: formatNullableNumber(alertStats.attempted) },
-            { label: "Failed", value: formatNullableNumber(alertStats.failed), tone: alertStats.failed > 0 ? "danger" : "default" },
+            {
+              label: "Failed",
+              value: formatNullableNumber(alertStats.failed),
+              tone: alertStats.failed > 0 ? "danger" : "default",
+            },
           ]}
         />
         <DeliveryStatCard
@@ -90,7 +99,11 @@ export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResp
           secondaryValue={formatPercent(magicLinkStats.sent, magicLinkStats.attempted)}
           rows={[
             { label: "Attempted", value: formatNullableNumber(magicLinkStats.attempted) },
-            { label: "Failed", value: formatNullableNumber(magicLinkStats.failed), tone: magicLinkStats.failed > 0 ? "danger" : "default" },
+            {
+              label: "Failed",
+              value: formatNullableNumber(magicLinkStats.failed),
+              tone: magicLinkStats.failed > 0 ? "danger" : "default",
+            },
           ]}
         />
         <DeliveryStatCard
@@ -102,8 +115,16 @@ export function AdminDeliverySection({ summary }: { summary: OpsAdminSummaryResp
           secondaryValue={formatPercent(resendStats.success_calls, resendStats.total_calls)}
           rows={[
             { label: "Success", value: formatNullableNumber(resendStats.success_calls) },
-            { label: "Errors", value: formatNullableNumber(resendStats.error_calls), tone: resendStats.error_calls > 0 ? "danger" : "default" },
-            { label: "429s", value: formatNullableNumber(resendStats.rate_limited_calls), tone: resendStats.rate_limited_calls > 0 ? "danger" : "default" },
+            {
+              label: "Errors",
+              value: formatNullableNumber(resendStats.error_calls),
+              tone: resendStats.error_calls > 0 ? "danger" : "default",
+            },
+            {
+              label: "429s",
+              value: formatNullableNumber(resendStats.rate_limited_calls),
+              tone: resendStats.rate_limited_calls > 0 ? "danger" : "default",
+            },
           ]}
         />
       </div>

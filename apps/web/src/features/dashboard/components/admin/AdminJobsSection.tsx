@@ -15,7 +15,10 @@ export function AdminJobsSection({ summary }: { summary: OpsAdminSummaryResponse
     }
   }, [leagueJobGroups, selectedLeague]);
 
-  const activeGroup = leagueJobGroups.find(({ league }) => league.league === selectedLeague) ?? leagueJobGroups[0] ?? null;
+  const activeGroup =
+    leagueJobGroups.find(({ league }) => league.league === selectedLeague) ??
+    leagueJobGroups[0] ??
+    null;
 
   if (!activeGroup) {
     return (
@@ -47,9 +50,15 @@ export function AdminJobsSection({ summary }: { summary: OpsAdminSummaryResponse
             >
               <span className="admin-jobs-league-mark" aria-hidden="true">
                 {logoUrl ? (
-                  <img className={`admin-jobs-league-logo league-${league.league.toLowerCase()}`} src={logoUrl} alt="" />
+                  <img
+                    className={`admin-jobs-league-logo league-${league.league.toLowerCase()}`}
+                    src={logoUrl}
+                    alt=""
+                  />
                 ) : (
-                  <span className="admin-jobs-league-fallback">{leagueBadgeLabel(league.league)}</span>
+                  <span className="admin-jobs-league-fallback">
+                    {leagueBadgeLabel(league.league)}
+                  </span>
                 )}
               </span>
               <span className="admin-jobs-league-copy">
@@ -72,7 +81,9 @@ export function AdminJobsSection({ summary }: { summary: OpsAdminSummaryResponse
           <article className="admin-sync-card">
             <div className="admin-sync-card-head">
               <strong>Catalog sync</strong>
-              <span className="admin-job-status">{activeGroup.catalogJob?.status ?? "missing"}</span>
+              <span className="admin-job-status">
+                {activeGroup.catalogJob?.status ?? "missing"}
+              </span>
             </div>
             <div className="admin-sync-card-meta">
               <div>

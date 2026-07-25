@@ -21,8 +21,26 @@ const teams = [
 ];
 
 const leagues = [
-  { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: [], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
-  { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: [], live_sync_interval_seconds: 300, default_test_matchup: ["NYY", "BOS"], is_enabled: true },
+  {
+    league: "NBA",
+    sport: "basketball",
+    label: "NBA",
+    badge_label: "NBA",
+    alert_types: [],
+    live_sync_interval_seconds: 120,
+    default_test_matchup: ["ATL", "BOS"],
+    is_enabled: true,
+  },
+  {
+    league: "MLB",
+    sport: "baseball",
+    label: "MLB",
+    badge_label: "MLB",
+    alert_types: [],
+    live_sync_interval_seconds: 300,
+    default_test_matchup: ["NYY", "BOS"],
+    is_enabled: true,
+  },
 ];
 
 function renderTeamsView(token: string | null, onSignInRequired = vi.fn()) {
@@ -102,6 +120,8 @@ describe("TeamsView", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "Follow" }))[0]);
 
     await waitFor(() => expect(apiMocks.followTeam).toHaveBeenCalledWith("token", 1));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Unfollow" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Unfollow" })).toBeInTheDocument(),
+    );
   });
 });

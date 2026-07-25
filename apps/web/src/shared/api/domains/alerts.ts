@@ -32,7 +32,10 @@ export function updateAlertPreference(
   });
 }
 
-export function getGameAlertPreferences(token: string, gameId: number): Promise<GameAlertPreferences> {
+export function getGameAlertPreferences(
+  token: string,
+  gameId: number,
+): Promise<GameAlertPreferences> {
   return apiRequest<GameAlertPreferences>(`/alert-preferences/games/${gameId}`, { token });
 }
 
@@ -54,7 +57,11 @@ export function updateGameAlertOverride(
   });
 }
 
-export function clearGameAlertOverride(token: string, gameId: number, alertType: string): Promise<GameAlertPreferenceItem> {
+export function clearGameAlertOverride(
+  token: string,
+  gameId: number,
+  alertType: string,
+): Promise<GameAlertPreferenceItem> {
   return apiRequest<GameAlertPreferenceItem>(`/alert-preferences/games/${gameId}/${alertType}`, {
     method: "DELETE",
     token,
@@ -76,13 +83,22 @@ export function listAlertHistory(
 export function sendDevTestEmail(
   token: string,
   payload: { league: League; alert_type: AlertType },
-): Promise<{ id: number; game_id: number; league: League; alert_type: AlertType; delivery_status: DeliveryStatus }> {
-  return apiRequest<{ id: number; game_id: number; league: League; alert_type: AlertType; delivery_status: DeliveryStatus }>(
-    "/alerts/admin/test-email",
-    {
-      method: "POST",
-      token,
-      body: JSON.stringify(payload),
-    },
-  );
+): Promise<{
+  id: number;
+  game_id: number;
+  league: League;
+  alert_type: AlertType;
+  delivery_status: DeliveryStatus;
+}> {
+  return apiRequest<{
+    id: number;
+    game_id: number;
+    league: League;
+    alert_type: AlertType;
+    delivery_status: DeliveryStatus;
+  }>("/alerts/admin/test-email", {
+    method: "POST",
+    token,
+    body: JSON.stringify(payload),
+  });
 }

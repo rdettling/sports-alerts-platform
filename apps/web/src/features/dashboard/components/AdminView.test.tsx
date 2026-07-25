@@ -22,7 +22,8 @@ vi.mock("../../../shared/api", async () => {
   const actual = await vi.importActual<typeof import("../../../shared/api")>("../../../shared/api");
   return {
     ...actual,
-    getOpsNeonUsage: (...args: Parameters<typeof getOpsNeonUsageMock>) => getOpsNeonUsageMock(...args),
+    getOpsNeonUsage: (...args: Parameters<typeof getOpsNeonUsageMock>) =>
+      getOpsNeonUsageMock(...args),
   };
 });
 
@@ -90,11 +91,56 @@ vi.mock("../hooks/useAdminData", () => ({
           last_success_at: "2026-06-20T08:04:00Z",
           active_leagues: ["NBA", "WNBA", "MLB", "MLS", "WORLD_CUP"],
           league_settings: [
-            { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
-            { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start"], live_sync_interval_seconds: 120, default_test_matchup: ["NY", "LV"], is_enabled: true },
-            { league: "MLB", sport: "baseball", label: "MLB", badge_label: "MLB", alert_types: ["game_start"], live_sync_interval_seconds: 300, default_test_matchup: ["MIA", "TOR"], is_enabled: true },
-            { league: "MLS", sport: "soccer", label: "MLS", badge_label: "MLS", alert_types: ["game_start"], live_sync_interval_seconds: 180, default_test_matchup: ["LAFC", "LA"], is_enabled: true },
-            { league: "WORLD_CUP", sport: "soccer", label: "World Cup", badge_label: "WC", alert_types: ["game_start"], live_sync_interval_seconds: 180, default_test_matchup: ["MEX", "USA"], is_enabled: true },
+            {
+              league: "NBA",
+              sport: "basketball",
+              label: "NBA",
+              badge_label: "NBA",
+              alert_types: ["game_start"],
+              live_sync_interval_seconds: 120,
+              default_test_matchup: ["ATL", "BOS"],
+              is_enabled: true,
+            },
+            {
+              league: "WNBA",
+              sport: "basketball",
+              label: "WNBA",
+              badge_label: "WNBA",
+              alert_types: ["game_start"],
+              live_sync_interval_seconds: 120,
+              default_test_matchup: ["NY", "LV"],
+              is_enabled: true,
+            },
+            {
+              league: "MLB",
+              sport: "baseball",
+              label: "MLB",
+              badge_label: "MLB",
+              alert_types: ["game_start"],
+              live_sync_interval_seconds: 300,
+              default_test_matchup: ["MIA", "TOR"],
+              is_enabled: true,
+            },
+            {
+              league: "MLS",
+              sport: "soccer",
+              label: "MLS",
+              badge_label: "MLS",
+              alert_types: ["game_start"],
+              live_sync_interval_seconds: 180,
+              default_test_matchup: ["LAFC", "LA"],
+              is_enabled: true,
+            },
+            {
+              league: "WORLD_CUP",
+              sport: "soccer",
+              label: "World Cup",
+              badge_label: "WC",
+              alert_types: ["game_start"],
+              live_sync_interval_seconds: 180,
+              default_test_matchup: ["MEX", "USA"],
+              is_enabled: true,
+            },
           ],
           jobs: [
             {
@@ -149,7 +195,10 @@ describe("AdminView", () => {
   it("shows the database tab by default", async () => {
     render(<AdminView token="token" />, { wrapper });
 
-    expect(screen.getByRole("button", { name: "Database" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Database" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await waitFor(() => expect(getOpsNeonUsageMock).toHaveBeenCalledWith("token"));
     await waitFor(() => expect(screen.getByText("Open Neon dashboard")).toBeInTheDocument());
   });
@@ -182,7 +231,9 @@ describe("AdminView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Delivery" }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Delivery" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Delivery" })).toBeInTheDocument(),
+    );
     expect(screen.getByRole("heading", { name: "Alert emails" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Magic links" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Resend API" })).toBeInTheDocument();

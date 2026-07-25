@@ -1,9 +1,7 @@
 import type { AlertPreference, GameAlertPreferenceItem } from "../../../../shared/api";
 
 type RuleFieldKey =
-  | "close_game_margin_threshold"
-  | "close_game_time_threshold_seconds"
-  | "inning_start_threshold";
+  "close_game_margin_threshold" | "close_game_time_threshold_seconds" | "inning_start_threshold";
 
 type RuleFieldConfig = {
   key: RuleFieldKey;
@@ -22,13 +20,31 @@ export const ALERT_RULE_CONFIG: Record<string, RuleConfig> = {
   close_game_late: {
     requiresEnabled: true,
     fields: [
-      { key: "close_game_margin_threshold", label: "Margin", options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], defaultValue: 5 },
-      { key: "close_game_time_threshold_seconds", label: "Minutes", options: [1, 2, 3, 4, 5, 10], defaultValue: 5, unit: "minutes" },
+      {
+        key: "close_game_margin_threshold",
+        label: "Margin",
+        options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        defaultValue: 5,
+      },
+      {
+        key: "close_game_time_threshold_seconds",
+        label: "Minutes",
+        options: [1, 2, 3, 4, 5, 10],
+        defaultValue: 5,
+        unit: "minutes",
+      },
     ],
   },
   inning_start: {
     requiresEnabled: true,
-    fields: [{ key: "inning_start_threshold", label: "Inning", options: [1, 2, 3, 4, 5, 6, 7, 8, 9], defaultValue: 7 }],
+    fields: [
+      {
+        key: "inning_start_threshold",
+        label: "Inning",
+        options: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        defaultValue: 7,
+      },
+    ],
   },
 };
 
@@ -72,14 +88,23 @@ export function buildLeagueRulePayload(
     close_game_time_threshold_seconds?: number;
     inning_start_threshold?: number;
   } = {
-    is_enabled: "is_enabled" in change ? change.is_enabled ?? preference.is_enabled : preference.is_enabled,
+    is_enabled:
+      "is_enabled" in change ? (change.is_enabled ?? preference.is_enabled) : preference.is_enabled,
   };
 
   for (const field of ALERT_RULE_CONFIG[preference.alert_type]?.fields ?? []) {
-    const nextValueRaw = "fieldKey" in change && change.fieldKey === field.key ? change.fieldValue : getLeagueFieldValue(preference, field);
-    const nextValue = field.unit === "minutes" && field.key === "close_game_time_threshold_seconds" ? nextValueRaw * 60 : nextValueRaw;
-    if (field.key === "close_game_margin_threshold") payload.close_game_margin_threshold = nextValue;
-    if (field.key === "close_game_time_threshold_seconds") payload.close_game_time_threshold_seconds = nextValue;
+    const nextValueRaw =
+      "fieldKey" in change && change.fieldKey === field.key
+        ? change.fieldValue
+        : getLeagueFieldValue(preference, field);
+    const nextValue =
+      field.unit === "minutes" && field.key === "close_game_time_threshold_seconds"
+        ? nextValueRaw * 60
+        : nextValueRaw;
+    if (field.key === "close_game_margin_threshold")
+      payload.close_game_margin_threshold = nextValue;
+    if (field.key === "close_game_time_threshold_seconds")
+      payload.close_game_time_threshold_seconds = nextValue;
     if (field.key === "inning_start_threshold") payload.inning_start_threshold = nextValue;
   }
 
@@ -102,17 +127,27 @@ export function buildGameRuleOverridePayload(
     inning_start_threshold_override?: number | null;
   } = {
     is_enabled_override:
-      "is_enabled_override" in change ? change.is_enabled_override : (item.override?.is_enabled_override ?? item.is_enabled),
+      "is_enabled_override" in change
+        ? change.is_enabled_override
+        : (item.override?.is_enabled_override ?? item.is_enabled),
     close_game_margin_threshold_override: null,
     close_game_time_threshold_seconds_override: null,
     inning_start_threshold_override: null,
   };
 
   for (const field of ALERT_RULE_CONFIG[item.alert_type]?.fields ?? []) {
-    const nextValueRaw = "fieldKey" in change && change.fieldKey === field.key ? change.fieldValue : getGameFieldValue(item, field);
-    const nextValue = field.unit === "minutes" && field.key === "close_game_time_threshold_seconds" ? nextValueRaw * 60 : nextValueRaw;
-    if (field.key === "close_game_margin_threshold") payload.close_game_margin_threshold_override = nextValue;
-    if (field.key === "close_game_time_threshold_seconds") payload.close_game_time_threshold_seconds_override = nextValue;
+    const nextValueRaw =
+      "fieldKey" in change && change.fieldKey === field.key
+        ? change.fieldValue
+        : getGameFieldValue(item, field);
+    const nextValue =
+      field.unit === "minutes" && field.key === "close_game_time_threshold_seconds"
+        ? nextValueRaw * 60
+        : nextValueRaw;
+    if (field.key === "close_game_margin_threshold")
+      payload.close_game_margin_threshold_override = nextValue;
+    if (field.key === "close_game_time_threshold_seconds")
+      payload.close_game_time_threshold_seconds_override = nextValue;
     if (field.key === "inning_start_threshold") payload.inning_start_threshold_override = nextValue;
   }
 

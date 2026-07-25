@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 import { AuthCallbackPage } from "../features/auth/AuthCallbackPage";
 import { DashboardLayout } from "../features/dashboard/DashboardLayout";

@@ -71,7 +71,9 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
         <header className="overlay-card-header">
           <div>
             <h4 id="sign-in-title">Sign in</h4>
-            <p className="muted sign-in-modal-subtitle">Sign in to follow games and receive alerts.</p>
+            <p className="muted sign-in-modal-subtitle">
+              Sign in to follow games and receive alerts.
+            </p>
           </div>
           <button className="btn btn-secondary" type="button" onClick={onClose}>
             Close
@@ -95,9 +97,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
           </>
         ) : (
           <form onSubmit={onSubmit} className="sign-in-modal-form">
-            <label htmlFor="sign-in-email">
-              Email
-            </label>
+            <label htmlFor="sign-in-email">Email</label>
             <input
               id="sign-in-email"
               type="email"
@@ -111,7 +111,9 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
               {busy ? "Working..." : "Send magic link"}
             </button>
             {error ? <p className="error">{error}</p> : null}
-            {busy && showSlowHint ? <p className="muted">Waking database, this may take a few seconds.</p> : null}
+            {busy && showSlowHint ? (
+              <p className="muted">Waking database, this may take a few seconds.</p>
+            ) : null}
           </form>
         )}
       </section>

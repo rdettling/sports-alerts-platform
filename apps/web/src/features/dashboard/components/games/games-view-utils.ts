@@ -15,7 +15,10 @@ export function localDateKey(dateIso: string): string {
 }
 
 export function sortGamesByStart(games: Game[]): Game[] {
-  return [...games].sort((a, b) => new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime());
+  return [...games].sort(
+    (a, b) =>
+      new Date(a.scheduled_start_time).getTime() - new Date(b.scheduled_start_time).getTime(),
+  );
 }
 
 export function filterGamesByLeague(games: Game[], leagueFilter: "all" | League): Game[] {

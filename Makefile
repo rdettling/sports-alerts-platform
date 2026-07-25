@@ -87,7 +87,7 @@ _test-worker:
 	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
 
 _test-web:
-	cd apps/web && npm ci --include=optional && npm run build
+	cd apps/web && npm ci --include=optional && npm run format && npm run lint && npm test && npm run build
 
 _check-docker:
 	@command -v docker >/dev/null 2>&1 || { \

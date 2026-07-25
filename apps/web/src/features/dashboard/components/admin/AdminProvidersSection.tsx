@@ -1,7 +1,11 @@
 import { type OpsAdminSummaryResponse } from "../../../../shared/api";
 import { formatNullableNumber } from "../../utils/telemetry-format";
 
-export function AdminProvidersSection({ providers }: { providers: OpsAdminSummaryResponse["providers"] }) {
+export function AdminProvidersSection({
+  providers,
+}: {
+  providers: OpsAdminSummaryResponse["providers"];
+}) {
   return (
     <section className="card admin-section admin-section-compact">
       <div className="admin-section-head">
@@ -35,7 +39,11 @@ export function AdminProvidersSection({ providers }: { providers: OpsAdminSummar
                 <td>{formatNullableNumber(provider.rate_limited_calls)}</td>
                 <td>{provider.calls_per_hour.toFixed(2)}</td>
                 <td>{formatNullableNumber(provider.quota_limit_window)}</td>
-                <td>{provider.utilization_pct === null ? "n/a" : `${provider.utilization_pct.toFixed(1)}%`}</td>
+                <td>
+                  {provider.utilization_pct === null
+                    ? "n/a"
+                    : `${provider.utilization_pct.toFixed(1)}%`}
+                </td>
                 <td>{provider.most_used_endpoint ?? "n/a"}</td>
               </tr>
             ))}

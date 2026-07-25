@@ -68,39 +68,98 @@ vi.mock("../hooks/useGamesData", () => ({
           odds: null,
         },
       ],
-      follows: token === "empty-token" ? { teams: [], games: [] } : token ? {
-        teams: [],
-        games: [
-          {
-            id: 1,
-            external_game_id: "today-game",
-            league: "NBA",
-            home_team_id: 10,
-            away_team_id: 11,
-            scheduled_start_time: "2026-06-12T20:00:00Z",
-            context_label: null,
-            status: "scheduled",
-            home_score: null,
-            away_score: null,
-            period: null,
-            clock: null,
-            is_final: false,
-            last_ingested_at: "2026-06-12T18:00:00Z",
-            odds: null,
-          },
-        ],
-      } : { teams: [], games: [] },
+      follows:
+        token === "empty-token"
+          ? { teams: [], games: [] }
+          : token
+            ? {
+                teams: [],
+                games: [
+                  {
+                    id: 1,
+                    external_game_id: "today-game",
+                    league: "NBA",
+                    home_team_id: 10,
+                    away_team_id: 11,
+                    scheduled_start_time: "2026-06-12T20:00:00Z",
+                    context_label: null,
+                    status: "scheduled",
+                    home_score: null,
+                    away_score: null,
+                    period: null,
+                    clock: null,
+                    is_final: false,
+                    last_ingested_at: "2026-06-12T18:00:00Z",
+                    odds: null,
+                  },
+                ],
+              }
+            : { teams: [], games: [] },
       teams: [
-        { id: 10, external_team_id: "10", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
-        { id: 11, external_team_id: "11", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
-        { id: 12, external_team_id: "12", league: "NBA", name: "Los Angeles Lakers", abbreviation: "LAL" },
-        { id: 13, external_team_id: "13", league: "NBA", name: "New York Knicks", abbreviation: "NY" },
-        { id: 14, external_team_id: "14", league: "WNBA", name: "Las Vegas Aces", abbreviation: "LV" },
-        { id: 15, external_team_id: "15", league: "WNBA", name: "Seattle Storm", abbreviation: "SEA" },
+        {
+          id: 10,
+          external_team_id: "10",
+          league: "NBA",
+          name: "Boston Celtics",
+          abbreviation: "BOS",
+        },
+        {
+          id: 11,
+          external_team_id: "11",
+          league: "NBA",
+          name: "Atlanta Hawks",
+          abbreviation: "ATL",
+        },
+        {
+          id: 12,
+          external_team_id: "12",
+          league: "NBA",
+          name: "Los Angeles Lakers",
+          abbreviation: "LAL",
+        },
+        {
+          id: 13,
+          external_team_id: "13",
+          league: "NBA",
+          name: "New York Knicks",
+          abbreviation: "NY",
+        },
+        {
+          id: 14,
+          external_team_id: "14",
+          league: "WNBA",
+          name: "Las Vegas Aces",
+          abbreviation: "LV",
+        },
+        {
+          id: 15,
+          external_team_id: "15",
+          league: "WNBA",
+          name: "Seattle Storm",
+          abbreviation: "SEA",
+        },
       ],
       leagues: [
-        { league: "NBA", sport: "basketball", label: "NBA", badge_label: "NBA", alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["ATL", "BOS"], is_enabled: true },
-        { league: "WNBA", sport: "basketball", label: "WNBA", badge_label: "WNBA", alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"], live_sync_interval_seconds: 120, default_test_matchup: ["SEA", "LV"], is_enabled: true },
+        {
+          league: "NBA",
+          sport: "basketball",
+          label: "NBA",
+          badge_label: "NBA",
+          alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
+          live_sync_interval_seconds: 120,
+          default_test_matchup: ["ATL", "BOS"],
+          is_enabled: true,
+        },
+        {
+          league: "WNBA",
+          sport: "basketball",
+          label: "WNBA",
+          badge_label: "WNBA",
+          alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
+          live_sync_interval_seconds: 120,
+          default_test_matchup: ["SEA", "LV"],
+          is_enabled: true,
+        },
       ],
     },
   })),
@@ -160,7 +219,9 @@ describe("GamesView", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12"),
+    );
     expect(screen.getByRole("button", { name: "Previous date" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Next date" }));

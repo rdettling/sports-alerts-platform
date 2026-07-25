@@ -76,7 +76,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (lastError instanceof Error && /fetch/i.test(lastError.message)) {
-    throw new Error(`Unable to reach API at ${API_BASE_URL}. Make sure the API service is running.`);
+    throw new Error(
+      `Unable to reach API at ${API_BASE_URL}. Make sure the API service is running.`,
+    );
   }
 
   throw lastError instanceof Error ? lastError : new Error("Request failed");

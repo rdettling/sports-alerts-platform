@@ -67,7 +67,11 @@ export function trendDirectionSymbol(direction: "up" | "down" | "flat"): string 
   return "→";
 }
 
-export function formatGameStatusLabel(status: string, isFinal: boolean, fallbackTime: string): string {
+export function formatGameStatusLabel(
+  status: string,
+  isFinal: boolean,
+  fallbackTime: string,
+): string {
   if (status === "in_progress" || status === "live") {
     return fallbackTime || "Live";
   }

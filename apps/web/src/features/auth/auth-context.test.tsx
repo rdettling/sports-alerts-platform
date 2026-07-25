@@ -13,7 +13,11 @@ vi.mock("../../shared/api", () => ({
 
 function AuthState() {
   const { token, user } = useAuth();
-  return <div>{token ?? "no-token"}|{user?.email ?? "no-user"}</div>;
+  return (
+    <div>
+      {token ?? "no-token"}|{user?.email ?? "no-user"}
+    </div>
+  );
 }
 
 describe("AuthProvider cross-tab sync", () => {
@@ -29,7 +33,11 @@ describe("AuthProvider cross-tab sync", () => {
   });
 
   it("loads a token written by another tab", async () => {
-    render(<AuthProvider><AuthState /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
     expect(await screen.findByText("no-token|no-user")).toBeInTheDocument();
 
     act(() => {
@@ -48,7 +56,11 @@ describe("AuthProvider cross-tab sync", () => {
 
   it("clears authentication when another tab logs out", async () => {
     localStorage.setItem("sports_alerts_token", "existing-token");
-    render(<AuthProvider><AuthState /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
     expect(await screen.findByText("existing-token|user@example.com")).toBeInTheDocument();
 
     act(() => {

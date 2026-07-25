@@ -147,7 +147,11 @@ function isClockAtZero(clock: string): boolean {
 export function formatGameTime(game: Game, sport: Sport): string {
   if (game.status === "in_progress" || game.status === "live") {
     const period =
-      sport === "baseball" ? formatBaseballPeriod(game.period) : sport === "soccer" ? formatSoccerPeriod(game.period) : formatPeriod(game.period);
+      sport === "baseball"
+        ? formatBaseballPeriod(game.period)
+        : sport === "soccer"
+          ? formatSoccerPeriod(game.period)
+          : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
     if (sport === "basketball" && game.period === 2 && isClockAtZero(clock)) {
       return "Halftime";

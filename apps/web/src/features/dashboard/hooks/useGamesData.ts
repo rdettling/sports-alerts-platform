@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listFollows, listGames, listLeagues, listTeams, type CurrentFollows } from "../../../shared/api";
+import {
+  listFollows,
+  listGames,
+  listLeagues,
+  listTeams,
+  type CurrentFollows,
+} from "../../../shared/api";
 
 const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
 

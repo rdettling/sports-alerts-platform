@@ -53,7 +53,7 @@ For the exact env shape, see [docs/configuration.md](/Users/rdettling/Library/Mo
 - `make reset` — stop the stack and remove DB volumes
 - `make logs` — tail logs for all services
 - `make logs SERVICE=api` — tail a single service
-- `make test` — run API tests, worker tests, and the web build
+- `make test` — run API and worker tests plus web formatting, lint, tests, and build
 
 ## Architecture At A Glance
 

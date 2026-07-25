@@ -1,9 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  getOpsAdminSummary,
-  type OpsAdminOverviewWindow,
-} from "../../../shared/api";
+import { getOpsAdminSummary, type OpsAdminOverviewWindow } from "../../../shared/api";
 
 export function useAdminData(token: string, windowValue: OpsAdminOverviewWindow) {
   return useQuery({

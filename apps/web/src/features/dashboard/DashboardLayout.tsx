@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router";
 
 import { useAuth } from "../auth/auth-context";
 import { SignInModal } from "../auth/SignInModal";
@@ -105,7 +105,11 @@ export function DashboardLayout() {
                 </button>
               </>
             ) : (
-              <button className="btn btn-secondary" type="button" onClick={() => setSignInOpen(true)}>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setSignInOpen(true)}
+              >
                 Sign in
               </button>
             )}
@@ -113,7 +117,9 @@ export function DashboardLayout() {
         </div>
       </header>
 
-      <main className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}>
+      <main
+        className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}
+      >
         <div className="app-content">
           <Routes>
             <Route path="/" element={<Navigate to="games" replace />} />
@@ -127,11 +133,15 @@ export function DashboardLayout() {
             />
             <Route
               path="alerts"
-              element={token && user ? <AlertsView token={token} /> : <Navigate to="/games" replace />}
+              element={
+                token && user ? <AlertsView token={token} /> : <Navigate to="/games" replace />
+              }
             />
             <Route
               path="admin"
-              element={isAdmin && token ? <AdminView token={token} /> : <Navigate to="/games" replace />}
+              element={
+                isAdmin && token ? <AdminView token={token} /> : <Navigate to="/games" replace />
+              }
             />
             <Route path="*" element={<Navigate to="/games" replace />} />
           </Routes>

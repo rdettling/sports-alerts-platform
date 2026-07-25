@@ -27,7 +27,11 @@ export function TeamsView({
   const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["teams-page", token ?? "anonymous"],
     queryFn: async () => {
       const [teams, leagues, follows] = await Promise.all([
@@ -45,7 +49,10 @@ export function TeamsView({
 
   useEffect(() => {
     if (activeLeagueKeys.length === 0) return;
-    if (leagueFilter === null || (leagueFilter !== "all" && !activeLeagueKeys.includes(leagueFilter))) {
+    if (
+      leagueFilter === null ||
+      (leagueFilter !== "all" && !activeLeagueKeys.includes(leagueFilter))
+    ) {
       setLeagueFilter(activeLeagueKeys[0]);
     }
   }, [activeLeagueKeys, leagueFilter]);
@@ -57,10 +64,15 @@ export function TeamsView({
   const visibleTeams = useMemo(() => {
     const search = teamSearch.trim().toLowerCase();
     return [...(data?.teams ?? [])]
-      .filter((team) => leagueFilter === "all" || leagueFilter === null || team.league === leagueFilter)
-      .filter((team) => !search || `${team.name} ${team.abbreviation}`.toLowerCase().includes(search))
+      .filter(
+        (team) => leagueFilter === "all" || leagueFilter === null || team.league === leagueFilter,
+      )
+      .filter(
+        (team) => !search || `${team.name} ${team.abbreviation}`.toLowerCase().includes(search),
+      )
       .sort((a, b) => {
-        const followedDifference = Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
+        const followedDifference =
+          Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
         return followedDifference || a.name.localeCompare(b.name);
       });
   }, [data?.teams, followedTeamIds, leagueFilter, teamSearch]);
@@ -121,12 +133,16 @@ export function TeamsView({
         </div>
 
         <div className="teams-results-scroll">
-          {error || queryError ? <p className="error">{error ?? messageFromUnknown(queryError)}</p> : null}
+          {error || queryError ? (
+            <p className="error">{error ?? messageFromUnknown(queryError)}</p>
+          ) : null}
           {isLoading ? <p className="muted">Loading teams...</p> : null}
 
           {!isLoading ? (
             <>
-              {visibleTeams.length === 0 ? <p className="muted">No teams match this filter.</p> : null}
+              {visibleTeams.length === 0 ? (
+                <p className="muted">No teams match this filter.</p>
+              ) : null}
               <ul className="teams-grid">
                 {visibleTeams.map((team) => {
                   const isFollowed = followedTeamIds.has(team.id);

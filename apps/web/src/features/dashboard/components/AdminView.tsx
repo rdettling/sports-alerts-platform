@@ -25,7 +25,8 @@ export function AdminView({ token }: { token: string }) {
 
   const summary = data?.summary ?? null;
   const loading = isLoading || isFetching;
-  const errorMessage = error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
+  const errorMessage =
+    error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
   const updatedAtLabel = summary ? formatRelativeTime(summary.overview.last_updated_at) : null;
 
   function renderTabContent() {
@@ -59,7 +60,9 @@ export function AdminView({ token }: { token: string }) {
       {loading ? <p className="muted">Loading admin data...</p> : null}
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
-      {!loading && !errorMessage && summary ? <div className="admin-content">{renderTabContent()}</div> : null}
+      {!loading && !errorMessage && summary ? (
+        <div className="admin-content">{renderTabContent()}</div>
+      ) : null}
     </div>
   );
 }

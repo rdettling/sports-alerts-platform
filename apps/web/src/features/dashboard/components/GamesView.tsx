@@ -34,8 +34,14 @@ export function GamesView({
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
   const hasAutoSelectedInitialDay = useRef(false);
-  const { alertGame, gameAlertState, alertsBusy, openGameAlerts, closeGameAlerts, applyAlertOverride } =
-    useGameAlertSettings(token, setError);
+  const {
+    alertGame,
+    gameAlertState,
+    alertsBusy,
+    openGameAlerts,
+    closeGameAlerts,
+    applyAlertOverride,
+  } = useGameAlertSettings(token, setError);
 
   const toggleMutation = useMutation({
     mutationFn: async ({ gameId, isFollowed }: { gameId: number; isFollowed: boolean }) => {
@@ -62,11 +68,17 @@ export function GamesView({
   );
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
-  const followedGameIds = useMemo(() => new Set((follows?.games ?? []).map((game) => game.id)), [follows?.games]);
+  const followedGameIds = useMemo(
+    () => new Set((follows?.games ?? []).map((game) => game.id)),
+    [follows?.games],
+  );
 
   const sortedGames = useMemo(() => sortGamesByStart(games), [games]);
   const scopeFilteredGames = useMemo(
-    () => gameScope === "following" ? sortedGames.filter((game) => followedGameIds.has(game.id)) : sortedGames,
+    () =>
+      gameScope === "following"
+        ? sortedGames.filter((game) => followedGameIds.has(game.id))
+        : sortedGames,
     [followedGameIds, gameScope, sortedGames],
   );
   const leagueFilteredGames = useMemo(
@@ -74,7 +86,10 @@ export function GamesView({
     [scopeFilteredGames, leagueFilter],
   );
   const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
-  const visibleGames = useMemo(() => filterGamesByDay(leagueFilteredGames, dayFilter), [leagueFilteredGames, dayFilter]);
+  const visibleGames = useMemo(
+    () => filterGamesByDay(leagueFilteredGames, dayFilter),
+    [leagueFilteredGames, dayFilter],
+  );
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
   useEffect(() => {
     if (!token && gameScope !== "all") setGameScope("all");
@@ -130,7 +145,10 @@ export function GamesView({
               <div className="games-list" role="list" aria-label="Games feed">
                 {groupedVisibleGames.map((group) => (
                   <section key={group.label} className="games-day-group">
-                    <div className="games-group-row-inner"><strong>{group.label}</strong><span className="muted">{group.items.length} games</span></div>
+                    <div className="games-group-row-inner">
+                      <strong>{group.label}</strong>
+                      <span className="muted">{group.items.length} games</span>
+                    </div>
                     <div className="games-cards">
                       {group.items.map((game) => {
                         const home = teamMap.get(game.home_team_id);
@@ -160,7 +178,10 @@ export function GamesView({
                             onUnfollow={async () => {
                               setBusyGameId(game.id);
                               try {
-                                await toggleMutation.mutateAsync({ gameId: game.id, isFollowed: true });
+                                await toggleMutation.mutateAsync({
+                                  gameId: game.id,
+                                  isFollowed: true,
+                                });
                               } finally {
                                 setBusyGameId(null);
                               }
@@ -181,7 +202,9 @@ export function GamesView({
 
         {!isLoading && visibleGames.length === 0 ? (
           <p className="muted">
-            {gameScope === "following" ? "No followed games match this filter." : "No games in this filter."}
+            {gameScope === "following"
+              ? "No followed games match this filter."
+              : "No games in this filter."}
           </p>
         ) : null}
       </section>

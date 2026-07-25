@@ -10,7 +10,10 @@ function WindowSelect({
   onChange: (next: OpsAdminOverviewWindow) => void;
 }) {
   return (
-    <select value={value} onChange={(event) => onChange(event.target.value as OpsAdminOverviewWindow)}>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as OpsAdminOverviewWindow)}
+    >
       <option value="1h">1h</option>
       <option value="6h">6h</option>
       <option value="24h">24h</option>

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AlertType, League, Team, listLeagues, listTeams, sendDevTestEmail, type LeagueSetting } from "../../../shared/api";
 import {
-  TeamLogo,
-  PREFERENCE_LABELS,
-  messageFromUnknown,
-} from "../../../shared/lib/dashboard-ui";
+  AlertType,
+  League,
+  Team,
+  listLeagues,
+  listTeams,
+  sendDevTestEmail,
+  type LeagueSetting,
+} from "../../../shared/api";
+import { TeamLogo, PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -45,7 +49,10 @@ export function DevToolsView({ token }: { token: string }) {
     setResult(null);
     setBusyAlertType(alertType);
     try {
-      const response = await sendDevTestEmail(token, { league: activeLeague, alert_type: alertType });
+      const response = await sendDevTestEmail(token, {
+        league: activeLeague,
+        alert_type: alertType,
+      });
       const message = `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} sent for ${response.league.replace("_", " ")}.`;
       setResult(message);
     } catch (requestError) {
@@ -60,8 +67,12 @@ export function DevToolsView({ token }: { token: string }) {
     if (leagueTeams.length < 2) {
       return { away: null, home: null };
     }
-    const matchup = activeLeagues.find((item) => item.league === activeLeague)?.default_test_matchup;
-    const byAbbreviation = new Map(leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team] as const));
+    const matchup = activeLeagues.find(
+      (item) => item.league === activeLeague,
+    )?.default_test_matchup;
+    const byAbbreviation = new Map(
+      leagueTeams.map((team) => [team.abbreviation.toUpperCase(), team] as const),
+    );
     const away = matchup ? byAbbreviation.get(matchup[0]) : undefined;
     const home = matchup ? byAbbreviation.get(matchup[1]) : undefined;
     if (away && home && away.id !== home.id) {
@@ -93,7 +104,9 @@ export function DevToolsView({ token }: { token: string }) {
         </div>
 
         <div className="admin-tools-matchup">
-          <span className="admin-tools-label">Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})</span>
+          <span className="admin-tools-label">
+            Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})
+          </span>
           <span className="admin-tools-matchup-row">
             {syntheticTeams.away ? <TeamLogo team={syntheticTeams.away} size={20} /> : null}
             <strong>{syntheticTeams.away?.abbreviation ?? "AWAY"}</strong>
@@ -109,7 +122,9 @@ export function DevToolsView({ token }: { token: string }) {
               key={alertType}
               className="admin-test-btn"
               type="button"
-              disabled={loading || busyAlertType !== null || !syntheticTeams.away || !syntheticTeams.home}
+              disabled={
+                loading || busyAlertType !== null || !syntheticTeams.away || !syntheticTeams.home
+              }
               onClick={() => onSendTest(alertType)}
             >
               <span>{PREFERENCE_LABELS[alertType] ?? alertType} alert</span>

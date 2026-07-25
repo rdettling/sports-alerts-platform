@@ -4,7 +4,7 @@
 
 - Docker Desktop
 - `uv`
-- Node.js 20+
+- Node.js 24
 
 The standard local path is the Docker-based stack defined in `infra/docker-compose.yml`.
 

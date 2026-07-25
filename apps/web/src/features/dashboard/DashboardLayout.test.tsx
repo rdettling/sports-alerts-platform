@@ -1,4 +1,4 @@
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,12 +21,15 @@ vi.mock("../auth/auth-context", () => ({
 }));
 
 vi.mock("../auth/SignInModal", () => ({
-  SignInModal: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div role="dialog">Sign-in modal</div> : null,
+  SignInModal: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div role="dialog">Sign-in modal</div> : null,
 }));
 
 vi.mock("./components/GamesView", () => ({
   GamesView: ({ onSignInRequired }: { onSignInRequired: () => void }) => (
-    <div>Games view<button onClick={onSignInRequired}>Guest follow</button></div>
+    <div>
+      Games view<button onClick={onSignInRequired}>Guest follow</button>
+    </div>
   ),
 }));
 

@@ -21,10 +21,19 @@ export function AlertRuleCard({
   endSlot,
   controls,
 }: AlertRuleCardProps) {
-  const cardClasses = ["row-card", "alert-rule-row", isDisabled ? "alert-rule-disabled" : "", cardClassName ?? ""].filter(Boolean).join(" ");
+  const cardClasses = [
+    "row-card",
+    "alert-rule-row",
+    isDisabled ? "alert-rule-disabled" : "",
+    cardClassName ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const contentClasses = ["alert-rule-content", contentClassName ?? ""].filter(Boolean).join(" ");
   const headerClasses = ["alert-rule-header", headerClassName ?? ""].filter(Boolean).join(" ");
-  const controlsClasses = ["alert-rule-controls", controlsClassName ?? ""].filter(Boolean).join(" ");
+  const controlsClasses = ["alert-rule-controls", controlsClassName ?? ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <li className={cardClasses}>

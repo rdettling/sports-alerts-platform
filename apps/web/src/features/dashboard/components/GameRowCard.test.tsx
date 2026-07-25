@@ -160,9 +160,19 @@ describe("GameRowCard", () => {
             bookmaker: null,
             last_update: null,
             outcomes: [
-              { outcome_key: "mexico", outcome_label: "Mexico", price_american: 180, team_side: "away" },
+              {
+                outcome_key: "mexico",
+                outcome_label: "Mexico",
+                price_american: 180,
+                team_side: "away",
+              },
               { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
-              { outcome_key: "united_states", outcome_label: "United States", price_american: 160, team_side: "home" },
+              {
+                outcome_key: "united_states",
+                outcome_label: "United States",
+                price_american: 160,
+                team_side: "home",
+              },
             ],
           },
         })}
@@ -189,15 +199,37 @@ describe("GameRowCard", () => {
             bookmaker: null,
             last_update: null,
             outcomes: [
-              { outcome_key: "los_angeles_fc", outcome_label: "Los Angeles FC", price_american: 180, team_side: "away" },
+              {
+                outcome_key: "los_angeles_fc",
+                outcome_label: "Los Angeles FC",
+                price_american: 180,
+                team_side: "away",
+              },
               { outcome_key: "draw", outcome_label: "Draw", price_american: 225, team_side: null },
-              { outcome_key: "la_galaxy", outcome_label: "LA Galaxy", price_american: 150, team_side: "home" },
+              {
+                outcome_key: "la_galaxy",
+                outcome_label: "LA Galaxy",
+                price_american: 150,
+                team_side: "home",
+              },
             ],
           },
         })}
         sport="soccer"
-        home={{ ...home, external_team_id: "187", league: "MLS", abbreviation: "LA", name: "LA Galaxy" }}
-        away={{ ...away, external_team_id: "18966", league: "MLS", abbreviation: "LAFC", name: "LAFC" }}
+        home={{
+          ...home,
+          external_team_id: "187",
+          league: "MLS",
+          abbreviation: "LA",
+          name: "LA Galaxy",
+        }}
+        away={{
+          ...away,
+          external_team_id: "18966",
+          league: "MLS",
+          abbreviation: "LAFC",
+          name: "LAFC",
+        }}
         isFollowed={false}
         statusLabel="7:00 PM"
       />,
@@ -226,14 +258,36 @@ describe("GameRowCard", () => {
             bookmaker: null,
             last_update: null,
             outcomes: [
-              { outcome_key: "las_vegas_aces", outcome_label: "Las Vegas Aces", price_american: 125, team_side: "away" },
-              { outcome_key: "new_york_liberty", outcome_label: "New York Liberty", price_american: -145, team_side: "home" },
+              {
+                outcome_key: "las_vegas_aces",
+                outcome_label: "Las Vegas Aces",
+                price_american: 125,
+                team_side: "away",
+              },
+              {
+                outcome_key: "new_york_liberty",
+                outcome_label: "New York Liberty",
+                price_american: -145,
+                team_side: "home",
+              },
             ],
           },
         })}
         sport="basketball"
-        home={{ ...home, external_team_id: "9", league: "WNBA", abbreviation: "NY", name: "New York Liberty" }}
-        away={{ ...away, external_team_id: "17", league: "WNBA", abbreviation: "LV", name: "Las Vegas Aces" }}
+        home={{
+          ...home,
+          external_team_id: "9",
+          league: "WNBA",
+          abbreviation: "NY",
+          name: "New York Liberty",
+        }}
+        away={{
+          ...away,
+          external_team_id: "17",
+          league: "WNBA",
+          abbreviation: "LV",
+          name: "Las Vegas Aces",
+        }}
         isFollowed={false}
         statusLabel="7:00 PM"
       />,

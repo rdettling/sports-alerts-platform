@@ -1,7 +1,11 @@
 import { PREFERENCE_LABELS } from "../../../shared/lib/dashboard-ui";
 import { type GameAlertPreferences } from "../../../shared/api";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
-import { buildGameRuleOverridePayload, getGameFieldValue, ruleFieldsFor } from "./alerts/alert-rule-config";
+import {
+  buildGameRuleOverridePayload,
+  getGameFieldValue,
+  ruleFieldsFor,
+} from "./alerts/alert-rule-config";
 
 type GameAlertSettingsModalProps = {
   isOpen: boolean;
@@ -59,7 +63,8 @@ export function GameAlertSettingsModal({
                   endSlot={
                     <div className="alert-rule-header-end">
                       {inlineField ? (
-                        <label className="alert-inline-field">{inlineField.label}
+                        <label className="alert-inline-field">
+                          {inlineField.label}
                           <select
                             value={getGameFieldValue(item, inlineField)}
                             disabled={alertsBusy}
@@ -67,11 +72,18 @@ export function GameAlertSettingsModal({
                               onApplyAlertOverride(
                                 gameAlertState.game_id,
                                 item.alert_type,
-                                buildGameRuleOverridePayload(item, { fieldKey: inlineField.key, fieldValue: Number(event.target.value) }),
+                                buildGameRuleOverridePayload(item, {
+                                  fieldKey: inlineField.key,
+                                  fieldValue: Number(event.target.value),
+                                }),
                               ).catch(() => undefined);
                             }}
                           >
-                            {inlineField.options.map((value) => <option key={value} value={value}>{value}</option>)}
+                            {inlineField.options.map((value) => (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            ))}
                           </select>
                         </label>
                       ) : null}
@@ -85,33 +97,47 @@ export function GameAlertSettingsModal({
                           onApplyAlertOverride(
                             gameAlertState.game_id,
                             item.alert_type,
-                            buildGameRuleOverridePayload(item, { is_enabled_override: !item.is_enabled }),
+                            buildGameRuleOverridePayload(item, {
+                              is_enabled_override: !item.is_enabled,
+                            }),
                           ).catch(() => undefined);
                         }}
                       >
-                        <span className="alert-toggle-track"><span className="alert-toggle-thumb" /></span>
+                        <span className="alert-toggle-track">
+                          <span className="alert-toggle-thumb" />
+                        </span>
                       </button>
                     </div>
                   }
                   controls={
                     <>
-                      {fields.filter((field) => field !== inlineField).map((field) => (
-                        <label key={field.key}>{field.label}
-                          <select
-                            value={getGameFieldValue(item, field)}
-                            disabled={alertsBusy}
-                            onChange={(event) => {
-                              onApplyAlertOverride(
-                                gameAlertState.game_id,
-                                item.alert_type,
-                                buildGameRuleOverridePayload(item, { fieldKey: field.key, fieldValue: Number(event.target.value) }),
-                              ).catch(() => undefined);
-                            }}
-                          >
-                            {field.options.map((value) => <option key={value} value={value}>{value}</option>)}
-                          </select>
-                        </label>
-                      ))}
+                      {fields
+                        .filter((field) => field !== inlineField)
+                        .map((field) => (
+                          <label key={field.key}>
+                            {field.label}
+                            <select
+                              value={getGameFieldValue(item, field)}
+                              disabled={alertsBusy}
+                              onChange={(event) => {
+                                onApplyAlertOverride(
+                                  gameAlertState.game_id,
+                                  item.alert_type,
+                                  buildGameRuleOverridePayload(item, {
+                                    fieldKey: field.key,
+                                    fieldValue: Number(event.target.value),
+                                  }),
+                                ).catch(() => undefined);
+                              }}
+                            >
+                              {field.options.map((value) => (
+                                <option key={value} value={value}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
                     </>
                   }
                 />
