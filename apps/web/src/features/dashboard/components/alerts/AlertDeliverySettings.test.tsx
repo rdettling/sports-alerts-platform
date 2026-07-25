@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AlertsView } from "./AlertsView";
+import { AlertDeliverySettings } from "./AlertDeliverySettings";
 
 const mocks = vi.hoisted(() => ({
   getNotificationSettings: vi.fn(),
@@ -19,30 +19,20 @@ const emailSettings = {
   vapid_public_key: "public-key",
 };
 
-vi.mock("../../../shared/api", () => ({
+vi.mock("../../../../shared/api", () => ({
   getNotificationSettings: mocks.getNotificationSettings,
   updateNotificationSettings: mocks.updateNotificationSettings,
   savePushSubscription: mocks.savePushSubscription,
-  listAlertHistory: vi.fn(async () => ({ items: [] })),
-  listAlertPreferences: vi.fn(async () => [{ league: "NBA", preferences: [] }]),
-  listLeagues: vi.fn(async () => [
-    {
-      league: "NBA",
-      label: "NBA",
-      alert_types: [],
-    },
-  ]),
-  updateAlertPreference: vi.fn(),
 }));
 
-vi.mock("../../../shared/lib/push-notifications", () => ({
+vi.mock("../../../../shared/lib/push-notifications", () => ({
   getCurrentPushSubscription: mocks.getCurrentPushSubscription,
   pushIsSupported: mocks.pushIsSupported,
   pushSubscriptionPayload: vi.fn((subscription) => subscription.payload),
   subscribeCurrentBrowser: mocks.subscribeCurrentBrowser,
 }));
 
-describe("AlertsView delivery settings", () => {
+describe("AlertDeliverySettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getNotificationSettings.mockResolvedValue(emailSettings);
@@ -63,10 +53,9 @@ describe("AlertsView delivery settings", () => {
       delivery_mode: "push",
       subscription_count: 1,
     });
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
-    const pushButton = await screen.findByRole("button", { name: "Push" });
-    fireEvent.click(pushButton);
+    fireEvent.click(await screen.findByRole("button", { name: "Push" }));
 
     await waitFor(() => {
       expect(mocks.subscribeCurrentBrowser).toHaveBeenCalledWith("public-key");
@@ -92,7 +81,7 @@ describe("AlertsView delivery settings", () => {
       .mockResolvedValueOnce(pushSettings)
       .mockResolvedValueOnce({ ...pushSettings, subscription_count: 2 });
     mocks.subscribeCurrentBrowser.mockResolvedValue(subscription);
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
 
@@ -112,7 +101,7 @@ describe("AlertsView delivery settings", () => {
       subscription_count: 1,
     });
     mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
 
@@ -125,7 +114,7 @@ describe("AlertsView delivery settings", () => {
 
   it("leaves the previous mode unchanged when browser subscription fails", async () => {
     mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Push" }));
 
@@ -136,7 +125,7 @@ describe("AlertsView delivery settings", () => {
 
   it("explains the Home Screen requirement when Push is unsupported", async () => {
     mocks.pushIsSupported.mockReturnValue(false);
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
     expect(
       await screen.findByText(/On iPhone or iPad, add this site to your Home Screen/),
@@ -159,7 +148,7 @@ describe("AlertsView delivery settings", () => {
     });
     mocks.getCurrentPushSubscription.mockResolvedValue(subscription);
     mocks.updateNotificationSettings.mockResolvedValue(emailSettings);
-    render(<AlertsView token="token" />);
+    render(<AlertDeliverySettings token="token" />);
 
     const emailButton = await screen.findByRole("button", { name: "Email" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Both" })).toHaveClass("active"));

@@ -1,31 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  getNotificationSettings,
   listAlertHistory,
   listAlertPreferences,
   listLeagues,
-  savePushSubscription,
-  updateNotificationSettings,
   updateAlertPreference,
-  type DeliveryMode,
   type League,
   type AlertPreference,
   type AlertPreferenceGroup,
   type AlertHistoryItem,
-  type NotificationSettings,
 } from "../../../shared/api";
-import {
-  getCurrentPushSubscription,
-  pushIsSupported,
-  pushSubscriptionPayload,
-  subscribeCurrentBrowser,
-} from "../../../shared/lib/push-notifications";
 import {
   PREFERENCE_LABELS,
   deliveryStatusClass,
   messageFromUnknown,
 } from "../../../shared/lib/dashboard-ui";
+import { AlertDeliverySettings } from "./alerts/AlertDeliverySettings";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
 import {
   buildLeagueRulePayload,
@@ -40,18 +30,13 @@ export function AlertsView({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
-    null,
-  );
-  const [deviceSubscribed, setDeviceSubscribed] = useState(false);
-  const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [activeLeagues, setActiveLeagues] = useState<
     Array<{ league: League; label: string; alert_types: string[] }>
   >([]);
 
-  const load = async () => {
+  const loadAlertData = async (showLoading = false) => {
     setError(null);
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [preferenceResponse, historyResponse, leaguesResponse] = await Promise.all([
         listAlertPreferences(token),
@@ -62,38 +47,17 @@ export function AlertsView({ token }: { token: string }) {
       setHistoryItems(historyResponse.items);
       setActiveLeagues(leaguesResponse);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    load().catch((loadError) => setError(messageFromUnknown(loadError)));
-  }, [token]);
-
-  const loadNotificationState = async () => {
-    const settings = await getNotificationSettings(token);
-    let currentSubscription: PushSubscription | null = null;
-    if (pushIsSupported()) {
-      currentSubscription = await getCurrentPushSubscription();
-      if (currentSubscription && settings.delivery_mode !== "email") {
-        await savePushSubscription(token, pushSubscriptionPayload(currentSubscription));
-      }
-    }
-    setDeviceSubscribed(Boolean(currentSubscription));
-    setNotificationSettings(
-      currentSubscription && settings.delivery_mode !== "email"
-        ? await getNotificationSettings(token)
-        : settings,
-    );
-  };
-
-  useEffect(() => {
-    loadNotificationState().catch((loadError) => setError(messageFromUnknown(loadError)));
+    loadAlertData(true).catch((loadError) => setError(messageFromUnknown(loadError)));
   }, [token]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      load().catch((loadError) => setError(messageFromUnknown(loadError)));
+      loadAlertData().catch((loadError) => setError(messageFromUnknown(loadError)));
     }, 120_000);
     return () => window.clearInterval(id);
   }, [token]);
@@ -122,7 +86,7 @@ export function AlertsView({ token }: { token: string }) {
         preference.alert_type,
         buildLeagueRulePayload(preference, { fieldKey, fieldValue }),
       );
-      await load();
+      await loadAlertData();
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
     } finally {
@@ -141,51 +105,6 @@ export function AlertsView({ token }: { token: string }) {
     };
   }, [preferenceGroups, activeLeague, activeLeagues]);
 
-  const subscribeThisDevice = async () => {
-    if (!notificationSettings?.push_configured || !notificationSettings.vapid_public_key) {
-      throw new Error("Push notifications are not configured yet.");
-    }
-    const subscription = await subscribeCurrentBrowser(notificationSettings.vapid_public_key);
-    await savePushSubscription(token, pushSubscriptionPayload(subscription));
-    setDeviceSubscribed(true);
-  };
-
-  const onEnablePushThisDevice = async () => {
-    setError(null);
-    setDeliveryBusy(true);
-    try {
-      await subscribeThisDevice();
-      setNotificationSettings(await getNotificationSettings(token));
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setDeliveryBusy(false);
-    }
-  };
-
-  const onDeliveryModeChange = async (mode: DeliveryMode) => {
-    if (!notificationSettings || mode === notificationSettings.delivery_mode) return;
-    setError(null);
-    setDeliveryBusy(true);
-    try {
-      if (mode === "email") {
-        const currentSubscription = await getCurrentPushSubscription().catch(() => null);
-        const settings = await updateNotificationSettings(token, "email");
-        await currentSubscription?.unsubscribe().catch(() => false);
-        setDeviceSubscribed(false);
-        setNotificationSettings(settings);
-        return;
-      }
-      await subscribeThisDevice();
-      const settings = await updateNotificationSettings(token, mode);
-      setNotificationSettings(settings);
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setDeliveryBusy(false);
-    }
-  };
-
   return (
     <section className="view-stack alerts-skeleton-page">
       {error ? <p className="error">{error}</p> : null}
@@ -193,56 +112,7 @@ export function AlertsView({ token }: { token: string }) {
 
       {!loading ? (
         <div className="alerts-layout">
-          <section className="panel alerts-delivery-panel">
-            <div>
-              <h3>Delivery</h3>
-              <p className="muted">Choose how you receive alerts. Email is the default.</p>
-            </div>
-            <div className="alerts-delivery-controls">
-              <div className="chip-row" aria-label="Alert delivery method">
-                {(["email", "push", "both"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    className={`chip-btn ${notificationSettings?.delivery_mode === mode ? "active" : ""}`.trim()}
-                    type="button"
-                    disabled={
-                      deliveryBusy ||
-                      !notificationSettings ||
-                      (mode !== "email" &&
-                        (!pushIsSupported() || !notificationSettings.push_configured))
-                    }
-                    onClick={() => onDeliveryModeChange(mode)}
-                  >
-                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div className="alerts-device-row">
-                <span className="muted alerts-device-status">
-                  {!pushIsSupported()
-                    ? "Push is unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
-                    : !notificationSettings?.push_configured
-                      ? "Push is not configured yet."
-                      : deviceSubscribed
-                        ? `This device is subscribed · ${notificationSettings?.subscription_count ?? 0} total`
-                        : "This device is not subscribed"}
-                </span>
-                {pushIsSupported() &&
-                notificationSettings?.push_configured &&
-                notificationSettings.delivery_mode !== "email" &&
-                !deviceSubscribed ? (
-                  <button
-                    className="chip-btn"
-                    type="button"
-                    disabled={deliveryBusy}
-                    onClick={onEnablePushThisDevice}
-                  >
-                    Enable on this device
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </section>
+          <AlertDeliverySettings token={token} />
 
           <section className="panel alerts-rules-panel">
             <div className="section-header section-header-inline alerts-rules-header">
@@ -322,7 +192,7 @@ export function AlertsView({ token }: { token: string }) {
                                     is_enabled: !preference.is_enabled,
                                   }),
                                 );
-                                await load();
+                                await loadAlertData();
                               } catch (requestError) {
                                 setError(messageFromUnknown(requestError));
                               } finally {
