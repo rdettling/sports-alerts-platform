@@ -12,6 +12,7 @@ ALERT_LABELS = {
     "close_game_late": "Close game late",
     "overtime_start": "Overtime start",
     "inning_start": "Inning start",
+    "extra_innings_start": "Extra innings start",
     "second_half_start": "Second half start",
     "extra_time_start": "Extra time start",
     "penalty_kicks": "Penalty kicks",
@@ -229,6 +230,16 @@ def _overtime_label(alert: SentAlert, game: Game, sport: str | None) -> str:
     return _format_period_value(period if period is not None else game.period, sport) or "Overtime"
 
 
+def _extra_inning_label(alert: SentAlert, game: Game) -> str:
+    inning = _metadata_int(_alert_metadata(alert), "period")
+    inning = inning if inning is not None else game.period
+    if inning is None:
+        return "Extra innings"
+    last_two_digits = inning % 100
+    suffix = "th" if 11 <= last_two_digits <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(inning % 10, "th")
+    return f"{inning}{suffix} inning"
+
+
 def _primary_status_line(
     alert: SentAlert,
     game: Game,
@@ -263,6 +274,8 @@ def _primary_status_line(
         return f"Match is still tied deep in extra time · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "overtime_start":
         return f"{_overtime_label(alert, game, sport)} is live now · {away_abbr} {_scoreline(game)} {home_abbr}"
+    if alert.alert_type == "extra_innings_start":
+        return f"{_extra_inning_label(alert, game)} is underway · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         details = [f"{away_abbr} {_scoreline(game)} {home_abbr}"]
         period = _format_period(game, sport)
@@ -312,6 +325,8 @@ def build_alert_subject(alert: SentAlert, game: Game, home: Team | None, away: T
         return f"Penalty kicks likely soon · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "overtime_start":
         return f"{_overtime_label(alert, game, sport)} · {away_abbr} {_scoreline(game)} {home_abbr}"
+    if alert.alert_type == "extra_innings_start":
+        return f"{_extra_inning_label(alert, game)} · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "close_game_late":
         return f"Close game · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "inning_start":

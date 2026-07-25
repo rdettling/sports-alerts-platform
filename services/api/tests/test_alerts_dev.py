@@ -67,27 +67,30 @@ def test_admin_test_email_endpoint_sends_inline_alert(client):
         db.close()
 
 
-def test_admin_test_email_endpoint_accepts_mlb_inning_start(client):
+def test_admin_test_email_endpoint_accepts_mlb_alerts(client):
     headers = _auth_headers(client, email="dev-alerts-mlb@example.com", role="admin")
 
-    response = client.post(
-        "/alerts/admin/test-email",
-        headers=headers,
-        json={"league": "MLB", "alert_type": "inning_start"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["league"] == "MLB"
-    assert body["alert_type"] == "inning_start"
+    for alert_type in ("inning_start", "extra_innings_start"):
+        response = client.post(
+            "/alerts/admin/test-email",
+            headers=headers,
+            json={"league": "MLB", "alert_type": alert_type},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["league"] == "MLB"
+        assert body["alert_type"] == alert_type
 
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == "dev-alerts-mlb@example.com"))
         alerts = db.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
-        assert len(alerts) == 1
-        game = db.get(Game, alerts[0].game_id)
+        assert len(alerts) == 2
+        extra_innings_alert = next(alert for alert in alerts if alert.alert_type == "extra_innings_start")
+        game = db.get(Game, extra_innings_alert.game_id)
         assert game is not None
-        assert game.league == "MLB"
+        assert (game.league, game.status, game.home_score, game.away_score) == ("MLB", "in_progress", 3, 3)
+        assert (game.period, game.clock) == (10, "Top 10th")
     finally:
         db.close()
 

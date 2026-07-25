@@ -31,6 +31,7 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
         300,
         "baseball_mlb",
     )
+    assert get_alert_types("MLB") == ("game_start", "inning_start", "extra_innings_start", "final_result")
 
     mls = get_league_profile("MLS")
     assert (mls.sport, mls.live_sync_interval_seconds, mls.odds_sport_key) == (
@@ -49,6 +50,8 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
     assert get_alert_types("MLS") == get_alert_types("WORLD_CUP")
     assert "overtime_start" not in get_alert_types("MLB")
     assert "overtime_start" not in get_alert_types("MLS")
+    assert "extra_innings_start" not in get_alert_types("NBA")
+    assert "extra_innings_start" not in get_alert_types("MLS")
 
 
 def test_public_leagues_include_sport_and_live_cadence(client):

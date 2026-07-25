@@ -126,6 +126,13 @@ def create_admin_test_alert(
         period = 7
         clock = "Mid 7th"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    elif payload.alert_type == "extra_innings_start":
+        game_status = "in_progress"
+        home_score = 3
+        away_score = 3
+        period = 10
+        clock = "Top 10th"
+        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=3)
     elif payload.alert_type == "final_result":
         game_status = "final"
         home_score = 109

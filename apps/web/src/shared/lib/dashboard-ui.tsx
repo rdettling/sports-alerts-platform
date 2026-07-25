@@ -15,6 +15,7 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   close_game_late: "Close game late",
   overtime_start: "Overtime start",
   inning_start: "Inning start",
+  extra_innings_start: "Extra innings start",
   second_half_start: "Second half start",
   extra_time_start: "Extra time start",
   penalty_kicks: "Penalty kicks",

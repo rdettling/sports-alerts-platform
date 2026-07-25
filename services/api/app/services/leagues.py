@@ -27,7 +27,7 @@ class LeagueProfile:
 
 SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
     "basketball": ("game_start", "close_game_late", "overtime_start", "final_result"),
-    "baseball": ("game_start", "inning_start", "final_result"),
+    "baseball": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "soccer": (
         "game_start",
         "second_half_start",

@@ -735,6 +735,88 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
     assert any(row.alert_type == "inning_start" for row in sent)
 
 
+def test_mlb_extra_innings_alerts_once_per_inning(db_session):
+    enabled_user = User(email="extra-innings@example.com")
+    disabled_user = User(email="no-extra-innings@example.com")
+    db_session.add_all([enabled_user, disabled_user])
+    db_session.commit()
+    db_session.refresh(enabled_user)
+    db_session.refresh(disabled_user)
+
+    team = db_session.scalar(select(Team).where(Team.league == "MLB", Team.external_team_id == "2"))
+    assert team is not None
+    for user, extra_innings_enabled in ((enabled_user, True), (disabled_user, False)):
+        db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+        db_session.add(
+            UserAlertDefault(user_id=user.id, league="MLB", alert_type="game_start", is_enabled=False)
+        )
+        db_session.add(
+            UserAlertDefault(user_id=user.id, league="MLB", alert_type="inning_start", is_enabled=False)
+        )
+        db_session.add(
+            UserAlertDefault(
+                user_id=user.id,
+                league="MLB",
+                alert_type="extra_innings_start",
+                is_enabled=extra_innings_enabled,
+            )
+        )
+    db_session.commit()
+
+    def extra_innings_provider(
+        inning: int,
+        *,
+        status: str = "in_progress",
+        is_final: bool = False,
+    ) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-extra-innings",
+                    home_external_team_id="2",
+                    away_external_team_id="10",
+                    status=status,
+                    home_score=3,
+                    away_score=3,
+                    period=inning,
+                    clock=f"Top {inning}th",
+                    is_final=is_final,
+                )
+            ]
+        )
+
+    assert run_catalog_sync(extra_innings_provider(9), league="MLB")["status"] == "success"
+    assert run_catalog_sync(extra_innings_provider(10), league="MLB")["status"] == "success"
+    assert run_catalog_sync(extra_innings_provider(10), league="MLB")["status"] == "success"
+    assert run_catalog_sync(extra_innings_provider(11), league="MLB")["status"] == "success"
+    assert run_catalog_sync(extra_innings_provider(11), league="MLB")["status"] == "success"
+    assert run_catalog_sync(
+        extra_innings_provider(12, status="final", is_final=True),
+        league="MLB",
+    )["status"] == "success"
+
+    alerts = db_session.scalars(
+        select(SentAlert)
+        .where(SentAlert.user_id == enabled_user.id, SentAlert.alert_type == "extra_innings_start")
+        .order_by(SentAlert.id.asc())
+    ).all()
+    assert [alert.metadata_json["period"] for alert in alerts] == [10, 11]
+    assert [alert.metadata_json["clock"] for alert in alerts] == ["Top 10th", "Top 11th"]
+    assert [alert.metadata_json["status"] for alert in alerts] == ["in_progress", "in_progress"]
+    assert [alert.dedupe_key for alert in alerts] == [
+        f"{enabled_user.id}:{alerts[0].game_id}:extra_innings_start:10",
+        f"{enabled_user.id}:{alerts[1].game_id}:extra_innings_start:11",
+    ]
+
+    disabled_alerts = db_session.scalars(
+        select(SentAlert).where(
+            SentAlert.user_id == disabled_user.id,
+            SentAlert.alert_type == "extra_innings_start",
+        )
+    ).all()
+    assert disabled_alerts == []
+
+
 def test_world_cup_score_changed_creates_inferred_goal_alert(db_session):
     user = User(email="world-cup-score@example.com")
     db_session.add(user)

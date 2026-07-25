@@ -248,6 +248,16 @@ def _should_trigger_overtime_start(game: Game, is_enabled: bool) -> bool:
     )
 
 
+def _should_trigger_extra_innings_start(game: Game, is_enabled: bool) -> bool:
+    return (
+        is_enabled
+        and get_league_profile(game.league).sport == "baseball"
+        and not game.is_final
+        and game.status in {"in_progress", "live"}
+        and (game.period or 0) >= 10
+    )
+
+
 def _should_trigger_penalty_kicks(game: Game, is_enabled: bool) -> bool:
     if not is_enabled:
         return False
@@ -441,6 +451,21 @@ def evaluate_and_record_alerts(
                     alert_type="overtime_start",
                     dedupe_key=f"{user_id}:{game.id}:overtime_start:{period}",
                     metadata_json={"period": period, "clock": game.clock or "", "status": game.status},
+                )
+
+            extra_innings_enabled, _, _, _ = _alert_settings_for(
+                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_innings_start"
+            )
+            if _should_trigger_extra_innings_start(game, extra_innings_enabled):
+                inning = game.period or 0
+                _append_candidate_alert(
+                    candidate_alerts,
+                    candidate_dedupe_keys,
+                    user_id=user_id,
+                    game_id=game.id,
+                    alert_type="extra_innings_start",
+                    dedupe_key=f"{user_id}:{game.id}:extra_innings_start:{inning}",
+                    metadata_json={"period": inning, "clock": game.clock or "", "status": game.status},
                 )
 
             inning_enabled, _, _, inning_threshold = _alert_settings_for(

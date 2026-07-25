@@ -22,13 +22,13 @@ def _auth_headers(client, email: str = "m2@example.com") -> dict[str, str]:
         db.close()
 
 
-def _create_game() -> int:
+def _create_game(league: str = "NBA") -> int:
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc()).limit(2)).all()
         game = Game(
-            external_game_id="test-game-m2",
-            league="NBA",
+            external_game_id=f"test-game-m2-{league.lower()}",
+            league=league,
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -165,7 +165,13 @@ def test_alert_preferences_get_and_update(client):
         "final_result",
     }
     assert next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")["is_enabled"] is True
-    assert {item["alert_type"] for item in mlb_group["preferences"]} == {"game_start", "inning_start", "final_result"}
+    assert {item["alert_type"] for item in mlb_group["preferences"]} == {
+        "game_start",
+        "inning_start",
+        "extra_innings_start",
+        "final_result",
+    }
+    assert next(item for item in mlb_group["preferences"] if item["alert_type"] == "extra_innings_start")["is_enabled"] is True
     assert {item["alert_type"] for item in mls_group["preferences"]} == {
         "game_start",
         "second_half_start",
@@ -244,6 +250,34 @@ def test_alert_preferences_backfill_overtime_for_existing_user(client):
     assert overtime["is_enabled"] is True
 
 
+def test_alert_preferences_backfill_extra_innings_for_existing_user(client):
+    email = "existing-extra-innings-preference@example.com"
+    headers = _auth_headers(client, email=email)
+    assert client.get("/alert-preferences", headers=headers).status_code == 200
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email))
+        assert user is not None
+        preference = db.scalar(
+            select(UserAlertDefault).where(
+                UserAlertDefault.user_id == user.id,
+                UserAlertDefault.league == "MLB",
+                UserAlertDefault.alert_type == "extra_innings_start",
+            )
+        )
+        assert preference is not None
+        db.delete(preference)
+        db.commit()
+
+    response = client.get("/alert-preferences", headers=headers)
+    assert response.status_code == 200
+    mlb_group = next(group for group in response.json() if group["league"] == "MLB")
+    extra_innings = next(
+        item for item in mlb_group["preferences"] if item["alert_type"] == "extra_innings_start"
+    )
+    assert extra_innings["is_enabled"] is True
+
+
 def test_game_alert_override_flow(client):
     headers = _auth_headers(client, email="m2-game-overrides@example.com")
     game_id = _create_game()
@@ -299,3 +333,30 @@ def test_game_alert_override_flow(client):
     assert overtime_clear.status_code == 200
     assert overtime_clear.json()["is_enabled"] is True
     assert overtime_clear.json()["use_league_default"] is True
+
+
+def test_extra_innings_game_alert_override_flow(client):
+    headers = _auth_headers(client, email="mlb-extra-innings-overrides@example.com")
+    game_id = _create_game("MLB")
+
+    response = client.get(f"/alert-preferences/games/{game_id}", headers=headers)
+    assert response.status_code == 200
+    extra_innings = next(
+        item for item in response.json()["items"] if item["alert_type"] == "extra_innings_start"
+    )
+    assert extra_innings["is_enabled"] is True
+    assert extra_innings["use_league_default"] is True
+
+    update = client.put(
+        f"/alert-preferences/games/{game_id}/extra_innings_start",
+        headers=headers,
+        json={"is_enabled_override": False},
+    )
+    assert update.status_code == 200
+    assert update.json()["is_enabled"] is False
+    assert update.json()["use_league_default"] is False
+
+    clear = client.delete(f"/alert-preferences/games/{game_id}/extra_innings_start", headers=headers)
+    assert clear.status_code == 200
+    assert clear.json()["is_enabled"] is True
+    assert clear.json()["use_league_default"] is True

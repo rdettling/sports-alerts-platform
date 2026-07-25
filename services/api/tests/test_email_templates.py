@@ -43,6 +43,37 @@ def test_mlb_inning_start_uses_mlb_logos_and_non_nba_details():
     assert "Mid 7th" in text_body
 
 
+def test_mlb_extra_innings_start_uses_ordinal_inning_copy():
+    away = Team(external_team_id="MIA", league="MLB", name="Miami Marlins", abbreviation="MIA")
+    home = Team(external_team_id="TOR", league="MLB", name="Toronto Blue Jays", abbreviation="TOR")
+    game = Game(
+        external_game_id="mlb-extra-innings",
+        league="MLB",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=3,
+        away_score=3,
+        period=11,
+        clock="Top 11th",
+    )
+    alert = _mk_alert("extra_innings_start")
+    alert.metadata_json = {"status": "in_progress", "period": 10, "clock": "Top 10th"}
+    assert build_alert_subject(alert, game, home, away) == "10th inning · MIA 3–3 TOR"
+
+    alert.metadata_json = {"status": "in_progress", "period": 11, "clock": "Top 11th"}
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "11th inning · MIA 3–3 TOR"
+    assert "Extra innings start" in text_body
+    assert "11th inning is underway · MIA 3–3 TOR" in text_body
+    assert "In Progress • Inning 11 • Top 11th" in text_body
+    assert "11th inning is underway · MIA 3–3 TOR" in html_body
+
+
 def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
     away = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
     home = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
