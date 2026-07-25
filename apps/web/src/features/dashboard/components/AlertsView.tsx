@@ -141,6 +141,28 @@ export function AlertsView({ token }: { token: string }) {
     };
   }, [preferenceGroups, activeLeague, activeLeagues]);
 
+  const subscribeThisDevice = async () => {
+    if (!notificationSettings?.push_configured || !notificationSettings.vapid_public_key) {
+      throw new Error("Push notifications are not configured yet.");
+    }
+    const subscription = await subscribeCurrentBrowser(notificationSettings.vapid_public_key);
+    await savePushSubscription(token, pushSubscriptionPayload(subscription));
+    setDeviceSubscribed(true);
+  };
+
+  const onEnablePushThisDevice = async () => {
+    setError(null);
+    setDeliveryBusy(true);
+    try {
+      await subscribeThisDevice();
+      setNotificationSettings(await getNotificationSettings(token));
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
+    } finally {
+      setDeliveryBusy(false);
+    }
+  };
+
   const onDeliveryModeChange = async (mode: DeliveryMode) => {
     if (!notificationSettings || mode === notificationSettings.delivery_mode) return;
     setError(null);
@@ -154,13 +176,8 @@ export function AlertsView({ token }: { token: string }) {
         setNotificationSettings(settings);
         return;
       }
-      if (!notificationSettings.push_configured || !notificationSettings.vapid_public_key) {
-        throw new Error("Push notifications are not configured yet.");
-      }
-      const subscription = await subscribeCurrentBrowser(notificationSettings.vapid_public_key);
-      await savePushSubscription(token, pushSubscriptionPayload(subscription));
+      await subscribeThisDevice();
       const settings = await updateNotificationSettings(token, mode);
-      setDeviceSubscribed(true);
       setNotificationSettings(settings);
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
@@ -200,15 +217,30 @@ export function AlertsView({ token }: { token: string }) {
                   </button>
                 ))}
               </div>
-              <span className="muted alerts-device-status">
-                {!pushIsSupported()
-                  ? "Push is unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
-                  : !notificationSettings?.push_configured
-                    ? "Push is not configured yet."
-                    : deviceSubscribed
-                      ? `This device is subscribed · ${notificationSettings?.subscription_count ?? 0} total`
-                      : "This device is not subscribed"}
-              </span>
+              <div className="alerts-device-row">
+                <span className="muted alerts-device-status">
+                  {!pushIsSupported()
+                    ? "Push is unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
+                    : !notificationSettings?.push_configured
+                      ? "Push is not configured yet."
+                      : deviceSubscribed
+                        ? `This device is subscribed · ${notificationSettings?.subscription_count ?? 0} total`
+                        : "This device is not subscribed"}
+                </span>
+                {pushIsSupported() &&
+                notificationSettings?.push_configured &&
+                notificationSettings.delivery_mode !== "email" &&
+                !deviceSubscribed ? (
+                  <button
+                    className="chip-btn"
+                    type="button"
+                    disabled={deliveryBusy}
+                    onClick={onEnablePushThisDevice}
+                  >
+                    Enable on this device
+                  </button>
+                ) : null}
+              </div>
             </div>
           </section>
 

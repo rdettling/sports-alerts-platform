@@ -1131,3 +1131,26 @@
 .alerts-device-status {
   font-size: 0.82rem;
 }
+
+.alerts-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+@media (max-width: 640px) {
+  .alerts-delivery-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .alerts-delivery-controls {
+    align-items: flex-start;
+  }
+
+  .alerts-device-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

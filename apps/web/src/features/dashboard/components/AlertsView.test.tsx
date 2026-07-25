@@ -76,6 +76,53 @@ describe("AlertsView delivery settings", () => {
     expect(screen.getByText(/This device is subscribed/)).toBeInTheDocument();
   });
 
+  it("enables Push on a new device without changing the active global mode", async () => {
+    const pushSettings = {
+      ...emailSettings,
+      delivery_mode: "push" as const,
+      subscription_count: 1,
+    };
+    const subscription = {
+      payload: {
+        endpoint: "https://push.example/iphone",
+        keys: { p256dh: "iphone-key", auth: "iphone-auth" },
+      },
+    };
+    mocks.getNotificationSettings
+      .mockResolvedValueOnce(pushSettings)
+      .mockResolvedValueOnce({ ...pushSettings, subscription_count: 2 });
+    mocks.subscribeCurrentBrowser.mockResolvedValue(subscription);
+    render(<AlertsView token="token" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
+
+    await waitFor(() => {
+      expect(mocks.subscribeCurrentBrowser).toHaveBeenCalledWith("public-key");
+      expect(mocks.savePushSubscription).toHaveBeenCalledWith("token", subscription.payload);
+    });
+    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
+    expect(screen.getByText("This device is subscribed · 2 total")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Push" })).toHaveClass("active");
+  });
+
+  it("keeps the global mode unchanged when new-device enrollment is denied", async () => {
+    mocks.getNotificationSettings.mockResolvedValue({
+      ...emailSettings,
+      delivery_mode: "push",
+      subscription_count: 1,
+    });
+    mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
+    render(<AlertsView token="token" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
+
+    expect(await screen.findByText("Permission denied")).toBeInTheDocument();
+    expect(mocks.savePushSubscription).not.toHaveBeenCalled();
+    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Push" })).toHaveClass("active");
+    expect(screen.getByText("This device is not subscribed")).toBeInTheDocument();
+  });
+
   it("leaves the previous mode unchanged when browser subscription fails", async () => {
     mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
     render(<AlertsView token="token" />);
