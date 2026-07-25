@@ -32,7 +32,7 @@ export function GameAlertSettingsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="overlay-sheet" role="dialog" aria-modal="true">
+    <div className="overlay-sheet game-alert-overlay" role="dialog" aria-modal="true">
       <section className="overlay-card game-alert-modal">
         <header className="overlay-card-header">
           <div className="game-alert-modal-title">

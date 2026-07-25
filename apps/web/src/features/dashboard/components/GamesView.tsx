@@ -56,7 +56,6 @@ export function GamesView({
   const follows = data?.follows;
   const teams = data?.teams ?? [];
   const activeLeagues = data?.leagues ?? [];
-  const activeLeagueKeys = activeLeagues.map((item) => item.league);
   const leagueProfiles = useMemo(
     () => new Map(activeLeagues.map((profile) => [profile.league, profile] as const)),
     [activeLeagues],
@@ -82,10 +81,10 @@ export function GamesView({
   }, [gameScope, token]);
 
   useEffect(() => {
-    if (leagueFilter !== "all" && !activeLeagueKeys.includes(leagueFilter)) {
+    if (leagueFilter !== "all" && !activeLeagues.some((item) => item.league === leagueFilter)) {
       setLeagueFilter("all");
     }
-  }, [activeLeagueKeys, leagueFilter]);
+  }, [activeLeagues, leagueFilter]);
 
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
@@ -119,7 +118,6 @@ export function GamesView({
               onLeagueFilterChange={setLeagueFilter}
               dayFilter={dayFilter}
               onDayFilterChange={setDayFilter}
-              isLoading={isLoading}
               totalLeagueGames={leagueFilteredGames.length}
               dayOptions={dayOptions}
               showScopeFilter={Boolean(token)}
@@ -128,7 +126,7 @@ export function GamesView({
               followedGameCount={followedGameIds.size}
             />
 
-            <div className="data-table-wrap">
+            <div className="games-feed-scroll">
               <div className="games-list" role="list" aria-label="Games feed">
                 {groupedVisibleGames.map((group) => (
                   <section key={group.label} className="games-day-group">

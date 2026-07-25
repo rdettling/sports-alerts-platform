@@ -9,7 +9,6 @@ export function GamesFilterToolbar({
   onLeagueFilterChange,
   dayFilter,
   onDayFilterChange,
-  isLoading,
   totalLeagueGames,
   dayOptions,
   showScopeFilter,
@@ -22,7 +21,6 @@ export function GamesFilterToolbar({
   onLeagueFilterChange: (value: "all" | League) => void;
   dayFilter: "all" | string;
   onDayFilterChange: (value: "all" | string) => void;
-  isLoading: boolean;
   totalLeagueGames: number;
   dayOptions: DayOption[];
   showScopeFilter: boolean;
@@ -70,7 +68,6 @@ export function GamesFilterToolbar({
           aria-label="All leagues"
           aria-pressed={leagueFilter === "all"}
           onClick={() => onLeagueFilterChange("all")}
-          disabled={isLoading}
         >
           All
         </button>
@@ -81,7 +78,6 @@ export function GamesFilterToolbar({
             type="button"
             aria-pressed={leagueFilter === league}
             onClick={() => onLeagueFilterChange(league)}
-            disabled={isLoading}
           >
             {label}
           </button>
@@ -93,7 +89,7 @@ export function GamesFilterToolbar({
           type="button"
           aria-label="Previous date"
           onClick={() => previousDay && onDayFilterChange(previousDay.key)}
-          disabled={isLoading || !previousDay}
+          disabled={!previousDay}
         >
           ‹
         </button>
@@ -102,7 +98,6 @@ export function GamesFilterToolbar({
           aria-label="Game date"
           value={dayFilter}
           onChange={(event) => onDayFilterChange(event.target.value)}
-          disabled={isLoading}
         >
           <option value="all">All dates ({totalLeagueGames})</option>
           {dayOptions.map((day) => (
@@ -116,7 +111,7 @@ export function GamesFilterToolbar({
           type="button"
           aria-label="Next date"
           onClick={() => nextDay && onDayFilterChange(nextDay.key)}
-          disabled={isLoading || !nextDay}
+          disabled={!nextDay}
         >
           ›
         </button>

@@ -36,7 +36,7 @@
   margin-top: 0.45rem;
 }
 
-.data-table-wrap {
+.games-feed-scroll {
   display: grid;
   gap: 0.6rem;
   min-height: 0;
@@ -772,6 +772,19 @@
   min-width: 66px;
 }
 
+@media (max-width: 899px) {
+  .games-filter-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin-inline: -0.35rem;
+    padding: 0.4rem 0.35rem;
+    border-bottom: 1px solid #cfdaec;
+    background: var(--bg-panel);
+    box-shadow: 0 7px 12px rgba(16, 28, 56, 0.08);
+  }
+}
+
 @media (min-width: 900px) {
   .games-filter-toolbar {
     grid-template-columns: auto minmax(0, 1fr) minmax(220px, 280px);
@@ -788,7 +801,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
   }
 
-  .data-table-wrap {
+  .games-feed-scroll {
     width: 100%;
   }
 
@@ -831,12 +844,12 @@
   }
 
   .games-feed-grid,
-  .data-table-wrap {
+  .games-feed-scroll {
     height: 100%;
     min-height: 0;
   }
 
-  .data-table-wrap {
+  .games-feed-scroll {
     overflow: auto;
     padding-right: 0.2rem;
   }
@@ -944,39 +957,85 @@
     align-items: end;
   }
 
+  .game-alert-overlay {
+    padding: 0.75rem;
+    align-items: center;
+  }
+
   .game-alert-modal {
     width: 100%;
-    max-height: 92vh;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    max-height: calc(100vh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+    padding: 0.85rem;
+    padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
+    gap: 0.65rem;
+    overscroll-behavior: contain;
+    border-radius: 18px;
+  }
+
+  .game-alert-modal > .overlay-card-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    align-items: center;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid #d6e0f0;
+    background: var(--bg-panel);
+  }
+
+  .game-alert-modal-title {
+    gap: 0.25rem;
+  }
+
+  .game-alert-matchup {
+    font-size: 0.95rem;
+  }
+
+  .game-alert-list {
+    gap: 0.5rem;
+  }
+
+  .game-alert-row {
+    gap: 0.35rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 12px;
   }
 
   .game-alert-rule-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.45rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
   }
 
-  .alert-rule-header-end {
-    width: 100%;
-    justify-content: space-between;
+  .game-alert-row .alert-rule-header-end {
+    width: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  .game-alert-row .alert-inline-field {
+    gap: 0.3rem;
+    font-size: 0.85rem;
+  }
+
+  .game-alert-row select {
+    width: 66px;
+    min-width: 66px;
+    padding: 0.35rem 0.4rem;
   }
 
   .game-alert-rule-controls {
     width: 100%;
     justify-content: flex-start;
+    gap: 0.5rem;
   }
 
   .game-alert-rule-controls label {
     white-space: normal;
   }
 
-  .game-alert-modal {
-    width: min(680px, 100%);
-    padding: 1rem;
-  }
-
   .overlay-card-header h4 {
-    font-size: 1.45rem;
+    font-size: 1.3rem;
   }
 }
