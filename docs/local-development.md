@@ -50,7 +50,7 @@ If you want narrower service checks:
 - `GET /healthz` returns `200`
 - `/docs` loads for the API
 - the web app loads at `:5173`
-- magic-link sign-in works
+- magic-link and one-time-code sign-in work
 - the public `Games` and `Teams` sections load
 - authenticated follow controls and the `Alerts` section load
 - worker logs show ingest activity

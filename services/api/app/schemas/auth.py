@@ -15,6 +15,11 @@ class MagicLinkVerifyRequest(BaseModel):
     token: str = Field(min_length=20, max_length=1024)
 
 
+class MagicCodeVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
+
+
 class UserOut(BaseModel):
     id: int
     email: EmailStr

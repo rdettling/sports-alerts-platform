@@ -10,10 +10,10 @@ def test_alembic_upgrade_head_smoke():
     if "postgresql" not in database_url:
         pytest.skip("Postgres DATABASE_URL not configured for integration smoke test")
 
-    completed = subprocess.run(
+    for command in (
         ["alembic", "upgrade", "head"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
+        ["alembic", "downgrade", "0002_add_web_push"],
+        ["alembic", "upgrade", "head"],
+    ):
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        assert completed.returncode == 0, completed.stderr

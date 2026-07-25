@@ -91,7 +91,7 @@ After a deploy:
 
 1. Open the frontend
 2. Confirm `GET /healthz` is healthy
-3. Confirm sign-in works
+3. Confirm magic-link and one-time-code sign-in work
 4. Confirm public games and teams load, then verify authenticated follow controls
 5. Confirm worker logs show sync activity
 6. Verify controlled Email, Push, and Both test alerts for the admin account

@@ -24,7 +24,7 @@ Fix:
 
 - configure SPA fallback / rewrites on the frontend host
 
-## Magic-Link Auth Issues
+## Email Sign-In Issues
 
 Checks:
 
@@ -34,7 +34,8 @@ Checks:
    - `DELIVERY_MODE=log` for local inspection
    - `DELIVERY_MODE=live` for real delivery
 4. For live email, confirm `RESEND_API_KEY` and `FROM_EMAIL` are valid
-5. Check API logs for magic-link rate limiting or delivery warnings
+5. Check API logs for sign-in email rate limiting or delivery warnings
+6. For an installed iPhone or iPad Home Screen app, enter the emailed code in the app; opening the link authenticates Safari instead
 
 ## Odds Not Showing
 

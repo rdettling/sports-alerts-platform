@@ -12,8 +12,9 @@ type SignInModalProps = {
 };
 
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
-  const { sendMagicLink, user } = useAuth();
+  const { sendMagicLink, verifyMagicCode, user } = useAuth();
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,6 +23,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   useEffect(() => {
     if (!isOpen) {
       setEmail("");
+      setCode("");
       setError(null);
       setInfo(null);
       setBusy(false);
@@ -47,7 +49,11 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
-  const onSubmit = async (event: FormEvent) => {
+  const isStandalone =
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.matchMedia?.("(display-mode: standalone)").matches === true;
+
+  const onSubmitEmail = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     setShowSlowHint(false);
@@ -62,6 +68,19 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       window.clearTimeout(timer);
       setBusy(false);
       setShowSlowHint(false);
+    }
+  };
+
+  const onSubmitCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await verifyMagicCode(email, code);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Code verification failed");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -83,12 +102,37 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
         {info ? (
           <>
             <p>{info}</p>
-            <p className="muted">Open the link in your email to finish signing in.</p>
+            <p className="muted">
+              {isStandalone
+                ? "Enter the 6-digit code from the email below. Opening its link signs in Safari instead of this Home Screen app."
+                : "Open the link in your email or enter its 6-digit code below."}
+            </p>
+            <form onSubmit={onSubmitCode} className="sign-in-modal-form">
+              <label htmlFor="sign-in-code">Sign-in code</label>
+              <input
+                id="sign-in-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="123456"
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                autoFocus
+                required
+              />
+              <button className="btn" disabled={busy || code.length !== 6} type="submit">
+                {busy ? "Verifying..." : "Verify code"}
+              </button>
+              {error ? <p className="error">{error}</p> : null}
+            </form>
             <button
               className="btn btn-secondary"
               type="button"
               onClick={() => {
                 setInfo(null);
+                setCode("");
                 setError(null);
               }}
             >
@@ -96,7 +140,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
             </button>
           </>
         ) : (
-          <form onSubmit={onSubmit} className="sign-in-modal-form">
+          <form onSubmit={onSubmitEmail} className="sign-in-modal-form">
             <label htmlFor="sign-in-email">Email</label>
             <input
               id="sign-in-email"
@@ -108,7 +152,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
               required
             />
             <button className="btn" disabled={busy} type="submit">
-              {busy ? "Working..." : "Send magic link"}
+              {busy ? "Working..." : "Send sign-in email"}
             </button>
             {error ? <p className="error">{error}</p> : null}
             {busy && showSlowHint ? (

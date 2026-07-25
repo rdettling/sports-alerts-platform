@@ -51,7 +51,7 @@ Each supported league has one code-owned profile containing its sport, provider 
 
 The API is split into a small set of route groups:
 
-- `/auth` — magic-link start/verify, auth warmup, current user
+- `/auth` — email sign-in start, link/code verification, auth warmup, current user
 - `/games` — game feed with league/status/finals/odds options
 - `/teams` — active team catalog
 - `/follows` — team follows and effective game follows
@@ -96,10 +96,11 @@ Notable modeling decisions:
 
 ### Auth
 
-1. User requests a magic link
-2. API creates an `email_login_tokens` row
-3. API sends the link through the configured delivery mode
-4. Verify flow consumes the token, creates the user if needed, and returns a JWT
+1. User requests a sign-in email
+2. API creates one `email_login_tokens` challenge containing hashes for a magic link and six-digit code
+3. API sends both credentials through the configured delivery mode
+4. Using either credential consumes the shared challenge, creates the user if needed, and returns a JWT
+5. Installed Home Screen apps use the code so authentication completes inside their isolated browser context
 
 ### Game Sync
 

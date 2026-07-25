@@ -68,7 +68,7 @@ Notes:
 - `DELIVERY_MODE` supports `live` and `log`.
 - The API needs both VAPID keys so it can report whether Push is available and return the public key to authenticated browsers.
 - The VAPID private key remains server-only. `VAPID_SUBJECT` must be an HTTPS URL or `mailto:` contact.
-- Magic-link behavior is configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
+- Email sign-in expiry and request limits are configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
 
 ## Worker Config
 

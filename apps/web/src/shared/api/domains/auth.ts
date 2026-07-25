@@ -25,6 +25,13 @@ export function verifyMagicLink(token: string): Promise<AuthResponse> {
   });
 }
 
+export function verifyMagicCode(email: string, code: string): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>("/auth/magic-code/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
 export function me(token: string): Promise<UserProfile> {
   return apiRequest<UserProfile>("/auth/me", { token });
 }

@@ -4,6 +4,7 @@ import {
   deletePushSubscription,
   me,
   startMagicLink,
+  verifyMagicCode as verifyMagicCodeRequest,
   verifyMagicLink,
   type UserProfile,
 } from "../../shared/api";
@@ -17,6 +18,7 @@ type AuthContextType = {
   token: string | null;
   user: UserProfile | null;
   sendMagicLink: (email: string) => Promise<{ message: string }>;
+  verifyMagicCode: (email: string, code: string) => Promise<void>;
   verifyMagicLinkToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -80,6 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(response.user);
   }, []);
 
+  const verifyMagicCode = useCallback(async (email: string, code: string) => {
+    const response = await verifyMagicCodeRequest(email, code);
+    localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+    setToken(response.access_token);
+    setUser(response.user);
+  }, []);
+
   const logout = async () => {
     if (token) {
       const subscription = await getCurrentPushSubscription().catch(() => null);
@@ -100,10 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       user,
       sendMagicLink,
+      verifyMagicCode,
       verifyMagicLinkToken,
       logout,
     }),
-    [isLoading, token, user, sendMagicLink, verifyMagicLinkToken],
+    [isLoading, token, user, sendMagicLink, verifyMagicCode, verifyMagicLinkToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

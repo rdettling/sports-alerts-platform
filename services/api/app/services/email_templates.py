@@ -21,12 +21,15 @@ ALERT_LABELS = {
 }
 
 
-def build_magic_link_email(magic_link: str, ttl_minutes: int) -> tuple[str, str, str]:
+def build_sign_in_email(magic_link: str, magic_code: str, ttl_minutes: int) -> tuple[str, str, str]:
     subject = f"Sign in to {APP_BRAND_NAME}"
     text_body = (
-        "Use this one-time link to sign in:\n\n"
+        f"Your one-time sign-in code is: {magic_code}\n\n"
+        "If you are signing in from an iPhone or iPad Home Screen app, return to the app and enter "
+        "this code. Opening the link signs in your browser instead.\n\n"
+        "Or use this one-time link to sign in:\n\n"
         f"{magic_link}\n\n"
-        f"This link expires in {ttl_minutes} minutes."
+        f"The code and link expire in {ttl_minutes} minutes."
     )
     html_body = f"""<!doctype html>
 <html>
@@ -47,7 +50,18 @@ def build_magic_link_email(magic_link: str, ttl_minutes: int) -> tuple[str, str,
             </tr>
             <tr>
               <td style="padding-top:8px;font-size:15px;color:#44506b;line-height:1.5;">
-                Use your one-time link to continue to your dashboard.
+                Enter this one-time code in the sign-in screen:
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:14px;font-size:30px;font-weight:800;letter-spacing:8px;color:#0f1f42;">
+                {html.escape(magic_code)}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:12px;font-size:13px;color:#667694;line-height:1.55;">
+                Using the iPhone or iPad Home Screen app? Return to the app and enter this code.
+                Opening the link below signs in your browser instead.
               </td>
             </tr>
             <tr>
@@ -59,7 +73,7 @@ def build_magic_link_email(magic_link: str, ttl_minutes: int) -> tuple[str, str,
             </tr>
             <tr>
               <td style="padding-top:14px;font-size:13px;color:#667694;line-height:1.55;">
-                This link expires in {ttl_minutes} minutes.<br/>
+                This code and link expire in {ttl_minutes} minutes.<br/>
                 If the button does not work, copy and paste this URL:
               </td>
             </tr>

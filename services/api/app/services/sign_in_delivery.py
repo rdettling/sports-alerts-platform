@@ -6,28 +6,44 @@ from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from sqlalchemy.orm import Session
+
 from app.config import settings
 from app.services.api_usage import record_api_call_event
 from app.services.delivery_settings import delivery_settings
-from app.services.email_templates import build_magic_link_email
-from sqlalchemy.orm import Session
+from app.services.email_templates import build_sign_in_email
 
 logger = logging.getLogger(__name__)
 
 
-def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = None) -> None:
-    subject, text_body, html_body = build_magic_link_email(magic_link, settings.magic_link_ttl_minutes)
+def send_sign_in_email(
+    to_email: str,
+    magic_link: str,
+    magic_code: str,
+    db: Session | None = None,
+) -> None:
+    subject, text_body, html_body = build_sign_in_email(
+        magic_link,
+        magic_code,
+        settings.magic_link_ttl_minutes,
+    )
 
     if delivery_settings.delivery_mode == "log":
-        logger.info("Magic link email to=%s subject=%s link=%s", to_email, subject, magic_link)
+        logger.info(
+            "Sign-in email to=%s subject=%s code=%s link=%s",
+            to_email,
+            subject,
+            magic_code,
+            magic_link,
+        )
         return
 
     if delivery_settings.delivery_mode != "live":
-        logger.warning("Unsupported delivery mode=%s while sending magic links", delivery_settings.delivery_mode)
+        logger.warning("Unsupported delivery mode=%s while sending sign-in email", delivery_settings.delivery_mode)
         return
 
     if not delivery_settings.resend_api_key:
-        logger.warning("Missing RESEND_API_KEY while sending magic link to=%s", to_email)
+        logger.warning("Missing RESEND_API_KEY while sending sign-in email to=%s", to_email)
         return
 
     payload = json.dumps(
@@ -65,7 +81,7 @@ def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = N
                     latency_ms=int((monotonic() - started_at) * 1000),
                 )
             if response.status >= 400:
-                logger.warning("Resend rejected magic link delivery status=%s", response.status)
+                logger.warning("Resend rejected sign-in email status=%s", response.status)
     except HTTPError as exc:
         if db is not None:
             record_api_call_event(
@@ -78,7 +94,7 @@ def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = N
                 latency_ms=int((monotonic() - started_at) * 1000),
                 error_code="http_error",
             )
-        logger.warning("Resend HTTP error delivering magic link status=%s", exc.code)
+        logger.warning("Resend HTTP error delivering sign-in email status=%s", exc.code)
     except URLError as exc:
         if db is not None:
             record_api_call_event(
@@ -90,4 +106,4 @@ def send_magic_link_email(to_email: str, magic_link: str, db: Session | None = N
                 latency_ms=int((monotonic() - started_at) * 1000),
                 error_code="network_error",
             )
-        logger.warning("Resend network error delivering magic link error=%s", exc.reason)
+        logger.warning("Resend network error delivering sign-in email error=%s", exc.reason)

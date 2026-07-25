@@ -6,11 +6,13 @@ import { AuthProvider, useAuth } from "./auth-context";
 const meMock = vi.fn();
 const deletePushSubscriptionMock = vi.fn();
 const getCurrentPushSubscriptionMock = vi.fn();
+const verifyMagicCodeMock = vi.fn();
 
 vi.mock("../../shared/api", () => ({
   deletePushSubscription: (...args: unknown[]) => deletePushSubscriptionMock(...args),
   me: (token: string) => meMock(token),
   startMagicLink: vi.fn(),
+  verifyMagicCode: (...args: unknown[]) => verifyMagicCodeMock(...args),
   verifyMagicLink: vi.fn(),
 }));
 
@@ -23,10 +25,13 @@ vi.mock("../../shared/lib/push-notifications", () => ({
 }));
 
 function AuthState() {
-  const { token, user, logout } = useAuth();
+  const { token, user, verifyMagicCode, logout } = useAuth();
   return (
     <div>
       {token ?? "no-token"}|{user?.email ?? "no-user"}
+      <button type="button" onClick={() => void verifyMagicCode("user@example.com", "123456")}>
+        Verify code
+      </button>
       <button type="button" onClick={() => void logout()}>
         Log out
       </button>
@@ -40,6 +45,7 @@ describe("AuthProvider cross-tab sync", () => {
     meMock.mockReset();
     deletePushSubscriptionMock.mockReset();
     getCurrentPushSubscriptionMock.mockReset();
+    verifyMagicCodeMock.mockReset();
     getCurrentPushSubscriptionMock.mockResolvedValue(null);
     meMock.mockResolvedValue({
       id: 1,
@@ -47,6 +53,31 @@ describe("AuthProvider cross-tab sync", () => {
       role: "user",
       created_at: "2026-01-01T00:00:00Z",
     });
+  });
+
+  it("stores authentication returned by code verification", async () => {
+    verifyMagicCodeMock.mockResolvedValue({
+      access_token: "code-token",
+      token_type: "bearer",
+      user: {
+        id: 1,
+        email: "user@example.com",
+        role: "user",
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
+    expect(await screen.findByText(/no-token\|no-user/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify code" }));
+
+    expect(await screen.findByText(/code-token\|user@example.com/)).toBeInTheDocument();
+    expect(verifyMagicCodeMock).toHaveBeenCalledWith("user@example.com", "123456");
+    expect(localStorage.getItem("sports_alerts_token")).toBe("code-token");
   });
 
   it("loads a token written by another tab", async () => {
