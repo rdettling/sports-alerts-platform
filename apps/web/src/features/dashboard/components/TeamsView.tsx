@@ -83,21 +83,16 @@ export function TeamsView({
   return (
     <section className="view-stack teams-page">
       <section className="panel teams-panel">
-        <div className="section-header teams-header">
-          <h3>Teams</h3>
-          <p>Find teams to follow for game and alert updates.</p>
-        </div>
+        <div className="teams-controls">
+          <p className="teams-helper">Follow a team to follow all its games by default.</p>
 
-        {error || queryError ? <p className="error">{error ?? messageFromUnknown(queryError)}</p> : null}
-        {isLoading ? <p className="muted">Loading teams...</p> : null}
-
-        {!isLoading ? (
-          <>
-            <div className="teams-toolbar">
-              <div className="chip-row" aria-label="League filter">
+          {!isLoading ? (
+            <div className="teams-toolbar" role="group" aria-label="Team filters">
+              <div className="teams-league-filter" role="group" aria-label="League filter">
                 <button
                   className={`chip-btn ${leagueFilter === "all" ? "active" : ""}`.trim()}
                   type="button"
+                  aria-pressed={leagueFilter === "all"}
                   onClick={() => setLeagueFilter("all")}
                 >
                   All
@@ -107,6 +102,7 @@ export function TeamsView({
                     key={league.league}
                     className={`chip-btn ${leagueFilter === league.league ? "active" : ""}`.trim()}
                     type="button"
+                    aria-pressed={leagueFilter === league.league}
                     onClick={() => setLeagueFilter(league.league)}
                   >
                     {league.label}
@@ -121,45 +117,54 @@ export function TeamsView({
                 onChange={(event) => setTeamSearch(event.target.value)}
               />
             </div>
+          ) : null}
+        </div>
 
-            {visibleTeams.length === 0 ? <p className="muted">No teams match this filter.</p> : null}
-            <ul className="teams-grid">
-              {visibleTeams.map((team) => {
-                const isFollowed = followedTeamIds.has(team.id);
-                return (
-                  <li key={team.id} className="row-card teams-row">
-                    <span className="teams-row-main">
-                      <TeamLogo team={team} size={28} />
-                      <span>
-                        <strong>{team.name}</strong>
-                        <span className="muted teams-abbreviation">{team.abbreviation}</span>
+        <div className="teams-results-scroll">
+          {error || queryError ? <p className="error">{error ?? messageFromUnknown(queryError)}</p> : null}
+          {isLoading ? <p className="muted">Loading teams...</p> : null}
+
+          {!isLoading ? (
+            <>
+              {visibleTeams.length === 0 ? <p className="muted">No teams match this filter.</p> : null}
+              <ul className="teams-grid">
+                {visibleTeams.map((team) => {
+                  const isFollowed = followedTeamIds.has(team.id);
+                  return (
+                    <li key={team.id} className="row-card teams-row">
+                      <span className="teams-row-main">
+                        <TeamLogo team={team} size={28} />
+                        <span>
+                          <strong>{team.name}</strong>
+                          <span className="muted teams-abbreviation">{team.abbreviation}</span>
+                        </span>
                       </span>
-                    </span>
-                    <button
-                      className={`btn ${isFollowed ? "btn-secondary" : ""}`.trim()}
-                      type="button"
-                      disabled={busyTeamId === team.id || toggleMutation.isPending}
-                      onClick={async () => {
-                        if (!token) {
-                          onSignInRequired();
-                          return;
-                        }
-                        setBusyTeamId(team.id);
-                        try {
-                          await toggleMutation.mutateAsync({ teamId: team.id, isFollowed });
-                        } finally {
-                          setBusyTeamId(null);
-                        }
-                      }}
-                    >
-                      {busyTeamId === team.id ? "Saving..." : isFollowed ? "Unfollow" : "Follow"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        ) : null}
+                      <button
+                        className={`btn ${isFollowed ? "btn-secondary" : ""}`.trim()}
+                        type="button"
+                        disabled={busyTeamId === team.id || toggleMutation.isPending}
+                        onClick={async () => {
+                          if (!token) {
+                            onSignInRequired();
+                            return;
+                          }
+                          setBusyTeamId(team.id);
+                          try {
+                            await toggleMutation.mutateAsync({ teamId: team.id, isFollowed });
+                          } finally {
+                            setBusyTeamId(null);
+                          }
+                        }}
+                      >
+                        {busyTeamId === team.id ? "Saving..." : isFollowed ? "Unfollow" : "Follow"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
+        </div>
       </section>
     </section>
   );

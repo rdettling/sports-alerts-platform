@@ -53,9 +53,12 @@ describe("TeamsView", () => {
     expect(await screen.findByText("Boston Celtics")).toBeInTheDocument();
     expect(screen.queryByText("New York Yankees")).toBeNull();
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "NBA" })).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(screen.getByText("New York Yankees")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "NBA" })).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
     fireEvent.change(screen.getByLabelText("Search teams"), { target: { value: "Boston" } });
