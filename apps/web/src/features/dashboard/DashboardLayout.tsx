@@ -12,16 +12,16 @@ type DashboardRouteKey = "games" | "teams" | "alerts" | "admin";
 
 type DashboardRouteMeta = {
   key: DashboardRouteKey;
-  path: string;
+  href: string;
   label: string;
   adminOnly?: boolean;
 };
 
 const DASHBOARD_ROUTES: DashboardRouteMeta[] = [
-  { key: "games", path: "games", label: "Games" },
-  { key: "teams", path: "teams", label: "Teams" },
-  { key: "alerts", path: "alerts", label: "Alerts" },
-  { key: "admin", path: "admin", label: "Admin", adminOnly: true },
+  { key: "games", href: "/", label: "Games" },
+  { key: "teams", href: "/teams", label: "Teams" },
+  { key: "alerts", href: "/alerts", label: "Alerts" },
+  { key: "admin", href: "/admin", label: "Admin", adminOnly: true },
 ];
 
 const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
@@ -53,7 +53,7 @@ const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
 
 function routeForPath(pathname: string): DashboardRouteMeta {
   const segment = pathname.split("/").filter(Boolean)[0] ?? "games";
-  return DASHBOARD_ROUTES.find((route) => route.path === segment) ?? DASHBOARD_ROUTES[0];
+  return DASHBOARD_ROUTES.find((route) => route.key === segment) ?? DASHBOARD_ROUTES[0];
 }
 
 export function DashboardLayout() {
@@ -86,7 +86,8 @@ export function DashboardLayout() {
             {navRoutes.map((route) => (
               <NavLink
                 key={route.key}
-                to={`/${route.path}`}
+                to={route.href}
+                end={route.key === "games"}
                 className={({ isActive }) => `app-nav-link ${isActive ? "active" : ""}`.trim()}
               >
                 <span className="app-nav-icon" aria-hidden>
@@ -122,28 +123,24 @@ export function DashboardLayout() {
       >
         <div className="app-content">
           <Routes>
-            <Route path="/" element={<Navigate to="games" replace />} />
             <Route
-              path="games"
+              path="/"
               element={<GamesView token={token} onSignInRequired={() => setSignInOpen(true)} />}
             />
+            <Route path="games" element={<Navigate to="/" replace />} />
             <Route
               path="teams"
               element={<TeamsView token={token} onSignInRequired={() => setSignInOpen(true)} />}
             />
             <Route
               path="alerts"
-              element={
-                token && user ? <AlertsView token={token} /> : <Navigate to="/games" replace />
-              }
+              element={token && user ? <AlertsView token={token} /> : <Navigate to="/" replace />}
             />
             <Route
               path="admin"
-              element={
-                isAdmin && token ? <AdminView token={token} /> : <Navigate to="/games" replace />
-              }
+              element={isAdmin && token ? <AdminView token={token} /> : <Navigate to="/" replace />}
             />
-            <Route path="*" element={<Navigate to="/games" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </main>

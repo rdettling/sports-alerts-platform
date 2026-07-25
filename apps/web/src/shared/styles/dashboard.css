@@ -14,9 +14,15 @@
 
 .games-page {
   display: grid;
-  gap: 0;
+  gap: 0.55rem;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.games-page-intro {
+  margin: 0 0 0 0.1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .games-panel {

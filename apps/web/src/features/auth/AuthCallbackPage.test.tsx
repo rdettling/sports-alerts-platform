@@ -17,7 +17,7 @@ function renderAuthCallbackPage(entry: string) {
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/auth" element={<AuthCallbackPage />} />
-        <Route path="/games" element={<div>Games view</div>} />
+        <Route path="/" element={<div>Games view</div>} />
       </Routes>
     </MemoryRouter>,
   );

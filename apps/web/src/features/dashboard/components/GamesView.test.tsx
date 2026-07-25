@@ -195,6 +195,16 @@ describe("GamesView", () => {
     vi.restoreAllMocks();
   });
 
+  it("describes the public games and alerts experience", () => {
+    render(<GamesView token={null} onSignInRequired={vi.fn()} />, { wrapper });
+
+    expect(
+      screen.getByText(
+        "Live scores and customizable email alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("selects today initially and supports selecting all dates", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
 

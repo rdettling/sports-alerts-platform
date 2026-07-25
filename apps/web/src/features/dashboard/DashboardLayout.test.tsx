@@ -45,7 +45,7 @@ vi.mock("./components/AdminView", () => ({
   AdminView: () => <div>Admin view</div>,
 }));
 
-function renderLayout(entry = "/games") {
+function renderLayout(entry = "/") {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
@@ -112,6 +112,12 @@ describe("DashboardLayout", () => {
     authState = { token: null, user: null };
     renderLayout("/alerts");
     expect(await screen.findByText("Games view")).toBeInTheDocument();
+  });
+
+  it("redirects the legacy Games path to the root Games view", async () => {
+    renderLayout("/games");
+    expect(await screen.findByText("Games view")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
   });
 
   it("treats the removed Following route as unknown", async () => {

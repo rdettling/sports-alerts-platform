@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://livegamealerts.com/sitemap.xml

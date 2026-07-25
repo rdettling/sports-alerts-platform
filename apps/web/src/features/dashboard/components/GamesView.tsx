@@ -121,6 +121,9 @@ export function GamesView({
 
   return (
     <section className="view-stack games-page">
+      <p className="games-page-intro">
+        Live scores and customizable email alerts for NBA, WNBA, MLB, MLS, and World Cup games.
+      </p>
       <section className="panel games-panel">
         {error ? <p className="error">{error}</p> : null}
         {isLoading ? <p className="muted">Loading games...</p> : null}

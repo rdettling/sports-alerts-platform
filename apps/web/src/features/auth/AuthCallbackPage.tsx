@@ -16,7 +16,7 @@ export function AuthCallbackPage() {
     if (!tokenFromUrl || verificationStarted.current) return;
     verificationStarted.current = true;
     verifyMagicLinkToken(tokenFromUrl)
-      .then(() => navigate("/games", { replace: true }))
+      .then(() => navigate("/", { replace: true }))
       .catch((verifyError) => {
         setError(
           verifyError instanceof Error ? verifyError.message : "Magic link verification failed",
@@ -24,7 +24,7 @@ export function AuthCallbackPage() {
       });
   }, [navigate, tokenFromUrl, verifyMagicLinkToken]);
 
-  if (!tokenFromUrl) return <Navigate to="/games" replace />;
+  if (!tokenFromUrl) return <Navigate to="/" replace />;
 
   return (
     <div className="container">
@@ -33,11 +33,7 @@ export function AuthCallbackPage() {
         {error ? (
           <>
             <p className="error">{error}</p>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => navigate("/games", { replace: true })}
-            >
+            <button className="btn" type="button" onClick={() => navigate("/", { replace: true })}>
               Back to games
             </button>
           </>
