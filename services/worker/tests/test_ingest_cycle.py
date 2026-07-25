@@ -19,7 +19,7 @@ from app.db.models import (
 )
 from app.services.api_usage import record_api_call_event
 from app.services.leagues import ensure_league_settings
-from worker.ingest import run_catalog_sync, run_ingest_cycle, run_live_sync
+from worker.ingest import run_catalog_sync, run_live_sync
 from worker.odds import OddsOutcome, OddsSnapshot
 from worker.planner import build_live_requests
 from worker.scoreboard import ScoreboardGame
@@ -299,7 +299,7 @@ def make_mlb_inning_provider() -> StaticProvider:
 
 def test_ingest_run_success(db_session):
     provider = make_success_provider()
-    result = run_ingest_cycle(provider)
+    result = run_catalog_sync(provider)
     assert result["status"] == "success"
     assert result["games_checked"] == 1
     assert result["games_updated"] == 1
@@ -310,7 +310,7 @@ def test_ingest_run_success(db_session):
 
 
 def test_ingest_run_failure(db_session):
-    result = run_ingest_cycle(StaticProvider(error=RuntimeError("boom")))
+    result = run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
     assert result["status"] == "failed"
     assert result["next_poll_seconds"] > 0
 
@@ -319,7 +319,7 @@ def test_ingest_attaches_provider_telemetry_context(db_session, monkeypatch):
     provider = TelemetryRecordingProvider()
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
 
-    result = run_ingest_cycle(provider)
+    result = run_catalog_sync(provider)
 
     assert result["status"] == "success"
     assert provider.contexts == [True, False]
@@ -352,9 +352,9 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     )
     db_session.commit()
 
-    first = run_ingest_cycle(make_live_close_provider())
+    first = run_catalog_sync(make_live_close_provider())
     assert first["status"] == "success"
-    second = run_ingest_cycle(make_live_close_provider())
+    second = run_catalog_sync(make_live_close_provider())
     assert second["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).order_by(SentAlert.alert_type.asc())).all()
@@ -443,7 +443,7 @@ def test_ingest_creates_final_result_alert(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    run_ingest_cycle(make_final_provider())
+    run_catalog_sync(make_final_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-final"))
     assert game is not None
 
@@ -451,7 +451,7 @@ def test_ingest_creates_final_result_alert(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="final_result", is_enabled=True))
     db_session.commit()
 
-    result = run_ingest_cycle(make_final_provider())
+    result = run_catalog_sync(make_final_provider())
     assert result["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
@@ -570,7 +570,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
             )
         ]
     )
-    assert run_ingest_cycle(provider)["status"] == "success"
+    assert run_catalog_sync(provider)["status"] == "success"
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live-late-follow"))
     assert game is not None
@@ -579,7 +579,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    result = run_ingest_cycle(provider)
+    result = run_catalog_sync(provider)
     assert result["status"] == "success"
 
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
@@ -604,7 +604,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
 
     monkeypatch.setattr("worker.alerts.deliver_alert_now", fake_deliver)
 
-    result = run_ingest_cycle(make_live_close_provider())
+    result = run_catalog_sync(make_live_close_provider())
     assert result["status"] == "success"
     assert result["alerts_created"] == 2
 
@@ -616,7 +616,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
 
 def test_live_sync_persists_long_clock_values(db_session):
     teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc())).all()
-    result = run_ingest_cycle(
+    result = run_catalog_sync(
         LongClockProvider(
             home_external_team_id=teams[0].external_team_id,
             away_external_team_id=teams[1].external_team_id,
@@ -660,7 +660,7 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    run_ingest_cycle(make_live_close_provider())
+    run_catalog_sync(make_live_close_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
     assert game is not None
 
@@ -677,7 +677,7 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     db_session.query(SentAlert).delete()
     db_session.commit()
 
-    run_ingest_cycle(make_live_close_provider())
+    run_catalog_sync(make_live_close_provider())
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert all(row.alert_type != "game_start" for row in sent)
 
@@ -693,7 +693,7 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     db_session.add(UserAlertDefault(user_id=user.id, league="NBA", alert_type="game_start", is_enabled=True))
     db_session.commit()
 
-    run_ingest_cycle(make_live_close_provider())
+    run_catalog_sync(make_live_close_provider())
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live"))
     assert game is not None
 
@@ -703,7 +703,7 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
     db_session.query(SentAlert).delete()
     db_session.commit()
 
-    run_ingest_cycle(make_live_close_provider())
+    run_catalog_sync(make_live_close_provider())
     sent = db_session.scalars(select(SentAlert).where(SentAlert.user_id == user.id)).all()
     assert len(sent) == 0
 
@@ -1271,7 +1271,7 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
         },
     )
 
-    result = run_ingest_cycle(make_success_provider())
+    result = run_catalog_sync(make_success_provider())
     assert result["status"] == "success"
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-1"))
@@ -1297,7 +1297,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
         },
     )
 
-    result = run_ingest_cycle(provider)
+    result = run_catalog_sync(provider)
     assert result["status"] == "success"
 
     first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
@@ -1327,7 +1327,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
         },
     )
 
-    result = run_ingest_cycle(provider)
+    result = run_catalog_sync(provider)
     assert result["status"] == "success"
 
     first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
@@ -1345,7 +1345,7 @@ def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypa
     monkeypatch.setattr("worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr("worker.ingest.fetch_odds_index", lambda league: {})
 
-    result = run_ingest_cycle(make_success_provider())
+    result = run_catalog_sync(make_success_provider())
     assert result["status"] == "success"
 
     assert result["next_poll_seconds"] > 0

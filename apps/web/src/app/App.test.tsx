@@ -33,8 +33,8 @@ describe("App page metadata", () => {
     document.head.innerHTML = "";
   });
 
-  it.each(["/", "/games"])("uses the root games metadata for %s", async (pathname) => {
-    renderPath(pathname);
+  it("uses the games metadata for the root page", async () => {
+    renderPath("/");
 
     await waitFor(() =>
       expect(document.title).toBe("Live Game Alerts | Live Sports Scores & Email Alerts"),

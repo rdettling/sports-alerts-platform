@@ -23,7 +23,6 @@ JOB_RETRY_BASE_SECONDS = 30
 JOB_RETRY_MAX_BACKOFF_SECONDS = 3600
 CATALOG_SYNC_JOB = "catalog_sync"
 LIVE_SYNC_JOB = "live_sync"
-CLEANUP_JOB = "cleanup_games"
 
 
 def _utcnow() -> datetime:
@@ -47,10 +46,6 @@ def _bootstrap_jobs() -> None:
     try:
         now = _utcnow()
         active_leagues = set(get_active_leagues(db))
-        # Cleanup now runs inline with catalog sync; remove legacy standalone jobs.
-        db.execute(delete(WorkerJob).where(WorkerJob.job_type == CLEANUP_JOB))
-        db.execute(delete(WorkerJob).where(WorkerJob.job_type.in_(("updates_sync", "updates_classify"))))
-        db.execute(delete(WorkerJob).where(WorkerJob.job_type == "delivery"))
         disabled_sync_jobs = delete(WorkerJob).where(
             WorkerJob.job_type.in_((CATALOG_SYNC_JOB, LIVE_SYNC_JOB)),
             WorkerJob.league.is_not(None),

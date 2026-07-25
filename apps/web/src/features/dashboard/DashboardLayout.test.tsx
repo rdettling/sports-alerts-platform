@@ -114,12 +114,6 @@ describe("DashboardLayout", () => {
     expect(await screen.findByText("Games view")).toBeInTheDocument();
   });
 
-  it("redirects the legacy Games path to the root Games view", async () => {
-    renderLayout("/games");
-    expect(await screen.findByText("Games view")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
-  });
-
   it("treats the removed Following route as unknown", async () => {
     renderLayout("/following");
     expect(await screen.findByText("Games view")).toBeInTheDocument();

@@ -646,8 +646,3 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
     finally:
         _set_fetch_telemetry_context(provider, None)
         db.close()
-
-
-def run_ingest_cycle(provider: ScoreboardFetcher) -> dict[str, int | str]:
-    # Legacy compatibility path used by existing tests and tooling.
-    return run_catalog_sync(provider, league="NBA")

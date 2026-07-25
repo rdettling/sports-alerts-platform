@@ -51,7 +51,7 @@ export default function App() {
   useEffect(() => {
     const normalizedPath = pathname === "/" ? pathname : pathname.replace(/\/+$/, "");
     const metadata =
-      normalizedPath === "/" || normalizedPath === "/games"
+      normalizedPath === "/"
         ? PAGE_METADATA.games
         : normalizedPath === "/teams"
           ? PAGE_METADATA.teams

@@ -127,7 +127,6 @@ export function DashboardLayout() {
               path="/"
               element={<GamesView token={token} onSignInRequired={() => setSignInOpen(true)} />}
             />
-            <Route path="games" element={<Navigate to="/" replace />} />
             <Route
               path="teams"
               element={<TeamsView token={token} onSignInRequired={() => setSignInOpen(true)} />}

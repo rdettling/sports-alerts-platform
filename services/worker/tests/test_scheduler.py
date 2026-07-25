@@ -70,42 +70,6 @@ def test_bootstrap_jobs_removes_stale_disabled_league_jobs(db_session):
     assert jobs == []
 
 
-def test_bootstrap_jobs_removes_legacy_cleanup_job(db_session):
-    db_session.add(
-        WorkerJob(
-            job_type="cleanup_games",
-            league=None,
-            status="queued",
-            next_run_at=datetime.now(timezone.utc),
-            attempt_count=0,
-            max_attempts=5,
-        )
-    )
-    db_session.commit()
-
-    scheduler._bootstrap_jobs()
-    cleanup_job = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "cleanup_games"))
-    assert cleanup_job is None
-
-
-def test_bootstrap_jobs_removes_legacy_delivery_job(db_session):
-    db_session.add(
-        WorkerJob(
-            job_type="delivery",
-            league=None,
-            status="queued",
-            next_run_at=datetime.now(timezone.utc),
-            attempt_count=0,
-            max_attempts=5,
-        )
-    )
-    db_session.commit()
-
-    scheduler._bootstrap_jobs()
-    delivery_job = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "delivery"))
-    assert delivery_job is None
-
-
 def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
     stale = datetime.now(timezone.utc) + timedelta(hours=6)
     db_session.add_all(
