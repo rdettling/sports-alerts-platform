@@ -1,6 +1,5 @@
 import { type Game, type League, type Sport } from "../../../../shared/api";
-import { formatGameTime } from "../../../../shared/lib/dashboard-ui";
-import { formatGameStatusLabel } from "../../utils/telemetry-format";
+import { formatGameStatusLabel, formatGameTime } from "./game-display";
 
 export type GameDayGroup = { label: string; items: Game[] };
 

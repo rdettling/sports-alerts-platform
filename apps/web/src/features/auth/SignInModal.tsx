@@ -85,12 +85,18 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   return (
-    <div className="overlay-sheet" role="dialog" aria-modal="true" aria-labelledby="sign-in-title">
+    <div
+      className="overlay-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sign-in-title"
+      aria-describedby="sign-in-description"
+    >
       <section className="overlay-card sign-in-modal">
         <header className="overlay-card-header">
           <div>
             <h4 id="sign-in-title">Sign in</h4>
-            <p className="muted sign-in-modal-subtitle">
+            <p id="sign-in-description" className="muted sign-in-modal-subtitle">
               Sign in to follow games and receive alerts.
             </p>
           </div>
@@ -101,7 +107,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
         {info ? (
           <>
-            <p>{info}</p>
+            <p role="status">{info}</p>
             <p className="muted">
               {isStandalone
                 ? "Enter the 6-digit code from the email below. Opening its link signs in Safari instead of this Home Screen app."
@@ -125,7 +131,11 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
               <button className="btn" disabled={busy || code.length !== 6} type="submit">
                 {busy ? "Verifying..." : "Verify code"}
               </button>
-              {error ? <p className="error">{error}</p> : null}
+              {error ? (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              ) : null}
             </form>
             <button
               className="btn btn-secondary"
@@ -154,9 +164,15 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <button className="btn" disabled={busy} type="submit">
               {busy ? "Working..." : "Send sign-in email"}
             </button>
-            {error ? <p className="error">{error}</p> : null}
+            {error ? (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            ) : null}
             {busy && showSlowHint ? (
-              <p className="muted">Waking database, this may take a few seconds.</p>
+              <p className="muted" role="status">
+                Waking database, this may take a few seconds.
+              </p>
             ) : null}
           </form>
         )}

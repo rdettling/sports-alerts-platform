@@ -172,14 +172,14 @@ describe("DevToolsView", () => {
     render(<DevToolsView token="token" />);
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());
-    expect(screen.getByText("Close game late alert")).toBeInTheDocument();
-    expect(screen.queryByText("Inning start alert")).toBeNull();
+    expect(screen.getByText("Close game late test alert")).toBeInTheDocument();
+    expect(screen.queryByText("Inning start test alert")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (MLB)")).toBeInTheDocument());
-    expect(screen.getByText("Inning start alert")).toBeInTheDocument();
-    expect(screen.queryByText("Close game late alert")).toBeNull();
+    expect(screen.getByText("Inning start test alert")).toBeInTheDocument();
+    expect(screen.queryByText("Close game late test alert")).toBeNull();
     expect(screen.getByText("MIA")).toBeInTheDocument();
     expect(screen.getByText("TOR")).toBeInTheDocument();
   });
@@ -188,7 +188,7 @@ describe("DevToolsView", () => {
     render(<DevToolsView token="token" />);
 
     await waitFor(() => expect(screen.getByText("Synthetic matchup (NBA)")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Close game late alert"));
+    fireEvent.click(screen.getByText("Close game late test alert"));
     await waitFor(() =>
       expect(sendDevTestAlertMock).toHaveBeenCalledWith({
         league: "NBA",
@@ -197,8 +197,8 @@ describe("DevToolsView", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
-    await waitFor(() => expect(screen.getByText("Inning start alert")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Inning start alert"));
+    await waitFor(() => expect(screen.getByText("Inning start test alert")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Inning start test alert"));
     await waitFor(() =>
       expect(sendDevTestAlertMock).toHaveBeenCalledWith({
         league: "MLB",
@@ -218,14 +218,14 @@ describe("DevToolsView", () => {
     await waitFor(() =>
       expect(screen.getByText("Synthetic matchup (World Cup)")).toBeInTheDocument(),
     );
-    expect(screen.getByText("Game start alert")).toBeInTheDocument();
-    expect(screen.getByText("Second half start alert")).toBeInTheDocument();
-    expect(screen.getByText("Extra time start alert")).toBeInTheDocument();
-    expect(screen.getByText("Penalty kicks alert")).toBeInTheDocument();
-    expect(screen.getByText("Final result alert")).toBeInTheDocument();
-    expect(screen.getByText("Score change alert")).toBeInTheDocument();
-    expect(screen.queryByText("Close game late alert")).toBeNull();
-    expect(screen.queryByText("Inning start alert")).toBeNull();
+    expect(screen.getByText("Game start test alert")).toBeInTheDocument();
+    expect(screen.getByText("Second half start test alert")).toBeInTheDocument();
+    expect(screen.getByText("Extra time start test alert")).toBeInTheDocument();
+    expect(screen.getByText("Penalty kicks test alert")).toBeInTheDocument();
+    expect(screen.getByText("Final result test alert")).toBeInTheDocument();
+    expect(screen.getByText("Score change test alert")).toBeInTheDocument();
+    expect(screen.queryByText("Close game late test alert")).toBeNull();
+    expect(screen.queryByText("Inning start test alert")).toBeNull();
   });
 
   it("shows the complete shared soccer alert set for MLS", async () => {
@@ -237,9 +237,9 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(screen.getByText("Synthetic matchup (MLS)")).toBeInTheDocument());
     expect(screen.getByText("LAFC")).toBeInTheDocument();
     expect(screen.getByText("LA")).toBeInTheDocument();
-    expect(screen.getByText("Extra time start alert")).toBeInTheDocument();
-    expect(screen.getByText("Penalty kicks alert")).toBeInTheDocument();
-    expect(screen.getByText("Score change alert")).toBeInTheDocument();
+    expect(screen.getByText("Extra time start test alert")).toBeInTheDocument();
+    expect(screen.getByText("Penalty kicks test alert")).toBeInTheDocument();
+    expect(screen.getByText("Score change test alert")).toBeInTheDocument();
   });
 
   it("shows the shared basketball alert set for WNBA", async () => {
@@ -250,7 +250,15 @@ describe("DevToolsView", () => {
     await waitFor(() => expect(screen.getByText("Synthetic matchup (WNBA)")).toBeInTheDocument());
     expect(screen.getByText("NY")).toBeInTheDocument();
     expect(screen.getByText("LV")).toBeInTheDocument();
-    expect(screen.getByText("Close game late alert")).toBeInTheDocument();
-    expect(screen.queryByText("Inning start alert")).toBeNull();
+    expect(screen.getByText("Close game late test alert")).toBeInTheDocument();
+    expect(screen.queryByText("Inning start test alert")).toBeNull();
+  });
+
+  it("reports failed test alerts", async () => {
+    sendDevTestAlertMock.mockRejectedValueOnce(new Error("Test delivery failed"));
+    render(<DevToolsView token="token" />);
+
+    fireEvent.click(await screen.findByText("Game start test alert"));
+    expect(await screen.findByText("Test delivery failed")).toBeInTheDocument();
   });
 });

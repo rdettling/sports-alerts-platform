@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router";
+import { NavLink, Navigate, Route, Routes } from "react-router";
 
 import { useAuth } from "../auth/auth-context";
 import { SignInModal } from "../auth/SignInModal";
@@ -51,19 +51,12 @@ const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
   ),
 };
 
-function routeForPath(pathname: string): DashboardRouteMeta {
-  const segment = pathname.split("/").filter(Boolean)[0] ?? "games";
-  return DASHBOARD_ROUTES.find((route) => route.key === segment) ?? DASHBOARD_ROUTES[0];
-}
-
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
-  const location = useLocation();
   const [signInOpen, setSignInOpen] = useState(false);
 
   const isAuthenticated = Boolean(token && user);
   const isAdmin = isAuthenticated && user?.role === "admin";
-  const currentRoute = routeForPath(location.pathname);
   const navRoutes = useMemo(
     () =>
       DASHBOARD_ROUTES.filter((route) => {
@@ -101,7 +94,7 @@ export function DashboardLayout() {
             {token && user ? (
               <>
                 <span className="user-email">{user.email}</span>
-                <button className="btn btn-secondary" onClick={() => void logout()}>
+                <button className="btn btn-secondary" type="button" onClick={() => void logout()}>
                   Logout
                 </button>
               </>
@@ -118,9 +111,7 @@ export function DashboardLayout() {
         </div>
       </header>
 
-      <main
-        className={`app-main ${currentRoute.key === "admin" ? "admin-context" : ""} ${currentRoute.key === "games" ? "games-context" : ""}`.trim()}
-      >
+      <main className="app-main">
         <div className="app-content">
           <Routes>
             <Route

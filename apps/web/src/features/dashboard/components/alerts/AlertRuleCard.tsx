@@ -22,7 +22,6 @@ export function AlertRuleCard({
   controls,
 }: AlertRuleCardProps) {
   const cardClasses = [
-    "row-card",
     "alert-rule-row",
     isDisabled ? "alert-rule-disabled" : "",
     cardClassName ?? "",

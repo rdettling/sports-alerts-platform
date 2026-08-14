@@ -1,0 +1,44 @@
+.auth-callback-card {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.auth-callback-card h1 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.sign-in-modal {
+  width: min(420px, 100%);
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.sign-in-modal-subtitle {
+  margin: 0.4rem 0 0;
+}
+
+.sign-in-modal-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sign-in-modal-form label {
+  color: #344054;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.sign-in-modal-form input {
+  width: 100%;
+  min-height: 2.625rem;
+}
+
+@media (max-width: 640px) {
+  .sign-in-modal {
+    padding: 0.95rem;
+  }
+}

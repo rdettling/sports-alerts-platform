@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import { PREFERENCE_LABELS } from "../../../shared/lib/dashboard-ui";
 import { type GameAlertPreferences } from "../../../shared/api";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
@@ -33,23 +35,44 @@ export function GameAlertSettingsModal({
   onClose,
   onApplyAlertOverride,
 }: GameAlertSettingsModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="overlay-sheet game-alert-overlay" role="dialog" aria-modal="true">
+    <div
+      className="overlay-sheet game-alert-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="game-alert-title"
+      aria-describedby="game-alert-matchup"
+    >
       <section className="overlay-card game-alert-modal">
         <header className="overlay-card-header">
           <div className="game-alert-modal-title">
-            <h4>Game Alert Settings</h4>
-            <p className="muted game-alert-matchup">{matchupLabel}</p>
+            <h4 id="game-alert-title">Game Alert Settings</h4>
+            <p id="game-alert-matchup" className="muted game-alert-matchup">
+              {matchupLabel}
+            </p>
           </div>
           <button className="btn btn-secondary" type="button" onClick={onClose}>
             Close
           </button>
         </header>
-        {alertsBusy && !gameAlertState ? <p className="muted">Loading alert settings...</p> : null}
+        {alertsBusy && !gameAlertState ? (
+          <p className="muted" role="status">
+            Loading alert settings...
+          </p>
+        ) : null}
         {gameAlertState ? (
-          <ul className="list game-alert-list">
+          <ul className="game-alert-list">
             {gameAlertState.items.map((item) => {
               const fields = ruleFieldsFor(item.alert_type, item.is_enabled);
               const inlineField = fields.length === 1 ? fields[0] : null;
@@ -91,6 +114,7 @@ export function GameAlertSettingsModal({
                         className={`alert-toggle ${item.is_enabled ? "on" : "off"}`}
                         type="button"
                         role="switch"
+                        aria-label={`${PREFERENCE_LABELS[item.alert_type] ?? item.alert_type} alerts for this game`}
                         aria-checked={item.is_enabled}
                         disabled={alertsBusy}
                         onClick={() => {
@@ -103,7 +127,10 @@ export function GameAlertSettingsModal({
                           ).catch(() => undefined);
                         }}
                       >
-                        <span className="alert-toggle-track">
+                        <span className="alert-toggle-label" aria-hidden>
+                          {item.is_enabled ? "On" : "Off"}
+                        </span>
+                        <span className="alert-toggle-track" aria-hidden>
                           <span className="alert-toggle-thumb" />
                         </span>
                       </button>

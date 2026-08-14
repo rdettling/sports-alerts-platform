@@ -8,6 +8,11 @@ import {
   messageFromUnknown,
 } from "../../../../shared/lib/dashboard-ui";
 
+function formatSyncCadence(seconds: number): string {
+  if (seconds % 60 === 0) return `Every ${seconds / 60}m`;
+  return `Every ${seconds}s`;
+}
+
 export function AdminLeagueSettingsPanel({
   token,
   items,
@@ -30,16 +35,18 @@ export function AdminLeagueSettingsPanel({
   });
 
   return (
-    <section className="card admin-section">
-      <div className="admin-section-head">
+    <section className="admin-panel surface" aria-labelledby="admin-league-runtime-title">
+      <div className="admin-panel-header surface-header">
         <div>
-          <h3>League Runtime</h3>
-          <p className="muted">
-            Enable leagues that should consume sync resources and appear in user-facing UI.
-          </p>
+          <h2 id="admin-league-runtime-title">League Runtime</h2>
+          <p>Control which leagues consume sync resources and appear in the app.</p>
         </div>
       </div>
-      {error ? <p className="error">{error}</p> : null}
+      {error ? (
+        <p className="admin-panel-message error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className="admin-league-settings-list">
         {items.map((item) => {
           const busy = toggleMutation.isPending && toggleMutation.variables?.league === item.league;
@@ -49,6 +56,7 @@ export function AdminLeagueSettingsPanel({
               key={item.league}
               className="admin-league-setting-btn"
               type="button"
+              aria-label={`${item.is_enabled ? "Disable" : "Enable"} ${item.label}`}
               disabled={busy}
               onClick={() =>
                 toggleMutation.mutate({ league: item.league, isEnabled: !item.is_enabled })
@@ -70,8 +78,9 @@ export function AdminLeagueSettingsPanel({
                 </span>
                 <span className="admin-league-setting-copy">
                   <strong>{item.label}</strong>
-                  <span className="admin-test-btn-meta">
-                    {item.is_enabled ? "Enabled" : "Disabled"}
+                  <span>
+                    {item.is_enabled ? "Enabled" : "Disabled"} ·{" "}
+                    {formatSyncCadence(item.live_sync_interval_seconds)}
                   </span>
                 </span>
               </span>

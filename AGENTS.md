@@ -91,9 +91,12 @@ Docs-only changes usually do not need tests.
 
 This is a single-developer personal repository.
 
-- When asked to commit and push, commit directly to `main` and push `origin/main`.
-- Do not create feature branches or pull requests unless explicitly requested.
-- Before committing, confirm the worktree contains only the intended changes and run the relevant checks.
+- Never commit implementation work directly to `main`.
+- Keep work on the currently checked-out working branch unless the user explicitly asks to switch or create a branch.
+- When asked to commit or push, use the current working branch and its corresponding remote branch unless the user specifies another target.
+- Do not open pull requests. When explicitly asked to integrate completed work, squash-merge the working branch into `main` locally so `main` receives one cohesive commit.
+- Do not merge, push, or delete branches unless the user asks for that action.
+- Before committing, confirm the current branch is not `main`, verify the worktree contains only the intended changes, and run the relevant checks.
 
 ## Working Style
 

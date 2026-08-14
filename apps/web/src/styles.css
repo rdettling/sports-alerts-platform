@@ -1,5 +1,8 @@
-@import "./shared/styles/tokens.css";
 @import "./shared/styles/base.css";
 @import "./shared/styles/layout.css";
-@import "./shared/styles/dashboard.css";
+@import "./shared/styles/auth.css";
+@import "./shared/styles/filters.css";
+@import "./shared/styles/alerts.css";
+@import "./shared/styles/games.css";
+@import "./shared/styles/teams.css";
 @import "./shared/styles/admin.css";

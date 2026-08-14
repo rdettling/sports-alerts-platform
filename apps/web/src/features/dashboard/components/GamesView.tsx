@@ -6,7 +6,7 @@ import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
-import { GameRowCard } from "./GameRowCard";
+import { GameScoreRow } from "./GameScoreRow";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import {
   buildDayOptions,
@@ -120,98 +120,112 @@ export function GamesView({
   }, [dayFilter, dayOptions]);
 
   return (
-    <section className="view-stack games-page">
-      <p className="games-page-intro">
-        Live scores and customizable email and push alerts for NBA, WNBA, MLB, MLS, and World Cup
-        games.
-      </p>
-      <section className="panel games-panel">
-        {error ? <p className="error">{error}</p> : null}
-        {isLoading ? <p className="muted">Loading games...</p> : null}
+    <section className="view-stack games-page" aria-label="Games">
+      {error ? (
+        <p className="error view-feedback" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {isLoading ? (
+        <p className="muted view-feedback" role="status">
+          Loading games...
+        </p>
+      ) : null}
 
-        {!isLoading ? (
-          <div className="games-feed-grid">
-            <GamesFilterToolbar
-              activeLeagues={activeLeagues}
-              leagueFilter={leagueFilter}
-              onLeagueFilterChange={setLeagueFilter}
-              dayFilter={dayFilter}
-              onDayFilterChange={setDayFilter}
-              totalLeagueGames={leagueFilteredGames.length}
-              dayOptions={dayOptions}
-              showScopeFilter={Boolean(token)}
-              gameScope={gameScope}
-              onGameScopeChange={setGameScope}
-              followedGameCount={followedGameIds.size}
-            />
+      {!isLoading ? (
+        <div className="games-layout">
+          <GamesFilterToolbar
+            activeLeagues={activeLeagues}
+            leagueFilter={leagueFilter}
+            onLeagueFilterChange={setLeagueFilter}
+            dayFilter={dayFilter}
+            onDayFilterChange={setDayFilter}
+            totalLeagueGames={leagueFilteredGames.length}
+            dayOptions={dayOptions}
+            showScopeFilter={Boolean(token)}
+            gameScope={gameScope}
+            onGameScopeChange={setGameScope}
+            followedGameCount={followedGameIds.size}
+          />
 
-            <div className="games-feed-scroll">
-              <div className="games-list" role="list" aria-label="Games feed">
-                {groupedVisibleGames.map((group) => (
-                  <section key={group.label} className="games-day-group">
-                    <div className="games-group-row-inner">
-                      <strong>{group.label}</strong>
-                      <span className="muted">{group.items.length} games</span>
-                    </div>
-                    <div className="games-cards">
-                      {group.items.map((game) => {
-                        const home = teamMap.get(game.home_team_id);
-                        const away = teamMap.get(game.away_team_id);
-                        const leagueProfile = leagueProfiles.get(game.league);
-                        if (!home || !away || !leagueProfile) return null;
-                        const isFollowed = followedGameIds.has(game.id);
+          <section className="games-feed-scroll" aria-label="Games feed">
+            {groupedVisibleGames.length > 0 ? (
+              <div className="games-day-list">
+                {groupedVisibleGames.map((group, groupIndex) => {
+                  const headingId = `games-day-${groupIndex}`;
+                  return (
+                    <section
+                      key={group.label}
+                      className="games-day-board surface"
+                      aria-labelledby={headingId}
+                    >
+                      <div className="games-day-header surface-header">
+                        <h2 id={headingId}>{group.label}</h2>
+                        <span>
+                          {group.items.length} {group.items.length === 1 ? "game" : "games"}
+                        </span>
+                      </div>
+                      <div
+                        className={`games-day-grid last-row-${group.items.length % 3 || 3}`}
+                        role="list"
+                        aria-label={`${group.label} games`}
+                      >
+                        {group.items.map((game) => {
+                          const home = teamMap.get(game.home_team_id);
+                          const away = teamMap.get(game.away_team_id);
+                          const leagueProfile = leagueProfiles.get(game.league);
+                          if (!home || !away || !leagueProfile) return null;
+                          const isFollowed = followedGameIds.has(game.id);
 
-                        return (
-                          <GameRowCard
-                            key={game.id}
-                            game={game}
-                            sport={leagueProfile.sport}
-                            home={home}
-                            away={away}
-                            isFollowed={isFollowed}
-                            statusLabel={gameStatusLabel(game, leagueProfile.sport)}
-                            showContextLabel
-                            actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
-                            onFollow={() => {
-                              if (!token) {
-                                onSignInRequired();
-                                return;
-                              }
-                              toggleMutation.mutate({ gameId: game.id, isFollowed: false });
-                            }}
-                            onUnfollow={async () => {
-                              setBusyGameId(game.id);
-                              try {
-                                await toggleMutation.mutateAsync({
-                                  gameId: game.id,
-                                  isFollowed: true,
-                                });
-                              } finally {
-                                setBusyGameId(null);
-                              }
-                            }}
-                            onOpenAlertSettings={() => {
-                              openGameAlerts(game).catch(() => undefined);
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
+                          return (
+                            <GameScoreRow
+                              key={game.id}
+                              game={game}
+                              sport={leagueProfile.sport}
+                              home={home}
+                              away={away}
+                              isFollowed={isFollowed}
+                              statusLabel={gameStatusLabel(game, leagueProfile.sport)}
+                              actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
+                              onFollow={() => {
+                                if (!token) {
+                                  onSignInRequired();
+                                  return;
+                                }
+                                toggleMutation.mutate({ gameId: game.id, isFollowed: false });
+                              }}
+                              onUnfollow={async () => {
+                                setBusyGameId(game.id);
+                                try {
+                                  await toggleMutation.mutateAsync({
+                                    gameId: game.id,
+                                    isFollowed: true,
+                                  });
+                                } finally {
+                                  setBusyGameId(null);
+                                }
+                              }}
+                              onOpenAlertSettings={() => {
+                                openGameAlerts(game).catch(() => undefined);
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-        ) : null}
-
-        {!isLoading && visibleGames.length === 0 ? (
-          <p className="muted">
-            {gameScope === "following"
-              ? "No followed games match this filter."
-              : "No games in this filter."}
-          </p>
-        ) : null}
-      </section>
+            ) : (
+              <p className="muted view-feedback">
+                {gameScope === "following"
+                  ? "No followed games match this filter."
+                  : "No games in this filter."}
+              </p>
+            )}
+          </section>
+        </div>
+      ) : null}
 
       <GameAlertSettingsModal
         isOpen={Boolean(alertGame)}

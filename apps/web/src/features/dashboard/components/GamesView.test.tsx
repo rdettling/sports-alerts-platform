@@ -195,14 +195,11 @@ describe("GamesView", () => {
     vi.restoreAllMocks();
   });
 
-  it("describes the public games and alerts experience", () => {
+  it("renders an accessible games feed without the removed marketing intro", () => {
     render(<GamesView token={null} onSignInRequired={vi.fn()} />, { wrapper });
 
-    expect(
-      screen.getByText(
-        "Live scores and customizable email and push alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Games feed" })).toBeInTheDocument();
+    expect(screen.queryByText(/Live scores and customizable/)).toBeNull();
   });
 
   it("selects today initially and supports selecting all dates", async () => {

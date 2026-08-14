@@ -28,17 +28,19 @@ export function AuthCallbackPage() {
 
   return (
     <div className="container">
-      <section className="panel">
+      <section className="auth-callback-card">
         <h1>Live Game Alerts</h1>
         {error ? (
           <>
-            <p className="error">{error}</p>
+            <p className="error" role="alert">
+              {error}
+            </p>
             <button className="btn" type="button" onClick={() => navigate("/", { replace: true })}>
               Back to games
             </button>
           </>
         ) : (
-          <p>Verifying your magic link...</p>
+          <p role="status">Verifying your magic link...</p>
         )}
       </section>
     </div>

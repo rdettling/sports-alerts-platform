@@ -9,7 +9,9 @@ import {
   sendDevTestAlert,
   type LeagueSetting,
 } from "../../../shared/api";
-import { TeamLogo, PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { TeamLogo } from "../../../shared/components/TeamLogo";
+import { PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { LeagueTabs } from "./DashboardFilters";
 
 export function DevToolsView({ token }: { token: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -87,29 +89,25 @@ export function DevToolsView({ token }: { token: string }) {
   const activeAlertTypes = (activeLeagueItem?.alert_types ?? []) as AlertType[];
 
   return (
-    <section className="card admin-tools-card">
+    <section className="admin-panel surface" aria-labelledby="admin-test-alerts-title">
+      <div className="admin-panel-header admin-tools-header surface-header">
+        <div>
+          <h2 id="admin-test-alerts-title">Test Alerts</h2>
+          <p>Send one synthetic alert to validate the delivery flow.</p>
+        </div>
+        <LeagueTabs
+          ariaLabel="Test alert league"
+          options={activeLeagues.map((league) => ({
+            value: league.league,
+            label: league.label,
+          }))}
+          value={activeLeague}
+          onChange={setActiveLeague}
+        />
+      </div>
       <div className="admin-tools-body">
-        <div className="admin-tools-intro">
-          <h3>Test alert actions</h3>
-          <p className="muted">Queue one synthetic pending alert to validate delivery flow.</p>
-        </div>
-        <div className="chip-row">
-          {activeLeagues.map((league) => (
-            <button
-              key={league.league}
-              className={`chip-btn ${activeLeague === league.league ? "active" : ""}`.trim()}
-              type="button"
-              onClick={() => setActiveLeague(league.league)}
-            >
-              {league.label}
-            </button>
-          ))}
-        </div>
-
         <div className="admin-tools-matchup">
-          <span className="admin-tools-label">
-            Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})
-          </span>
+          <span>Synthetic matchup ({activeLeagueItem?.label ?? activeLeague})</span>
           <span className="admin-tools-matchup-row">
             {syntheticTeams.away ? <TeamLogo team={syntheticTeams.away} size={20} /> : null}
             <strong>{syntheticTeams.away?.abbreviation ?? "AWAY"}</strong>
@@ -119,7 +117,7 @@ export function DevToolsView({ token }: { token: string }) {
           </span>
         </div>
 
-        <div className="admin-action-list">
+        <div className="admin-action-list" aria-label="Test alert actions">
           {activeAlertTypes.map((alertType) => (
             <button
               key={alertType}
@@ -130,15 +128,27 @@ export function DevToolsView({ token }: { token: string }) {
               }
               onClick={() => onSendTest(alertType)}
             >
-              <span>{PREFERENCE_LABELS[alertType] ?? alertType} alert</span>
-              <span className="admin-test-btn-meta">Queue now</span>
+              <span>{PREFERENCE_LABELS[alertType] ?? alertType} test alert</span>
+              <span>{busyAlertType === alertType ? "Sending…" : "Send"}</span>
             </button>
           ))}
         </div>
 
-        {loading ? <p>Loading test tool data...</p> : null}
-        {error ? <p className="error">{error}</p> : null}
-        {result ? <p className="admin-result">{result}</p> : null}
+        {loading ? (
+          <p className="admin-panel-message" role="status">
+            Loading test tool data…
+          </p>
+        ) : null}
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {result ? (
+          <p className="admin-result" role="status" aria-live="polite">
+            {result}
+          </p>
+        ) : null}
       </div>
     </section>
   );

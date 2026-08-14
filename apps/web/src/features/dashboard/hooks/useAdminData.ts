@@ -9,6 +9,7 @@ export function useAdminData(token: string, windowValue: OpsAdminOverviewWindow)
       const summary = await getOpsAdminSummary(token, windowValue);
       return { summary };
     },
+    placeholderData: (previousData) => previousData,
     refetchInterval: 30_000,
   });
 }

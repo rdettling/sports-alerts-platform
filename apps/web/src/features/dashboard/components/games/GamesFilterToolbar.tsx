@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { type League, type LeagueSetting } from "../../../../shared/api";
+import { LeagueTabs, ScopeToggle } from "../DashboardFilters";
 import { type DayOption, localDateKey } from "./games-view-utils";
 
 export function GamesFilterToolbar({
@@ -38,51 +39,27 @@ export function GamesFilterToolbar({
 
   return (
     <section
-      className={`games-filter-toolbar ${showScopeFilter ? "" : "without-scope"}`.trim()}
+      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"}`.trim()}
       aria-label="Game filters"
     >
       {showScopeFilter ? (
-        <div className="games-scope-filter" role="group" aria-label="Game scope">
-          <button
-            className={`games-scope-filter-btn ${gameScope === "all" ? "active" : ""}`.trim()}
-            type="button"
-            aria-pressed={gameScope === "all"}
-            onClick={() => onGameScopeChange("all")}
-          >
-            All games
-          </button>
-          <button
-            className={`games-scope-filter-btn ${gameScope === "following" ? "active" : ""}`.trim()}
-            type="button"
-            aria-pressed={gameScope === "following"}
-            onClick={() => onGameScopeChange("following")}
-          >
-            Following <span>{followedGameCount}</span>
-          </button>
-        </div>
+        <ScopeToggle
+          ariaLabel="Game scope"
+          allLabel="All games"
+          value={gameScope}
+          followingCount={followedGameCount}
+          onChange={onGameScopeChange}
+        />
       ) : null}
-      <div className="games-league-filter" role="group" aria-label="League">
-        <button
-          className={`games-league-filter-btn ${leagueFilter === "all" ? "active" : ""}`.trim()}
-          type="button"
-          aria-label="All leagues"
-          aria-pressed={leagueFilter === "all"}
-          onClick={() => onLeagueFilterChange("all")}
-        >
-          All
-        </button>
-        {activeLeagues.map(({ league, label }) => (
-          <button
-            key={league}
-            className={`games-league-filter-btn ${leagueFilter === league ? "active" : ""}`.trim()}
-            type="button"
-            aria-pressed={leagueFilter === league}
-            onClick={() => onLeagueFilterChange(league)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <LeagueTabs
+        ariaLabel="League"
+        options={[
+          { value: "all", label: "All", ariaLabel: "All leagues" },
+          ...activeLeagues.map(({ league, label }) => ({ value: league, label })),
+        ]}
+        value={leagueFilter}
+        onChange={onLeagueFilterChange}
+      />
       <div className="games-date-filter" role="group" aria-label="Game date">
         <button
           className="games-date-step"

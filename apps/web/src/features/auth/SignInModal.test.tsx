@@ -35,6 +35,10 @@ describe("SignInModal", () => {
     const onClose = vi.fn();
     const { rerender } = render(<SignInModal isOpen onClose={onClose} />);
 
+    expect(screen.getByRole("dialog", { name: "Sign in" })).toHaveAttribute(
+      "aria-describedby",
+      "sign-in-description",
+    );
     expect(warmAuthDbMock).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "user@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Send sign-in email" }));

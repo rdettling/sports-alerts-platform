@@ -1,18 +1,16 @@
 .app-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: transparent;
 }
 
 .app-header {
-  display: grid;
-  gap: 0.55rem;
-  padding: 0.65rem 0.8rem;
-  background: linear-gradient(180deg, #12203c 0%, #17284a 100%);
-  color: var(--text-inverse);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px rgba(10, 18, 37, 0.12);
+  position: relative;
+  z-index: 20;
+  padding: 0.625rem 0.75rem;
+  color: var(--text-main);
+  background: #fff;
+  border-bottom: 1px solid var(--border);
 }
 
 .app-header-top {
@@ -22,27 +20,27 @@
     "nav nav";
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.55rem 0.75rem;
-}
-
-.app-brand h1 {
-  margin: 0;
-  font-size: 1rem;
-  letter-spacing: -0.02em;
+  gap: 0.5rem 0.75rem;
 }
 
 .app-brand {
   grid-area: brand;
 }
 
+.app-brand h1 {
+  margin: 0;
+  color: #17365f;
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
 .app-nav {
   grid-area: nav;
   display: flex;
-  gap: 0.45rem;
+  gap: 0.25rem;
+  min-width: 0;
   overflow-x: auto;
-  padding-bottom: 0.05rem;
-  padding-inline: 0;
-  scroll-padding-inline: 0;
   scrollbar-width: none;
 }
 
@@ -54,41 +52,38 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid rgba(173, 196, 245, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  color: #dce7ff;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-sm);
+  color: #667085;
   text-decoration: none;
-  font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
+  font-weight: 650;
   white-space: nowrap;
 }
 
 .app-nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+  background: #f2f4f7;
 }
 
 .app-nav-link.active {
-  background: linear-gradient(180deg, #2c4e99 0%, #244284 100%);
-  color: #f7faff;
-  border-color: rgba(181, 203, 255, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+  background: var(--bg-hover);
 }
 
 .app-nav-icon {
-  width: 18px;
-  height: 18px;
+  width: 1rem;
+  height: 1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #bfd0f3;
+  color: #7b8798;
 }
 
 .app-nav-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.8;
@@ -97,7 +92,7 @@
 }
 
 .app-nav-link.active .app-nav-icon {
-  color: #f4f8ff;
+  color: var(--accent);
 }
 
 .app-account {
@@ -105,47 +100,34 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: nowrap;
-  gap: 0.55rem;
+  gap: 0.5rem;
   min-width: 0;
-  padding-inline: 0;
 }
 
 .user-email {
-  color: #d6e1f6;
-  font-size: 0.9rem;
-  font-weight: 600;
   min-width: 0;
   max-width: 42vw;
-  flex: 0 1 auto;
   overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.825rem;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .app-account .btn {
-  padding: 0.38rem 0.65rem;
-  border-radius: 10px;
-  font-size: 0.86rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.825rem;
 }
 
-.app-main {
+.app-main,
+.app-content {
   min-width: 0;
   min-height: 0;
 }
 
 .app-content {
-  padding: 0.8rem;
-  min-width: 0;
-  min-height: 0;
-}
-
-.games-context {
-  overflow: visible;
-}
-
-.admin-context {
-  background: linear-gradient(180deg, rgba(238, 246, 255, 0.8) 0%, rgba(233, 243, 255, 0.35) 100%);
+  padding: 0.75rem;
 }
 
 .view-stack {
@@ -155,112 +137,97 @@
 
 @media (min-width: 768px) {
   .app-header {
-    padding: 0.85rem 1.1rem;
-    gap: 0.7rem;
+    padding: 0.75rem 1.25rem;
   }
 
   .app-brand h1 {
-    font-size: 1.2rem;
+    font-size: 1.125rem;
   }
 
   .app-content {
-    padding: 1.25rem 1.35rem 1.4rem;
+    padding: 1rem 1.25rem 1.25rem;
   }
 }
 
 @media (min-width: 1024px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   .app-shell {
-    height: 100vh;
-    min-height: 100vh;
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
     overflow: hidden;
   }
 
   .app-header {
-    padding: 1rem 1.75rem 0.95rem;
-  }
-
-  .app-brand h1 {
-    font-size: 1.3rem;
+    padding: 0.625rem 1.5rem;
   }
 
   .app-header-top {
     grid-template-areas: "brand nav account";
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 1rem;
+    gap: 1.25rem;
+  }
+
+  .app-brand h1 {
+    font-size: 1.125rem;
   }
 
   .app-nav {
-    gap: 0.55rem;
+    align-self: stretch;
+    gap: 0.125rem;
     overflow: visible;
-    flex-wrap: wrap;
-    padding-inline: 0;
   }
 
   .app-nav-link {
-    gap: 0.45rem;
-    padding: 0.44rem 0.64rem;
-    font-size: 0.92rem;
+    position: relative;
+    padding: 0.45rem 0.625rem;
   }
 
-  .app-account {
-    justify-content: flex-end;
-    align-self: center;
-    flex-wrap: nowrap;
-    gap: 0.75rem;
-    padding-inline: 0;
+  .app-nav-link.active {
+    background: transparent;
+  }
+
+  .app-nav-link.active::after {
+    position: absolute;
+    right: 0.625rem;
+    bottom: -0.625rem;
+    left: 0.625rem;
+    height: 2px;
+    background: var(--accent);
+    content: "";
   }
 
   .user-email {
-    flex: 0 1 auto;
     max-width: none;
-    white-space: nowrap;
-  }
-
-  .app-account .btn {
-    padding: 0.38rem 0.72rem;
-    border-radius: 12px;
-    font-size: 0.9rem;
-  }
-
-  .app-content {
-    height: 100%;
-    padding: 1.5rem 1.75rem 1.8rem;
-    overflow: hidden;
   }
 
   .app-main,
-  .games-context,
-  .admin-context {
+  .app-content {
+    height: 100%;
     overflow: hidden;
+  }
+
+  .app-content {
+    padding: 1rem 1.5rem 1.25rem;
   }
 
   .app-content > * {
     min-height: 0;
   }
+
+  .view-stack {
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 @media (max-width: 767px) {
-  .app-nav {
-    gap: 0.3rem;
-  }
-
-  .app-nav-link {
-    gap: 0.3rem;
-    padding-inline: 0.48rem;
-    font-size: 0.84rem;
-  }
-
-  .app-nav-icon {
-    width: 16px;
-    height: 16px;
-  }
-
-  .app-nav-icon svg {
-    width: 15px;
-    height: 15px;
-  }
-
   .user-email {
     display: none;
   }
