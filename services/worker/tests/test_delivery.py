@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, Game, PushSubscription, Team, User
-from app.services import alert_delivery
+from app.services import alert_delivery, resend
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.email_branding import APP_BRAND_NAME
 
@@ -71,7 +71,7 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
     monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
+    monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
     user = db_session.get(User, alert.user_id)
     game = db_session.get(Game, alert.game_id)
@@ -113,11 +113,11 @@ def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monk
             return None
 
     def fake_urlopen(request, timeout):
-        raise alert_delivery.HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=ErrorResponse())
+        raise resend.HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=ErrorResponse())
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
     monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "bad-key")
-    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
+    monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
     user = db_session.get(User, alert.user_id)
     game = db_session.get(Game, alert.game_id)
@@ -156,7 +156,7 @@ def test_email_delivery_log_mode_marks_delivery_sent_without_provider_call(db_se
         raise AssertionError("log mode must not call Resend")
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "log")
-    monkeypatch.setattr(alert_delivery, "urlopen", fail_urlopen)
+    monkeypatch.setattr(resend, "urlopen", fail_urlopen)
 
     game = db_session.get(Game, alert.game_id)
     assert game is not None
@@ -198,6 +198,60 @@ def test_email_delivery_without_resend_key_marks_only_delivery_failed(db_session
     assert status == "failed"
     assert delivery.provider_data == {"error": "missing_resend_api_key"}
     assert alert.event_data == {"status": "in_progress"}
+
+
+def test_resend_success_without_message_id_returns_warning(db_session, monkeypatch):
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def read(self):
+            return b"{}"
+
+    monkeypatch.setattr(resend.delivery_settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(resend, "urlopen", lambda request, timeout: Response())
+
+    result = resend.send_resend_email(
+        db_session,
+        service="worker",
+        to_email="delivery@example.com",
+        subject="Test",
+        text_body="Test",
+        html_body="<p>Test</p>",
+    )
+
+    assert result.sent is True
+    assert result.provider_message_id is None
+    assert result.metadata == {"provider_warning": "missing_message_id"}
+
+
+def test_resend_network_failure_returns_metadata_and_records_telemetry(db_session, monkeypatch):
+    def fail_urlopen(request, timeout):
+        raise resend.URLError("network unavailable")
+
+    monkeypatch.setattr(resend.delivery_settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(resend, "urlopen", fail_urlopen)
+
+    result = resend.send_resend_email(
+        db_session,
+        service="worker",
+        to_email="delivery@example.com",
+        subject="Test",
+        text_body="Test",
+        html_body="<p>Test</p>",
+    )
+
+    assert result.sent is False
+    assert result.metadata == {"error": "resend_http_error", "detail": "network unavailable"}
+    db_session.flush()
+    rollup = db_session.scalar(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "resend"))
+    assert rollup is not None
+    assert rollup.attempt_status == "error"
 
 
 def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, monkeypatch):
@@ -266,7 +320,7 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
     monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(alert_delivery, "urlopen", fake_urlopen)
+    monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
     persisted = db_session.scalar(select(Alert).where(Alert.id == alert.id))
     assert persisted is not None

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import LeagueSetting
 
 
-Sport = Literal["basketball", "baseball", "soccer"]
+Sport = Literal["basketball", "football", "baseball", "soccer"]
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class LeagueProfile:
 
 SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
     "basketball": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "football": ("game_start", "close_game_late", "overtime_start", "final_result"),
     "baseball": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "soccer": (
         "game_start",
@@ -59,6 +60,16 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
         live_sync_interval_seconds=120,
         odds_sport_key="basketball_wnba",
+    ),
+    "NFL": LeagueProfile(
+        league="NFL",
+        sport="football",
+        label="NFL",
+        badge_label="NFL",
+        default_test_matchup=("KC", "BUF"),
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+        live_sync_interval_seconds=120,
+        odds_sport_key="americanfootball_nfl",
     ),
     "MLB": LeagueProfile(
         league="MLB",

@@ -1,6 +1,6 @@
 # Configuration
 
-This repo uses strict environment loading. Missing required values fail fast at startup.
+Required environment values fail fast at startup. Because every service reads the shared root `.env`, unrelated keys are ignored.
 
 The local stack expects a single `.env` at the repo root.
 

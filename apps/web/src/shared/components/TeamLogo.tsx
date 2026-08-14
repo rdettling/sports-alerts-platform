@@ -16,6 +16,9 @@ function teamLogoUrl(team: Team): string {
   if (team.league === "WNBA") {
     return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbreviation}.png`;
   }
+  if (team.league === "NFL") {
+    return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbreviation}.png`;
+  }
   if (team.league === "WORLD_CUP") {
     return `https://a.espncdn.com/i/teamlogos/countries/500/${abbreviation}.png`;
   }

@@ -18,8 +18,6 @@ class WorkerSettings(BaseSettings):
     odds_enabled: bool = True
     scheduler_tick_seconds: int = 15
     scheduler_idle_max_sleep_seconds: int = 3600
-    openai_api_key: str = ""
-    openai_api_base_url: str = "https://api.openai.com/v1"
 
 
 settings = WorkerSettings()

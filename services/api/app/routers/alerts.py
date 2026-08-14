@@ -110,6 +110,7 @@ def create_admin_test_alert(
         )
 
     away_team, home_team = _resolve_admin_test_teams(db, league)
+    sport = get_league_profile(league).sport
 
     game_status = "scheduled"
     home_score = None
@@ -190,6 +191,21 @@ def create_admin_test_alert(
         period = 5
         clock = "Pens"
         scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+
+    if sport == "football":
+        if payload.alert_type == "close_game_late":
+            home_score = 20
+            away_score = 17
+            clock = "04:30"
+        elif payload.alert_type == "overtime_start":
+            home_score = 20
+            away_score = 20
+            clock = "10:00"
+        elif payload.alert_type == "final_result":
+            home_score = 24
+            away_score = 21
+            period = 4
+            clock = "0:00"
 
     target_game = Game(
         external_game_id=f"admin-test-game-{uuid4()}",

@@ -26,7 +26,7 @@ Requirements:
 
 - Run `alembic upgrade head` before serving traffic
 - Expose the app on the configured host/port
-- Provide all required API env vars from [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md)
+- Provide all required API env vars from [configuration.md](configuration.md)
 
 Health checks:
 
@@ -46,7 +46,7 @@ uv run python -m worker.main
 Requirements:
 
 - Point at the same database as the API
-- Provide worker env vars from [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md)
+- Provide worker env vars from [configuration.md](configuration.md)
 - Keep it running continuously; this is not a scheduled job container
 
 Behavior notes:

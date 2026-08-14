@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.services.leagues import get_league_profile
+
 
 @dataclass(frozen=True)
 class AlertDefaultValues:
@@ -39,8 +41,8 @@ _ALERT_DEFAULTS: dict[str, AlertDefaultValues] = {
 }
 
 
-def get_alert_default_values(alert_type: str) -> AlertDefaultValues:
-    return _ALERT_DEFAULTS.get(
+def get_alert_default_values(league: str, alert_type: str) -> AlertDefaultValues:
+    defaults = _ALERT_DEFAULTS.get(
         alert_type,
         AlertDefaultValues(
             is_enabled=True,
@@ -49,3 +51,11 @@ def get_alert_default_values(alert_type: str) -> AlertDefaultValues:
             inning_start_threshold=None,
         ),
     )
+    if alert_type == "close_game_late" and get_league_profile(league).sport == "football":
+        return AlertDefaultValues(
+            is_enabled=defaults.is_enabled,
+            close_game_margin_threshold=8,
+            close_game_time_threshold_seconds=300,
+            inning_start_threshold=None,
+        )
+    return defaults

@@ -37,7 +37,6 @@ _CACHE_LOCK = threading.Lock()
 _CACHE_FETCHED_AT_BY_LEAGUE: dict[str, float] = {}
 _CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
 _TELEMETRY_DB: Session | None = None
-_TELEMETRY_INGEST_RUN_ID: int | None = None
 
 
 @dataclass(frozen=True)
@@ -58,10 +57,9 @@ class OddsSnapshot:
     commence_time: datetime | None = None
 
 
-def set_telemetry_context(db: Session | None, ingest_run_id: int | None) -> None:
-    global _TELEMETRY_DB, _TELEMETRY_INGEST_RUN_ID  # noqa: PLW0603
+def set_telemetry_context(db: Session | None) -> None:
+    global _TELEMETRY_DB  # noqa: PLW0603
     _TELEMETRY_DB = db
-    _TELEMETRY_INGEST_RUN_ID = ingest_run_id
 
 
 def _normalize_team_name(name: str) -> str:
@@ -178,7 +176,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                     attempt_status="success" if 200 <= status_code < 300 else "error",
                     http_status=status_code,
                     latency_ms=int((monotonic() - started_at) * 1000),
-                    ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
                 )
     except HTTPError as exc:
         if _TELEMETRY_DB is not None:
@@ -191,7 +188,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 http_status=int(exc.code),
                 latency_ms=int((monotonic() - started_at) * 1000),
                 error_code="http_error",
-                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
             )
         raise
     except URLError:
@@ -204,7 +200,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 attempt_status="error",
                 latency_ms=int((monotonic() - started_at) * 1000),
                 error_code="network_error",
-                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
             )
         raise
     except Exception:
@@ -217,7 +212,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 attempt_status="error",
                 latency_ms=int((monotonic() - started_at) * 1000),
                 error_code="unexpected_error",
-                ingest_run_id=_TELEMETRY_INGEST_RUN_ID,
             )
         raise
 

@@ -6,7 +6,7 @@ from app.services.leagues import get_alert_types, get_league_profile, list_suppo
 
 
 def test_league_profiles_are_the_single_source_of_sport_and_provider_configuration():
-    assert list_supported_leagues() == ["NBA", "WNBA", "MLB", "MLS", "WORLD_CUP"]
+    assert list_supported_leagues() == ["NBA", "WNBA", "NFL", "MLB", "MLS", "WORLD_CUP"]
 
     nba = get_league_profile("NBA")
     assert (nba.sport, nba.live_sync_interval_seconds, nba.odds_sport_key) == (
@@ -24,6 +24,15 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
     assert wnba.scoreboard_url.endswith("/sports/basketball/wnba/scoreboard")
     assert get_alert_types("WNBA") == get_alert_types("NBA")
     assert get_alert_types("NBA") == ("game_start", "close_game_late", "overtime_start", "final_result")
+
+    nfl = get_league_profile("NFL")
+    assert (nfl.sport, nfl.live_sync_interval_seconds, nfl.odds_sport_key) == (
+        "football",
+        120,
+        "americanfootball_nfl",
+    )
+    assert nfl.scoreboard_url.endswith("/sports/football/nfl/scoreboard")
+    assert get_alert_types("NFL") == ("game_start", "close_game_late", "overtime_start", "final_result")
 
     mlb = get_league_profile("MLB")
     assert (mlb.sport, mlb.live_sync_interval_seconds, mlb.odds_sport_key) == (
@@ -69,6 +78,7 @@ def test_public_leagues_include_sport_and_live_cadence(client):
     ] == [
         ("NBA", "basketball", 120, ["ATL", "BOS"]),
         ("WNBA", "basketball", 120, ["NY", "LV"]),
+        ("NFL", "football", 120, ["KC", "BUF"]),
         ("MLB", "baseball", 300, ["MIA", "TOR"]),
         ("MLS", "soccer", 180, ["LAFC", "LA"]),
         ("WORLD_CUP", "soccer", 180, ["MEX", "USA"]),
@@ -98,4 +108,21 @@ def test_wnba_team_catalog_contains_all_current_clubs(client):
         ("129689", "GS"),
         ("132052", "POR"),
         ("131935", "TOR"),
+    }
+
+
+def test_nfl_team_catalog_contains_all_teams(client):
+    client.get("/leagues")
+    with SessionLocal() as db:
+        teams = db.scalars(select(Team).where(Team.league == "NFL")).all()
+
+    assert len(teams) == 32
+    assert {
+        (team.external_team_id, team.abbreviation)
+        for team in teams
+    } >= {
+        ("2", "BUF"),
+        ("12", "KC"),
+        ("34", "HOU"),
+        ("33", "BAL"),
     }

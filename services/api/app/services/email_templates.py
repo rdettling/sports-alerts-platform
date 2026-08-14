@@ -21,83 +21,6 @@ ALERT_LABELS = {
 }
 
 
-def build_sign_in_email(magic_link: str, magic_code: str, ttl_minutes: int) -> tuple[str, str, str]:
-    subject = f"Sign in to {APP_BRAND_NAME}"
-    text_body = (
-        f"Your one-time sign-in code is: {magic_code}\n\n"
-        "If you are signing in from an iPhone or iPad Home Screen app, return to the app and enter "
-        "this code. Opening the link signs in your browser instead.\n\n"
-        "Or use this one-time link to sign in:\n\n"
-        f"{magic_link}\n\n"
-        f"The code and link expire in {ttl_minutes} minutes."
-    )
-    html_body = f"""<!doctype html>
-<html>
-  <body style="margin:0;padding:24px;background:#f3f6fc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#121a2f;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #dbe3f1;border-radius:16px;padding:24px;">
-            <tr>
-              <td style="font-size:13px;font-weight:700;color:#4d5ddb;letter-spacing:0.4px;text-transform:uppercase;">
-                {APP_BRAND_NAME}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:10px;font-size:22px;font-weight:750;color:#0f1f42;">
-                Sign in securely
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:8px;font-size:15px;color:#44506b;line-height:1.5;">
-                Enter this one-time code in the sign-in screen:
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:14px;font-size:30px;font-weight:800;letter-spacing:8px;color:#0f1f42;">
-                {html.escape(magic_code)}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:12px;font-size:13px;color:#667694;line-height:1.55;">
-                Using the iPhone or iPad Home Screen app? Return to the app and enter this code.
-                Opening the link below signs in your browser instead.
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:18px;">
-                <a href="{html.escape(magic_link)}" style="display:inline-block;background:#173d9f;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 18px;border-radius:10px;">
-                  Open sign-in link
-                </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:14px;font-size:13px;color:#667694;line-height:1.55;">
-                This code and link expire in {ttl_minutes} minutes.<br/>
-                If the button does not work, copy and paste this URL:
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:8px;">
-                <div style="word-break:break-all;background:#f7f9ff;border:1px solid #dbe3f1;border-radius:10px;padding:10px 12px;font-size:12px;color:#2c3c61;">
-                  {html.escape(magic_link)}
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-top:18px;font-size:12px;color:#8a96b0;line-height:1.45;">
-                If you didn't request this, you can ignore this email.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>"""
-    return subject, text_body, html_body
-
-
 def _team_abbr(team: Team | None, fallback: str) -> str:
     return (team.abbreviation if team and team.abbreviation else fallback).upper()
 
@@ -127,6 +50,8 @@ def _team_logo_url(team: Team | None, fallback_abbr: str, league: str) -> str:
         return f"https://a.espncdn.com/i/teamlogos/{league.lower()}/500/{abbr}.png"
     if league == "MLB":
         return f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbr}.png"
+    if league == "NFL":
+        return f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbr}.png"
     if league == "WORLD_CUP":
         return f"https://a.espncdn.com/i/teamlogos/countries/500/{abbr}.png"
     return ""
@@ -184,7 +109,7 @@ def _format_clock(game: Game) -> str:
 
 
 def _format_period(game: Game, sport: str | None) -> str:
-    if sport != "basketball":
+    if sport not in {"basketball", "football"}:
         return ""
     if game.period is None:
         return ""
@@ -196,7 +121,7 @@ def _format_period(game: Game, sport: str | None) -> str:
 def _format_period_value(period: int | None, sport: str | None) -> str:
     if period is None:
         return ""
-    if sport == "basketball":
+    if sport in {"basketball", "football"}:
         if period <= 4:
             return f"Q{period}"
         return f"OT{period - 4}"
@@ -232,7 +157,7 @@ def _event_status_details(alert: Alert, game: Game, sport: str | None) -> str:
 
     normalized_clock = (clock or "").strip()
     if normalized_clock:
-        if sport == "basketball":
+        if sport in {"basketball", "football"}:
             details_parts.append(f"{normalized_clock} left")
         else:
             details_parts.append(normalized_clock)
@@ -270,6 +195,8 @@ def _primary_status_line(
             return "First pitch is live now"
         if sport == "soccer":
             return "Kickoff is live now"
+        if sport == "football":
+            return "Kickoff is live now"
         return "Game start is live now"
     if alert.alert_type == "score_changed":
         _, _, new_away_score, new_home_score, is_inferred_goal, scoring_side = _score_changed_values(alert, game)
@@ -296,7 +223,7 @@ def _primary_status_line(
         clock = _format_clock(game)
         if period:
             details.append(period)
-        if clock and sport == "basketball":
+        if clock and sport in {"basketball", "football"}:
             details.append(f"{clock} left")
         elif clock and sport == "baseball":
             details.append(clock)
@@ -322,6 +249,8 @@ def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team 
         if sport == "baseball":
             return f"First pitch · {away_abbr} @ {home_abbr}"
         if sport == "soccer":
+            return f"Kickoff · {away_abbr} @ {home_abbr}"
+        if sport == "football":
             return f"Kickoff · {away_abbr} @ {home_abbr}"
         return f"Game start · {away_abbr} @ {home_abbr}"
     if alert.alert_type == "score_changed":

@@ -6,7 +6,7 @@ ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY ODDS_API_KEY RESEND_API_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT VITE_API_BASE_URL
 
-.PHONY: help setup up rebuild down reset logs test web web-fix _test-api _test-worker _test-web _check-docker _check-env
+.PHONY: help setup up rebuild down reset logs test web web-fix _lint-python _test-api _test-worker _test-web _check-docker _check-env
 
 help:
 	@echo "Sports Alerts Platform"
@@ -82,7 +82,10 @@ web-fix:
 	$(COMPOSE) run --rm --entrypoint "" web npm ci --include=optional
 	$(COMPOSE) up -d --force-recreate web
 
-test: _test-api _test-worker _test-web
+test: _lint-python _test-api _test-worker _test-web
+
+_lint-python:
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uvx --from ruff==0.16.3 ruff check --select E4,E7,E9,F services/api/app services/api/tests services/worker/worker services/worker/tests
 
 _test-api:
 	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q

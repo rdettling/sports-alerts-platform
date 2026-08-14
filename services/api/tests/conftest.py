@@ -28,11 +28,6 @@ os.environ.update(
         "VAPID_SUBJECT": "mailto:alerts@example.com",
         "ODDS_PROVIDER": "the_odds_api",
         "ODDS_API_MARKET": "h2h",
-        "ODDS_REFRESH_SECONDS": "5400",
-        "TELEMETRY_RAW_EVENTS_ENABLED": "true",
-        "GAMES_RETENTION_PAST_HOURS": "36",
-        "GAMES_RETENTION_FUTURE_DAYS": "7",
-        "DEV_MODE": "true",
     }
 )
 

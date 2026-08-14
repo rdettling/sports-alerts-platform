@@ -14,7 +14,7 @@ from app.db.models import (
     GameOddsOutcomeCurrent,
     Team,
 )
-from app.services.leagues import get_active_leagues, get_league_profile, league_supports_odds, list_supported_leagues
+from app.services.leagues import get_active_leagues, get_league_profile, league_supports_odds, normalize_league
 from worker.alerts import ScoreChangeEvent, SoccerDerivedEvents, evaluate_and_record_alerts
 from worker.db import SessionLocal
 from worker.config import settings
@@ -25,7 +25,6 @@ from worker.scoreboard import ScoreboardGame
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 LIVE_STATUS_RECHECK_GRACE = timedelta(hours=2)
-SUPPORTED_LEAGUES = tuple(list_supported_leagues())
 
 
 class ScoreboardFetcher(Protocol):
@@ -39,24 +38,18 @@ class GameUpdateResult:
     soccer_events: SoccerDerivedEvents | None = None
 
 
-def _normalize_league(league: str) -> str:
-    value = league.strip().upper()
-    if value not in SUPPORTED_LEAGUES:
-        raise ValueError(f"Unsupported league: {league}")
-    return value
-
-
 def _assert_league_enabled(db: Session, league: str) -> None:
     if league not in set(get_active_leagues(db)):
         raise ValueError(f"League disabled: {league}")
 
 
-def _catalog_interval_seconds(league: str) -> int:
+def _catalog_interval_seconds() -> int:
     return max(1, settings.catalog_sync_interval_seconds)
 
 
 def _live_interval_seconds(league: str) -> int:
     return max(1, get_league_profile(league).live_sync_interval_seconds)
+
 
 def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
     return db.scalar(
@@ -429,19 +422,26 @@ def _upsert_games_and_collect(
     return updated, touched_game_ids, game_key_by_id, soccer_events
 
 
-def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> list[Game]:
+def _games_missing_pregame_snapshot(
+    db: Session,
+    league: str,
+    now: datetime,
+    *,
+    eligible_external_ids: set[str] | None = None,
+) -> list[Game]:
+    if eligible_external_ids is not None and not eligible_external_ids:
+        return []
     pregame_cutoff = now + timedelta(hours=max(1, settings.odds_pregame_window_hours))
-    rows = db.scalars(
-        select(Game)
-        .where(
-            Game.league == league,
-            Game.is_final.is_(False),
-            Game.status == "scheduled",
-            Game.scheduled_start_time >= now,
-            Game.scheduled_start_time <= pregame_cutoff,
-        )
-        .order_by(Game.scheduled_start_time.asc())
-    ).all()
+    stmt = select(Game).where(
+        Game.league == league,
+        Game.is_final.is_(False),
+        Game.status == "scheduled",
+        Game.scheduled_start_time >= now,
+        Game.scheduled_start_time <= pregame_cutoff,
+    )
+    if eligible_external_ids is not None:
+        stmt = stmt.where(Game.external_game_id.in_(sorted(eligible_external_ids)))
+    rows = db.scalars(stmt.order_by(Game.scheduled_start_time.asc())).all()
     if not rows:
         return []
     game_ids = [game.id for game in rows]
@@ -461,12 +461,12 @@ def _games_missing_pregame_snapshot(db: Session, league: str, now: datetime) -> 
 def _set_fetch_telemetry_context(provider: ScoreboardFetcher, db: Session | None) -> None:
     provider_context = getattr(provider, "set_telemetry_context", None)
     if callable(provider_context):
-        provider_context(db, None)
-    set_odds_telemetry_context(db, None)
+        provider_context(db)
+    set_odds_telemetry_context(db)
 
 
 def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
-    league = _normalize_league(league)
+    league = normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
@@ -479,7 +479,21 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
         if all_games and not touched_game_ids:
             raise RuntimeError(f"No {league} games could be mapped to catalog teams")
 
-        odds_candidates = _games_missing_pregame_snapshot(db, league, now) if settings.odds_enabled and league_supports_odds(league) else []
+        odds_eligible_external_ids = None
+        if league == "NFL":
+            odds_eligible_external_ids = {
+                game.external_game_id for game in all_games if game.season_slug != "preseason"
+            }
+        odds_candidates = (
+            _games_missing_pregame_snapshot(
+                db,
+                league,
+                now,
+                eligible_external_ids=odds_eligible_external_ids,
+            )
+            if settings.odds_enabled and league_supports_odds(league)
+            else []
+        )
         odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:
@@ -522,7 +536,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
             "odds_candidates": len(odds_candidates),
             "odds_snapshots_created": odds_snapshots_created,
             "alerts_created": alerts_created,
-            "next_poll_seconds": _catalog_interval_seconds(league),
+            "next_poll_seconds": _catalog_interval_seconds(),
         }
     except Exception as exc:
         db.rollback()
@@ -534,7 +548,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
             "error": str(exc),
             "games_checked": 0,
             "games_updated": 0,
-            "next_poll_seconds": _catalog_interval_seconds(league),
+            "next_poll_seconds": _catalog_interval_seconds(),
         }
     finally:
         _set_fetch_telemetry_context(provider, None)
@@ -542,7 +556,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
 
 
 def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
-    league = _normalize_league(league)
+    league = normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
@@ -565,7 +579,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
                 "next_scheduled_start_at": next_scheduled_iso,
                 "games_checked": 0,
                 "games_updated": 0,
-                "next_poll_seconds": _catalog_interval_seconds(league),
+                "next_poll_seconds": _catalog_interval_seconds(),
                 "mode": mode,
             }
 
@@ -625,7 +639,7 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
             "games_checked": len(provider_games),
             "games_updated": updated,
             "alerts_created": alerts_created,
-            "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(league),
+            "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(),
             "mode": "live" if has_live_games else ("waiting_for_start" if next_scheduled is not None else "no_upcoming"),
         }
     except Exception as exc:

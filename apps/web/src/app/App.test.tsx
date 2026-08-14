@@ -40,7 +40,7 @@ describe("App page metadata", () => {
       expect(document.title).toBe("Live Game Alerts | Live Sports Scores & Email and Push Alerts"),
     );
     expect(metaContent('meta[name="description"]')).toBe(
-      "Live scores and customizable email and push alerts for NBA, WNBA, MLB, MLS, and World Cup games.",
+      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, and World Cup games.",
     );
     expect(metaContent('meta[name="robots"]')).toBe("index, follow");
     expect(metaContent('meta[property="og:title"]')).toBe(
@@ -56,7 +56,7 @@ describe("App page metadata", () => {
     renderPath("/teams");
 
     await waitFor(() => expect(document.title).toBe("Sports Teams | Live Game Alerts"));
-    expect(metaContent('meta[name="description"]')).toContain("Browse NBA, WNBA, MLB, MLS");
+    expect(metaContent('meta[name="description"]')).toContain("Browse NBA, WNBA, NFL, MLB, MLS");
     expect(metaContent('meta[name="robots"]')).toBe("index, follow");
     expect(metaContent('meta[property="og:url"]')).toBe("https://livegamealerts.com/teams");
     expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href).toBe(

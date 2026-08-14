@@ -15,7 +15,6 @@ from app.deps import require_admin_user
 from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
 from app.schemas.ops import (
     ApiUsageSummaryOut,
-    IngestHealthEventOut,
     IngestHealthOut,
     IngestHealthResponseOut,
     ApiUsageTimeseriesOut,

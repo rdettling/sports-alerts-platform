@@ -39,13 +39,14 @@ Current supported leagues:
 
 - `NBA`
 - `WNBA`
+- `NFL`
 - `MLB`
 - `MLS`
 - `WORLD_CUP`
 
 League runtime is controlled by DB-backed `league_settings`, so disabled leagues disappear from user-facing reads and worker scope without a code change.
 
-Each supported league has one code-owned profile containing its sport, provider identifiers, live cadence, and display metadata. Alert availability and shared game behavior are selected by sport: basketball, baseball, or soccer. User preferences remain league-specific, and presentation such as World Cup stage labels remains explicit.
+Each supported league has one code-owned profile containing its sport, provider identifiers, live cadence, and display metadata. Alert availability and shared game behavior are selected by sport: basketball, football, baseball, or soccer. User preferences remain league-specific, and presentation such as NFL season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed.
 
 ## Main API Areas
 
@@ -81,7 +82,6 @@ Main persisted tables:
 - `alerts`
 - `alert_deliveries`
 - `push_subscriptions`
-- `alert_deliveries`
 - `api_call_rollups_hourly`
 - `worker_jobs`
 
@@ -105,7 +105,7 @@ Notable modeling decisions:
 ### Game Sync
 
 1. Worker fetches provider schedule/state for enabled leagues
-2. Worker upserts teams and games into Postgres
+2. Worker maps provider team IDs to the API-seeded catalog and upserts games into Postgres
 3. Worker snapshots odds for eligible pregame windows when enabled
 4. Web reads the DB-backed game state through `/games`
 
@@ -113,7 +113,7 @@ Notable modeling decisions:
 
 1. Worker loads effective followers and alert settings for touched games
 2. Worker evaluates league-appropriate alert types
-3. Worker writes a deduplicated `alerts` event and its email `alert_deliveries` row
+3. Worker writes a deduplicated `alerts` event and channel-specific Email and/or Push `alert_deliveries` rows
 4. Email delivery executes through log mode or live Resend mode
 5. Web reads alert history through `/alerts/history`
 

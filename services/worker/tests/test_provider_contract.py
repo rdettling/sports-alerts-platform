@@ -130,6 +130,111 @@ def test_provider_parses_wnba_state_team_ids_and_postseason_context():
     assert final.is_final is True
 
 
+def test_provider_parses_nfl_preseason_state_and_context():
+    payload = {
+        "events": [
+            {
+                "id": "401873272",
+                "date": "2026-08-13T23:00Z",
+                "season": {"year": 2026, "type": 1, "slug": "preseason"},
+                "week": {"number": 2},
+                "competitions": [
+                    {
+                        "notes": [],
+                        "status": {
+                            "period": 2,
+                            "displayClock": "9:35",
+                            "type": {
+                                "state": "in",
+                                "name": "STATUS_IN_PROGRESS",
+                                "completed": False,
+                            },
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "10", "team": {"id": "4", "abbreviation": "CIN"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "8", "abbreviation": "DET"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    schedule = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("NFL", ["20260813"])
+
+    assert len(schedule) == 1
+    game = schedule[0]
+    assert (game.home_external_team_id, game.away_external_team_id) == ("4", "8")
+    assert (game.status, game.period, game.clock, game.home_score, game.away_score) == (
+        "in_progress",
+        2,
+        "9:35",
+        10,
+        0,
+    )
+    assert (game.season_slug, game.season_week, game.context_label) == (
+        "preseason",
+        2,
+        "Preseason · Week 2",
+    )
+
+
+def test_provider_uses_meaningful_nfl_context_and_leaves_standard_games_unlabeled():
+    payload = {
+        "events": [
+            {
+                "id": "401999201",
+                "date": "2026-09-10T20:00Z",
+                "season": {"year": 2026, "type": 2, "slug": "regular-season"},
+                "week": {"number": 1},
+                "competitions": [
+                    {
+                        "notes": [],
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "2", "abbreviation": "BUF"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "12", "abbreviation": "KC"}},
+                        ],
+                    }
+                ],
+            },
+            {
+                "id": "401999202",
+                "date": "2027-01-17T20:00Z",
+                "season": {"year": 2026, "type": 3, "slug": "post-season"},
+                "week": {"number": 1},
+                "competitions": [
+                    {
+                        "notes": [{"headline": "Wild Card Playoffs"}],
+                        "status": {
+                            "period": 4,
+                            "displayClock": "0:00",
+                            "type": {"state": "post", "name": "STATUS_FINAL", "completed": True},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "24", "team": {"id": "2", "abbreviation": "BUF"}},
+                            {"homeAway": "away", "score": "21", "team": {"id": "12", "abbreviation": "KC"}},
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+
+    schedule = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("NFL", ["20260910"])
+
+    regular = next(game for game in schedule if game.external_game_id == "401999201")
+    postseason = next(game for game in schedule if game.external_game_id == "401999202")
+    assert regular.context_label is None
+    assert (regular.season_slug, regular.season_week) == ("regular-season", 1)
+    assert postseason.context_label == "Wild Card Playoffs"
+    assert postseason.is_final is True
+
+
 def test_provider_builds_world_cup_stage_context_label():
     payload = {
         "events": [

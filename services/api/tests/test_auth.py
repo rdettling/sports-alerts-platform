@@ -4,7 +4,9 @@ from time import monotonic
 from app.config import settings
 from app.db.models import EmailLoginToken
 from app.db.session import SessionLocal
-from app.services.email_templates import build_sign_in_email
+from app.services import sign_in_delivery
+from app.services.resend import ResendResult
+from app.services.sign_in_email import build_sign_in_email
 
 TEST_CODE = "123456"
 
@@ -187,6 +189,26 @@ def test_sign_in_email_contains_link_code_expiry_and_home_screen_guidance():
         assert "https://example.com/auth?token=secret" in body
         assert "15 minutes" in body
         assert "Home Screen app" in body
+
+
+def test_sign_in_email_live_failure_is_swallowed(monkeypatch, caplog):
+    monkeypatch.setattr(sign_in_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(
+        sign_in_delivery,
+        "send_resend_email",
+        lambda *args, **kwargs: ResendResult(
+            sent=False,
+            metadata={"error": "resend_http_error", "detail": "network unavailable"},
+        ),
+    )
+
+    sign_in_delivery.send_sign_in_email(
+        "user@example.com",
+        "https://example.com/auth?token=secret",
+        TEST_CODE,
+    )
+
+    assert "network unavailable" in caplog.text
 
 
 def test_magic_link_start_always_returns_neutral_message_for_unknown_email(client):

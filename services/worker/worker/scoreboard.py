@@ -22,6 +22,8 @@ class ScoreboardGame:
     away_external_team_id: str
     scheduled_start_time: datetime
     status: str
+    season_slug: str | None = None
+    season_week: int | None = None
     context_label: str | None = None
     home_score: int | None = None
     away_score: int | None = None
@@ -56,11 +58,9 @@ class EspnScoreboardClient:
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
         self._telemetry_db: Session | None = None
-        self._ingest_run_id: int | None = None
 
-    def set_telemetry_context(self, db: Session | None, ingest_run_id: int | None) -> None:
+    def set_telemetry_context(self, db: Session | None) -> None:
         self._telemetry_db = db
-        self._ingest_run_id = ingest_run_id
 
     def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
         scoreboard_url = get_scoreboard_url(league)
@@ -76,7 +76,6 @@ class EspnScoreboardClient:
                 attempt_status="rate_limited" if status_code == 429 else ("success" if 200 <= status_code < 300 else "error"),
                 http_status=status_code,
                 latency_ms=int((monotonic() - started_at) * 1000),
-                ingest_run_id=self._ingest_run_id,
             )
         response.raise_for_status()
         return response.json()
@@ -133,14 +132,25 @@ class EspnScoreboardClient:
         if sport in {"baseball", "soccer"} and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
+        season = event.get("season") or {}
+        season_slug = _clean_text(season.get("slug"))
+        week = event.get("week") or {}
+        raw_season_week = week.get("number") if isinstance(week, dict) else None
+        season_week = int(raw_season_week) if isinstance(raw_season_week, int) else None
         context_label: str | None = None
         if sport == "basketball":
             round_label = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
             series_summary = _clean_text(((competition.get("series") or {}).get("summary")))
             context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary
+        elif sport == "football":
+            event_note = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
+            if event_note:
+                context_label = event_note
+            elif season_slug == "preseason":
+                context_label = f"Preseason · Week {season_week}" if season_week is not None else "Preseason"
+            elif season_slug == "post-season":
+                context_label = "Postseason"
         elif normalized_league == "WORLD_CUP":
-            season = event.get("season") or {}
-            season_slug = _clean_text(season.get("slug"))
             season_type = season.get("type")
             season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
             context_label = _format_world_cup_stage(season_slug) or season_type_name
@@ -150,6 +160,8 @@ class EspnScoreboardClient:
             home_external_team_id=home_external_team_id,
             away_external_team_id=away_external_team_id,
             scheduled_start_time=scheduled_start_time,
+            season_slug=season_slug,
+            season_week=season_week,
             context_label=context_label,
             status=status,
             home_score=int(home.get("score")) if home.get("score") else None,

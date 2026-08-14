@@ -24,3 +24,11 @@ def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
         "golden state valkyries",
         "toronto tempo",
     )
+
+
+def test_nfl_uses_regular_season_odds_feed():
+    assert _odds_sport_key_for_league("NFL") == "americanfootball_nfl"
+    assert game_key("Buffalo Bills", "Kansas City Chiefs") == (
+        "buffalo bills",
+        "kansas city chiefs",
+    )

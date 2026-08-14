@@ -12,4 +12,8 @@ describe("dashboard utilities", () => {
   it("uses the WNBA league mark", () => {
     expect(leagueLogoUrl("WNBA")).toBe("https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png");
   });
+
+  it("uses the NFL league mark", () => {
+    expect(leagueLogoUrl("NFL")).toBe("https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png");
+  });
 });

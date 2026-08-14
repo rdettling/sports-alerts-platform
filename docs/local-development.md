@@ -14,7 +14,7 @@ The standard local path is the Docker-based stack defined in `infra/docker-compo
 2. Review and edit `.env`
 3. Run `make rebuild`
 
-The generated `.env` template and required config groups are documented in [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md).
+The generated `.env` template and required config groups are documented in [configuration.md](configuration.md).
 
 ## Local URLs
 

@@ -259,4 +259,43 @@ describe("GameScoreRow", () => {
       "https://a.espncdn.com/i/teamlogos/soccer/500/18966.png",
     );
   });
+
+  it("shows NFL identity, team logos, and two-way moneyline odds", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ league: "NFL" })}
+        sport="football"
+        home={{
+          ...home,
+          external_team_id: "2",
+          league: "NFL",
+          name: "Buffalo Bills",
+          abbreviation: "BUF",
+        }}
+        away={{
+          ...away,
+          external_team_id: "12",
+          league: "NFL",
+          name: "Kansas City Chiefs",
+          abbreviation: "KC",
+        }}
+        isFollowed={false}
+        statusLabel="5:20 PM"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "NFL logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+    );
+    expect(screen.getByRole("img", { name: "Kansas City Chiefs logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png",
+    );
+    expect(screen.getByRole("img", { name: "Buffalo Bills logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
+    );
+    expect(screen.queryByText("Draw")).not.toBeInTheDocument();
+  });
 });

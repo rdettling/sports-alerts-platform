@@ -43,6 +43,21 @@ describe("game display utilities", () => {
     ).toBe("Q4 01:12");
     expect(
       formatGameTime(
+        game({ league: "NFL", status: "live", period: 4, clock: "04:31" }),
+        "football",
+      ),
+    ).toBe("Q4 04:31");
+    expect(
+      formatGameTime(game({ league: "NFL", status: "live", period: 2, clock: "0:00" }), "football"),
+    ).toBe("Halftime");
+    expect(
+      formatGameTime(
+        game({ league: "NFL", status: "live", period: 5, clock: "08:42" }),
+        "football",
+      ),
+    ).toBe("OT1 08:42");
+    expect(
+      formatGameTime(
         game({ league: "WORLD_CUP", status: "live", period: 2, clock: "67'" }),
         "soccer",
       ),

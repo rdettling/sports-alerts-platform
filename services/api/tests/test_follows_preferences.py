@@ -145,9 +145,10 @@ def test_alert_preferences_get_and_update(client):
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert len(groups) == 5
+    assert len(groups) == 6
     nba_group = next(group for group in groups if group["league"] == "NBA")
     wnba_group = next(group for group in groups if group["league"] == "WNBA")
+    nfl_group = next(group for group in groups if group["league"] == "NFL")
     mlb_group = next(group for group in groups if group["league"] == "MLB")
     mls_group = next(group for group in groups if group["league"] == "MLS")
     world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
@@ -165,6 +166,15 @@ def test_alert_preferences_get_and_update(client):
         "final_result",
     }
     assert next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")["is_enabled"] is True
+    assert {item["alert_type"] for item in nfl_group["preferences"]} == {
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "final_result",
+    }
+    nfl_close = next(item for item in nfl_group["preferences"] if item["alert_type"] == "close_game_late")
+    assert nfl_close["close_game_margin_threshold"] == 8
+    assert nfl_close["close_game_time_threshold_seconds"] == 300
     assert {item["alert_type"] for item in mlb_group["preferences"]} == {
         "game_start",
         "inning_start",

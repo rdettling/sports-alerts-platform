@@ -113,4 +113,4 @@ Symptoms:
 Fix:
 
 - make sure required values exist in `.env` or your deployed service environment
-- use [configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md) as the source of truth
+- use [configuration.md](configuration.md) as the source of truth

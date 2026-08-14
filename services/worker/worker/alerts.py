@@ -147,7 +147,7 @@ def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: s
                 key = (user_id, league, alert_type)
                 if key in existing:
                     continue
-                defaults = get_alert_default_values(alert_type)
+                defaults = get_alert_default_values(league, alert_type)
                 db.add(
                     UserAlertDefault(
                         user_id=user_id,
@@ -242,7 +242,7 @@ def _should_trigger_inning_start(game: Game, is_enabled: bool, inning_threshold:
 def _should_trigger_overtime_start(game: Game, is_enabled: bool) -> bool:
     return (
         is_enabled
-        and get_league_profile(game.league).sport == "basketball"
+        and get_league_profile(game.league).sport in {"basketball", "football"}
         and not game.is_final
         and game.status in {"in_progress", "live"}
         and (game.period or 0) >= 5

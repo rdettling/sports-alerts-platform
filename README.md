@@ -2,7 +2,7 @@
 
 Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-The current product surface supports five leagues: `NBA`, `WNBA`, `MLB`, `MLS`, and `WORLD_CUP`.
+The current product surface supports six leagues: `NBA`, `WNBA`, `NFL`, `MLB`, `MLS`, and `WORLD_CUP`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -16,12 +16,12 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Admin-only runtime area for provider telemetry, DB stats, league enable/disable controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
-- Code-owned league profiles pair league-specific provider configuration with shared basketball, baseball, or soccer behavior.
+- Code-owned league profiles pair league-specific provider configuration with shared basketball, football, baseball, or soccer behavior.
 
 Alert types are defined by sport and exposed independently for each league:
 
-- `NBA` and `WNBA`: `game_start`, `close_game_late`, `final_result`
-- `MLB`: `game_start`, `inning_start`, `final_result`
+- `NBA`, `WNBA`, and `NFL`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
+- `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
 - `MLS` and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 
 ## Repo Layout
@@ -42,7 +42,7 @@ Alert types are defined by sport and exposed independently for each league:
    - API docs: `http://localhost:8000/docs`
    - API health: `http://localhost:8000/healthz`
 
-For the exact env shape, see [docs/configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md).
+For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 
 ## Day-To-Day Commands
 
@@ -65,12 +65,12 @@ For the exact env shape, see [docs/configuration.md](/Users/rdettling/Library/Mo
 
 ## Canonical Docs
 
-- [docs/architecture.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/architecture.md) — services, flows, and persisted state
-- [docs/local-development.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/local-development.md) — setup, daily workflow, and local verification
-- [docs/configuration.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/configuration.md) — env vars and config groups
-- [docs/deployment.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/deployment.md) — deployment shape and post-deploy checks
-- [docs/runbook.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/runbook.md) — troubleshooting and recovery
+- [docs/architecture.md](docs/architecture.md) — services, flows, and persisted state
+- [docs/local-development.md](docs/local-development.md) — setup, daily workflow, and local verification
+- [docs/configuration.md](docs/configuration.md) — env vars and config groups
+- [docs/deployment.md](docs/deployment.md) — deployment shape and post-deploy checks
+- [docs/runbook.md](docs/runbook.md) — troubleshooting and recovery
 
 ## Deployment Note
 
-The project has a production-style deployment shape and can be hosted on services like Render plus a managed Postgres provider such as Neon. See [docs/deployment.md](/Users/rdettling/Library/Mobile Documents/com~apple~CloudDocs/Code/projects/sports-alerts-platform/docs/deployment.md) for the reference model.
+The project has a production-style deployment shape and can be hosted on services like Render plus a managed Postgres provider such as Neon. See [docs/deployment.md](docs/deployment.md) for the reference model.

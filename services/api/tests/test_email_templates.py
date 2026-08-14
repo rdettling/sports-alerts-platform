@@ -117,6 +117,39 @@ def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
     assert "teamlogos/wnba/500/ny.png" in html_body
 
 
+def test_nfl_alerts_use_football_copy_periods_and_logos():
+    away = Team(external_team_id="12", league="NFL", name="Kansas City Chiefs", abbreviation="KC")
+    home = Team(external_team_id="2", league="NFL", name="Buffalo Bills", abbreviation="BUF")
+    game = Game(
+        external_game_id="nfl-1",
+        league="NFL",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=20,
+        away_score=17,
+        period=4,
+        clock="04:30",
+    )
+
+    start_subject = build_alert_subject(_mk_alert("game_start"), game, home, away)
+    close_text, close_html = build_alert_email_content(_mk_alert("close_game_late"), game, home, away)
+
+    assert start_subject == "Kickoff · KC @ BUF"
+    assert "KC 17–20 BUF • Q4 • 04:30 left" in close_text
+    assert "teamlogos/nfl/500/kc.png" in close_html
+    assert "teamlogos/nfl/500/buf.png" in close_html
+
+    game.home_score = 20
+    game.away_score = 20
+    game.period = 5
+    game.clock = "10:00"
+    overtime = _mk_alert("overtime_start")
+    overtime.event_data = {"status": "in_progress", "period": 5, "clock": "10:00"}
+    assert build_alert_subject(overtime, game, home, away) == "OT1 · KC 20–20 BUF"
+
+
 def test_nba_overtime_start_uses_period_aware_copy():
     away = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
     home = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")

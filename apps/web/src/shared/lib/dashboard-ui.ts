@@ -21,6 +21,7 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   const normalized = (league || "").toUpperCase();
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "WNBA") return "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png";
+  if (normalized === "NFL") return "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png";
   if (normalized === "MLB") return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg";
   if (normalized === "MLS") {
     return "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg";

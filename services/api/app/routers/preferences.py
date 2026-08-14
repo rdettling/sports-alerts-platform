@@ -44,7 +44,7 @@ def _ensure_default_preferences(db: Session, user_id: int) -> None:
             key = (league, alert_type)
             if key in existing:
                 continue
-            defaults = get_alert_default_values(alert_type)
+            defaults = get_alert_default_values(league, alert_type)
             db.add(
                 UserAlertDefault(
                     user_id=user_id,

@@ -34,7 +34,12 @@ export function formatGameTime(game: Game, sport: Sport): string {
           ? formatSoccerPeriod(game.period)
           : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
-    if (sport === "basketball" && game.period === 2 && isClockAtZero(clock)) return "Halftime";
+    if (
+      (sport === "basketball" || sport === "football") &&
+      game.period === 2 &&
+      isClockAtZero(clock)
+    )
+      return "Halftime";
     if (sport === "soccer" && clock.toUpperCase() === "HT") return "Halftime";
     if (sport === "soccer" && clock) return clock;
     if (sport === "baseball" && clock && !isClockAtZero(clock)) return clock;
