@@ -41,8 +41,8 @@ Primary repo check:
 
 If you want narrower service checks:
 
-- API: `cd services/api && uv run pytest -q`
-- Worker: `cd services/worker && uv run pytest -q`
+- API: `cd services/backend && uv run pytest -q tests/api`
+- Worker: `cd services/backend && uv run pytest -q tests/worker`
 - Web build: `cd apps/web && npm run build`
 
 ## Local Verification Checklist

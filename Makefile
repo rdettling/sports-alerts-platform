@@ -1,6 +1,9 @@
 SHELL := /bin/sh
-UV_CACHE_DIR ?= ./.cache/uv
-UV_PROJECT_ENVIRONMENT ?= .venv-local
+REPO_ROOT := $(CURDIR)
+BACKEND_DIR := services/backend
+UV_CACHE_DIR ?= $(REPO_ROOT)/.cache/uv
+UV_PROJECT_ENVIRONMENT ?= $(REPO_ROOT)/$(BACKEND_DIR)/.venv-local
+UV_LINK_MODE ?= copy
 COMPOSE_FILE := infra/docker-compose.yml
 ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
@@ -45,8 +48,7 @@ setup:
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \
 	fi
-	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
-	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
+	cd $(BACKEND_DIR) && UV_PROJECT_ENVIRONMENT="$(UV_PROJECT_ENVIRONMENT)" UV_CACHE_DIR="$(UV_CACHE_DIR)" UV_LINK_MODE="$(UV_LINK_MODE)" uv sync --locked --group dev
 	cd apps/web && npm ci --include=optional
 
 up:
@@ -85,13 +87,13 @@ web-fix:
 test: _lint-python _test-api _test-worker _test-web
 
 _lint-python:
-	UV_CACHE_DIR=$(UV_CACHE_DIR) uvx --from ruff==0.16.3 ruff check --select E4,E7,E9,F services/api/app services/api/tests services/worker/worker services/worker/tests
+	UV_CACHE_DIR="$(UV_CACHE_DIR)" uvx --from ruff==0.16.3 ruff check --select E4,E7,E9,F $(BACKEND_DIR)/app $(BACKEND_DIR)/worker $(BACKEND_DIR)/tests
 
 _test-api:
-	cd services/api && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
+	cd $(BACKEND_DIR) && UV_PROJECT_ENVIRONMENT="$(UV_PROJECT_ENVIRONMENT)" UV_CACHE_DIR="$(UV_CACHE_DIR)" UV_LINK_MODE="$(UV_LINK_MODE)" uv run pytest -q tests/api
 
 _test-worker:
-	cd services/worker && UV_PROJECT_ENVIRONMENT=$(UV_PROJECT_ENVIRONMENT) UV_CACHE_DIR=$(UV_CACHE_DIR) uv run pytest -q
+	cd $(BACKEND_DIR) && UV_PROJECT_ENVIRONMENT="$(UV_PROJECT_ENVIRONMENT)" UV_CACHE_DIR="$(UV_CACHE_DIR)" UV_LINK_MODE="$(UV_LINK_MODE)" uv run pytest -q tests/worker
 
 _test-web:
 	cd apps/web && npm ci --include=optional && npm run format && npm run lint && npm test && npm run build

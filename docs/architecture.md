@@ -3,8 +3,8 @@
 ## Services
 
 - **Web** (`apps/web`): React + Vite UI for public games and teams plus authenticated alerts and admin-only runtime views
-- **API** (`services/api`): FastAPI service for auth, reads/writes, admin endpoints, startup seeding, and delivery helpers
-- **Worker** (`services/worker`): continuous schedule sync, odds snapshots, alert evaluation, and delivery execution
+- **API** (`services/backend/app`): FastAPI service for auth, reads/writes, admin endpoints, startup seeding, and delivery helpers
+- **Worker** (`services/backend/worker`): continuous schedule sync, odds snapshots, alert evaluation, and delivery execution
 - **Postgres**: system of record for users, follows, games, odds snapshots, alert configuration, sent alerts, and lightweight ops state
 
 ## Runtime Shape

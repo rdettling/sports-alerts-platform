@@ -95,7 +95,7 @@ Use this when you want to keep the repo shape but clear sports-domain state.
 2. Run:
 
 ```sh
-cd services/api
+cd services/backend
 uv run alembic upgrade head
 uv run python scripts/reset_sports_data.py --yes
 ```

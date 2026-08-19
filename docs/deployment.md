@@ -20,7 +20,7 @@ The worker and API should point at the same database and the same logical enviro
 
 ## API Service
 
-Deploy the API from `services/api/Dockerfile`.
+Deploy the API from `services/backend/Dockerfile` using its default command.
 
 Requirements:
 
@@ -35,12 +35,12 @@ Health checks:
 
 ## Worker Service
 
-Deploy the worker from `services/worker/Dockerfile`.
+Deploy the worker from `services/backend/Dockerfile`.
 
 Run:
 
 ```sh
-uv run python -m worker.main
+/opt/venv/bin/python -m worker.main
 ```
 
 Requirements:

@@ -1,7 +1,7 @@
 [project]
-name = "sports-alerts-api"
+name = "sports-alerts-backend"
 version = "0.1.0"
-description = "FastAPI backend for Sports Alerts Platform"
+description = "API and worker backend for Sports Alerts Platform"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.13.3",

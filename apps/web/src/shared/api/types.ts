@@ -145,73 +145,7 @@ export type PushSubscriptionPayload = {
   };
 };
 
-export type OpsWindow = "24h" | "7d" | "30d";
-export type OpsTimeseriesWindow = "24h" | "7d";
 export type OpsAdminOverviewWindow = "1h" | "6h" | "24h" | "7d";
-
-export type OpsSummaryResponse = {
-  window: OpsWindow;
-  totals: {
-    actual_calls: number;
-    success_calls: number;
-    error_calls: number;
-    rate_limited_calls: number;
-  };
-  expected_vs_actual: Record<string, { expected: number; actual: number }>;
-  by_provider: Array<{
-    provider: string;
-    actual_calls: number;
-    success_calls: number;
-    error_calls: number;
-    rate_limited_calls: number;
-    expected_calls: number | null;
-  }>;
-  by_endpoint: Array<{
-    provider: string;
-    endpoint_key: string;
-    actual_calls: number;
-    success_calls: number;
-    error_calls: number;
-    rate_limited_calls: number;
-  }>;
-};
-
-export type OpsTimeseriesResponse = {
-  window: OpsTimeseriesWindow;
-  bucket: "hour";
-  points: Array<{
-    bucket_start: string;
-    provider: string;
-    actual_calls: number;
-    success_calls: number;
-    error_calls: number;
-    rate_limited_calls: number;
-    expected_calls: number | null;
-  }>;
-};
-
-export type OpsIngestHealthResponse = {
-  scheduler_mode: "live" | "pregame_hot" | "pregame_cold" | "off";
-  next_run_at: string | null;
-  last_success_at: string | null;
-  active_leagues: League[];
-  states: Array<{
-    source_key: string;
-    mode: string;
-    next_due_at: string | null;
-    last_success_at: string | null;
-    backoff_until: string | null;
-    last_error: string | null;
-  }>;
-  events: Array<{
-    id: number;
-    source_key: string;
-    event_type: string;
-    mode: string | null;
-    message: string | null;
-    occurred_at: string;
-  }>;
-};
 
 export type OpsAdminSummaryResponse = {
   overview: {
@@ -289,8 +223,4 @@ export type OpsNeonUsageResponse = {
   compute_last_active_at: string | null;
   avg_cu_while_active: number | null;
   message: string | null;
-};
-
-export type OpsLeagueSettingsResponse = {
-  items: LeagueSetting[];
 };

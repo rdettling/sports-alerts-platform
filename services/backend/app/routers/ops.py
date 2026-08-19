@@ -9,18 +9,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, LeagueSetting, Team, User, WorkerJob
+from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, LeagueSetting, User, WorkerJob
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
 from app.schemas.ops import (
-    ApiUsageSummaryOut,
-    IngestHealthOut,
-    IngestHealthResponseOut,
-    ApiUsageTimeseriesOut,
-    ApiUsageTimeseriesPointOut,
-    EndpointUsageOut,
-    ExpectedActualOut,
     OpsAdminDeliveryOut,
     OpsAdminDeliveryStatsOut,
     OpsAdminProviderOut,
@@ -30,24 +23,18 @@ from app.schemas.ops import (
     OpsAdminSummaryOut,
     OpsAdminSummaryOverviewOut,
     NeonUsageOut,
-    ProviderUsageOut,
-    TeamMappingHealthOut,
-    TeamMappingLeagueHealthOut,
-    OpsLeagueSettingsResponseOut,
 )
 from app.services.leagues import (
     get_active_leagues,
     get_alert_types,
     get_league_profile,
-    get_scoreboard_url,
     list_league_settings,
     normalize_league,
 )
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
-WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
-TIMESERIES_WINDOWS = {"24h": 24, "7d": 24 * 7}
+WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7}
 ADMIN_OVERVIEW_WINDOWS = {"1h", "6h", "24h", "7d"}
 NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
 OPS_PROVIDER_QUOTAS = {"espn": 5000, "odds": 1000}
@@ -58,12 +45,6 @@ def _window_start(window: str) -> datetime:
     if window not in WINDOW_TO_HOURS:
         raise HTTPException(status_code=422, detail="Invalid window")
     return datetime.now(timezone.utc) - timedelta(hours=WINDOW_TO_HOURS[window])
-
-
-def _timeseries_window_start(window: str) -> datetime:
-    if window not in TIMESERIES_WINDOWS:
-        raise HTTPException(status_code=422, detail="Invalid window")
-    return datetime.now(timezone.utc) - timedelta(hours=TIMESERIES_WINDOWS[window])
 
 
 def _canonical_provider_name(name: str) -> str:
@@ -127,160 +108,6 @@ def _build_runtime(db: Session) -> OpsAdminRuntimeOut:
             )
             for job in jobs
         ],
-    )
-
-
-@router.get("/api-usage/summary", response_model=ApiUsageSummaryOut)
-def api_usage_summary(
-    window: str = Query(default="24h"),
-    _: User = Depends(require_admin_user),
-    db: Session = Depends(get_db),
-) -> ApiUsageSummaryOut:
-    start = _window_start(window)
-    rollups = db.scalars(
-        select(ApiCallRollupHourly).where(
-            ApiCallRollupHourly.bucket_start >= start,
-        )
-    ).all()
-
-    provider_accumulator: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    endpoint_accumulator: dict[tuple[str, str], dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    totals = {"actual_calls": 0, "success_calls": 0, "error_calls": 0, "rate_limited_calls": 0}
-
-    for row in rollups:
-        provider_metrics = provider_accumulator[row.provider]
-        endpoint_metrics = endpoint_accumulator[(row.provider, row.endpoint_key)]
-        provider_metrics["actual_calls"] += row.call_count
-        endpoint_metrics["actual_calls"] += row.call_count
-        totals["actual_calls"] += row.call_count
-        if row.attempt_status == "success":
-            provider_metrics["success_calls"] += row.call_count
-            endpoint_metrics["success_calls"] += row.call_count
-            totals["success_calls"] += row.call_count
-        elif row.attempt_status == "rate_limited":
-            provider_metrics["rate_limited_calls"] += row.call_count
-            endpoint_metrics["rate_limited_calls"] += row.call_count
-            totals["rate_limited_calls"] += row.call_count
-        else:
-            provider_metrics["error_calls"] += row.call_count
-            endpoint_metrics["error_calls"] += row.call_count
-            totals["error_calls"] += row.call_count
-
-    provider_expected = {"espn": None, "odds": None}
-    by_provider = [
-        ProviderUsageOut(
-            provider=provider,
-            actual_calls=metrics.get("actual_calls", 0),
-            success_calls=metrics.get("success_calls", 0),
-            error_calls=metrics.get("error_calls", 0),
-            rate_limited_calls=metrics.get("rate_limited_calls", 0),
-            expected_calls=provider_expected.get(provider),
-        )
-        for provider, metrics in sorted(provider_accumulator.items())
-    ]
-    by_endpoint = [
-        EndpointUsageOut(
-            provider=provider,
-            endpoint_key=endpoint_key,
-            actual_calls=metrics.get("actual_calls", 0),
-            success_calls=metrics.get("success_calls", 0),
-            error_calls=metrics.get("error_calls", 0),
-            rate_limited_calls=metrics.get("rate_limited_calls", 0),
-        )
-        for (provider, endpoint_key), metrics in sorted(endpoint_accumulator.items())
-    ]
-
-    return ApiUsageSummaryOut(
-        window=window,
-        totals=totals,
-        expected_vs_actual={
-            "espn": ExpectedActualOut(expected=0, actual=0),
-            "odds": ExpectedActualOut(expected=0, actual=0),
-        },
-        by_provider=by_provider,
-        by_endpoint=by_endpoint,
-    )
-
-
-@router.get("/api-usage/timeseries", response_model=ApiUsageTimeseriesOut)
-def api_usage_timeseries(
-    window: str = Query(default="24h"),
-    bucket: str = Query(default="hour"),
-    _: User = Depends(require_admin_user),
-    db: Session = Depends(get_db),
-) -> ApiUsageTimeseriesOut:
-    if bucket != "hour":
-        raise HTTPException(status_code=422, detail="Invalid bucket")
-    start = _timeseries_window_start(window)
-
-    rollups = db.scalars(
-        select(ApiCallRollupHourly).where(
-            ApiCallRollupHourly.bucket_start >= start,
-        )
-    ).all()
-    points_acc: dict[tuple[datetime, str], dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for row in rollups:
-        key = (row.bucket_start, row.provider)
-        point = points_acc[key]
-        point["actual_calls"] += row.call_count
-        if row.attempt_status == "success":
-            point["success_calls"] += row.call_count
-        elif row.attempt_status == "rate_limited":
-            point["rate_limited_calls"] += row.call_count
-        else:
-            point["error_calls"] += row.call_count
-
-    points = []
-    for (bucket_start, provider), metrics in sorted(points_acc.items()):
-        points.append(
-            ApiUsageTimeseriesPointOut(
-                bucket_start=bucket_start,
-                provider=provider,
-                actual_calls=metrics.get("actual_calls", 0),
-                success_calls=metrics.get("success_calls", 0),
-                error_calls=metrics.get("error_calls", 0),
-                rate_limited_calls=metrics.get("rate_limited_calls", 0),
-                expected_calls=None,
-            )
-        )
-    return ApiUsageTimeseriesOut(window=window, bucket=bucket, points=points)
-
-
-@router.get("/db/ingest-health", response_model=IngestHealthResponseOut)
-def ingest_health(
-    event_limit: int = Query(default=20, ge=1, le=200),
-    _: User = Depends(require_admin_user),
-    db: Session = Depends(get_db),
-) -> IngestHealthResponseOut:
-    runtime = _build_runtime(db)
-    jobs = db.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
-    return IngestHealthResponseOut(
-        scheduler_mode=runtime.scheduler_mode,
-        next_run_at=runtime.next_run_at,
-        last_success_at=runtime.last_success_at,
-        active_leagues=runtime.active_leagues,
-        states=[
-            IngestHealthOut(
-                source_key=f"worker:{job.job_type}:{job.league or 'global'}",
-                mode=job.status,
-                next_due_at=job.next_run_at,
-                last_success_at=job.last_finished_at,
-                backoff_until=job.backoff_until,
-                last_error=job.last_error,
-            )
-            for job in jobs
-        ],
-        events=[],
-    )
-
-
-@router.get("/leagues", response_model=OpsLeagueSettingsResponseOut)
-def get_league_settings(
-    _: User = Depends(require_admin_user),
-    db: Session = Depends(get_db),
-) -> OpsLeagueSettingsResponseOut:
-    return OpsLeagueSettingsResponseOut(
-        items=[_league_setting_out(row) for row in list_league_settings(db)]
     )
 
 
@@ -465,58 +292,4 @@ def neon_usage(_: User = Depends(require_admin_user)) -> NeonUsageOut:
         active_time_sec=active_time_sec,
         compute_last_active_at=data.get("compute_last_active_at"),
         avg_cu_while_active=avg_cu_while_active,
-    )
-
-
-@router.get("/db/team-mapping-health", response_model=TeamMappingHealthOut)
-def team_mapping_health(
-    date: str | None = Query(default=None, description="Date in YYYYMMDD format"),
-    _: User = Depends(require_admin_user),
-    db: Session = Depends(get_db),
-) -> TeamMappingHealthOut:
-    check_date = date or datetime.now(timezone.utc).strftime("%Y%m%d")
-    if len(check_date) != 8 or not check_date.isdigit():
-        raise HTTPException(status_code=422, detail="Invalid date. Use YYYYMMDD.")
-
-    leagues_out: list[TeamMappingLeagueHealthOut] = []
-    for league in get_active_leagues(db):
-        seeded_team_ids = {
-            team_id
-            for team_id, in db.execute(select(Team.external_team_id).where(Team.league == league)).all()
-        }
-        missing_team_ids: set[str] = set()
-        checked_games = 0
-        checked_team_refs = 0
-        try:
-            with httpx.Client(timeout=8.0) as client:
-                response = client.get(get_scoreboard_url(league), params={"dates": check_date})
-                response.raise_for_status()
-                payload = response.json()
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Failed to load {league} scoreboard for {check_date}: {exc}") from exc
-
-        for event in payload.get("events", []):
-            checked_games += 1
-            competition = (event.get("competitions") or [{}])[0]
-            for competitor in competition.get("competitors", []):
-                team = competitor.get("team") or {}
-                team_id = str(team.get("id") or "").strip()
-                if not team_id:
-                    continue
-                checked_team_refs += 1
-                if team_id not in seeded_team_ids:
-                    missing_team_ids.add(team_id)
-        leagues_out.append(
-            TeamMappingLeagueHealthOut(
-                league=league,
-                checked_games=checked_games,
-                checked_team_refs=checked_team_refs,
-                missing_team_ids=sorted(missing_team_ids, key=lambda value: int(value) if value.isdigit() else value),
-            )
-        )
-
-    return TeamMappingHealthOut(
-        ok=all(not league.missing_team_ids for league in leagues_out),
-        checked_at=datetime.now(timezone.utc),
-        leagues=leagues_out,
     )

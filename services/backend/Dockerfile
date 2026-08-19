@@ -2,7 +2,6 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app/services/api:/app/services/worker
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV UV_LINK_MODE=copy
 
@@ -12,11 +11,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/services/worker
+WORKDIR /app/services/backend
 
-COPY services/worker/pyproject.toml services/worker/uv.lock ./
+COPY services/backend/pyproject.toml services/backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
-COPY services /app/services
+COPY services/backend /app/services/backend
 
-CMD ["uv", "run", "python", "-m", "worker.main"]
+CMD ["sh", "-c", "/opt/venv/bin/alembic upgrade head && exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

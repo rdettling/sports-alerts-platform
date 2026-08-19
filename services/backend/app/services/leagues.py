@@ -162,8 +162,3 @@ def list_league_settings(db: Session) -> list[LeagueSetting]:
 
 def get_active_leagues(db: Session) -> list[str]:
     return [row.league for row in list_league_settings(db) if row.is_enabled]
-
-
-def is_league_enabled(db: Session, league: str) -> bool:
-    normalized = normalize_league(league)
-    return normalized in set(get_active_leagues(db))

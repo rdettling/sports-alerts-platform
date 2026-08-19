@@ -20,7 +20,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: services/api/Dockerfile
+      dockerfile: services/backend/Dockerfile
     container_name: sports-alerts-api
     restart: unless-stopped
     env_file:
@@ -34,12 +34,12 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ../services:/app/services
-    working_dir: /app/services/api
+      - ../services/backend:/app/services/backend
+    working_dir: /app/services/backend
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000}"
+    command: sh -c "/opt/venv/bin/alembic upgrade head && exec /opt/venv/bin/uvicorn app.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()"]
       interval: 10s
@@ -49,25 +49,24 @@ services:
   worker:
     build:
       context: ..
-      dockerfile: services/worker/Dockerfile
+      dockerfile: services/backend/Dockerfile
     container_name: sports-alerts-worker
     restart: unless-stopped
     env_file:
       - ../.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      PYTHONPATH: /app/services/api:/app/services/worker
       UV_LINK_MODE: copy
       UV_PROJECT_ENVIRONMENT: /opt/venv
     volumes:
-      - ../services:/app/services
-    working_dir: /app/services/worker
+      - ../services/backend:/app/services/backend
+    working_dir: /app/services/backend
     depends_on:
       db:
         condition: service_healthy
       api:
         condition: service_healthy
-    command: uv run python -m worker.main
+    command: /opt/venv/bin/python -m worker.main
 
   web:
     build:

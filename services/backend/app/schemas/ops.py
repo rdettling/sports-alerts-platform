@@ -6,80 +6,6 @@ from pydantic import BaseModel
 from app.schemas.league import LeagueSettingOut
 
 
-class ProviderUsageOut(BaseModel):
-    provider: str
-    actual_calls: int
-    success_calls: int
-    error_calls: int
-    rate_limited_calls: int
-    expected_calls: int | None = None
-
-
-class EndpointUsageOut(BaseModel):
-    provider: str
-    endpoint_key: str
-    actual_calls: int
-    success_calls: int
-    error_calls: int
-    rate_limited_calls: int
-
-
-class ExpectedActualOut(BaseModel):
-    expected: int
-    actual: int
-
-
-class ApiUsageSummaryOut(BaseModel):
-    window: str
-    totals: dict[str, int]
-    expected_vs_actual: dict[str, ExpectedActualOut]
-    by_provider: list[ProviderUsageOut]
-    by_endpoint: list[EndpointUsageOut]
-
-
-class ApiUsageTimeseriesPointOut(BaseModel):
-    bucket_start: datetime
-    provider: str
-    actual_calls: int
-    success_calls: int
-    error_calls: int
-    rate_limited_calls: int
-    expected_calls: int | None = None
-
-
-class ApiUsageTimeseriesOut(BaseModel):
-    window: str
-    bucket: str
-    points: list[ApiUsageTimeseriesPointOut]
-
-
-class IngestHealthEventOut(BaseModel):
-    id: int
-    source_key: str
-    event_type: str
-    mode: str | None
-    message: str | None
-    occurred_at: datetime
-
-
-class IngestHealthOut(BaseModel):
-    source_key: str
-    mode: str
-    next_due_at: datetime | None
-    last_success_at: datetime | None
-    backoff_until: datetime | None
-    last_error: str | None
-
-
-class IngestHealthResponseOut(BaseModel):
-    scheduler_mode: str
-    next_run_at: datetime | None
-    last_success_at: datetime | None
-    active_leagues: list[str]
-    states: list[IngestHealthOut]
-    events: list[IngestHealthEventOut]
-
-
 class OpsAdminSummaryOverviewOut(BaseModel):
     window: str
     total_provider_calls: int
@@ -162,20 +88,3 @@ class NeonUsageOut(BaseModel):
     compute_last_active_at: datetime | None = None
     avg_cu_while_active: float | None = None
     message: str | None = None
-
-
-class TeamMappingLeagueHealthOut(BaseModel):
-    league: str
-    checked_games: int
-    checked_team_refs: int
-    missing_team_ids: list[str]
-
-
-class TeamMappingHealthOut(BaseModel):
-    ok: bool
-    checked_at: datetime
-    leagues: list[TeamMappingLeagueHealthOut]
-
-
-class OpsLeagueSettingsResponseOut(BaseModel):
-    items: list[LeagueSettingOut]
