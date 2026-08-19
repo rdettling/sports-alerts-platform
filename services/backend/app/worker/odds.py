@@ -5,18 +5,22 @@ import logging
 import threading
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent
 from app.services.api_usage import record_api_call_event
 from app.services.leagues import get_league_profile
-from sqlalchemy.orm import Session
 from app.worker.config import settings
 
 logger = logging.getLogger(__name__)
+MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
     "la clippers": "los angeles clippers",
@@ -72,6 +76,134 @@ def _normalize_team_name(name: str) -> str:
 
 def game_key(home_team_name: str, away_team_name: str) -> tuple[str, str]:
     return (_normalize_team_name(home_team_name), _normalize_team_name(away_team_name))
+
+
+def _odds_signature(odds: OddsSnapshot) -> tuple[tuple[str, str | None, int | None, str | None], ...]:
+    return tuple(
+        (outcome.outcome_key, outcome.team_side, outcome.price_american, outcome.outcome_label)
+        for outcome in odds.outcomes
+    )
+
+
+def _stored_odds_signature(row: GameOddsCurrent) -> tuple[tuple[str, str | None, int | None, str | None], ...]:
+    return tuple(
+        (outcome.outcome_key, outcome.team_side, outcome.price_american, outcome.outcome_label)
+        for outcome in sorted(row.outcomes, key=lambda outcome: outcome.outcome_order)
+    )
+
+
+def _build_current_outcomes(odds: OddsSnapshot) -> list[GameOddsOutcomeCurrent]:
+    return [
+        GameOddsOutcomeCurrent(
+            outcome_key=outcome.outcome_key,
+            outcome_label=outcome.outcome_label,
+            outcome_order=outcome.outcome_order,
+            price_american=outcome.price_american,
+            team_side=outcome.team_side,
+        )
+        for outcome in odds.outcomes
+    ]
+
+
+def upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
+    row = db.scalar(
+        select(GameOddsCurrent).where(
+            GameOddsCurrent.game_id == game_id,
+            GameOddsCurrent.provider == settings.odds_provider,
+            GameOddsCurrent.market == odds.market,
+        )
+    )
+    if row:
+        before = (row.bookmaker, _stored_odds_signature(row))
+        after = (odds.bookmaker, _odds_signature(odds))
+        if before == after:
+            return False
+        row.bookmaker = odds.bookmaker
+        row.fetched_at = odds.last_update or datetime.now(timezone.utc)
+        row.outcomes.clear()
+        row.outcomes.extend(_build_current_outcomes(odds))
+        return True
+
+    row = GameOddsCurrent(
+        game_id=game_id,
+        provider=settings.odds_provider,
+        market=odds.market,
+        bookmaker=odds.bookmaker,
+        fetched_at=odds.last_update or datetime.now(timezone.utc),
+    )
+    row.outcomes.extend(_build_current_outcomes(odds))
+    db.add(row)
+    return True
+
+
+def select_best_for_game(
+    options: list[OddsSnapshot] | OddsSnapshot | None,
+    scheduled_start_time: datetime,
+) -> OddsSnapshot | None:
+    if options is None:
+        return None
+    candidates = options if isinstance(options, list) else [options]
+    if not candidates:
+        return None
+
+    target = scheduled_start_time if scheduled_start_time.tzinfo else scheduled_start_time.replace(tzinfo=timezone.utc)
+    with_commence = [odds for odds in candidates if odds.commence_time]
+    if not with_commence:
+        return candidates[0]
+
+    closest = min(
+        with_commence,
+        key=lambda odds: abs(
+            (
+                (odds.commence_time if odds.commence_time.tzinfo else odds.commence_time.replace(tzinfo=timezone.utc))
+                - target
+            ).total_seconds()
+        ),
+    )
+    closest_commence = (
+        closest.commence_time
+        if closest.commence_time.tzinfo
+        else closest.commence_time.replace(tzinfo=timezone.utc)
+    )
+    if abs((closest_commence - target).total_seconds()) > MATCH_MAX_COMMENCE_DIFF.total_seconds():
+        return None
+    return closest
+
+
+def games_missing_pregame_snapshot(
+    db: Session,
+    league: str,
+    now: datetime,
+    *,
+    eligible_external_ids: set[str] | None = None,
+) -> list[Game]:
+    if eligible_external_ids is not None and not eligible_external_ids:
+        return []
+    pregame_cutoff = now + timedelta(hours=max(1, settings.odds_pregame_window_hours))
+    stmt = select(Game).where(
+        Game.league == league,
+        Game.is_final.is_(False),
+        Game.status == "scheduled",
+        Game.scheduled_start_time >= now,
+        Game.scheduled_start_time <= pregame_cutoff,
+    )
+    if eligible_external_ids is not None:
+        stmt = stmt.where(Game.external_game_id.in_(sorted(eligible_external_ids)))
+    rows = db.scalars(stmt.order_by(Game.scheduled_start_time.asc())).all()
+    if not rows:
+        return []
+    game_ids = [game.id for game in rows]
+    existing_ids = {
+        game_id
+        for game_id, in db.execute(
+            select(GameOddsCurrent.game_id).where(
+                GameOddsCurrent.game_id.in_(game_ids),
+                GameOddsCurrent.provider == settings.odds_provider,
+                GameOddsCurrent.market == settings.odds_api_market,
+            )
+        ).all()
+    }
+    return [game for game in rows if game.id not in existing_ids]
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -162,7 +294,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
     sport_key = _odds_sport_key_for_league(league)
     url = f"{settings.odds_api_base_url.rstrip('/')}/{sport_key}/odds?{query}"
 
-    started_at = monotonic()
     try:
         with urlopen(url, timeout=settings.odds_api_timeout_seconds) as response:  # noqa: S310
             status_code = int(getattr(response, "status", 200))
@@ -174,8 +305,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                     provider="odds",
                     endpoint_key=settings.odds_api_market,
                     attempt_status="success" if 200 <= status_code < 300 else "error",
-                    http_status=status_code,
-                    latency_ms=int((monotonic() - started_at) * 1000),
                 )
     except HTTPError as exc:
         if _TELEMETRY_DB is not None:
@@ -185,9 +314,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 provider="odds",
                 endpoint_key=settings.odds_api_market,
                 attempt_status="rate_limited" if int(exc.code) == 429 else "error",
-                http_status=int(exc.code),
-                latency_ms=int((monotonic() - started_at) * 1000),
-                error_code="http_error",
             )
         raise
     except URLError:
@@ -198,8 +324,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 provider="odds",
                 endpoint_key=settings.odds_api_market,
                 attempt_status="error",
-                latency_ms=int((monotonic() - started_at) * 1000),
-                error_code="network_error",
             )
         raise
     except Exception:
@@ -210,8 +334,6 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
                 provider="odds",
                 endpoint_key=settings.odds_api_market,
                 attempt_status="error",
-                latency_ms=int((monotonic() - started_at) * 1000),
-                error_code="unexpected_error",
             )
         raise
 

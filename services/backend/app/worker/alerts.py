@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -21,26 +20,7 @@ from app.db.models import (
 from app.services.alert_defaults import get_alert_default_values
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.leagues import get_alert_types, get_league_profile
-
-
-@dataclass(frozen=True)
-class ScoreChangeEvent:
-    previous_home_score: int
-    previous_away_score: int
-    new_home_score: int
-    new_away_score: int
-    scoring_side: str | None
-    is_inferred_goal: bool
-    period: int | None
-    clock: str | None
-    status: str
-
-
-@dataclass(frozen=True)
-class SoccerDerivedEvents:
-    score_change: ScoreChangeEvent | None = None
-    second_half_started: bool = False
-    extra_time_started: bool = False
+from app.worker.soccer import SoccerDerivedEvents
 
 
 def _parse_clock_seconds(clock: str | None) -> int | None:

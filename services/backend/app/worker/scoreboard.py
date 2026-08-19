@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from time import monotonic
 from typing import Any, Callable
 
 import httpx
@@ -64,7 +63,6 @@ class EspnScoreboardClient:
 
     def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
         scoreboard_url = get_scoreboard_url(league)
-        started_at = monotonic()
         response = httpx.get(scoreboard_url, params=params, timeout=15.0)
         status_code = int(response.status_code)
         if self._telemetry_db is not None:
@@ -74,8 +72,6 @@ class EspnScoreboardClient:
                 provider="espn",
                 endpoint_key="scoreboard",
                 attempt_status="rate_limited" if status_code == 429 else ("success" if 200 <= status_code < 300 else "error"),
-                http_status=status_code,
-                latency_ms=int((monotonic() - started_at) * 1000),
             )
         response.raise_for_status()
         return response.json()

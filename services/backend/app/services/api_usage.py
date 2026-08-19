@@ -37,13 +37,8 @@ def record_api_call_event(
     provider: str,
     endpoint_key: str,
     attempt_status: str,
-    http_status: int | None = None,
-    latency_ms: int | None = None,
-    error_code: str | None = None,
-    occurred_at: datetime | None = None,
 ) -> None:
-    event_time = occurred_at or datetime.now(timezone.utc)
-    bucket_start = event_time.replace(minute=0, second=0, microsecond=0)
+    bucket_start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     pending_rollup = _find_pending_rollup(
         db,
         bucket_start=bucket_start,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from time import monotonic
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -24,9 +23,6 @@ def _record_attempt(
     *,
     service: str,
     attempt_status: str,
-    started_at: float,
-    http_status: int | None = None,
-    error_code: str | None = None,
 ) -> None:
     if db is None:
         return
@@ -36,9 +32,6 @@ def _record_attempt(
         provider="resend",
         endpoint_key="resend_send_email",
         attempt_status=attempt_status,
-        http_status=http_status,
-        latency_ms=int((monotonic() - started_at) * 1000),
-        error_code=error_code,
     )
 
 
@@ -73,7 +66,6 @@ def send_resend_email(
             "User-Agent": "sports-alerts-api/1.0",
         },
     )
-    started_at = monotonic()
     try:
         with urlopen(request, timeout=15.0) as response:
             status_code = int(getattr(response, "status", 200))
@@ -83,9 +75,6 @@ def send_resend_email(
                 db,
                 service=service,
                 attempt_status="rate_limited" if status_code == 429 else ("success" if sent else "error"),
-                started_at=started_at,
-                http_status=status_code,
-                error_code=None if sent else "resend_request_failed",
             )
             if not sent:
                 return ResendResult(
@@ -109,9 +98,6 @@ def send_resend_email(
             db,
             service=service,
             attempt_status="rate_limited" if exc.code == 429 else "error",
-            started_at=started_at,
-            http_status=exc.code,
-            error_code="resend_request_failed",
         )
         return ResendResult(
             sent=False,
@@ -126,8 +112,6 @@ def send_resend_email(
             db,
             service=service,
             attempt_status="error",
-            started_at=started_at,
-            error_code="resend_http_error",
         )
         return ResendResult(
             sent=False,

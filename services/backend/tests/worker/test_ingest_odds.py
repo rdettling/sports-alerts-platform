@@ -18,7 +18,7 @@ from ingest_support import (
 def test_ingest_persists_current_odds(db_session, monkeypatch):
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: {
             ("atlanta hawks", "boston celtics"): make_snapshot(
                 away_label="Atlanta Hawks",
@@ -47,7 +47,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: {
             ("atlanta hawks", "boston celtics"): [
                 make_snapshot(away_label="Atlanta Hawks", away_price=120, home_label="Boston Celtics", home_price=-140, bookmaker="FanDuel", last_update=now, commence_time=first_start),
@@ -78,7 +78,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: {
             ("atlanta hawks", "boston celtics"): [
                 make_snapshot(away_label="Atlanta Hawks", away_price=122, home_label="Boston Celtics", home_price=-145, bookmaker="FanDuel", last_update=now, commence_time=first_start)
@@ -102,7 +102,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
 
 def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypatch):
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
-    monkeypatch.setattr("app.worker.ingest.fetch_odds_index", lambda league: {})
+    monkeypatch.setattr("app.worker.odds.fetch_odds_index", lambda league: {})
 
     result = run_catalog_sync(make_success_provider())
     assert result["status"] == "success"
@@ -126,7 +126,7 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
             ]
         }
 
-    monkeypatch.setattr("app.worker.ingest.fetch_odds_index", _fake_odds_index)
+    monkeypatch.setattr("app.worker.odds.fetch_odds_index", _fake_odds_index)
 
     first = run_catalog_sync(provider)
     second = run_catalog_sync(provider)
@@ -206,7 +206,7 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched in live sync")),
     )
 
@@ -223,7 +223,7 @@ def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
 
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
     )
 
@@ -251,7 +251,7 @@ def test_nfl_preseason_catalog_sync_skips_odds_request(db_session, monkeypatch):
     )
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: (_ for _ in ()).throw(AssertionError("preseason must not fetch NFL odds")),
     )
 
@@ -307,7 +307,7 @@ def test_nfl_catalog_sync_only_persists_regular_season_odds(db_session, monkeypa
         }
 
     monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
-    monkeypatch.setattr("app.worker.ingest.fetch_odds_index", _fake_odds_index)
+    monkeypatch.setattr("app.worker.odds.fetch_odds_index", _fake_odds_index)
 
     result = run_catalog_sync(provider, league="NFL")
 
@@ -339,7 +339,7 @@ def test_world_cup_catalog_sync_persists_three_way_odds(db_session, monkeypatch)
     )
 
     monkeypatch.setattr(
-        "app.worker.ingest.fetch_odds_index",
+        "app.worker.odds.fetch_odds_index",
         lambda league: {
             ("united states", "mexico"): [
                 make_snapshot(
