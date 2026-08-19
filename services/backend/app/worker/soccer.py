@@ -51,7 +51,7 @@ def _is_extra_time(*, status: str, period: int | None) -> bool:
     return status in {"in_progress", "live"} and period in {3, 4}
 
 
-def _is_penalty_kicks_window(
+def is_penalty_kicks_window(
     *,
     status: str,
     period: int | None,
@@ -148,14 +148,14 @@ def log_transition(previous: StateSnapshot, payload: ScoreboardGame, events: Soc
     new_second_half = _is_live_second_half(status=payload.status, period=payload.period, clock=payload.clock)
     previous_extra_time = _is_extra_time(status=previous.status, period=previous.period)
     new_extra_time = _is_extra_time(status=payload.status, period=payload.period)
-    previous_penalty_kicks_window = _is_penalty_kicks_window(
+    previous_penalty_kicks_window = is_penalty_kicks_window(
         status=previous.status,
         period=previous.period,
         home_score=previous.home_score,
         away_score=previous.away_score,
         clock=previous.clock,
     )
-    new_penalty_kicks_window = _is_penalty_kicks_window(
+    new_penalty_kicks_window = is_penalty_kicks_window(
         status=payload.status,
         period=payload.period,
         home_score=payload.home_score,
