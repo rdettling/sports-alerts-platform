@@ -11,14 +11,14 @@ from app.db.models import (
     Game,
     Team,
     User,
-    UserAlertDefault,
+    UserAlertPreference,
     UserGameAlertOverride,
     UserGameFollow,
     UserGameUnfollow,
     UserTeamFollow,
 )
-from app.services.alert_defaults import get_alert_default_values
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
+from app.services.alert_preferences import AlertSettings, resolve_alert_settings
 from app.services.leagues import get_alert_types, get_league_profile
 from app.worker.soccer import SoccerDerivedEvents
 
@@ -99,51 +99,20 @@ def _load_game_watch_times(db: Session, games: list[Game]) -> dict[int, dict[int
     return by_game
 
 
-def _load_user_alert_defaults(db: Session, user_ids: set[int], leagues: set[str]) -> list[UserAlertDefault]:
+def _load_preferences_by_user_league(
+    db: Session,
+    user_ids: set[int],
+    leagues: set[str],
+) -> dict[tuple[int, str, str], UserAlertPreference]:
     if not user_ids or not leagues:
-        return []
-    return db.scalars(
-        select(UserAlertDefault).where(
-            UserAlertDefault.user_id.in_(sorted(user_ids)),
-            UserAlertDefault.league.in_(sorted(leagues)),
+        return {}
+    rows = db.scalars(
+        select(UserAlertPreference).where(
+            UserAlertPreference.user_id.in_(sorted(user_ids)),
+            UserAlertPreference.league.in_(sorted(leagues)),
         )
     ).all()
-
-
-def _load_defaults_by_user_league(db: Session, user_ids: set[int], leagues: set[str]) -> dict[tuple[int, str, str], UserAlertDefault]:
-    rows = _load_user_alert_defaults(db, user_ids, leagues)
     return {(row.user_id, row.league, row.alert_type): row for row in rows}
-
-
-def _ensure_alert_defaults_for_users(db: Session, user_ids: set[int], leagues: set[str]) -> None:
-    if not user_ids or not leagues:
-        return
-    existing = {(row.user_id, row.league, row.alert_type) for row in _load_user_alert_defaults(db, user_ids, leagues)}
-    now = datetime.now(timezone.utc)
-    created = False
-    for user_id in sorted(user_ids):
-        for league in sorted(leagues):
-            for alert_type in get_alert_types(league):
-                key = (user_id, league, alert_type)
-                if key in existing:
-                    continue
-                defaults = get_alert_default_values(league, alert_type)
-                db.add(
-                    UserAlertDefault(
-                        user_id=user_id,
-                        league=league,
-                        alert_type=alert_type,
-                        is_enabled=defaults.is_enabled,
-                        close_game_margin_threshold=defaults.close_game_margin_threshold,
-                        close_game_time_threshold_seconds=defaults.close_game_time_threshold_seconds,
-                        inning_start_threshold=defaults.inning_start_threshold,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-                created = True
-    if created:
-        db.flush()
 
 
 def _load_overrides_by_user_game(db: Session, user_ids: set[int], game_ids: list[int]) -> dict[tuple[int, int, str], UserGameAlertOverride]:
@@ -158,36 +127,20 @@ def _load_overrides_by_user_game(db: Session, user_ids: set[int], game_ids: list
     return {(row.user_id, row.game_id, row.alert_type): row for row in rows}
 
 
-def _effective_alert_settings(
-    default_pref: UserAlertDefault | None,
-    override: UserGameAlertOverride | None,
-) -> tuple[bool, int | None, int | None, int | None]:
-    enabled = default_pref.is_enabled if default_pref else False
-    margin = default_pref.close_game_margin_threshold if default_pref else None
-    seconds = default_pref.close_game_time_threshold_seconds if default_pref else None
-    inning = default_pref.inning_start_threshold if default_pref else None
-    if override is not None:
-        if override.is_enabled_override is not None:
-            enabled = override.is_enabled_override
-        if override.close_game_margin_threshold_override is not None:
-            margin = override.close_game_margin_threshold_override
-        if override.close_game_time_threshold_seconds_override is not None:
-            seconds = override.close_game_time_threshold_seconds_override
-        if override.inning_start_threshold_override is not None:
-            inning = override.inning_start_threshold_override
-    return enabled, margin, seconds, inning
-
-
 def _alert_settings_for(
-    defaults_by_key: dict[tuple[int, str, str], UserAlertDefault],
+    preferences_by_key: dict[tuple[int, str, str], UserAlertPreference],
     overrides_by_key: dict[tuple[int, int, str], UserGameAlertOverride],
     *,
     user_id: int,
     game: Game,
     alert_type: str,
-) -> tuple[bool, int | None, int | None, int | None]:
-    return _effective_alert_settings(
-        defaults_by_key.get((user_id, game.league, alert_type)),
+) -> AlertSettings | None:
+    if alert_type not in get_alert_types(game.league):
+        return None
+    return resolve_alert_settings(
+        game.league,
+        alert_type,
+        preferences_by_key.get((user_id, game.league, alert_type)),
         overrides_by_key.get((user_id, game.id, alert_type)),
     )
 
@@ -298,8 +251,7 @@ def evaluate_and_record_alerts(
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
     leagues = {game.league for game in games}
-    _ensure_alert_defaults_for_users(db, all_user_ids, leagues)
-    defaults_by_key = _load_defaults_by_user_league(db, all_user_ids, leagues)
+    preferences_by_key = _load_preferences_by_user_league(db, all_user_ids, leagues)
     overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, [game.id for game in games])
 
     candidate_alerts: list[Alert] = []
@@ -307,10 +259,10 @@ def evaluate_and_record_alerts(
     for game in games:
         user_watch_times = watch_times_by_game.get(game.id, {})
         for user_id, followed_at in user_watch_times.items():
-            game_start_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="game_start"
+            game_start = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="game_start"
             )
-            if game_start_enabled and game.status in {"in_progress", "live"} and _followed_by_game_start(followed_at, game):
+            if game_start and game_start.is_enabled and game.status in {"in_progress", "live"} and _followed_by_game_start(followed_at, game):
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -321,10 +273,10 @@ def evaluate_and_record_alerts(
                     event_data={"status": game.status},
                 )
 
-            final_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="final_result"
+            final_result = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="final_result"
             )
-            if final_enabled and (game.is_final or game.status == "final"):
+            if final_result and final_result.is_enabled and (game.is_final or game.status == "final"):
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -337,10 +289,10 @@ def evaluate_and_record_alerts(
 
             soccer_event = soccer_events.get(game.id)
             score_change_event = soccer_event.score_change if soccer_event is not None else None
-            score_changed_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="score_changed"
+            score_changed = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="score_changed"
             )
-            if score_change_event and score_changed_enabled:
+            if score_change_event and score_changed and score_changed.is_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -361,10 +313,10 @@ def evaluate_and_record_alerts(
                     },
                 )
 
-            second_half_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="second_half_start"
+            second_half = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="second_half_start"
             )
-            if soccer_event and soccer_event.second_half_started and second_half_enabled:
+            if soccer_event and soccer_event.second_half_started and second_half and second_half.is_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -375,10 +327,10 @@ def evaluate_and_record_alerts(
                     event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
-            extra_time_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_time_start"
+            extra_time = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_time_start"
             )
-            if soccer_event and soccer_event.extra_time_started and extra_time_enabled:
+            if soccer_event and soccer_event.extra_time_started and extra_time and extra_time.is_enabled:
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -389,10 +341,10 @@ def evaluate_and_record_alerts(
                     event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
-            penalty_kicks_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="penalty_kicks"
+            penalty_kicks = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="penalty_kicks"
             )
-            if _should_trigger_penalty_kicks(game, penalty_kicks_enabled):
+            if penalty_kicks and _should_trigger_penalty_kicks(game, penalty_kicks.is_enabled):
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -403,10 +355,15 @@ def evaluate_and_record_alerts(
                     event_data={"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
                 )
 
-            close_enabled, close_margin, close_seconds, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="close_game_late"
+            close_game = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="close_game_late"
             )
-            if _should_trigger_close_game_late(game, close_enabled, close_margin, close_seconds):
+            if close_game and _should_trigger_close_game_late(
+                game,
+                close_game.is_enabled,
+                close_game.close_game_margin_threshold,
+                close_game.close_game_time_threshold_seconds,
+            ):
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,
@@ -417,10 +374,10 @@ def evaluate_and_record_alerts(
                     event_data={"period": game.period or 0, "clock": game.clock or "", "status": game.status},
                 )
 
-            overtime_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="overtime_start"
+            overtime = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="overtime_start"
             )
-            if _should_trigger_overtime_start(game, overtime_enabled):
+            if overtime and _should_trigger_overtime_start(game, overtime.is_enabled):
                 period = game.period or 0
                 _append_candidate_alert(
                     candidate_alerts,
@@ -432,10 +389,10 @@ def evaluate_and_record_alerts(
                     event_data={"period": period, "clock": game.clock or "", "status": game.status},
                 )
 
-            extra_innings_enabled, _, _, _ = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_innings_start"
+            extra_innings = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="extra_innings_start"
             )
-            if _should_trigger_extra_innings_start(game, extra_innings_enabled):
+            if extra_innings and _should_trigger_extra_innings_start(game, extra_innings.is_enabled):
                 inning = game.period or 0
                 _append_candidate_alert(
                     candidate_alerts,
@@ -447,10 +404,14 @@ def evaluate_and_record_alerts(
                     event_data={"period": inning, "clock": game.clock or "", "status": game.status},
                 )
 
-            inning_enabled, _, _, inning_threshold = _alert_settings_for(
-                defaults_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="inning_start"
+            inning_start = _alert_settings_for(
+                preferences_by_key, overrides_by_key, user_id=user_id, game=game, alert_type="inning_start"
             )
-            if _should_trigger_inning_start(game, inning_enabled, inning_threshold):
+            if inning_start and _should_trigger_inning_start(
+                game,
+                inning_start.is_enabled,
+                inning_start.inning_start_threshold,
+            ):
                 _append_candidate_alert(
                     candidate_alerts,
                     candidate_event_keys,

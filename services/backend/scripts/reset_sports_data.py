@@ -22,7 +22,7 @@ SPORTS_TABLES = [
     "user_game_unfollows",
     "user_game_follows",
     "user_team_follows",
-    "user_alert_defaults",
+    "user_alert_preferences",
     "game_odds_current",
     "games",
     "teams",

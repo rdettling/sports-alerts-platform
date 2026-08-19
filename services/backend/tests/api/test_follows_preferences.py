@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, Team, User, UserAlertDefault
+from app.db.models import Game, Team, User, UserAlertPreference, UserGameAlertOverride
 from app.db.session import SessionLocal
 
 
@@ -209,6 +209,16 @@ def test_alert_preferences_get_and_update(client):
     assert updated["close_game_margin_threshold"] == 3
     assert updated["close_game_time_threshold_seconds"] == 90
 
+    partial_update = client.put(
+        "/alert-preferences/leagues/NBA/close_game_late",
+        headers=headers,
+        json={"is_enabled": False},
+    )
+    assert partial_update.status_code == 200
+    assert partial_update.json()["is_enabled"] is False
+    assert partial_update.json()["close_game_margin_threshold"] == 3
+    assert partial_update.json()["close_game_time_threshold_seconds"] == 90
+
     mls_update = client.put(
         "/alert-preferences/leagues/MLS/penalty_kicks",
         headers=headers,
@@ -233,59 +243,58 @@ def test_alert_preferences_get_and_update(client):
     assert mls_penalties["is_enabled"] is False
     assert world_cup_penalties["is_enabled"] is True
 
-
-def test_alert_preferences_backfill_overtime_for_existing_user(client):
-    email = "existing-overtime-preference@example.com"
-    headers = _auth_headers(client, email=email)
-    assert client.get("/alert-preferences", headers=headers).status_code == 200
-
     with SessionLocal() as db:
-        user = db.scalar(select(User).where(User.email == email))
-        assert user is not None
-        preference = db.scalar(
-            select(UserAlertDefault).where(
-                UserAlertDefault.user_id == user.id,
-                UserAlertDefault.league == "NBA",
-                UserAlertDefault.alert_type == "overtime_start",
-            )
-        )
-        assert preference is not None
-        db.delete(preference)
-        db.commit()
+        user = db.scalar(select(User).where(User.email == "m2-preferences@example.com"))
+        rows = db.scalars(
+            select(UserAlertPreference).where(UserAlertPreference.user_id == user.id)
+        ).all()
+        assert len(rows) == 2
+        nba_preference = next(row for row in rows if row.league == "NBA")
+        assert nba_preference.is_enabled_override is False
+        assert nba_preference.close_game_margin_threshold_override == 3
+        assert nba_preference.close_game_time_threshold_seconds_override == 90
 
+    reset = client.put(
+        "/alert-preferences/leagues/NBA/close_game_late",
+        headers=headers,
+        json={
+            "is_enabled": True,
+            "close_game_margin_threshold": 5,
+            "close_game_time_threshold_seconds": 300,
+        },
+    )
+    assert reset.status_code == 200
+    assert reset.json()["close_game_margin_threshold"] == 5
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == "m2-preferences@example.com"))
+        assert db.scalar(
+            select(UserAlertPreference).where(
+                UserAlertPreference.user_id == user.id,
+                UserAlertPreference.league == "NBA",
+            )
+        ) is None
+
+
+def test_alert_preferences_get_does_not_materialize_defaults(client):
+    email = "sparse-preferences@example.com"
+    headers = _auth_headers(client, email=email)
     response = client.get("/alert-preferences", headers=headers)
     assert response.status_code == 200
     nba_group = next(group for group in response.json() if group["league"] == "NBA")
     overtime = next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")
     assert overtime["is_enabled"] is True
-
-
-def test_alert_preferences_backfill_extra_innings_for_existing_user(client):
-    email = "existing-extra-innings-preference@example.com"
-    headers = _auth_headers(client, email=email)
-    assert client.get("/alert-preferences", headers=headers).status_code == 200
-
-    with SessionLocal() as db:
-        user = db.scalar(select(User).where(User.email == email))
-        assert user is not None
-        preference = db.scalar(
-            select(UserAlertDefault).where(
-                UserAlertDefault.user_id == user.id,
-                UserAlertDefault.league == "MLB",
-                UserAlertDefault.alert_type == "extra_innings_start",
-            )
-        )
-        assert preference is not None
-        db.delete(preference)
-        db.commit()
-
-    response = client.get("/alert-preferences", headers=headers)
-    assert response.status_code == 200
     mlb_group = next(group for group in response.json() if group["league"] == "MLB")
     extra_innings = next(
         item for item in mlb_group["preferences"] if item["alert_type"] == "extra_innings_start"
     )
     assert extra_innings["is_enabled"] is True
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email))
+        assert user is not None
+        assert db.scalars(
+            select(UserAlertPreference).where(UserAlertPreference.user_id == user.id)
+        ).all() == []
 
 
 def test_game_alert_override_flow(client):
@@ -305,6 +314,15 @@ def test_game_alert_override_flow(client):
     overtime_item = next(item for item in payload["items"] if item["alert_type"] == "overtime_start")
     assert overtime_item["is_enabled"] is True
     assert overtime_item["use_league_default"] is True
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == "m2-game-overrides@example.com"))
+        assert db.scalars(
+            select(UserAlertPreference).where(UserAlertPreference.user_id == user.id)
+        ).all() == []
+        assert db.scalars(
+            select(UserGameAlertOverride).where(UserGameAlertOverride.user_id == user.id)
+        ).all() == []
 
     update_response = client.put(
         f"/alert-preferences/games/{game_id}/close_game_late",
@@ -370,3 +388,46 @@ def test_extra_innings_game_alert_override_flow(client):
     assert clear.status_code == 200
     assert clear.json()["is_enabled"] is True
     assert clear.json()["use_league_default"] is True
+
+
+def test_noop_game_alert_overrides_are_not_stored(client):
+    email = "noop-game-overrides@example.com"
+    headers = _auth_headers(client, email=email)
+    game_id = _create_game()
+
+    league_update = client.put(
+        "/alert-preferences/leagues/NBA/close_game_late",
+        headers=headers,
+        json={"close_game_margin_threshold": 3},
+    )
+    assert league_update.status_code == 200
+
+    equivalent = client.put(
+        f"/alert-preferences/games/{game_id}/close_game_late",
+        headers=headers,
+        json={
+            "is_enabled_override": True,
+            "close_game_margin_threshold_override": 3,
+            "close_game_time_threshold_seconds_override": 300,
+        },
+    )
+    assert equivalent.status_code == 200
+    assert equivalent.json()["use_league_default"] is True
+    assert equivalent.json()["override"] is None
+
+    empty = client.put(
+        f"/alert-preferences/games/{game_id}/close_game_late",
+        headers=headers,
+        json={},
+    )
+    assert empty.status_code == 200
+    assert empty.json()["use_league_default"] is True
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == email))
+        assert db.scalar(
+            select(UserGameAlertOverride).where(
+                UserGameAlertOverride.user_id == user.id,
+                UserGameAlertOverride.game_id == game_id,
+            )
+        ) is None

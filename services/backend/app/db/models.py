@@ -29,7 +29,7 @@ class User(Base):
     team_follows = relationship("UserTeamFollow", back_populates="user")
     game_follows = relationship("UserGameFollow", back_populates="user")
     game_unfollows = relationship("UserGameUnfollow", back_populates="user")
-    alert_defaults = relationship("UserAlertDefault", back_populates="user")
+    alert_preferences = relationship("UserAlertPreference", back_populates="user")
     game_alert_overrides = relationship("UserGameAlertOverride", back_populates="user")
     push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
 
@@ -169,22 +169,22 @@ class UserGameUnfollow(Base):
     game = relationship("Game")
 
 
-class UserAlertDefault(Base):
-    __tablename__ = "user_alert_defaults"
-    __table_args__ = (UniqueConstraint("user_id", "league", "alert_type", name="uq_user_alert_defaults_user_league_type"),)
+class UserAlertPreference(Base):
+    __tablename__ = "user_alert_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "league", "alert_type", name="uq_user_alert_preferences_user_league_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     league: Mapped[str] = mapped_column(String(16))
     alert_type: Mapped[str] = mapped_column(String(32))
-    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    close_game_margin_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    close_game_time_threshold_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    inning_start_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    inning_start_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    user = relationship("User", back_populates="alert_defaults")
+    user = relationship("User", back_populates="alert_preferences")
 
 
 class UserGameAlertOverride(Base):

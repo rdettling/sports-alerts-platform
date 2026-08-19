@@ -77,7 +77,7 @@ Main persisted tables:
 - `user_team_follows`
 - `user_game_follows`
 - `user_game_unfollows`
-- `user_alert_defaults`
+- `user_alert_preferences`
 - `user_game_alert_overrides`
 - `alerts`
 - `alert_deliveries`
@@ -89,7 +89,7 @@ Notable modeling decisions:
 
 - Games are retained as normalized rows and can carry live/final state, scores, context labels, and odds associations
 - Team follows can imply effective game follows, with explicit game unfollows stored separately
-- Alert settings exist at two levels: league defaults and per-game overrides
+- Alert settings use canonical code defaults with sparse league and per-game overrides
 - Alerts are deduped events; channel-specific attempts and outcomes are stored as alert deliveries
 
 ## Key Flows
