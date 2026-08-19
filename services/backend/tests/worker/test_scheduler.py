@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.db.models import Game, LeagueSetting, Team, WorkerJob
 from app.services.leagues import ensure_league_settings, get_league_profile
-from worker import scheduler
+from app.worker import scheduler
 
 
 def test_bootstrap_jobs_creates_sync_jobs_only(db_session):
@@ -197,7 +197,7 @@ def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
 def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
     target = datetime.now(timezone.utc) + timedelta(minutes=42)
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -215,7 +215,7 @@ def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
 
 def test_run_live_sync_job_uses_league_live_interval_when_start_missing(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -233,7 +233,7 @@ def test_run_live_sync_job_uses_league_live_interval_when_start_missing(monkeypa
 def test_run_live_sync_job_uses_league_live_interval_when_start_is_past(monkeypatch):
     target = datetime.now(timezone.utc) - timedelta(minutes=5)
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -250,7 +250,7 @@ def test_run_live_sync_job_uses_league_live_interval_when_start_is_past(monkeypa
 
 def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -267,7 +267,7 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
 
 def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -284,7 +284,7 @@ def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
 
 def test_run_live_sync_job_uses_mls_interval(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -301,7 +301,7 @@ def test_run_live_sync_job_uses_mls_interval(monkeypatch):
 
 def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "live_sync",
@@ -320,7 +320,7 @@ def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
 
 def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_catalog_sync",
+        "app.worker.scheduler.run_catalog_sync",
         lambda provider, league: {
             "status": "success",
             "job_type": "catalog_sync",
@@ -334,8 +334,8 @@ def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
         called["cleanup"] += 1
         return 0
 
-    monkeypatch.setattr("worker.scheduler.cleanup_games_outside_window", fake_cleanup)
-    monkeypatch.setattr("worker.scheduler._pull_live_sync_forward", lambda _league: None)
+    monkeypatch.setattr("app.worker.scheduler.cleanup_games_outside_window", fake_cleanup)
+    monkeypatch.setattr("app.worker.scheduler._pull_live_sync_forward", lambda _league: None)
 
     next_seconds, result = scheduler._run_catalog_sync_job("MLB")
     assert next_seconds == 123
@@ -345,7 +345,7 @@ def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
 
 def test_run_catalog_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_catalog_sync",
+        "app.worker.scheduler.run_catalog_sync",
         lambda provider, league: {
             "status": "failed",
             "job_type": "catalog_sync",
@@ -360,7 +360,7 @@ def test_run_catalog_sync_job_raises_failed_result_for_scheduler_retry(monkeypat
 
 def test_run_live_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
     monkeypatch.setattr(
-        "worker.scheduler.run_live_sync",
+        "app.worker.scheduler.run_live_sync",
         lambda provider, league: {
             "status": "failed",
             "job_type": "live_sync",
@@ -374,7 +374,7 @@ def test_run_live_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch)
 
 
 def test_log_job_success_emits_compact_summary(caplog):
-    with caplog.at_level("INFO", logger="worker.scheduler"):
+    with caplog.at_level("INFO", logger="app.worker.scheduler"):
         scheduler._log_job_success(
             job_type="live_sync",
             league="MLB",

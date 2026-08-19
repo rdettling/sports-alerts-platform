@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    database_url: str
     catalog_sync_interval_seconds: int = 43200
     odds_pregame_window_hours: int = 24
     odds_provider: str = "the_odds_api"

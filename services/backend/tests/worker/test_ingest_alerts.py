@@ -14,8 +14,8 @@ from app.db.models import (
     UserGameUnfollow,
     UserTeamFollow,
 )
-from worker.ingest import run_catalog_sync
-from worker.planner import build_live_requests
+from app.worker.ingest import run_catalog_sync
+from app.worker.planner import build_live_requests
 
 from ingest_support import (
     LongClockProvider,
@@ -422,7 +422,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
         delivery.provider_data = {"error": "synthetic_failure"}
         return "failed"
 
-    monkeypatch.setattr("worker.alerts.deliver_email_alert_now", fake_deliver)
+    monkeypatch.setattr("app.worker.alerts.deliver_email_alert_now", fake_deliver)
 
     result = run_catalog_sync(make_live_close_provider())
     assert result["status"] == "success"

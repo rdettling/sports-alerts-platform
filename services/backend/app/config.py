@@ -5,9 +5,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "sports-alerts-api"
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-    database_url: str
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 86400

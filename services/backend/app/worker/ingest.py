@@ -14,13 +14,13 @@ from app.db.models import (
     GameOddsOutcomeCurrent,
     Team,
 )
+from app.db.session import SessionLocal
 from app.services.leagues import get_active_leagues, get_league_profile, league_supports_odds, normalize_league
-from worker.alerts import ScoreChangeEvent, SoccerDerivedEvents, evaluate_and_record_alerts
-from worker.db import SessionLocal
-from worker.config import settings
-from worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
-from worker.planner import build_catalog_requests, build_live_requests
-from worker.scoreboard import ScoreboardGame
+from app.worker.alerts import ScoreChangeEvent, SoccerDerivedEvents, evaluate_and_record_alerts
+from app.worker.config import settings
+from app.worker.odds import OddsSnapshot, fetch_odds_index, game_key, set_telemetry_context as set_odds_telemetry_context
+from app.worker.planner import build_catalog_requests, build_live_requests
+from app.worker.scoreboard import ScoreboardGame
 
 logger = logging.getLogger(__name__)
 ODDS_MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)

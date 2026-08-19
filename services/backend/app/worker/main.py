@@ -4,8 +4,8 @@ import threading
 
 from app.services.leagues import get_league_profile, list_supported_leagues
 
-from worker import scheduler
-from worker.config import settings
+from app.worker import scheduler
+from app.worker.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)

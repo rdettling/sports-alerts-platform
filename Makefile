@@ -87,7 +87,7 @@ web-fix:
 test: _lint-python _test-api _test-worker _test-web
 
 _lint-python:
-	UV_CACHE_DIR="$(UV_CACHE_DIR)" uvx --from ruff==0.16.3 ruff check --select E4,E7,E9,F $(BACKEND_DIR)/app $(BACKEND_DIR)/worker $(BACKEND_DIR)/tests
+	UV_CACHE_DIR="$(UV_CACHE_DIR)" uvx --from ruff==0.16.3 ruff check --select E4,E7,E9,F $(BACKEND_DIR)/app $(BACKEND_DIR)/tests
 
 _test-api:
 	cd $(BACKEND_DIR) && UV_PROJECT_ENVIRONMENT="$(UV_PROJECT_ENVIRONMENT)" UV_CACHE_DIR="$(UV_CACHE_DIR)" UV_LINK_MODE="$(UV_LINK_MODE)" uv run pytest -q tests/api

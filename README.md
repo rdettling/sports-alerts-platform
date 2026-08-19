@@ -28,7 +28,7 @@ Alert types are defined by sport and exposed independently for each league:
 
 - `apps/web` — React + Vite frontend
 - `services/backend/app` — FastAPI API, auth, reads/writes, admin endpoints, and delivery helpers
-- `services/backend/worker` — schedule ingest, odds snapshots, alert evaluation, and delivery
+- `services/backend/app/worker` — schedule ingest, odds snapshots, alert evaluation, and delivery
 - `services/backend/alembic` — database migrations shared by both backend processes
 - `infra/docker-compose.yml` — local multi-service stack
 - `docs` — focused support docs for architecture, local development, configuration, deployment, and troubleshooting

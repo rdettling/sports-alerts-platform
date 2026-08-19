@@ -8,12 +8,12 @@ from time import monotonic
 from sqlalchemy import delete, func, select
 
 from app.db.models import Game, WorkerJob
+from app.db.session import SessionLocal
 from app.services.leagues import get_active_leagues, get_league_profile
-from worker.cleanup import cleanup_games_outside_window
-from worker.config import settings
-from worker.db import SessionLocal
-from worker.ingest import run_catalog_sync, run_live_sync
-from worker.scoreboard import EspnScoreboardClient
+from app.worker.cleanup import cleanup_games_outside_window
+from app.worker.config import settings
+from app.worker.ingest import run_catalog_sync, run_live_sync
+from app.worker.scoreboard import EspnScoreboardClient
 
 logger = logging.getLogger(__name__)
 SCHEDULER_MAX_SLEEP_SECONDS = settings.scheduler_tick_seconds

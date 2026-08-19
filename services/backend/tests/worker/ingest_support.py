@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 from app.services.api_usage import record_api_call_event
-from worker.odds import OddsOutcome, OddsSnapshot
-from worker.scoreboard import ScoreboardGame
+from app.worker.odds import OddsOutcome, OddsSnapshot
+from app.worker.scoreboard import ScoreboardGame
 
 
 def make_snapshot(

@@ -14,7 +14,7 @@ from urllib.request import urlopen
 from app.services.api_usage import record_api_call_event
 from app.services.leagues import get_league_profile
 from sqlalchemy.orm import Session
-from worker.config import settings
+from app.worker.config import settings
 
 logger = logging.getLogger(__name__)
 

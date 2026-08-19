@@ -1,4 +1,4 @@
-from worker.scoreboard import EspnScoreboardClient
+from app.worker.scoreboard import EspnScoreboardClient
 
 
 def test_provider_parses_espn_payload_shape():

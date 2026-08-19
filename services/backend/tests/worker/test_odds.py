@@ -1,4 +1,4 @@
-from worker.odds import _odds_sport_key_for_league, game_key
+from app.worker.odds import _odds_sport_key_for_league, game_key
 
 
 def test_world_cup_name_aliases_match_seeded_names():

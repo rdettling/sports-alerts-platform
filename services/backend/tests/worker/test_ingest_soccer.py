@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from app.db.models import Alert, Team, User, UserAlertDefault, UserTeamFollow
-from worker.ingest import run_catalog_sync
+from app.worker.ingest import run_catalog_sync
 
 from ingest_support import SequenceWorldCupProvider, StaticProvider, make_game
 
@@ -221,7 +221,7 @@ def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db
         ]
     )
 
-    with caplog.at_level("INFO", logger="worker.ingest"):
+    with caplog.at_level("INFO", logger="app.worker.ingest"):
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 
@@ -302,7 +302,7 @@ def test_world_cup_transition_logging_marks_penalty_kicks_window(db_session, cap
         ]
     )
 
-    with caplog.at_level("INFO", logger="worker.ingest"):
+    with caplog.at_level("INFO", logger="app.worker.ingest"):
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
         assert run_catalog_sync(provider, league="WORLD_CUP")["status"] == "success"
 

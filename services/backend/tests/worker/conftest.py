@@ -8,18 +8,7 @@ from sqlalchemy.orm import sessionmaker
 TEST_DB_PATH = Path(__file__).parent / "worker_test.db"
 os.environ.update(
     {
-        "APP_NAME": "sports-alerts-api-test",
-        "API_HOST": "127.0.0.1",
-        "API_PORT": "8000",
         "DATABASE_URL": f"sqlite+pysqlite:///{TEST_DB_PATH}",
-        "JWT_SECRET_KEY": "test-secret",
-        "JWT_ALGORITHM": "HS256",
-        "JWT_EXPIRE_MINUTES": "10080",
-        "MAGIC_LINK_TTL_MINUTES": "15",
-        "MAGIC_LINK_COOLDOWN_SECONDS": "60",
-        "MAGIC_LINK_MAX_REQUESTS_PER_HOUR": "5",
-        "WEB_BASE_URL": "http://localhost:5173",
-        "CORS_ALLOW_ORIGINS": "http://localhost:5173",
         "ODDS_API_KEY": "test-odds-key",
         "ODDS_API_BASE_URL": "https://api.the-odds-api.com/v4/sports",
         "ODDS_PROVIDER": "the_odds_api",
@@ -42,7 +31,7 @@ os.environ.update(
 )
 
 from app.db.models import Base, Team  # noqa: E402
-from worker.ingest import SessionLocal  # noqa: E402
+from app.db.session import SessionLocal  # noqa: E402
 
 TEST_TEAM_SEEDS = [
     ("1", "NBA", "Atlanta Hawks", "ATL"),

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import Alert, AlertDelivery, Game, GameOddsCurrent, GameOddsOutcomeCurrent, Team, User, UserGameAlertOverride, UserGameFollow, UserGameUnfollow
-from worker.cleanup import cleanup_games_outside_window
+from app.worker.cleanup import cleanup_games_outside_window
 
 
 def test_cleanup_removes_games_outside_window(db_session):

@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.db.models import ApiCallRollupHourly, Game, LeagueSetting, Team
 from app.services.leagues import ensure_league_settings
-from worker.ingest import run_catalog_sync, run_live_sync
+from app.worker.ingest import run_catalog_sync, run_live_sync
 
 from ingest_support import (
     ContextLabelProvider,
@@ -35,7 +35,7 @@ def test_ingest_run_failure(db_session):
 
 def test_ingest_attaches_provider_telemetry_context(db_session, monkeypatch):
     provider = TelemetryRecordingProvider()
-    monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
+    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
 
     result = run_catalog_sync(provider)
 
@@ -134,7 +134,7 @@ def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
 
 
 def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
-    monkeypatch.setattr("worker.ingest.settings.odds_enabled", False)
+    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
     provider = StaticProvider(
         [
             make_game(

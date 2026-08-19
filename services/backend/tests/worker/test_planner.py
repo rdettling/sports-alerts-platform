@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import Game, Team
-from worker.planner import build_catalog_requests, build_live_requests
+from app.worker.planner import build_catalog_requests, build_live_requests
 
 
 def _seed_game(db_session, *, external_id: str, status: str, scheduled_start: datetime, is_final: bool = False) -> None:

@@ -40,7 +40,7 @@ Deploy the worker from `services/backend/Dockerfile`.
 Run:
 
 ```sh
-/opt/venv/bin/python -m worker.main
+/opt/venv/bin/python -m app.worker.main
 ```
 
 Requirements:
