@@ -147,7 +147,6 @@ vi.mock("../hooks/useGamesData", () => ({
           badge_label: "NBA",
           alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
           live_sync_interval_seconds: 120,
-          default_test_matchup: ["ATL", "BOS"],
           is_enabled: true,
         },
         {
@@ -157,7 +156,6 @@ vi.mock("../hooks/useGamesData", () => ({
           badge_label: "WNBA",
           alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
           live_sync_interval_seconds: 120,
-          default_test_matchup: ["SEA", "LV"],
           is_enabled: true,
         },
       ],
@@ -172,7 +170,8 @@ vi.mock("../hooks/useGameAlertSettings", () => ({
     alertsBusy: false,
     openGameAlerts: vi.fn(async () => undefined),
     closeGameAlerts: vi.fn(),
-    applyAlertOverride: vi.fn(async () => undefined),
+    updateGameAlertSettings: vi.fn(async () => undefined),
+    resetGameAlertSettings: vi.fn(async () => undefined),
   })),
 }));
 

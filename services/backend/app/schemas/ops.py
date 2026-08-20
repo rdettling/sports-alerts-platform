@@ -3,31 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel
+
 from app.schemas.league import LeagueSettingOut
 
 
 class OpsAdminSummaryOverviewOut(BaseModel):
     window: str
-    total_provider_calls: int
-    provider_errors: int
-    provider_rate_limits: int
-    total_emails_attempted: int
-    emails_sent: int
-    emails_failed: int
     total_alerts_created: int
     last_updated_at: datetime
-
-
-class OpsAdminProviderOut(BaseModel):
-    provider: str
-    total_calls: int
-    success_calls: int
-    error_calls: int
-    rate_limited_calls: int
-    calls_per_hour: float
-    quota_limit_window: int | None
-    utilization_pct: float | None
-    most_used_endpoint: str | None
 
 
 class OpsAdminDeliveryStatsOut(BaseModel):
@@ -36,44 +19,15 @@ class OpsAdminDeliveryStatsOut(BaseModel):
     failed: int
 
 
-class OpsAdminResendStatsOut(BaseModel):
-    total_calls: int
-    success_calls: int
-    error_calls: int
-    rate_limited_calls: int
-
-
 class OpsAdminDeliveryOut(BaseModel):
     email_alerts: OpsAdminDeliveryStatsOut
     push_alerts: OpsAdminDeliveryStatsOut
-    magic_links: OpsAdminDeliveryStatsOut
-    resend: OpsAdminResendStatsOut
-
-
-class OpsAdminRuntimeJobOut(BaseModel):
-    job_type: str
-    league: str | None
-    status: str
-    next_run_at: datetime | None
-    last_success_at: datetime | None
-    backoff_until: datetime | None
-    last_error: str | None
-
-
-class OpsAdminRuntimeOut(BaseModel):
-    scheduler_mode: str
-    next_run_at: datetime | None
-    last_success_at: datetime | None
-    active_leagues: list[str]
-    league_settings: list[LeagueSettingOut]
-    jobs: list[OpsAdminRuntimeJobOut]
 
 
 class OpsAdminSummaryOut(BaseModel):
     overview: OpsAdminSummaryOverviewOut
-    providers: list[OpsAdminProviderOut]
     delivery: OpsAdminDeliveryOut
-    runtime: OpsAdminRuntimeOut
+    league_settings: list[LeagueSettingOut]
 
 
 class NeonUsageOut(BaseModel):

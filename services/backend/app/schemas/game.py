@@ -11,7 +11,6 @@ class GameOddsOutcomeOut(BaseModel):
 
 
 class GameOddsOut(BaseModel):
-    market: str
     bookmaker: str | None
     last_update: datetime | None
     outcomes: list[GameOddsOutcomeOut]

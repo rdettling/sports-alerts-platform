@@ -28,8 +28,7 @@ def main() -> None:
         for league in list_supported_leagues()
     )
     logger.info(
-        "Worker started scheduler_max_sleep=%ss intervals(catalog=%ss live=%s)",
-        settings.scheduler_tick_seconds,
+        "Worker started intervals(catalog=%ss live=%s)",
         settings.catalog_sync_interval_seconds,
         live_intervals,
     )

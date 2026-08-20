@@ -1,15 +1,15 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select
 
-from app.db.models import ApiCallRollupHourly, Game, LeagueSetting, Team
+from app.db.models import Game, LeagueSetting, Team
 from app.services.leagues import ensure_league_settings
 from app.worker.ingest import run_catalog_sync, run_live_sync
 
 from ingest_support import (
     ContextLabelProvider,
     StaticProvider,
-    TelemetryRecordingProvider,
     make_game,
     make_success_provider,
 )
@@ -18,35 +18,19 @@ from ingest_support import (
 def test_ingest_run_success(db_session):
     provider = make_success_provider()
     result = run_catalog_sync(provider)
-    assert result["status"] == "success"
-    assert result["games_checked"] == 1
-    assert result["games_updated"] == 1
-    assert result["next_poll_seconds"] >= 30
+    assert result.games_checked == 1
+    assert result.games_updated == 1
+    assert result.next_live_sync_at is not None
+    assert result.next_live_sync_at.tzinfo is not None
 
     games = db_session.scalars(select(Game)).all()
     assert len(games) == 1
 
 
 def test_ingest_run_failure(db_session):
-    result = run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
-    assert result["status"] == "failed"
-    assert result["next_poll_seconds"] > 0
-
-
-def test_ingest_attaches_provider_telemetry_context(db_session, monkeypatch):
-    provider = TelemetryRecordingProvider()
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
-
-    result = run_catalog_sync(provider)
-
-    assert result["status"] == "success"
-    assert provider.contexts == [True, False]
-
-    rollups = db_session.scalars(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "espn")).all()
-    assert len(rollups) == 1
-    assert rollups[0].endpoint_key == "scoreboard"
-    assert rollups[0].attempt_status == "success"
-    assert rollups[0].call_count == 1
+    with pytest.raises(RuntimeError, match="boom"):
+        run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
+    assert db_session.scalar(select(Game)) is None
 
 
 def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
@@ -66,18 +50,15 @@ def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
     db_session.commit()
 
     result = run_live_sync(StaticProvider(), league="MLB")
-    assert result["status"] == "success"
-    assert result["has_live_games"] == "false"
-    assert result["mode"] == "waiting_for_start"
-    assert result["next_scheduled_start_at"] is not None
+    assert result.has_live_games is False
+    assert result.next_scheduled_start_at is not None
+    assert result.next_scheduled_start_at.tzinfo is not None
 
 
 def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
     result = run_live_sync(StaticProvider(), league="MLB")
-    assert result["status"] == "success"
-    assert result["has_live_games"] == "false"
-    assert result["mode"] == "no_upcoming"
-    assert result["next_scheduled_start_at"] is None
+    assert result.has_live_games is False
+    assert result.next_scheduled_start_at is None
 
 
 def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
@@ -97,10 +78,9 @@ def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
     db_session.commit()
 
     result = run_live_sync(StaticProvider(), league="MLB")
-    assert result["status"] == "success"
-    assert result["has_live_games"] == "false"
-    assert result["mode"] == "waiting_for_start"
-    assert result["next_scheduled_start_at"] is not None
+    assert result.has_live_games is False
+    assert result.next_scheduled_start_at is not None
+    assert result.next_scheduled_start_at < now
 
 
 def test_catalog_sync_fails_for_disabled_league(db_session):
@@ -110,8 +90,8 @@ def test_catalog_sync_fails_for_disabled_league(db_session):
     row.is_enabled = False
     db_session.commit()
 
-    result = run_catalog_sync(StaticProvider(), league="MLB")
-    assert result["status"] == "failed"
+    with pytest.raises(ValueError, match="League disabled: MLB"):
+        run_catalog_sync(StaticProvider(), league="MLB")
 
 
 def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
@@ -126,15 +106,13 @@ def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
         ]
     )
 
-    result = run_catalog_sync(provider, league="MLS")
-
-    assert result["status"] == "failed"
-    assert result["error"] == "No MLS games could be mapped to catalog teams"
+    with pytest.raises(RuntimeError, match="No MLS games could be mapped to catalog teams"):
+        run_catalog_sync(provider, league="MLS")
     assert db_session.scalar(select(Game).where(Game.league == "MLS")) is None
 
 
 def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     provider = StaticProvider(
         [
             make_game(
@@ -154,9 +132,8 @@ def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
 
     result = run_catalog_sync(provider, league="MLS")
 
-    assert result["status"] == "success"
-    assert result["games_checked"] == 2
-    assert result["games_updated"] == 1
+    assert result.games_checked == 2
+    assert result.games_updated == 1
     games = db_session.scalars(select(Game).where(Game.league == "MLS")).all()
     assert [game.external_game_id for game in games] == ["mls-mapped"]
 
@@ -195,10 +172,8 @@ def test_live_sync_promotes_scheduled_game_to_live(db_session):
     )
 
     result = run_live_sync(provider, league="MLB")
-    assert result["status"] == "success"
-    assert result["has_live_games"] == "true"
-    assert result["mode"] == "live"
-    assert result["games_updated"] >= 1
+    assert result.has_live_games is True
+    assert result.games_updated >= 1
 
     db_session.expire_all()
     game = db_session.scalar(select(Game).where(Game.external_game_id == "mlb-angels-like", Game.league == "MLB"))
@@ -207,15 +182,79 @@ def test_live_sync_promotes_scheduled_game_to_live(db_session):
 
 
 def test_ingest_persists_and_refreshes_context_label(db_session):
-    first = run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · NY leads series 3-1"), league="NBA")
-    assert first["status"] == "success"
+    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · NY leads series 3-1"), league="NBA")
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-context"))
     assert game is not None
     assert game.context_label == "NBA Finals - Game 5 · NY leads series 3-1"
 
-    second = run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · Series tied 3-3"), league="NBA")
-    assert second["status"] == "success"
+    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · Series tied 3-3"), league="NBA")
 
     db_session.refresh(game)
     assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"
+
+
+def test_catalog_cleanup_runs_in_ingest_transaction(db_session):
+    now = datetime.now(timezone.utc)
+    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc()).limit(2)).all()
+    db_session.add(
+        Game(
+            external_game_id="old-cleanup-game",
+            league="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now - timedelta(days=3),
+            status="final",
+            is_final=True,
+        )
+    )
+    db_session.commit()
+
+    result = run_catalog_sync(StaticProvider())
+
+    assert result.games_removed == 1
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "old-cleanup-game")) is None
+
+
+def test_cleanup_failure_rolls_back_entire_catalog_sync(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc()).limit(2)).all()
+    db_session.add(
+        Game(
+            external_game_id="existing-before-cleanup-failure",
+            league="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now,
+            status="scheduled",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+
+    def fail_cleanup(db, now):
+        existing = db.scalar(select(Game).where(Game.external_game_id == "existing-before-cleanup-failure"))
+        assert existing is not None
+        db.delete(existing)
+        db.flush()
+        raise RuntimeError("cleanup failed")
+
+    monkeypatch.setattr("app.worker.ingest.cleanup_games_outside_window", fail_cleanup)
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        run_catalog_sync(make_success_provider())
+
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "game-1")) is None
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "existing-before-cleanup-failure")) is not None
+
+
+def test_alert_evaluation_failure_rolls_back_catalog_writes(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.worker.ingest.evaluate_and_record_alerts",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("alert evaluation failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="alert evaluation failed"):
+        run_catalog_sync(make_success_provider())
+
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "game-1")) is None

@@ -1,467 +1,347 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
 
-from app.db.models import Game, LeagueSetting, Team, WorkerJob
+from app.db.models import LeagueSetting
 from app.services.leagues import ensure_league_settings, get_league_profile
 from app.worker import scheduler
+from app.worker.ingest import CatalogSyncResult, LiveSyncResult
 
 
-def test_bootstrap_jobs_creates_sync_jobs_only(db_session):
-    scheduler._bootstrap_jobs()
-    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
-    assert [(job.job_type, job.league) for job in jobs] == [
+def _job(
+    job_type: scheduler.JobType = scheduler.CATALOG_SYNC_JOB,
+    league: str = "MLB",
+    next_run_at: datetime | None = None,
+) -> scheduler.ScheduledJob:
+    return scheduler.ScheduledJob(
+        job_type=job_type,
+        league=league,
+        next_run_at=next_run_at or datetime.now(timezone.utc),
+    )
+
+
+def _catalog_result(league: str = "MLB", **overrides) -> CatalogSyncResult:
+    return replace(
+        CatalogSyncResult(
+            league=league,
+            games_checked=0,
+            games_updated=0,
+            alerts_created=0,
+            odds_candidates=0,
+            odds_snapshots_created=0,
+            games_removed=0,
+            next_live_sync_at=None,
+        ),
+        **overrides,
+    )
+
+
+def _live_result(league: str = "MLB", **overrides) -> LiveSyncResult:
+    return replace(
+        LiveSyncResult(
+            league=league,
+            games_checked=0,
+            games_updated=0,
+            alerts_created=0,
+            has_live_games=False,
+            next_scheduled_start_at=None,
+        ),
+        **overrides,
+    )
+
+
+def test_sync_jobs_creates_active_league_jobs():
+    now = datetime.now(timezone.utc)
+    jobs: scheduler.JobSchedule = {}
+
+    scheduler._sync_jobs(jobs, ["MLB", "NBA"], now)
+
+    assert set(jobs) == {
         ("catalog_sync", "MLB"),
-        ("catalog_sync", "MLS"),
-        ("catalog_sync", "NBA"),
-        ("catalog_sync", "NFL"),
-        ("catalog_sync", "WNBA"),
-        ("catalog_sync", "WORLD_CUP"),
         ("live_sync", "MLB"),
-        ("live_sync", "MLS"),
-        ("live_sync", "NBA"),
-        ("live_sync", "NFL"),
-        ("live_sync", "WNBA"),
-        ("live_sync", "WORLD_CUP"),
-    ]
-    assert all(job.status == "queued" for job in jobs)
-
-
-def test_bootstrap_jobs_skips_disabled_leagues(db_session):
-    ensure_league_settings(db_session)
-    row = db_session.get(LeagueSetting, "MLB")
-    assert row is not None
-    row.is_enabled = False
-    db_session.commit()
-
-    scheduler._bootstrap_jobs()
-    jobs = db_session.scalars(select(WorkerJob).order_by(WorkerJob.job_type.asc(), WorkerJob.league.asc())).all()
-    assert [(job.job_type, job.league) for job in jobs] == [
-        ("catalog_sync", "MLS"),
         ("catalog_sync", "NBA"),
-        ("catalog_sync", "NFL"),
-        ("catalog_sync", "WNBA"),
-        ("catalog_sync", "WORLD_CUP"),
-        ("live_sync", "MLS"),
         ("live_sync", "NBA"),
-        ("live_sync", "NFL"),
-        ("live_sync", "WNBA"),
-        ("live_sync", "WORLD_CUP"),
-    ]
+    }
+    assert all(job.next_run_at == now for job in jobs.values())
 
 
-def test_bootstrap_jobs_removes_stale_disabled_league_jobs(db_session):
+def test_sync_jobs_adds_enabled_and_removes_disabled_leagues():
+    now = datetime.now(timezone.utc)
+    jobs: scheduler.JobSchedule = {}
+    scheduler._sync_jobs(jobs, ["MLB"], now)
+    jobs[(scheduler.CATALOG_SYNC_JOB, "MLB")].failure_count = 2
+
+    later = now + timedelta(minutes=5)
+    scheduler._sync_jobs(jobs, ["NBA"], later)
+
+    assert set(jobs) == {("catalog_sync", "NBA"), ("live_sync", "NBA")}
+    assert all(job.next_run_at == later for job in jobs.values())
+
+
+def test_load_active_leagues_skips_disabled_leagues(db_session):
     ensure_league_settings(db_session)
-    db_session.add_all(
-        [
-            WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=datetime.now(timezone.utc), attempt_count=0, max_attempts=5),
-            WorkerJob(job_type="live_sync", league="MLB", status="queued", next_run_at=datetime.now(timezone.utc), attempt_count=0, max_attempts=5),
-        ]
-    )
-    db_session.commit()
-
     row = db_session.get(LeagueSetting, "MLB")
     assert row is not None
     row.is_enabled = False
     db_session.commit()
 
-    scheduler._bootstrap_jobs()
+    active = scheduler._load_active_leagues()
 
-    jobs = db_session.scalars(
-        select(WorkerJob).where(WorkerJob.league == "MLB").order_by(WorkerJob.job_type.asc())
-    ).all()
-    assert jobs == []
+    assert "MLB" not in active
+    assert "NBA" in active
 
 
-def test_bootstrap_jobs_resets_catalog_next_run_for_existing_jobs(db_session):
-    stale = datetime.now(timezone.utc) + timedelta(hours=6)
-    db_session.add_all(
-        [
-            WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=stale, attempt_count=0, max_attempts=5),
-            WorkerJob(job_type="live_sync", league="MLB", status="queued", next_run_at=stale, attempt_count=0, max_attempts=5),
-        ]
-    )
-    db_session.commit()
-
-    before = datetime.now(timezone.utc)
-    scheduler._bootstrap_jobs()
-    after = datetime.now(timezone.utc)
-
-    db_session.expire_all()
-    catalog = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "catalog_sync", WorkerJob.league == "MLB"))
-    live = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "live_sync", WorkerJob.league == "MLB"))
-    assert catalog is not None
-    assert live is not None
-    assert before <= catalog.next_run_at.replace(tzinfo=timezone.utc) <= after
-    assert live.next_run_at.replace(tzinfo=timezone.utc) == stale
-
-
-def test_next_due_job_discards_disabled_league_sync_jobs(db_session):
-    ensure_league_settings(db_session)
-    due_at = datetime.now(timezone.utc) - timedelta(seconds=5)
-    db_session.add(
-        WorkerJob(job_type="catalog_sync", league="MLB", status="queued", next_run_at=due_at, attempt_count=0, max_attempts=5)
-    )
-    db_session.commit()
-
-    row = db_session.get(LeagueSetting, "MLB")
-    assert row is not None
-    row.is_enabled = False
-    db_session.commit()
-
-    due_job = scheduler._next_due_job(datetime.now(timezone.utc))
-    assert due_job is None
-    db_session.expire_all()
-    remaining = db_session.scalar(select(WorkerJob).where(WorkerJob.job_type == "catalog_sync", WorkerJob.league == "MLB"))
-    assert remaining is None
-
-
-def test_mark_job_failed_applies_backoff(db_session):
+def test_next_due_job_prefers_catalog_then_league_name():
     now = datetime.now(timezone.utc)
-    job = WorkerJob(
-        job_type="catalog_sync",
-        league="NBA",
-        status="queued",
-        next_run_at=now,
-        attempt_count=0,
-        max_attempts=3,
-    )
-    db_session.add(job)
-    db_session.commit()
-    db_session.refresh(job)
+    jobs = {
+        (scheduler.LIVE_SYNC_JOB, "MLB"): _job(scheduler.LIVE_SYNC_JOB, "MLB", now),
+        (scheduler.CATALOG_SYNC_JOB, "NBA"): _job(scheduler.CATALOG_SYNC_JOB, "NBA", now),
+        (scheduler.CATALOG_SYNC_JOB, "MLB"): _job(scheduler.CATALOG_SYNC_JOB, "MLB", now),
+    }
 
-    scheduler._mark_job_failed(job.id, "boom", now)
+    due = scheduler._next_due_job(jobs, now)
 
-    db_session.expire_all()
-    updated = db_session.get(WorkerJob, job.id)
-    assert updated is not None
-    assert updated.status == "queued"
-    assert updated.attempt_count == 1
-    assert updated.backoff_until is not None
-    min_expected = (now + timedelta(seconds=1)).replace(tzinfo=None)
-    assert updated.next_run_at >= min_expected
+    assert due is jobs[(scheduler.CATALOG_SYNC_JOB, "MLB")]
 
 
-def test_mark_job_failed_requeues_after_max_attempts(db_session):
+def test_next_due_job_and_sleep_handle_future_and_empty_schedules(monkeypatch):
+    monkeypatch.setattr(scheduler, "SCHEDULER_IDLE_MAX_SLEEP_SECONDS", 120)
     now = datetime.now(timezone.utc)
-    job = WorkerJob(
-        job_type="live_sync",
-        league="MLB",
-        status="queued",
-        next_run_at=now,
-        attempt_count=1,
-        max_attempts=2,
-    )
-    db_session.add(job)
-    db_session.commit()
-    db_session.refresh(job)
+    jobs = {
+        (scheduler.CATALOG_SYNC_JOB, "MLB"): _job(
+            scheduler.CATALOG_SYNC_JOB,
+            "MLB",
+            now + timedelta(minutes=5),
+        )
+    }
 
-    scheduler._mark_job_failed(job.id, "fatal", now)
-
-    db_session.expire_all()
-    updated = db_session.get(WorkerJob, job.id)
-    assert updated is not None
-    assert updated.status == "queued"
-    assert updated.attempt_count == 2
-    assert updated.backoff_until is not None
-    assert updated.next_run_at is not None
+    assert scheduler._next_due_job(jobs, now) is None
+    assert scheduler._next_due_seconds(jobs, now) == 120
+    assert scheduler._next_due_seconds({}, now) == 120
+    assert scheduler._next_due_seconds(jobs, now + timedelta(minutes=5)) == 0
 
 
-def test_mark_job_failed_caps_backoff(db_session, monkeypatch):
-    monkeypatch.setattr(scheduler, "JOB_RETRY_BASE_SECONDS", 60)
-    monkeypatch.setattr(scheduler, "JOB_RETRY_MAX_BACKOFF_SECONDS", 120)
+def test_mark_job_success_resets_failures_and_schedules_next_run():
     now = datetime.now(timezone.utc)
-    job = WorkerJob(
-        job_type="catalog_sync",
-        league="MLB",
-        status="queued",
-        next_run_at=now,
-        attempt_count=3,
-        max_attempts=5,
+    job = _job()
+    job.failure_count = 3
+
+    scheduler._mark_job_success(job, 90, now)
+
+    assert job.failure_count == 0
+    assert job.next_run_at == now + timedelta(seconds=90)
+
+
+def test_mark_job_failed_applies_exponential_backoff_with_cap(monkeypatch):
+    monkeypatch.setattr(scheduler, "JOB_RETRY_BASE_SECONDS", 30)
+    monkeypatch.setattr(scheduler, "JOB_RETRY_MAX_BACKOFF_SECONDS", 60)
+    now = datetime.now(timezone.utc)
+    job = _job()
+
+    assert scheduler._mark_job_failed(job, now) == 30
+    assert job.next_run_at == now + timedelta(seconds=30)
+    assert scheduler._mark_job_failed(job, now) == 60
+    assert scheduler._mark_job_failed(job, now) == 60
+    assert job.failure_count == 3
+
+
+def test_run_logs_failure_and_stops_after_requested_iteration(monkeypatch, caplog):
+    class OneIteration:
+        checks = 0
+
+        def is_set(self):
+            self.checks += 1
+            return self.checks > 1
+
+        def wait(self, _seconds):
+            raise AssertionError("due startup job should not wait")
+
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(scheduler, "_utcnow", lambda: now)
+    monkeypatch.setattr(scheduler, "_load_active_leagues", lambda: ["MLB"])
+    monkeypatch.setattr(
+        scheduler,
+        "_run_catalog_sync_job",
+        lambda _jobs, _league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
     )
-    db_session.add(job)
-    db_session.commit()
-    db_session.refresh(job)
 
-    scheduler._mark_job_failed(job.id, "still failing", now)
+    with caplog.at_level("INFO", logger="app.worker.scheduler"):
+        scheduler.run(OneIteration())
 
-    db_session.expire_all()
-    updated = db_session.get(WorkerJob, job.id)
-    assert updated is not None
-    assert updated.backoff_until is not None
-    delta = (updated.backoff_until.replace(tzinfo=timezone.utc) - now).total_seconds()
-    assert delta <= 120
+    assert "Job failed job_type=catalog_sync league=MLB failure_count=1 retry_in_seconds=30" in caplog.text
+    assert caplog.text.count("Job failed") == 1
+    assert "Scheduler loop stopped" in caplog.text
 
 
 def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
     target = datetime.now(timezone.utc) + timedelta(minutes=42)
     monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "false",
-            "mode": "waiting_for_start",
-            "next_scheduled_start_at": target.isoformat(),
-            "next_poll_seconds": 1,
-        },
+        scheduler,
+        "run_live_sync",
+        lambda provider, league: _live_result(league, next_scheduled_start_at=target),
     )
+
     next_seconds, result = scheduler._run_live_sync_job("MLB")
+
     assert 41 * 60 <= next_seconds <= 42 * 60
-    assert result["mode"] == "waiting_for_start"
+    assert scheduler._live_mode(result) == "waiting_for_start"
 
 
-def test_run_live_sync_job_uses_league_live_interval_when_start_missing(monkeypatch):
+def test_run_live_sync_job_uses_live_interval_when_start_is_overdue(monkeypatch):
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
     monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "false",
-            "mode": "waiting_for_start",
-            "next_scheduled_start_at": None,
-        },
+        scheduler,
+        "run_live_sync",
+        lambda provider, league: _live_result(league, next_scheduled_start_at=start),
     )
-    next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == get_league_profile("MLB").live_sync_interval_seconds
-    assert result["mode"] == "waiting_for_start"
 
+    next_seconds, _ = scheduler._run_live_sync_job("MLB")
 
-def test_run_live_sync_job_uses_league_live_interval_when_start_is_past(monkeypatch):
-    target = datetime.now(timezone.utc) - timedelta(minutes=5)
-    monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "false",
-            "mode": "waiting_for_start",
-            "next_scheduled_start_at": target.isoformat(),
-        },
-    )
-    next_seconds, result = scheduler._run_live_sync_job("MLB")
     assert next_seconds == get_league_profile("MLB").live_sync_interval_seconds
-    assert result["mode"] == "waiting_for_start"
 
 
 def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "false",
-            "mode": "no_upcoming",
-            "next_poll_seconds": scheduler.settings.catalog_sync_interval_seconds,
-        },
+        scheduler,
+        "run_live_sync",
+        lambda provider, league: _live_result(league),
     )
+
     next_seconds, result = scheduler._run_live_sync_job("MLB")
+
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
-    assert result["mode"] == "no_upcoming"
+    assert scheduler._live_mode(result) == "no_upcoming"
 
 
-def test_run_live_sync_job_uses_world_cup_interval(monkeypatch):
+@pytest.mark.parametrize(("league", "interval"), [("MLB", 300), ("MLS", 180), ("WORLD_CUP", 180)])
+def test_run_live_sync_job_uses_league_live_interval(monkeypatch, league, interval):
     monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "true",
-            "next_poll_seconds": get_league_profile("WORLD_CUP").live_sync_interval_seconds,
-        },
+        scheduler,
+        "run_live_sync",
+        lambda provider, league: _live_result(league, has_live_games=True),
     )
 
-    next_seconds, result = scheduler._run_live_sync_job("WORLD_CUP")
-    assert next_seconds == get_league_profile("WORLD_CUP").live_sync_interval_seconds
-    assert result["has_live_games"] == "true"
+    next_seconds, result = scheduler._run_live_sync_job(league)
 
-
-def test_run_live_sync_job_uses_mls_interval(monkeypatch):
-    monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "true",
-            "next_poll_seconds": get_league_profile("MLS").live_sync_interval_seconds,
-        },
-    )
-
-    next_seconds, result = scheduler._run_live_sync_job("MLS")
-    assert next_seconds == 180
-    assert result["league"] == "MLS"
+    assert next_seconds == interval
+    assert result.league == league
 
 
 def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
     monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "alerts_created": 2,
-            "has_live_games": "false",
-            "mode": "no_upcoming",
-            "next_poll_seconds": 123,
-        },
+        scheduler,
+        "run_live_sync",
+        lambda provider, league: _live_result(league, alerts_created=2),
     )
 
-    next_seconds, result = scheduler._run_live_sync_job("MLB")
-    assert next_seconds == 123
-    assert result["alerts_created"] == 2
+    _, result = scheduler._run_live_sync_job("MLB")
+
+    assert result.alerts_created == 2
 
 
-def test_run_catalog_sync_job_runs_cleanup(monkeypatch):
+def test_run_catalog_sync_job_uses_fixed_cadence_and_pulls_live_forward(monkeypatch):
+    target = datetime.now(timezone.utc) + timedelta(minutes=20)
     monkeypatch.setattr(
-        "app.worker.scheduler.run_catalog_sync",
-        lambda provider, league: {
-            "status": "success",
-            "job_type": "catalog_sync",
-            "league": league,
-            "next_poll_seconds": 123,
-        },
+        scheduler,
+        "run_catalog_sync",
+        lambda provider, league: _catalog_result(league, next_live_sync_at=target),
     )
-    called = {"cleanup": 0}
+    called = []
 
-    def fake_cleanup(_db):
-        called["cleanup"] += 1
-        return 0
+    def fake_pull(jobs, league, desired):
+        called.append((jobs, league, desired))
 
-    monkeypatch.setattr("app.worker.scheduler.cleanup_games_outside_window", fake_cleanup)
-    monkeypatch.setattr("app.worker.scheduler._pull_live_sync_forward", lambda _league: None)
+    monkeypatch.setattr(scheduler, "_pull_live_sync_forward", fake_pull)
 
-    next_seconds, result = scheduler._run_catalog_sync_job("MLB")
-    assert next_seconds == 123
-    assert called["cleanup"] == 1
-    assert result["job_type"] == "catalog_sync"
+    jobs = {}
+    next_seconds, result = scheduler._run_catalog_sync_job(jobs, "MLB")
+
+    assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
+    assert called == [(jobs, "MLB", target)]
+    assert result.league == "MLB"
 
 
-def test_run_catalog_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
+@pytest.mark.parametrize(
+    ("runner", "wrapper"),
+    [
+        ("run_catalog_sync", "_run_catalog_sync_job"),
+        ("run_live_sync", "_run_live_sync_job"),
+    ],
+)
+def test_sync_job_wrappers_propagate_failures(monkeypatch, runner, wrapper):
     monkeypatch.setattr(
-        "app.worker.scheduler.run_catalog_sync",
-        lambda provider, league: {
-            "status": "failed",
-            "job_type": "catalog_sync",
-            "league": league,
-            "error": "No MLS games could be mapped to catalog teams",
-        },
+        scheduler,
+        runner,
+        lambda provider, league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
     )
 
-    with pytest.raises(RuntimeError, match="No MLS games could be mapped to catalog teams"):
-        scheduler._run_catalog_sync_job("MLS")
-
-
-def test_run_live_sync_job_raises_failed_result_for_scheduler_retry(monkeypatch):
-    monkeypatch.setattr(
-        "app.worker.scheduler.run_live_sync",
-        lambda provider, league: {
-            "status": "failed",
-            "job_type": "live_sync",
-            "league": league,
-            "error": "scoreboard unavailable",
-        },
-    )
-
-    with pytest.raises(RuntimeError, match="scoreboard unavailable"):
-        scheduler._run_live_sync_job("MLS")
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        if wrapper == "_run_catalog_sync_job":
+            scheduler._run_catalog_sync_job({}, "MLB")
+        else:
+            scheduler._run_live_sync_job("MLB")
 
 
 def test_log_job_success_emits_compact_summary(caplog):
     with caplog.at_level("INFO", logger="app.worker.scheduler"):
         scheduler._log_job_success(
-            job_type="live_sync",
-            league="MLB",
-            result={
-                "status": "success",
-                "games_checked": 23,
-                "games_updated": 2,
-                "alerts_created": 1,
-                "has_live_games": "true",
-                "mode": "live",
-            },
+            result=_live_result(
+                games_checked=23,
+                games_updated=2,
+                alerts_created=1,
+                has_live_games=True,
+            ),
             next_run_seconds=300,
             duration_ms=145,
         )
 
-    assert "Job completed job_type=live_sync league=MLB status=success duration_ms=145 next_run_seconds=300 games_checked=23 games_updated=2 alerts_created=1 has_live_games=true mode=live" in caplog.text
+    assert (
+        "Job completed job_type=live_sync league=MLB duration_ms=145 "
+        "next_run_seconds=300 games_checked=23 games_updated=2 alerts_created=1 "
+        "has_live_games=True mode=live"
+    ) in caplog.text
 
 
-def test_pull_live_sync_forward_to_next_scheduled_start(db_session):
-    now = datetime.now(timezone.utc)
-    team_a = Team(external_team_id="TST1", league="MLB", name="Test Team One", abbreviation="T1")
-    team_b = Team(external_team_id="TST2", league="MLB", name="Test Team Two", abbreviation="T2")
-    db_session.add_all([team_a, team_b])
-    db_session.flush()
-    db_session.add(
-        Game(
-            external_game_id="g1",
-            league="MLB",
-            home_team_id=team_a.id,
-            away_team_id=team_b.id,
-            scheduled_start_time=now + timedelta(minutes=20),
-            status="scheduled",
-            is_final=False,
+def test_log_catalog_success_includes_all_job_counts(caplog):
+    with caplog.at_level("INFO", logger="app.worker.scheduler"):
+        scheduler._log_job_success(
+            result=_catalog_result(
+                games_checked=12,
+                games_updated=3,
+                alerts_created=2,
+                odds_candidates=4,
+                odds_snapshots_created=1,
+                games_removed=5,
+            ),
+            next_run_seconds=43200,
+            duration_ms=210,
         )
-    )
-    live_job = WorkerJob(
-        job_type="live_sync",
-        league="MLB",
-        status="queued",
-        next_run_at=now + timedelta(hours=6),
-        attempt_count=0,
-        max_attempts=5,
-    )
-    db_session.add(live_job)
-    db_session.commit()
 
-    scheduler._pull_live_sync_forward("MLB")
-
-    db_session.expire_all()
-    updated = db_session.get(WorkerJob, live_job.id)
-    assert updated is not None
-    assert updated.next_run_at.replace(tzinfo=timezone.utc) <= (now + timedelta(minutes=20)).replace(tzinfo=timezone.utc)
+    assert caplog.text.count("Job completed") == 1
+    assert (
+        "Job completed job_type=catalog_sync league=MLB duration_ms=210 next_run_seconds=43200 "
+        "games_checked=12 games_updated=3 alerts_created=2 odds_candidates=4 "
+        "odds_snapshots_created=1 games_removed=5"
+    ) in caplog.text
 
 
-def test_pull_live_sync_forward_to_now_when_live_exists(db_session):
+def test_pull_live_sync_forward_uses_native_hint():
     now = datetime.now(timezone.utc)
-    team_a = Team(external_team_id="TST3", league="MLB", name="Test Team Three", abbreviation="T3")
-    team_b = Team(external_team_id="TST4", league="MLB", name="Test Team Four", abbreviation="T4")
-    db_session.add_all([team_a, team_b])
-    db_session.flush()
-    db_session.add(
-        Game(
-            external_game_id="g2",
-            league="MLB",
-            home_team_id=team_a.id,
-            away_team_id=team_b.id,
-            scheduled_start_time=now - timedelta(minutes=10),
-            status="in_progress",
-            is_final=False,
-        )
-    )
-    live_job = WorkerJob(
-        job_type="live_sync",
-        league="MLB",
-        status="queued",
-        next_run_at=now + timedelta(hours=1),
-        attempt_count=0,
-        max_attempts=5,
-    )
-    db_session.add(live_job)
-    db_session.commit()
+    live_job = _job(scheduler.LIVE_SYNC_JOB, "MLB", now + timedelta(hours=6))
+    jobs = {(scheduler.LIVE_SYNC_JOB, "MLB"): live_job}
+    desired = now + timedelta(minutes=20)
 
-    before = datetime.now(timezone.utc)
-    scheduler._pull_live_sync_forward("MLB")
-    after = datetime.now(timezone.utc)
+    scheduler._pull_live_sync_forward(jobs, "MLB", desired)
 
-    db_session.expire_all()
-    updated = db_session.get(WorkerJob, live_job.id)
-    assert updated is not None
-    assert before <= updated.next_run_at.replace(tzinfo=timezone.utc) <= after
+    assert live_job.next_run_at == desired
+
+
+def test_pull_live_sync_forward_does_not_delay_existing_job():
+    now = datetime.now(timezone.utc)
+    live_job = _job(scheduler.LIVE_SYNC_JOB, "MLB", now + timedelta(minutes=10))
+    jobs = {(scheduler.LIVE_SYNC_JOB, "MLB"): live_job}
+
+    scheduler._pull_live_sync_forward(jobs, "MLB", now + timedelta(hours=1))
+
+    assert live_job.next_run_at == now + timedelta(minutes=10)

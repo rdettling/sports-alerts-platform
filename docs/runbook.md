@@ -41,14 +41,13 @@ Checks:
 
 Checks:
 
-1. Confirm `ODDS_ENABLED=true` if you expect odds
-2. Confirm `ODDS_API_KEY` is valid
-3. Confirm the worker is running
-4. Check worker logs for odds fetch failures during catalog sync
+1. Confirm `ODDS_API_KEY` is nonblank and valid if you expect odds
+2. Confirm the worker is running
+3. Check worker logs for odds fetch failures during catalog sync
 
 Expected behavior:
 
-- when `ODDS_ENABLED=false`, games still load but odds values can be empty
+- when `ODDS_API_KEY` is blank, games still load but odds values can be empty
 
 ## Worker Running But Alerts Not Arriving
 
@@ -57,7 +56,7 @@ Checks:
 1. Confirm the worker is running and logging sync activity
 2. Confirm a relevant league is enabled in `league_settings`
 3. Confirm users follow teams or games that should produce alert candidates
-4. Confirm league defaults or game overrides have the alert type enabled
+4. Confirm the resolved league or per-game settings have the alert type enabled; per-game fields inherit league values until explicitly changed
 5. For real delivery, confirm `DELIVERY_MODE=live`
 6. For email failures, confirm the Resend settings
 7. For Push failures, confirm `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, then inspect the aggregate `provider_data`

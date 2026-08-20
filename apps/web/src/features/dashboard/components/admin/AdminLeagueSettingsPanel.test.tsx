@@ -20,7 +20,6 @@ const item: LeagueSetting = {
   badge_label: "WNBA",
   alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
   live_sync_interval_seconds: 120,
-  default_test_matchup: ["NY", "LV"],
   is_enabled: true,
 };
 

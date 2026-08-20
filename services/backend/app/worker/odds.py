@@ -7,7 +7,6 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from time import monotonic
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -15,11 +14,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent
-from app.services.api_usage import record_api_call_event
 from app.services.leagues import get_league_profile
 from app.worker.config import settings
 
 logger = logging.getLogger(__name__)
+ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"
+ODDS_API_REGION = "us"
+ODDS_MARKET = "h2h"
+ODDS_FORMAT = "american"
+ODDS_TIMEOUT_SECONDS = 6
+ODDS_CACHE_SECONDS = 60
+ODDS_PREGAME_WINDOW = timedelta(hours=24)
 MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
@@ -40,7 +45,6 @@ TEAM_NAME_ALIASES = {
 _CACHE_LOCK = threading.Lock()
 _CACHE_FETCHED_AT_BY_LEAGUE: dict[str, float] = {}
 _CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
-_TELEMETRY_DB: Session | None = None
 
 
 @dataclass(frozen=True)
@@ -54,16 +58,10 @@ class OddsOutcome:
 
 @dataclass(frozen=True)
 class OddsSnapshot:
-    market: str
     outcomes: tuple[OddsOutcome, ...]
     bookmaker: str | None
     last_update: datetime | None
     commence_time: datetime | None = None
-
-
-def set_telemetry_context(db: Session | None) -> None:
-    global _TELEMETRY_DB  # noqa: PLW0603
-    _TELEMETRY_DB = db
 
 
 def _normalize_team_name(name: str) -> str:
@@ -106,13 +104,7 @@ def _build_current_outcomes(odds: OddsSnapshot) -> list[GameOddsOutcomeCurrent]:
 
 
 def upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
-    row = db.scalar(
-        select(GameOddsCurrent).where(
-            GameOddsCurrent.game_id == game_id,
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == odds.market,
-        )
-    )
+    row = db.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game_id))
     if row:
         before = (row.bookmaker, _stored_odds_signature(row))
         after = (odds.bookmaker, _odds_signature(odds))
@@ -126,8 +118,6 @@ def upsert_game_odds(db: Session, game_id: int, odds: OddsSnapshot) -> bool:
 
     row = GameOddsCurrent(
         game_id=game_id,
-        provider=settings.odds_provider,
-        market=odds.market,
         bookmaker=odds.bookmaker,
         fetched_at=odds.last_update or datetime.now(timezone.utc),
     )
@@ -179,7 +169,7 @@ def games_missing_pregame_snapshot(
 ) -> list[Game]:
     if eligible_external_ids is not None and not eligible_external_ids:
         return []
-    pregame_cutoff = now + timedelta(hours=max(1, settings.odds_pregame_window_hours))
+    pregame_cutoff = now + ODDS_PREGAME_WINDOW
     stmt = select(Game).where(
         Game.league == league,
         Game.is_final.is_(False),
@@ -196,11 +186,7 @@ def games_missing_pregame_snapshot(
     existing_ids = {
         game_id
         for game_id, in db.execute(
-            select(GameOddsCurrent.game_id).where(
-                GameOddsCurrent.game_id.in_(game_ids),
-                GameOddsCurrent.provider == settings.odds_provider,
-                GameOddsCurrent.market == settings.odds_api_market,
-            )
+            select(GameOddsCurrent.game_id).where(GameOddsCurrent.game_id.in_(game_ids))
         ).all()
     }
     return [game for game in rows if game.id not in existing_ids]
@@ -237,7 +223,7 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
         if not isinstance(markets, list):
             continue
         for market in markets:
-            if not isinstance(market, dict) or market.get("key") != settings.odds_api_market:
+            if not isinstance(market, dict) or market.get("key") != ODDS_MARKET:
                 continue
             outcomes = market.get("outcomes")
             if not isinstance(outcomes, list):
@@ -266,7 +252,6 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
             if not parsed_outcomes:
                 continue
             return OddsSnapshot(
-                market=str(market.get("key", settings.odds_api_market)),
                 outcomes=tuple(parsed_outcomes),
                 bookmaker=bookmaker.get("title") if isinstance(bookmaker, dict) else None,
                 last_update=_parse_datetime(bookmaker.get("last_update") if isinstance(bookmaker, dict) else None),
@@ -285,57 +270,17 @@ def _odds_sport_key_for_league(league: str) -> str:
 def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     query = urlencode(
         {
-            "apiKey": settings.odds_api_key,
-            "regions": settings.odds_api_regions,
-            "markets": settings.odds_api_market,
-            "oddsFormat": settings.odds_api_format,
+            "apiKey": settings.odds_api_key.strip(),
+            "regions": ODDS_API_REGION,
+            "markets": ODDS_MARKET,
+            "oddsFormat": ODDS_FORMAT,
         }
     )
     sport_key = _odds_sport_key_for_league(league)
-    url = f"{settings.odds_api_base_url.rstrip('/')}/{sport_key}/odds?{query}"
+    url = f"{ODDS_API_BASE_URL}/{sport_key}/odds?{query}"
 
-    try:
-        with urlopen(url, timeout=settings.odds_api_timeout_seconds) as response:  # noqa: S310
-            status_code = int(getattr(response, "status", 200))
-            payload = json.loads(response.read().decode("utf-8"))
-            if _TELEMETRY_DB is not None:
-                record_api_call_event(
-                    _TELEMETRY_DB,
-                    service="worker",
-                    provider="odds",
-                    endpoint_key=settings.odds_api_market,
-                    attempt_status="success" if 200 <= status_code < 300 else "error",
-                )
-    except HTTPError as exc:
-        if _TELEMETRY_DB is not None:
-            record_api_call_event(
-                _TELEMETRY_DB,
-                service="worker",
-                provider="odds",
-                endpoint_key=settings.odds_api_market,
-                attempt_status="rate_limited" if int(exc.code) == 429 else "error",
-            )
-        raise
-    except URLError:
-        if _TELEMETRY_DB is not None:
-            record_api_call_event(
-                _TELEMETRY_DB,
-                service="worker",
-                provider="odds",
-                endpoint_key=settings.odds_api_market,
-                attempt_status="error",
-            )
-        raise
-    except Exception:
-        if _TELEMETRY_DB is not None:
-            record_api_call_event(
-                _TELEMETRY_DB,
-                service="worker",
-                provider="odds",
-                endpoint_key=settings.odds_api_market,
-                attempt_status="error",
-            )
-        raise
+    with urlopen(url, timeout=ODDS_TIMEOUT_SECONDS) as response:  # noqa: S310
+        payload = json.loads(response.read().decode("utf-8"))
 
     if not isinstance(payload, list):
         return {}
@@ -358,6 +303,9 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
 
 
 def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
+    if not settings.odds_api_key.strip():
+        return {}
+
     normalized = league.strip().upper()
     try:
         profile = get_league_profile(normalized)
@@ -370,7 +318,7 @@ def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     with _CACHE_LOCK:
         cached = _CACHE_DATA_BY_LEAGUE.get(normalized)
         fetched_at = _CACHE_FETCHED_AT_BY_LEAGUE.get(normalized, 0.0)
-        if cached and now - fetched_at < settings.odds_api_cache_seconds:
+        if cached and now - fetched_at < ODDS_CACHE_SECONDS:
             return cached
 
     try:

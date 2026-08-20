@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 
-from app.services.api_usage import record_api_call_event
 from app.worker.odds import OddsOutcome, OddsSnapshot
 from app.worker.scoreboard import ScoreboardGame
 
@@ -23,7 +22,6 @@ def make_snapshot(
     if draw_price is not None:
         outcomes.insert(1, OddsOutcome(outcome_key="draw", outcome_label="Draw", outcome_order=1, price_american=draw_price, team_side=None))
     return OddsSnapshot(
-        market="h2h",
         outcomes=tuple(outcomes),
         bookmaker=bookmaker,
         last_update=last_update,
@@ -182,34 +180,6 @@ class RecordingCatalogProvider:
                 home_external_team_id="10" if league == "MLB" else "660",
                 away_external_team_id="2" if league == "MLB" else "203",
                 scheduled_start_time=self.scheduled_start_time,
-                status="scheduled",
-            )
-        ]
-
-
-class TelemetryRecordingProvider:
-    def __init__(self):
-        self.contexts: list[bool] = []
-        self._db = None
-
-    def set_telemetry_context(self, db):
-        self._db = db
-        self.contexts.append(db is not None)
-
-    def fetch_games(self, league, requests):
-        assert self._db is not None
-        record_api_call_event(
-            self._db,
-            service="worker",
-            provider="espn",
-            endpoint_key="scoreboard",
-            attempt_status="success",
-        )
-        return [
-            make_game(
-                external_game_id="game-telemetry",
-                home_external_team_id="1",
-                away_external_team_id="2",
                 status="scheduled",
             )
         ]

@@ -40,7 +40,8 @@ export function GamesView({
     alertsBusy,
     openGameAlerts,
     closeGameAlerts,
-    applyAlertOverride,
+    updateGameAlertSettings,
+    resetGameAlertSettings,
   } = useGameAlertSettings(token, setError);
 
   const toggleMutation = useMutation({
@@ -233,7 +234,8 @@ export function GamesView({
         alertsBusy={alertsBusy}
         gameAlertState={gameAlertState}
         onClose={closeGameAlerts}
-        onApplyAlertOverride={applyAlertOverride}
+        onUpdateGameAlertSettings={updateGameAlertSettings}
+        onResetGameAlertSettings={resetGameAlertSettings}
       />
     </section>
   );

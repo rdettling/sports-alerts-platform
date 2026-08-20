@@ -11,7 +11,7 @@ function WindowSelect({
 }) {
   return (
     <select
-      aria-label="Telemetry window"
+      aria-label="Activity window"
       value={value}
       onChange={(event) => onChange(event.target.value as OpsAdminOverviewWindow)}
     >
@@ -32,7 +32,7 @@ export function AdminTabsHeader({
   isRefreshing,
   refreshFailed,
 }: AdminTabsHeaderProps) {
-  const showWindow = tab === "overview" || tab === "providers" || tab === "delivery";
+  const showWindow = tab === "overview";
 
   const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;

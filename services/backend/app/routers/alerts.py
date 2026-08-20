@@ -1,5 +1,5 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -8,25 +8,115 @@ from sqlalchemy.orm import Session, aliased
 from app.db.models import Alert, AlertDelivery, Game, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
-from app.schemas.alert import AlertDeliveryOut, AlertHistoryItemOut, AlertHistoryResponse, DevTestAlertRequest, DevTestAlertResponse
+from app.schemas.alert import (
+    AdminTestAlertRequest,
+    AdminTestAlertResponse,
+    AlertDeliveryOut,
+    AlertHistoryItemOut,
+    AlertHistoryResponse,
+)
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
-from app.services.leagues import get_active_leagues, get_alert_types, get_default_test_matchup, get_league_profile
+from app.services.leagues import get_active_leagues, get_alert_types, get_league_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
+@dataclass(frozen=True)
+class AdminTestGameState:
+    status: str
+    home_score: int | None
+    away_score: int | None
+    period: int | None
+    clock: str | None
+    start_offset: timedelta
+    is_final: bool = False
+
+
+ADMIN_TEST_GAME_STATES = {
+    "game_start": AdminTestGameState("scheduled", None, None, None, None, timedelta(minutes=30)),
+    "close_game_late": AdminTestGameState("in_progress", 102, 100, 4, "01:42", -timedelta(hours=2)),
+    "overtime_start": AdminTestGameState("in_progress", 112, 112, 5, "05:00", -timedelta(hours=2)),
+    "inning_start": AdminTestGameState("in_progress", 2, 1, 7, "Mid 7th", -timedelta(hours=2)),
+    "extra_innings_start": AdminTestGameState("in_progress", 3, 3, 10, "Top 10th", -timedelta(hours=3)),
+    "second_half_start": AdminTestGameState("in_progress", 0, 0, 2, "46'", -timedelta(hours=1)),
+    "extra_time_start": AdminTestGameState("in_progress", 1, 1, 3, "91'", -timedelta(hours=2)),
+    "penalty_kicks": AdminTestGameState("in_progress", 1, 1, 5, "Pens", -timedelta(hours=2)),
+    "score_changed": AdminTestGameState("in_progress", 0, 1, 1, "18'", -timedelta(minutes=25)),
+    "final_result": AdminTestGameState("final", 109, 105, None, None, -timedelta(hours=4), True),
+}
+
+ADMIN_TEST_SPORT_OVERRIDES = {
+    ("football", "close_game_late"): AdminTestGameState(
+        "in_progress", 20, 17, 4, "04:30", -timedelta(hours=2)
+    ),
+    ("football", "overtime_start"): AdminTestGameState(
+        "in_progress", 20, 20, 5, "10:00", -timedelta(hours=2)
+    ),
+    ("football", "final_result"): AdminTestGameState(
+        "final", 24, 21, 4, "0:00", -timedelta(hours=4), True
+    ),
+    ("baseball", "final_result"): AdminTestGameState(
+        "final", 5, 3, 9, "Final", -timedelta(hours=4), True
+    ),
+    ("soccer", "final_result"): AdminTestGameState(
+        "final", 2, 1, 2, "FT", -timedelta(hours=4), True
+    ),
+}
+
+
 def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
-    teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc())).all()
+    teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc()).limit(2)).all()
     if len(teams) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough teams available for test alerts")
-
-    by_abbr = {team.abbreviation.upper(): team for team in teams}
-    default_away_abbr, default_home_abbr = get_default_test_matchup(league)
-    away = by_abbr.get(default_away_abbr)
-    home = by_abbr.get(default_home_abbr)
-    if away and home and away.id != home.id:
-        return away, home
     return teams[0], teams[1]
+
+
+def _build_admin_test_objects(
+    *,
+    user_id: int,
+    league: str,
+    alert_type: str,
+    away_team: Team,
+    home_team: Team,
+) -> tuple[Game, Alert]:
+    sport = get_league_profile(league).sport
+    state = ADMIN_TEST_SPORT_OVERRIDES.get((sport, alert_type), ADMIN_TEST_GAME_STATES[alert_type])
+    game = Game(
+        id=0,
+        external_game_id="admin-test",
+        league=league,
+        home_team_id=home_team.id,
+        away_team_id=away_team.id,
+        scheduled_start_time=datetime.now(timezone.utc) + state.start_offset,
+        status=state.status,
+        home_score=state.home_score,
+        away_score=state.away_score,
+        period=state.period,
+        clock=state.clock,
+        is_final=state.is_final,
+    )
+    event_data: dict[str, object] = {
+        "status": state.status,
+        "period": state.period,
+        "clock": state.clock,
+    }
+    if alert_type == "score_changed":
+        event_data.update(
+            previous_home_score=0,
+            previous_away_score=0,
+            new_home_score=state.home_score,
+            new_away_score=state.away_score,
+            scoring_side="away",
+            is_inferred_goal=True,
+        )
+    return game, Alert(
+        id=0,
+        user_id=user_id,
+        game_id=0,
+        alert_type=alert_type,
+        event_key="admin-test",
+        event_data=event_data,
+    )
 
 
 @router.get("/history", response_model=AlertHistoryResponse)
@@ -88,12 +178,12 @@ def get_alert_history(
     return AlertHistoryResponse(items=items)
 
 
-@router.post("/admin/test", response_model=DevTestAlertResponse)
+@router.post("/admin/test", response_model=AdminTestAlertResponse)
 def create_admin_test_alert(
-    payload: DevTestAlertRequest,
+    payload: AdminTestAlertRequest,
     current_user: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
-) -> DevTestAlertResponse:
+) -> AdminTestAlertResponse:
     league = payload.league.strip().upper()
     try:
         allowed_alert_types = set(get_alert_types(league))
@@ -110,149 +200,16 @@ def create_admin_test_alert(
         )
 
     away_team, home_team = _resolve_admin_test_teams(db, league)
-    sport = get_league_profile(league).sport
-
-    game_status = "scheduled"
-    home_score = None
-    away_score = None
-    period = None
-    clock = None
-    is_final = False
-    scheduled_start_time = datetime.now(timezone.utc) + timedelta(minutes=30)
-    if payload.alert_type == "close_game_late":
-        game_status = "in_progress"
-        home_score = 102
-        away_score = 100
-        period = 4
-        clock = "01:42"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
-    elif payload.alert_type == "overtime_start":
-        game_status = "in_progress"
-        home_score = 112
-        away_score = 112
-        period = 5
-        clock = "05:00"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
-    elif payload.alert_type == "inning_start":
-        game_status = "in_progress"
-        home_score = 2
-        away_score = 1
-        period = 7
-        clock = "Mid 7th"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
-    elif payload.alert_type == "extra_innings_start":
-        game_status = "in_progress"
-        home_score = 3
-        away_score = 3
-        period = 10
-        clock = "Top 10th"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=3)
-    elif payload.alert_type == "final_result":
-        game_status = "final"
-        home_score = 109
-        away_score = 105
-        is_final = True
-        if league == "MLB":
-            home_score = 5
-            away_score = 3
-            period = 9
-            clock = "Final"
-        elif get_league_profile(league).sport == "soccer":
-            home_score = 2
-            away_score = 1
-            period = 2
-            clock = "FT"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=4)
-    elif payload.alert_type == "score_changed":
-        game_status = "in_progress"
-        home_score = 0
-        away_score = 1
-        period = 1
-        clock = "18'"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(minutes=25)
-    elif payload.alert_type == "second_half_start":
-        game_status = "in_progress"
-        home_score = 0
-        away_score = 0
-        period = 2
-        clock = "46'"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=1)
-    elif payload.alert_type == "extra_time_start":
-        game_status = "in_progress"
-        home_score = 1
-        away_score = 1
-        period = 3
-        clock = "91'"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
-    elif payload.alert_type == "penalty_kicks":
-        game_status = "in_progress"
-        home_score = 1
-        away_score = 1
-        period = 5
-        clock = "Pens"
-        scheduled_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
-
-    if sport == "football":
-        if payload.alert_type == "close_game_late":
-            home_score = 20
-            away_score = 17
-            clock = "04:30"
-        elif payload.alert_type == "overtime_start":
-            home_score = 20
-            away_score = 20
-            clock = "10:00"
-        elif payload.alert_type == "final_result":
-            home_score = 24
-            away_score = 21
-            period = 4
-            clock = "0:00"
-
-    target_game = Game(
-        external_game_id=f"admin-test-game-{uuid4()}",
-        league=league,
-        home_team_id=home_team.id,
-        away_team_id=away_team.id,
-        scheduled_start_time=scheduled_start_time,
-        status=game_status,
-        home_score=home_score,
-        away_score=away_score,
-        period=period,
-        clock=clock,
-        is_final=is_final,
-        is_test=True,
-    )
-    db.add(target_game)
-    db.flush()
-
-    alert = Alert(
+    target_game, alert = _build_admin_test_objects(
         user_id=current_user.id,
-        game_id=target_game.id,
+        league=league,
         alert_type=payload.alert_type,
-        event_key=f"dev-test:{current_user.id}:{target_game.id}:{payload.alert_type}:{uuid4()}",
-        event_data=(
-            {
-                "source": "dev_test",
-                "status": game_status,
-                "period": period,
-                "clock": clock,
-                "previous_home_score": 0,
-                "previous_away_score": 0,
-                "new_home_score": home_score,
-                "new_away_score": away_score,
-                "scoring_side": "away",
-                "is_inferred_goal": True,
-            }
-            if payload.alert_type == "score_changed"
-            else {"source": "dev_test", "status": game_status, "period": period, "clock": clock}
-        ),
+        away_team=away_team,
+        home_team=home_team,
     )
-    db.add(alert)
-    db.flush()
     deliveries: list[AlertDelivery] = []
     if current_user.alert_delivery_mode in {"email", "both"}:
-        email_delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
-        db.add(email_delivery)
-        db.flush()
+        email_delivery = AlertDelivery(id=0, alert_id=0, channel="email", status="pending")
         deliver_email_alert_now(
             db,
             alert=alert,
@@ -261,13 +218,11 @@ def create_admin_test_alert(
             game=target_game,
             home=home_team,
             away=away_team,
-            service="api",
+            service="api-test",
         )
         deliveries.append(email_delivery)
     if current_user.alert_delivery_mode in {"push", "both"}:
-        push_delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
-        db.add(push_delivery)
-        db.flush()
+        push_delivery = AlertDelivery(id=0, alert_id=0, channel="push", status="pending")
         deliver_push_alert_now(
             db,
             alert=alert,
@@ -276,18 +231,13 @@ def create_admin_test_alert(
             game=target_game,
             home=home_team,
             away=away_team,
-            service="api",
+            service="api-test",
         )
         deliveries.append(push_delivery)
     db.commit()
-    db.refresh(alert)
-    for delivery in deliveries:
-        db.refresh(delivery)
-    return DevTestAlertResponse(
-        id=alert.id,
-        game_id=alert.game_id,
+    return AdminTestAlertResponse(
         league=league,
-        alert_type=alert.alert_type,
+        alert_type=payload.alert_type,
         deliveries=[
             AlertDeliveryOut(
                 channel=delivery.channel,

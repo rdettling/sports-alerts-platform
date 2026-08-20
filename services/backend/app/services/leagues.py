@@ -19,7 +19,6 @@ class LeagueProfile:
     sport: Sport
     label: str
     badge_label: str
-    default_test_matchup: tuple[str, str]
     scoreboard_url: str
     live_sync_interval_seconds: int
     odds_sport_key: str | None
@@ -46,7 +45,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="basketball",
         label="NBA",
         badge_label="NBA",
-        default_test_matchup=("ATL", "BOS"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
         live_sync_interval_seconds=120,
         odds_sport_key="basketball_nba",
@@ -56,7 +54,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="basketball",
         label="WNBA",
         badge_label="WNBA",
-        default_test_matchup=("NY", "LV"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
         live_sync_interval_seconds=120,
         odds_sport_key="basketball_wnba",
@@ -66,7 +63,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="football",
         label="NFL",
         badge_label="NFL",
-        default_test_matchup=("KC", "BUF"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
         live_sync_interval_seconds=120,
         odds_sport_key="americanfootball_nfl",
@@ -76,7 +72,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="baseball",
         label="MLB",
         badge_label="MLB",
-        default_test_matchup=("MIA", "TOR"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
         live_sync_interval_seconds=300,
         odds_sport_key="baseball_mlb",
@@ -86,7 +81,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="soccer",
         label="MLS",
         badge_label="MLS",
-        default_test_matchup=("LAFC", "LA"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard",
         live_sync_interval_seconds=180,
         odds_sport_key="soccer_usa_mls",
@@ -96,7 +90,6 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         sport="soccer",
         label="World Cup",
         badge_label="WC",
-        default_test_matchup=("MEX", "USA"),
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
         live_sync_interval_seconds=180,
         odds_sport_key="soccer_fifa_world_cup",
@@ -123,10 +116,6 @@ def get_league_profile(league: str) -> LeagueProfile:
 
 def get_alert_types(league: str) -> tuple[str, ...]:
     return SPORT_ALERT_TYPES[get_league_profile(league).sport]
-
-
-def get_default_test_matchup(league: str) -> tuple[str, str]:
-    return get_league_profile(league).default_test_matchup
 
 
 def get_scoreboard_url(league: str) -> str:

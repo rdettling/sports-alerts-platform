@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 
 import { PREFERENCE_LABELS } from "../../../shared/lib/dashboard-ui";
-import { type GameAlertPreferences } from "../../../shared/api";
+import { type AlertSettingsUpdate, type GameAlertPreferences } from "../../../shared/api";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
 import {
-  buildGameRuleOverridePayload,
-  getGameFieldValue,
+  buildAlertSettingsPayload,
+  getRuleFieldValue,
   ruleFieldsFor,
 } from "./alerts/alert-rule-config";
 
@@ -15,16 +15,12 @@ type GameAlertSettingsModalProps = {
   alertsBusy: boolean;
   gameAlertState: GameAlertPreferences | null;
   onClose: () => void;
-  onApplyAlertOverride: (
+  onUpdateGameAlertSettings: (
     gameId: number,
     alertType: string,
-    payload: {
-      is_enabled_override?: boolean | null;
-      close_game_margin_threshold_override?: number | null;
-      close_game_time_threshold_seconds_override?: number | null;
-      inning_start_threshold_override?: number | null;
-    },
+    payload: AlertSettingsUpdate,
   ) => Promise<void>;
+  onResetGameAlertSettings: (gameId: number, alertType: string) => Promise<void>;
 };
 
 export function GameAlertSettingsModal({
@@ -33,7 +29,8 @@ export function GameAlertSettingsModal({
   alertsBusy,
   gameAlertState,
   onClose,
-  onApplyAlertOverride,
+  onUpdateGameAlertSettings,
+  onResetGameAlertSettings,
 }: GameAlertSettingsModalProps) {
   useEffect(() => {
     if (!isOpen) return;
@@ -85,17 +82,31 @@ export function GameAlertSettingsModal({
                   controlsClassName="game-alert-rule-controls"
                   endSlot={
                     <div className="alert-rule-header-end">
+                      {!item.uses_league_defaults ? (
+                        <button
+                          className="game-alert-reset"
+                          type="button"
+                          disabled={alertsBusy}
+                          onClick={() => {
+                            onResetGameAlertSettings(gameAlertState.game_id, item.alert_type).catch(
+                              () => undefined,
+                            );
+                          }}
+                        >
+                          Use league settings
+                        </button>
+                      ) : null}
                       {inlineField ? (
                         <label className="alert-inline-field">
                           {inlineField.label}
                           <select
-                            value={getGameFieldValue(item, inlineField)}
+                            value={getRuleFieldValue(item, inlineField)}
                             disabled={alertsBusy}
                             onChange={(event) => {
-                              onApplyAlertOverride(
+                              onUpdateGameAlertSettings(
                                 gameAlertState.game_id,
                                 item.alert_type,
-                                buildGameRuleOverridePayload(item, {
+                                buildAlertSettingsPayload(item, {
                                   fieldKey: inlineField.key,
                                   fieldValue: Number(event.target.value),
                                 }),
@@ -118,11 +129,11 @@ export function GameAlertSettingsModal({
                         aria-checked={item.is_enabled}
                         disabled={alertsBusy}
                         onClick={() => {
-                          onApplyAlertOverride(
+                          onUpdateGameAlertSettings(
                             gameAlertState.game_id,
                             item.alert_type,
-                            buildGameRuleOverridePayload(item, {
-                              is_enabled_override: !item.is_enabled,
+                            buildAlertSettingsPayload(item, {
+                              is_enabled: !item.is_enabled,
                             }),
                           ).catch(() => undefined);
                         }}
@@ -144,13 +155,13 @@ export function GameAlertSettingsModal({
                           <label key={field.key}>
                             {field.label}
                             <select
-                              value={getGameFieldValue(item, field)}
+                              value={getRuleFieldValue(item, field)}
                               disabled={alertsBusy}
                               onChange={(event) => {
-                                onApplyAlertOverride(
+                                onUpdateGameAlertSettings(
                                   gameAlertState.game_id,
                                   item.alert_type,
-                                  buildGameRuleOverridePayload(item, {
+                                  buildAlertSettingsPayload(item, {
                                     fieldKey: field.key,
                                     fieldValue: Number(event.target.value),
                                   }),

@@ -1,4 +1,30 @@
+from app.worker import odds
 from app.worker.odds import _odds_sport_key_for_league, game_key
+
+
+def test_blank_api_key_disables_fetch(monkeypatch):
+    monkeypatch.setattr(odds.settings, "odds_api_key", " ")
+    monkeypatch.setattr(
+        odds,
+        "_fetch_from_provider",
+        lambda _league: (_ for _ in ()).throw(AssertionError("provider should not be called")),
+    )
+
+    assert odds.fetch_odds_index("NBA") == {}
+
+
+def test_provider_failure_returns_no_odds(monkeypatch, caplog):
+    monkeypatch.setattr(odds.settings, "odds_api_key", "test-key")
+    monkeypatch.setattr(
+        odds,
+        "_fetch_from_provider",
+        lambda _league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+
+    with caplog.at_level("WARNING", logger="app.worker.odds"):
+        assert odds.fetch_odds_index("NBA") == {}
+
+    assert "Odds API request failed: provider unavailable" in caplog.text
 
 
 def test_world_cup_name_aliases_match_seeded_names():

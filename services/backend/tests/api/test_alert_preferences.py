@@ -3,9 +3,8 @@ import pytest
 from app.db.models import UserAlertPreference, UserGameAlertOverride
 from app.services.alert_preferences import (
     AlertSettings,
-    compact_game_override,
+    apply_sparse_overrides,
     default_alert_settings,
-    preference_override_values,
     resolve_alert_settings,
 )
 
@@ -49,28 +48,45 @@ def test_preference_and_game_override_precedence():
     )
 
 
-def test_override_compaction_removes_values_equal_to_defaults():
+def test_sparse_overrides_store_only_values_different_from_baseline():
     settings = AlertSettings(
         is_enabled=False,
         close_game_margin_threshold=5,
         close_game_time_threshold_seconds=90,
     )
-    assert preference_override_values("NBA", "close_game_late", settings) == {
-        "is_enabled_override": False,
-        "close_game_margin_threshold_override": None,
-        "close_game_time_threshold_seconds_override": 90,
-        "inning_start_threshold_override": None,
-    }
-
-    game_override = UserGameAlertOverride(
+    preference = UserAlertPreference(
         user_id=1,
-        game_id=1,
+        league="NBA",
         alert_type="close_game_late",
-        is_enabled_override=True,
-        close_game_margin_threshold_override=5,
-        close_game_time_threshold_seconds_override=60,
     )
-    assert compact_game_override(game_override, default_alert_settings("NBA", "close_game_late")) is True
-    assert game_override.is_enabled_override is None
+    assert (
+        apply_sparse_overrides(
+            preference, settings, default_alert_settings("NBA", "close_game_late")
+        )
+        is True
+    )
+    assert preference.is_enabled_override is False
+    assert preference.close_game_margin_threshold_override is None
+    assert preference.close_game_time_threshold_seconds_override == 90
+    assert preference.inning_start_threshold_override is None
+
+
+def test_sparse_overrides_remove_values_equal_to_league_settings():
+    game_override = UserGameAlertOverride(
+        user_id=1, game_id=1, alert_type="close_game_late"
+    )
+    league_settings = AlertSettings(
+        is_enabled=False,
+        close_game_margin_threshold=3,
+        close_game_time_threshold_seconds=90,
+    )
+    game_settings = AlertSettings(
+        is_enabled=True,
+        close_game_margin_threshold=3,
+        close_game_time_threshold_seconds=60,
+    )
+
+    assert apply_sparse_overrides(game_override, game_settings, league_settings) is True
+    assert game_override.is_enabled_override is True
     assert game_override.close_game_margin_threshold_override is None
     assert game_override.close_game_time_threshold_seconds_override == 60

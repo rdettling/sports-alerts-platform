@@ -139,7 +139,9 @@ describe("AlertsView", () => {
     apiMocks.listAlertPreferences.mockResolvedValue(preferenceGroups);
     apiMocks.listAlertHistory.mockResolvedValue({ items: historyItems });
     apiMocks.listLeagues.mockResolvedValue(leagues);
-    apiMocks.updateAlertPreference.mockResolvedValue({});
+    apiMocks.updateAlertPreference.mockImplementation((_token, league, alertType, payload) =>
+      Promise.resolve({ league, alert_type: alertType, ...payload }),
+    );
   });
 
   afterEach(() => {
@@ -182,12 +184,12 @@ describe("AlertsView", () => {
     expect(screen.queryByText("Close game late")).toBeNull();
   });
 
-  it("updates a switch, disables it while saving, and refreshes the data", async () => {
+  it("updates a switch and local state without refetching alert data", async () => {
     let finishUpdate: (() => void) | undefined;
     apiMocks.updateAlertPreference.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finishUpdate = () => resolve({});
+          finishUpdate = () => resolve({ ...wnbaPreferences[0], is_enabled: false });
         }),
     );
     render(<AlertsView token="token" />);
@@ -198,12 +200,16 @@ describe("AlertsView", () => {
     await waitFor(() =>
       expect(apiMocks.updateAlertPreference).toHaveBeenCalledWith("token", "WNBA", "game_start", {
         is_enabled: false,
+        close_game_margin_threshold: null,
+        close_game_time_threshold_seconds: null,
+        inning_start_threshold: null,
       }),
     );
 
     finishUpdate?.();
     await waitFor(() => expect(toggle).not.toBeDisabled());
-    expect(apiMocks.listAlertPreferences).toHaveBeenCalledTimes(2);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(apiMocks.listAlertPreferences).toHaveBeenCalledTimes(1);
   });
 
   it("converts threshold minutes to seconds and reports update errors", async () => {
@@ -220,6 +226,7 @@ describe("AlertsView", () => {
           is_enabled: true,
           close_game_margin_threshold: 5,
           close_game_time_threshold_seconds: 600,
+          inning_start_threshold: null,
         },
       ),
     );

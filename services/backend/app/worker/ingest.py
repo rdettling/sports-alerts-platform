@@ -13,8 +13,9 @@ from app.db.session import SessionLocal
 from app.services.leagues import get_active_leagues, get_league_profile, league_supports_odds, normalize_league
 from app.worker import odds, soccer
 from app.worker.alerts import evaluate_and_record_alerts
+from app.worker.cleanup import cleanup_games_outside_window
 from app.worker.config import settings
-from app.worker.planner import build_catalog_requests, build_live_requests
+from app.worker.planner import build_catalog_dates, build_live_requests
 from app.worker.scoreboard import ScoreboardGame
 
 logger = logging.getLogger(__name__)
@@ -32,17 +33,39 @@ class GameUpdateResult:
     soccer_events: soccer.SoccerDerivedEvents | None = None
 
 
+@dataclass(frozen=True)
+class CatalogSyncResult:
+    league: str
+    games_checked: int
+    games_updated: int
+    alerts_created: int
+    odds_candidates: int
+    odds_snapshots_created: int
+    games_removed: int
+    next_live_sync_at: datetime | None
+
+
+@dataclass(frozen=True)
+class LiveSyncResult:
+    league: str
+    games_checked: int
+    games_updated: int
+    alerts_created: int
+    has_live_games: bool
+    next_scheduled_start_at: datetime | None
+
+
 def _assert_league_enabled(db: Session, league: str) -> None:
     if league not in set(get_active_leagues(db)):
         raise ValueError(f"League disabled: {league}")
 
 
-def _catalog_interval_seconds() -> int:
-    return max(1, settings.catalog_sync_interval_seconds)
-
-
-def _live_interval_seconds(league: str) -> int:
-    return max(1, get_league_profile(league).live_sync_interval_seconds)
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _next_scheduled_start(db: Session, league: str, now: datetime) -> datetime | None:
@@ -164,21 +187,13 @@ def _upsert_games_and_collect(
     return updated, touched_game_ids, game_key_by_id, soccer_events
 
 
-def _set_fetch_telemetry_context(provider: ScoreboardFetcher, db: Session | None) -> None:
-    provider_context = getattr(provider, "set_telemetry_context", None)
-    if callable(provider_context):
-        provider_context(db)
-    odds.set_telemetry_context(db)
-
-
-def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
+def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> CatalogSyncResult:
     league = normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
-        _set_fetch_telemetry_context(provider, db)
         _assert_league_enabled(db, league)
-        requests = build_catalog_requests(db, league, now=now)
+        requests = build_catalog_dates(now)
         team_map, team_names = _league_team_maps(db, league)
         all_games = provider.fetch_games(league, requests)
         updated, touched_game_ids, game_key_by_id, soccer_events = _upsert_games_and_collect(db, league, all_games, team_map, team_names)
@@ -197,14 +212,12 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
                 now,
                 eligible_external_ids=odds_eligible_external_ids,
             )
-            if settings.odds_enabled and league_supports_odds(league)
+            if settings.odds_api_key.strip() and league_supports_odds(league)
             else []
         )
-        odds_calls = 0
         odds_snapshots_created = 0
         if odds_candidates:
             odds_by_matchup = odds.fetch_odds_index(league)
-            odds_calls = 1
             for game in odds_candidates:
                 key = game_key_by_id.get(game.id)
                 if key is None:
@@ -221,73 +234,53 @@ def run_catalog_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[s
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
         alerts_created = evaluate_and_record_alerts(db, touched_games, soccer_events=soccer_events)
+        games_removed = cleanup_games_outside_window(db, now)
+        has_live_games = bool(
+            db.scalar(
+                select(func.count(Game.id)).where(
+                    Game.league == league,
+                    Game.is_final.is_(False),
+                    Game.status.in_(("in_progress", "live")),
+                )
+            )
+            or 0
+        )
+        next_live_sync_at = now if has_live_games else _as_utc(_next_scheduled_start(db, league, now))
         db.commit()
 
-        logger.info(
-            "Catalog sync league=%s checked=%s updated=%s odds_candidates=%s odds_snapshots_created=%s odds_calls=%s alerts_created=%s",
-            league,
-            len(all_games),
-            updated,
-            len(odds_candidates),
-            odds_snapshots_created,
-            odds_calls,
-            alerts_created,
+        return CatalogSyncResult(
+            league=league,
+            games_checked=len(all_games),
+            games_updated=updated,
+            alerts_created=alerts_created,
+            odds_candidates=len(odds_candidates),
+            odds_snapshots_created=odds_snapshots_created,
+            games_removed=games_removed,
+            next_live_sync_at=next_live_sync_at,
         )
-        return {
-            "status": "success",
-            "job_type": "catalog_sync",
-            "league": league,
-            "games_checked": len(all_games),
-            "games_updated": updated,
-            "odds_candidates": len(odds_candidates),
-            "odds_snapshots_created": odds_snapshots_created,
-            "alerts_created": alerts_created,
-            "next_poll_seconds": _catalog_interval_seconds(),
-        }
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception("Catalog sync failed")
-        return {
-            "status": "failed",
-            "job_type": "catalog_sync",
-            "league": league,
-            "error": str(exc),
-            "games_checked": 0,
-            "games_updated": 0,
-            "next_poll_seconds": _catalog_interval_seconds(),
-        }
+        raise
     finally:
-        _set_fetch_telemetry_context(provider, None)
         db.close()
 
 
-def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str, int | str]:
+def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> LiveSyncResult:
     league = normalize_league(league)
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
-        _set_fetch_telemetry_context(provider, db)
         _assert_league_enabled(db, league)
         requests = build_live_requests(db, league)
         if not requests:
-            next_scheduled = _next_scheduled_start(db, league, now)
-            if next_scheduled is None:
-                mode = "no_upcoming"
-                next_scheduled_iso: str | None = None
-            else:
-                mode = "waiting_for_start"
-                next_scheduled_iso = (next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)).isoformat()
-            return {
-                "status": "success",
-                "job_type": "live_sync",
-                "league": league,
-                "has_live_games": "false",
-                "next_scheduled_start_at": next_scheduled_iso,
-                "games_checked": 0,
-                "games_updated": 0,
-                "next_poll_seconds": _catalog_interval_seconds(),
-                "mode": mode,
-            }
+            return LiveSyncResult(
+                league=league,
+                games_checked=0,
+                games_updated=0,
+                alerts_created=0,
+                has_live_games=False,
+                next_scheduled_start_at=_as_utc(_next_scheduled_start(db, league, now)),
+            )
 
         team_map, team_names = _league_team_maps(db, league)
         provider_games = provider.fetch_games(league, requests)
@@ -322,47 +315,18 @@ def run_live_sync(provider: ScoreboardFetcher, league: str = "NBA") -> dict[str,
             )
             or 0
         )
-        next_scheduled = _next_scheduled_start(db, league, now)
+        next_scheduled = _as_utc(_next_scheduled_start(db, league, now))
         db.commit()
-        logger.info(
-            "Live sync league=%s checked=%s updated=%s alerts_created=%s has_live_games=%s",
-            league,
-            len(provider_games),
-            updated,
-            alerts_created,
-            has_live_games,
+        return LiveSyncResult(
+            league=league,
+            games_checked=len(provider_games),
+            games_updated=updated,
+            alerts_created=alerts_created,
+            has_live_games=has_live_games,
+            next_scheduled_start_at=next_scheduled,
         )
-        return {
-            "status": "success",
-            "job_type": "live_sync",
-            "league": league,
-            "has_live_games": "true" if has_live_games else "false",
-            "next_scheduled_start_at": (
-                (next_scheduled if next_scheduled.tzinfo else next_scheduled.replace(tzinfo=timezone.utc)).isoformat()
-                if next_scheduled is not None
-                else None
-            ),
-            "games_checked": len(provider_games),
-            "games_updated": updated,
-            "alerts_created": alerts_created,
-            "next_poll_seconds": _live_interval_seconds(league) if has_live_games else _catalog_interval_seconds(),
-            "mode": "live" if has_live_games else ("waiting_for_start" if next_scheduled is not None else "no_upcoming"),
-        }
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        logger.exception("Live sync failed")
-        return {
-            "status": "failed",
-            "job_type": "live_sync",
-            "league": league,
-            "error": str(exc),
-            "has_live_games": "false",
-            "next_scheduled_start_at": None,
-            "games_checked": 0,
-            "games_updated": 0,
-            "next_poll_seconds": _live_interval_seconds(league),
-            "mode": "live",
-        }
+        raise
     finally:
-        _set_fetch_telemetry_context(provider, None)
         db.close()

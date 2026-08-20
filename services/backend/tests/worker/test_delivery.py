@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Alert, AlertDelivery, ApiCallRollupHourly, Game, PushSubscription, Team, User
+from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
 from app.services import alert_delivery, resend
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.email_branding import APP_BRAND_NAME
@@ -97,12 +97,9 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
     assert updated.provider_message_id == "email_123"
     assert updated.provider_data is None
     assert alert.event_data == {"status": "in_progress"}
-    resend_rollups = db_session.scalars(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "resend")).all()
-    assert len(resend_rollups) == 1
-    assert resend_rollups[0].attempt_status == "success"
 
 
-def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monkeypatch):
+def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monkeypatch, caplog):
     alert, delivery = _seed_alert(db_session)
 
     class ErrorResponse:
@@ -144,9 +141,9 @@ def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monk
     assert alert.event_data == {"status": "in_progress"}
     assert updated.provider_data["error"] == "resend_request_failed"
     assert updated.provider_data["status_code"] == 401
-    resend_rollups = db_session.scalars(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "resend")).all()
-    assert len(resend_rollups) == 1
-    assert resend_rollups[0].attempt_status == "error"
+    assert "Alert email delivery failed service=worker" in caplog.text
+    assert f"alert_id={alert.id}" in caplog.text
+    assert "error=resend_request_failed status_code=401" in caplog.text
 
 
 def test_email_delivery_log_mode_marks_delivery_sent_without_provider_call(db_session, monkeypatch):
@@ -200,7 +197,7 @@ def test_email_delivery_without_resend_key_marks_only_delivery_failed(db_session
     assert alert.event_data == {"status": "in_progress"}
 
 
-def test_resend_success_without_message_id_returns_warning(db_session, monkeypatch):
+def test_resend_success_without_message_id_returns_warning(monkeypatch):
     class Response:
         status = 200
 
@@ -217,8 +214,6 @@ def test_resend_success_without_message_id_returns_warning(db_session, monkeypat
     monkeypatch.setattr(resend, "urlopen", lambda request, timeout: Response())
 
     result = resend.send_resend_email(
-        db_session,
-        service="worker",
         to_email="delivery@example.com",
         subject="Test",
         text_body="Test",
@@ -230,7 +225,7 @@ def test_resend_success_without_message_id_returns_warning(db_session, monkeypat
     assert result.metadata == {"provider_warning": "missing_message_id"}
 
 
-def test_resend_network_failure_returns_metadata_and_records_telemetry(db_session, monkeypatch):
+def test_resend_network_failure_returns_metadata(monkeypatch):
     def fail_urlopen(request, timeout):
         raise resend.URLError("network unavailable")
 
@@ -238,8 +233,6 @@ def test_resend_network_failure_returns_metadata_and_records_telemetry(db_sessio
     monkeypatch.setattr(resend, "urlopen", fail_urlopen)
 
     result = resend.send_resend_email(
-        db_session,
-        service="worker",
         to_email="delivery@example.com",
         subject="Test",
         text_body="Test",
@@ -248,10 +241,6 @@ def test_resend_network_failure_returns_metadata_and_records_telemetry(db_sessio
 
     assert result.sent is False
     assert result.metadata == {"error": "resend_http_error", "detail": "network unavailable"}
-    db_session.flush()
-    rollup = db_session.scalar(select(ApiCallRollupHourly).where(ApiCallRollupHourly.provider == "resend"))
-    assert rollup is not None
-    assert rollup.attempt_status == "error"
 
 
 def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, monkeypatch):

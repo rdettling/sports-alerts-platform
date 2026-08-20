@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy.orm import Session
-
 from app.config import settings
 from app.services.delivery_settings import delivery_settings
 from app.services.resend import send_resend_email
@@ -16,7 +14,6 @@ def send_sign_in_email(
     to_email: str,
     magic_link: str,
     magic_code: str,
-    db: Session | None = None,
 ) -> None:
     subject, text_body, html_body = build_sign_in_email(
         magic_link,
@@ -39,8 +36,6 @@ def send_sign_in_email(
         return
 
     result = send_resend_email(
-        db,
-        service="api",
         to_email=to_email,
         subject=subject,
         text_body=text_body,

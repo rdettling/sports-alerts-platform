@@ -21,14 +21,9 @@ def _default_catalog_dates(now: datetime) -> set[str]:
     }
 
 
-def _build_catalog_requests(now: datetime) -> list[str]:
-    dates = _default_catalog_dates(now)
-    return sorted(dates)
-
-
-def build_catalog_requests(db: Session, league: str, now: datetime | None = None) -> list[str]:
+def build_catalog_dates(now: datetime | None = None) -> list[str]:
     at = now or datetime.now(timezone.utc)
-    return _build_catalog_requests(at)
+    return sorted(_default_catalog_dates(at))
 
 
 def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[str]:

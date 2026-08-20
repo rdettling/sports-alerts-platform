@@ -7,12 +7,6 @@ function formatHours(seconds: number | null | undefined, unit: string): string {
     : `${(seconds / 3600).toFixed(2)}${unit}`;
 }
 
-function formatEmailDelivery(summary: OpsAdminSummaryResponse): string {
-  const attempted = summary.overview.total_emails_attempted;
-  if (attempted === 0) return "n/a";
-  return `${Math.round((summary.overview.emails_sent / attempted) * 100)}%`;
-}
-
 export function AdminOverviewSection({
   summary,
   neonUsage,
@@ -24,28 +18,21 @@ export function AdminOverviewSection({
   neonLoading: boolean;
   neonError: string | null;
 }) {
-  const issueJobs = summary.runtime.jobs.filter(
-    (job) =>
-      job.last_error || job.backoff_until || job.status === "error" || job.status === "failed",
-  ).length;
+  const email = summary.delivery.email_alerts;
+  const push = summary.delivery.push_alerts;
   const activity = [
-    { label: "Provider calls", value: formatNullableNumber(summary.overview.total_provider_calls) },
-    {
-      label: "Provider errors",
-      value: formatNullableNumber(summary.overview.provider_errors),
-      danger: summary.overview.provider_errors > 0,
-    },
-    {
-      label: "Rate limits",
-      value: formatNullableNumber(summary.overview.provider_rate_limits),
-      danger: summary.overview.provider_rate_limits > 0,
-    },
     { label: "Alerts created", value: formatNullableNumber(summary.overview.total_alerts_created) },
-    { label: "Email success", value: formatEmailDelivery(summary) },
+    { label: "Email sent / attempted", value: `${email.sent} / ${email.attempted}` },
     {
       label: "Email failures",
-      value: formatNullableNumber(summary.overview.emails_failed),
-      danger: summary.overview.emails_failed > 0,
+      value: formatNullableNumber(email.failed),
+      danger: email.failed > 0,
+    },
+    { label: "Push sent / attempted", value: `${push.sent} / ${push.attempted}` },
+    {
+      label: "Push failures",
+      value: formatNullableNumber(push.failed),
+      danger: push.failed > 0,
     },
   ];
 
@@ -58,7 +45,7 @@ export function AdminOverviewSection({
         <div className="admin-panel-header surface-header">
           <div>
             <h2 id="admin-activity-title">Recent Activity</h2>
-            <p>Operational totals for the selected telemetry window.</p>
+            <p>Alert and delivery totals for the selected activity window.</p>
           </div>
         </div>
         <div className="admin-metric-grid">
@@ -72,36 +59,6 @@ export function AdminOverviewSection({
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="admin-panel surface" aria-labelledby="admin-runtime-title">
-        <div className="admin-panel-header surface-header">
-          <div>
-            <h2 id="admin-runtime-title">Runtime</h2>
-            <p>Scheduler and worker activity across enabled leagues.</p>
-          </div>
-          <span className={`admin-status ${issueJobs > 0 ? "is-danger" : ""}`.trim()}>
-            {issueJobs} {issueJobs === 1 ? "job issue" : "job issues"}
-          </span>
-        </div>
-        <dl className="admin-detail-list">
-          <div>
-            <dt>Scheduler mode</dt>
-            <dd>{summary.runtime.scheduler_mode.replace(/_/g, " ")}</dd>
-          </div>
-          <div>
-            <dt>Active leagues</dt>
-            <dd>{summary.runtime.active_leagues.length}</dd>
-          </div>
-          <div>
-            <dt>Next run</dt>
-            <dd>{formatAdminDateTime(summary.runtime.next_run_at)}</dd>
-          </div>
-          <div>
-            <dt>Previous success</dt>
-            <dd>{formatAdminDateTime(summary.runtime.last_success_at)}</dd>
-          </div>
-        </dl>
       </section>
 
       <section className="admin-panel surface" aria-labelledby="admin-neon-title">

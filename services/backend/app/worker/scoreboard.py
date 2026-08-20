@@ -6,9 +6,7 @@ from datetime import UTC, datetime
 from typing import Any, Callable
 
 import httpx
-from sqlalchemy.orm import Session
 
-from app.services.api_usage import record_api_call_event
 from app.services.leagues import get_league_profile, get_scoreboard_url
 
 logger = logging.getLogger(__name__)
@@ -56,23 +54,10 @@ def _format_world_cup_stage(slug: str | None) -> str | None:
 class EspnScoreboardClient:
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
-        self._telemetry_db: Session | None = None
-
-    def set_telemetry_context(self, db: Session | None) -> None:
-        self._telemetry_db = db
 
     def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
         scoreboard_url = get_scoreboard_url(league)
         response = httpx.get(scoreboard_url, params=params, timeout=15.0)
-        status_code = int(response.status_code)
-        if self._telemetry_db is not None:
-            record_api_call_event(
-                self._telemetry_db,
-                service="worker",
-                provider="espn",
-                endpoint_key="scoreboard",
-                attempt_status="rate_limited" if status_code == 429 else ("success" if 200 <= status_code < 300 else "error"),
-            )
         response.raise_for_status()
         return response.json()
 
@@ -172,8 +157,13 @@ class EspnScoreboardClient:
         for date in dates:
             try:
                 payload = self._fetch_json(league, {"dates": date})
-            except Exception:  # pragma: no cover
-                logger.warning("ESPN request failed for date=%s; preserving stale game rows until next cycle", date)
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "ESPN request failed league=%s date=%s error=%s; preserving stale game rows until next cycle",
+                    league,
+                    date,
+                    exc,
+                )
                 continue
             for event in payload.get("events", []):
                 event_id = str(event.get("id"))

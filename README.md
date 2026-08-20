@@ -13,7 +13,7 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Public `Teams` directory with league/search filters and team follow controls.
 - Authenticated Games filter for direct and team-derived follows.
 - `Alerts` dashboard for league defaults plus alert history.
-- Admin-only runtime area for provider telemetry, DB stats, league enable/disable controls, and test tools.
+- Admin-only operations area for alert delivery activity, DB stats, league controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
 - Code-owned league profiles pair league-specific provider configuration with shared basketball, football, baseball, or soccer behavior.

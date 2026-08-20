@@ -7,7 +7,7 @@ UV_LINK_MODE ?= copy
 COMPOSE_FILE := infra/docker-compose.yml
 ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
-ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY ODDS_API_KEY RESEND_API_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT VITE_API_BASE_URL
+ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY RESEND_API_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT VITE_API_BASE_URL
 
 .PHONY: help setup up rebuild down reset logs test web web-fix _lint-python _test-api _test-worker _test-web _check-docker _check-env
 
@@ -35,15 +35,13 @@ setup:
 			'JWT_SECRET_KEY=replace-with-long-random-string' \
 			'WEB_BASE_URL=http://localhost:5173' \
 			'CORS_ALLOW_ORIGINS=http://localhost:5173' \
-			'ODDS_API_KEY=replace-with-the-odds-api-key' \
-			'ODDS_ENABLED=false' \
+			'ODDS_API_KEY=' \
 			'RESEND_API_KEY=replace-with-resend-api-key' \
 			'DELIVERY_MODE=log' \
 			'VAPID_PUBLIC_KEY=' \
 			'VAPID_PRIVATE_KEY=' \
 			'VAPID_SUBJECT=mailto:you@example.com' \
 			'CATALOG_SYNC_INTERVAL_SECONDS=43200' \
-			'ODDS_PREGAME_WINDOW_HOURS=24' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \
@@ -96,7 +94,7 @@ _test-worker:
 	cd $(BACKEND_DIR) && UV_PROJECT_ENVIRONMENT="$(UV_PROJECT_ENVIRONMENT)" UV_CACHE_DIR="$(UV_CACHE_DIR)" UV_LINK_MODE="$(UV_LINK_MODE)" uv run pytest -q tests/worker
 
 _test-web:
-	cd apps/web && npm ci --include=optional && npm run format && npm run lint && npm test && npm run build
+	cd apps/web && npm run format && npm run lint && npm test && npm run build
 
 _check-docker:
 	@command -v docker >/dev/null 2>&1 || { \

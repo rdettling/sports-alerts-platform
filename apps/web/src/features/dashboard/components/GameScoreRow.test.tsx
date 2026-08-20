@@ -31,7 +31,6 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     is_final: false,
     last_ingested_at: null,
     odds: {
-      market: "h2h",
       bookmaker: null,
       last_update: null,
       outcomes: [
@@ -184,7 +183,6 @@ describe("GameScoreRow", () => {
         game={makeGame({
           league: "WORLD_CUP",
           odds: {
-            market: "h2h",
             bookmaker: null,
             last_update: null,
             outcomes: [

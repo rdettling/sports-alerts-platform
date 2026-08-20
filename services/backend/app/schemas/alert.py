@@ -24,14 +24,12 @@ class AlertHistoryResponse(BaseModel):
     items: list[AlertHistoryItemOut]
 
 
-class DevTestAlertRequest(BaseModel):
+class AdminTestAlertRequest(BaseModel):
     league: str
     alert_type: str
 
 
-class DevTestAlertResponse(BaseModel):
-    id: int
-    game_id: int
+class AdminTestAlertResponse(BaseModel):
     league: str
     alert_type: str
     deliveries: list[AlertDeliveryOut]

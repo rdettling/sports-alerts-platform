@@ -27,8 +27,6 @@ SPORTS_TABLES = [
     "games",
     "teams",
     "league_settings",
-    "worker_jobs",
-    "api_call_rollups_hourly",
 ]
 
 

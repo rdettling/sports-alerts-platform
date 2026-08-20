@@ -35,7 +35,6 @@ const leagues = [
     badge_label: "NBA",
     alert_types: [],
     live_sync_interval_seconds: 120,
-    default_test_matchup: ["ATL", "BOS"],
     is_enabled: true,
   },
   {
@@ -45,7 +44,6 @@ const leagues = [
     badge_label: "MLB",
     alert_types: [],
     live_sync_interval_seconds: 300,
-    default_test_matchup: ["NYY", "BOS"],
     is_enabled: true,
   },
   {
@@ -55,7 +53,6 @@ const leagues = [
     badge_label: "MLS",
     alert_types: [],
     live_sync_interval_seconds: 120,
-    default_test_matchup: ["NE", "ATL"],
     is_enabled: true,
   },
 ];

@@ -26,8 +26,6 @@ os.environ.update(
         "VAPID_PUBLIC_KEY": "test-public-key",
         "VAPID_PRIVATE_KEY": "test-private-key",
         "VAPID_SUBJECT": "mailto:alerts@example.com",
-        "ODDS_PROVIDER": "the_odds_api",
-        "ODDS_API_MARKET": "h2h",
     }
 )
 

@@ -2,9 +2,6 @@ import { type OpsAdminOverviewWindow } from "../../../../shared/api";
 
 export const ADMIN_TABS = [
   { key: "overview", label: "Overview" },
-  { key: "providers", label: "Providers" },
-  { key: "delivery", label: "Delivery" },
-  { key: "jobs", label: "Jobs" },
   { key: "tools", label: "Tools" },
 ] as const;
 

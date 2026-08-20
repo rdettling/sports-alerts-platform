@@ -13,7 +13,8 @@ describe("GameAlertSettingsModal", () => {
         alertsBusy
         gameAlertState={null}
         onClose={onClose}
-        onApplyAlertOverride={vi.fn(async () => undefined)}
+        onUpdateGameAlertSettings={vi.fn(async () => undefined)}
+        onResetGameAlertSettings={vi.fn(async () => undefined)}
       />,
     );
 
@@ -27,7 +28,8 @@ describe("GameAlertSettingsModal", () => {
   });
 
   it("keeps shared rule rows interactive and accessibly labeled", () => {
-    const onApplyAlertOverride = vi.fn(async () => undefined);
+    const onUpdateGameAlertSettings = vi.fn(async () => undefined);
+    const onResetGameAlertSettings = vi.fn(async () => undefined);
     render(
       <GameAlertSettingsModal
         isOpen
@@ -40,17 +42,17 @@ describe("GameAlertSettingsModal", () => {
             {
               league: "WNBA",
               alert_type: "game_start",
-              use_league_default: true,
+              uses_league_defaults: false,
               is_enabled: true,
               close_game_margin_threshold: null,
               close_game_time_threshold_seconds: null,
               inning_start_threshold: null,
-              override: null,
             },
           ],
         }}
         onClose={vi.fn()}
-        onApplyAlertOverride={onApplyAlertOverride}
+        onUpdateGameAlertSettings={onUpdateGameAlertSettings}
+        onResetGameAlertSettings={onResetGameAlertSettings}
       />,
     );
 
@@ -60,10 +62,44 @@ describe("GameAlertSettingsModal", () => {
     expect(toggle).toHaveTextContent("On");
 
     fireEvent.click(toggle);
-    expect(onApplyAlertOverride).toHaveBeenCalledWith(
-      12,
-      "game_start",
-      expect.objectContaining({ is_enabled_override: false }),
+    expect(onUpdateGameAlertSettings).toHaveBeenCalledWith(12, "game_start", {
+      is_enabled: false,
+      close_game_margin_threshold: null,
+      close_game_time_threshold_seconds: null,
+      inning_start_threshold: null,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Use league settings" }));
+    expect(onResetGameAlertSettings).toHaveBeenCalledWith(12, "game_start");
+  });
+
+  it("hides reset for game alerts already using league settings", () => {
+    render(
+      <GameAlertSettingsModal
+        isOpen
+        matchupLabel="NY at LV"
+        alertsBusy={false}
+        gameAlertState={{
+          game_id: 12,
+          league: "WNBA",
+          items: [
+            {
+              league: "WNBA",
+              alert_type: "game_start",
+              uses_league_defaults: true,
+              is_enabled: true,
+              close_game_margin_threshold: null,
+              close_game_time_threshold_seconds: null,
+              inning_start_threshold: null,
+            },
+          ],
+        }}
+        onClose={vi.fn()}
+        onUpdateGameAlertSettings={vi.fn(async () => undefined)}
+        onResetGameAlertSettings={vi.fn(async () => undefined)}
+      />,
     );
+
+    expect(screen.queryByRole("button", { name: "Use league settings" })).toBeNull();
   });
 });

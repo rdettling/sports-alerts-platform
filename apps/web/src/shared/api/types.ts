@@ -40,7 +40,6 @@ export type Game = {
   is_final: boolean;
   last_ingested_at: string | null;
   odds: {
-    market: string;
     bookmaker: string | null;
     last_update: string | null;
     outcomes: Array<{
@@ -59,19 +58,23 @@ export type LeagueSetting = {
   badge_label: string;
   alert_types: AlertType[];
   live_sync_interval_seconds: number;
-  default_test_matchup: [string, string];
   is_enabled: boolean;
 };
 
 export type CurrentFollows = { teams: Team[]; games: Game[] };
 
-export type AlertPreference = {
-  league: League;
-  alert_type: string;
+export type AlertSettings = {
   is_enabled: boolean;
   close_game_margin_threshold: number | null;
   close_game_time_threshold_seconds: number | null;
   inning_start_threshold: number | null;
+};
+
+export type AlertSettingsUpdate = AlertSettings;
+
+export type AlertPreference = AlertSettings & {
+  league: League;
+  alert_type: string;
 };
 
 export type AlertPreferenceGroup = {
@@ -79,20 +82,10 @@ export type AlertPreferenceGroup = {
   preferences: AlertPreference[];
 };
 
-export type GameAlertPreferenceItem = {
+export type GameAlertPreferenceItem = AlertSettings & {
   league: League;
   alert_type: string;
-  use_league_default: boolean;
-  is_enabled: boolean;
-  close_game_margin_threshold: number | null;
-  close_game_time_threshold_seconds: number | null;
-  inning_start_threshold: number | null;
-  override: {
-    is_enabled_override: boolean | null;
-    close_game_margin_threshold_override: number | null;
-    close_game_time_threshold_seconds_override: number | null;
-    inning_start_threshold_override: number | null;
-  } | null;
+  uses_league_defaults: boolean;
 };
 
 export type GameAlertPreferences = {
@@ -150,26 +143,9 @@ export type OpsAdminOverviewWindow = "1h" | "6h" | "24h" | "7d";
 export type OpsAdminSummaryResponse = {
   overview: {
     window: OpsAdminOverviewWindow;
-    total_provider_calls: number;
-    provider_errors: number;
-    provider_rate_limits: number;
-    total_emails_attempted: number;
-    emails_sent: number;
-    emails_failed: number;
     total_alerts_created: number;
     last_updated_at: string;
   };
-  providers: Array<{
-    provider: string;
-    total_calls: number;
-    success_calls: number;
-    error_calls: number;
-    rate_limited_calls: number;
-    calls_per_hour: number;
-    quota_limit_window: number | null;
-    utilization_pct: number | null;
-    most_used_endpoint: string | null;
-  }>;
   delivery: {
     email_alerts: {
       attempted: number;
@@ -181,34 +157,8 @@ export type OpsAdminSummaryResponse = {
       sent: number;
       failed: number;
     };
-    magic_links: {
-      attempted: number;
-      sent: number;
-      failed: number;
-    };
-    resend: {
-      total_calls: number;
-      success_calls: number;
-      error_calls: number;
-      rate_limited_calls: number;
-    };
   };
-  runtime: {
-    scheduler_mode: string;
-    next_run_at: string | null;
-    last_success_at: string | null;
-    active_leagues: League[];
-    league_settings: LeagueSetting[];
-    jobs: Array<{
-      job_type: string;
-      league: string | null;
-      status: string;
-      next_run_at: string | null;
-      last_success_at: string | null;
-      backoff_until: string | null;
-      last_error: string | null;
-    }>;
-  };
+  league_settings: LeagueSetting[];
 };
 
 export type OpsNeonUsageResponse = {

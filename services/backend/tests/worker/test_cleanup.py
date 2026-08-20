@@ -35,8 +35,6 @@ def test_cleanup_removes_games_outside_window(db_session):
         [
             GameOddsCurrent(
                 game_id=old_game.id,
-                provider="the_odds_api",
-                market="h2h",
                 fetched_at=datetime.now(timezone.utc),
             ),
             Alert(

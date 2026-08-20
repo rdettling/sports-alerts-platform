@@ -15,8 +15,8 @@ import { LeagueTabs } from "./DashboardFilters";
 import { AlertDeliverySettings } from "./alerts/AlertDeliverySettings";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
 import {
-  buildLeagueRulePayload,
-  getLeagueFieldValue,
+  buildAlertSettingsPayload,
+  getRuleFieldValue,
   ruleFieldsFor,
 } from "./alerts/alert-rule-config";
 
@@ -84,44 +84,40 @@ export function AlertsView({ token }: { token: string }) {
     return () => window.clearInterval(id);
   }, [loadAlertData]);
 
-  const updateRuleEnabled = async (preference: AlertPreference) => {
-    const busyKey = `${preference.league}:${preference.alert_type}`;
-    setError(null);
-    setBusyAlertType(busyKey);
-    try {
-      await updateAlertPreference(
-        token,
-        preference.league,
-        preference.alert_type,
-        buildLeagueRulePayload(preference, { is_enabled: !preference.is_enabled }),
-      );
-      await loadAlertData();
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setBusyAlertType(null);
-    }
-  };
-
-  const updateRuleField = async (
+  const updateRule = async (
     preference: AlertPreference,
-    fieldKey:
-      | "close_game_margin_threshold"
-      | "close_game_time_threshold_seconds"
-      | "inning_start_threshold",
-    fieldValue: number,
+    change:
+      | { is_enabled: boolean }
+      | {
+          fieldKey:
+            | "close_game_margin_threshold"
+            | "close_game_time_threshold_seconds"
+            | "inning_start_threshold";
+          fieldValue: number;
+        },
   ) => {
     const busyKey = `${preference.league}:${preference.alert_type}`;
     setError(null);
     setBusyAlertType(busyKey);
     try {
-      await updateAlertPreference(
+      const updated = await updateAlertPreference(
         token,
         preference.league,
         preference.alert_type,
-        buildLeagueRulePayload(preference, { fieldKey, fieldValue }),
+        buildAlertSettingsPayload(preference, change),
       );
-      await loadAlertData();
+      setPreferenceGroups((groups) =>
+        groups.map((group) =>
+          group.league === updated.league
+            ? {
+                ...group,
+                preferences: group.preferences.map((item) =>
+                  item.alert_type === updated.alert_type ? updated : item,
+                ),
+              }
+            : group,
+        ),
+      );
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
     } finally {
@@ -212,13 +208,12 @@ export function AlertsView({ token }: { token: string }) {
                                   {inlineField.label}
                                   <select
                                     className="alert-rule-select"
-                                    value={getLeagueFieldValue(preference, inlineField)}
+                                    value={getRuleFieldValue(preference, inlineField)}
                                     onChange={(event) =>
-                                      void updateRuleField(
-                                        preference,
-                                        inlineField.key,
-                                        Number(event.target.value),
-                                      )
+                                      void updateRule(preference, {
+                                        fieldKey: inlineField.key,
+                                        fieldValue: Number(event.target.value),
+                                      })
                                     }
                                     disabled={isBusy}
                                   >
@@ -237,7 +232,11 @@ export function AlertsView({ token }: { token: string }) {
                                 aria-label={`${label} alerts`}
                                 aria-checked={preference.is_enabled}
                                 disabled={isBusy}
-                                onClick={() => void updateRuleEnabled(preference)}
+                                onClick={() =>
+                                  void updateRule(preference, {
+                                    is_enabled: !preference.is_enabled,
+                                  })
+                                }
                               >
                                 <span className="alert-toggle-label" aria-hidden>
                                   {preference.is_enabled ? "On" : "Off"}
@@ -256,13 +255,12 @@ export function AlertsView({ token }: { token: string }) {
                                     {field.label}
                                     <select
                                       className="alert-rule-select"
-                                      value={getLeagueFieldValue(preference, field)}
+                                      value={getRuleFieldValue(preference, field)}
                                       onChange={(event) =>
-                                        void updateRuleField(
-                                          preference,
-                                          field.key,
-                                          Number(event.target.value),
-                                        )
+                                        void updateRule(preference, {
+                                          fieldKey: field.key,
+                                          fieldValue: Number(event.target.value),
+                                        })
                                       }
                                       disabled={isBusy}
                                     >

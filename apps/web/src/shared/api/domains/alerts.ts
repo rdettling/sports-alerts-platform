@@ -3,6 +3,7 @@ import type {
   AlertHistoryItem,
   AlertPreference,
   AlertPreferenceGroup,
+  AlertSettingsUpdate,
   AlertType,
   DeliveryStatus,
   GameAlertPreferenceItem,
@@ -18,12 +19,7 @@ export function updateAlertPreference(
   token: string,
   league: League,
   alertType: string,
-  payload: {
-    is_enabled?: boolean;
-    close_game_margin_threshold?: number;
-    close_game_time_threshold_seconds?: number;
-    inning_start_threshold?: number;
-  },
+  payload: AlertSettingsUpdate,
 ): Promise<AlertPreference> {
   return apiRequest<AlertPreference>(`/alert-preferences/leagues/${league}/${alertType}`, {
     method: "PUT",
@@ -39,16 +35,11 @@ export function getGameAlertPreferences(
   return apiRequest<GameAlertPreferences>(`/alert-preferences/games/${gameId}`, { token });
 }
 
-export function updateGameAlertOverride(
+export function updateGameAlertSettings(
   token: string,
   gameId: number,
   alertType: string,
-  payload: {
-    is_enabled_override?: boolean | null;
-    close_game_margin_threshold_override?: number | null;
-    close_game_time_threshold_seconds_override?: number | null;
-    inning_start_threshold_override?: number | null;
-  },
+  payload: AlertSettingsUpdate,
 ): Promise<GameAlertPreferenceItem> {
   return apiRequest<GameAlertPreferenceItem>(`/alert-preferences/games/${gameId}/${alertType}`, {
     method: "PUT",
@@ -57,7 +48,7 @@ export function updateGameAlertOverride(
   });
 }
 
-export function clearGameAlertOverride(
+export function resetGameAlertSettings(
   token: string,
   gameId: number,
   alertType: string,
@@ -80,12 +71,10 @@ export function listAlertHistory(
   return apiRequest<{ items: AlertHistoryItem[] }>(`/alerts/history${suffix}`, { token });
 }
 
-export function sendDevTestAlert(
+export function sendAdminTestAlert(
   token: string,
   payload: { league: League; alert_type: AlertType },
 ): Promise<{
-  id: number;
-  game_id: number;
   league: League;
   alert_type: AlertType;
   deliveries: Array<{
@@ -95,8 +84,6 @@ export function sendDevTestAlert(
   }>;
 }> {
   return apiRequest<{
-    id: number;
-    game_id: number;
     league: League;
     alert_type: AlertType;
     deliveries: Array<{

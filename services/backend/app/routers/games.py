@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config import settings
 from app.db.models import Game, GameOddsCurrent
 from app.db.session import get_db
 from app.schemas.game import GameOddsOut, GameOddsOutcomeOut, GameOut
@@ -20,7 +19,6 @@ def list_games(
     status: str | None = Query(default=None, description="Filter by game status"),
     league: str | None = Query(default=None, description="Filter by league, e.g. NBA or MLB"),
     include_finals: bool = Query(default=False, description="Include final games in results"),
-    include_odds: bool = Query(default=True, description="Include moneyline odds when configured"),
     limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
@@ -31,7 +29,6 @@ def list_games(
     stmt = (
         select(Game)
         .where(Game.league.in_(active_leagues))
-        .where(Game.is_test.is_(False))
         .where(Game.scheduled_start_time >= lower, Game.scheduled_start_time <= upper)
         .order_by(Game.scheduled_start_time.asc())
         .limit(limit)
@@ -44,18 +41,14 @@ def list_games(
         stmt = stmt.where(Game.is_final.is_(False))
     games = db.scalars(stmt).all()
     game_views = [GameOut.model_validate(game) for game in games]
-    if not include_odds or not games:
+    if not games:
         return game_views
 
     game_ids = [game.id for game in games]
     odds_rows = db.scalars(
         select(GameOddsCurrent)
         .options(selectinload(GameOddsCurrent.outcomes))
-        .where(
-            GameOddsCurrent.game_id.in_(game_ids),
-            GameOddsCurrent.provider == settings.odds_provider,
-            GameOddsCurrent.market == settings.odds_api_market,
-        )
+        .where(GameOddsCurrent.game_id.in_(game_ids))
     ).all()
     odds_by_game_id = {row.game_id: row for row in odds_rows}
 
@@ -64,7 +57,6 @@ def list_games(
         if not odds:
             continue
         game_view.odds = GameOddsOut(
-            market=odds.market,
             bookmaker=odds.bookmaker,
             last_update=odds.fetched_at,
             outcomes=[

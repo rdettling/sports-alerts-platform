@@ -1,6 +1,16 @@
 from app.worker.scoreboard import EspnScoreboardClient
 
 
+def test_provider_failure_logs_compact_request_context(caplog):
+    def fail_fetch(_league, _params):
+        raise RuntimeError("provider unavailable")
+
+    games = EspnScoreboardClient(fetch_json=fail_fetch).fetch_games("NBA", ["20260406"])
+
+    assert games == []
+    assert "ESPN request failed league=NBA date=20260406 error=provider unavailable" in caplog.text
+
+
 def test_provider_parses_espn_payload_shape():
     payload = {
         "events": [

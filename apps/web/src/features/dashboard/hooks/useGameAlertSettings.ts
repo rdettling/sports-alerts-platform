@@ -2,18 +2,14 @@ import { useState } from "react";
 
 import {
   getGameAlertPreferences,
+  resetGameAlertSettings as requestGameAlertReset,
+  type AlertSettingsUpdate,
   type Game,
+  type GameAlertPreferenceItem,
   type GameAlertPreferences,
-  updateGameAlertOverride,
+  updateGameAlertSettings as requestGameAlertUpdate,
 } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-
-type AlertOverridePayload = {
-  is_enabled_override?: boolean | null;
-  close_game_margin_threshold_override?: number | null;
-  close_game_time_threshold_seconds_override?: number | null;
-  inning_start_threshold_override?: number | null;
-};
 
 export function useGameAlertSettings(
   token: string | null,
@@ -44,18 +40,44 @@ export function useGameAlertSettings(
     setGameAlertState(null);
   };
 
-  const applyAlertOverride = async (
+  const replaceGameAlertItem = (gameId: number, updated: GameAlertPreferenceItem) => {
+    setGameAlertState((current) =>
+      current?.game_id === gameId
+        ? {
+            ...current,
+            items: current.items.map((item) =>
+              item.alert_type === updated.alert_type ? updated : item,
+            ),
+          }
+        : current,
+    );
+  };
+
+  const updateGameAlertSettings = async (
     gameId: number,
     alertType: string,
-    payload: AlertOverridePayload,
+    payload: AlertSettingsUpdate,
   ) => {
     if (!token) return;
     setAlertsBusy(true);
     setError(null);
     try {
-      await updateGameAlertOverride(token, gameId, alertType, payload);
-      const refreshed = await getGameAlertPreferences(token, gameId);
-      setGameAlertState(refreshed);
+      const updated = await requestGameAlertUpdate(token, gameId, alertType, payload);
+      replaceGameAlertItem(gameId, updated);
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
+    } finally {
+      setAlertsBusy(false);
+    }
+  };
+
+  const resetGameAlertSettings = async (gameId: number, alertType: string) => {
+    if (!token) return;
+    setAlertsBusy(true);
+    setError(null);
+    try {
+      const updated = await requestGameAlertReset(token, gameId, alertType);
+      replaceGameAlertItem(gameId, updated);
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
     } finally {
@@ -69,6 +91,7 @@ export function useGameAlertSettings(
     alertsBusy,
     openGameAlerts,
     closeGameAlerts,
-    applyAlertOverride,
+    updateGameAlertSettings,
+    resetGameAlertSettings,
   };
 }

@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from sqlalchemy.orm import Session
-
-from app.services.api_usage import record_api_call_event
 from app.services.delivery_settings import delivery_settings
 
 
@@ -18,27 +15,8 @@ class ResendResult:
     metadata: dict[str, object] | None = None
 
 
-def _record_attempt(
-    db: Session | None,
-    *,
-    service: str,
-    attempt_status: str,
-) -> None:
-    if db is None:
-        return
-    record_api_call_event(
-        db,
-        service=service,
-        provider="resend",
-        endpoint_key="resend_send_email",
-        attempt_status=attempt_status,
-    )
-
-
 def send_resend_email(
-    db: Session | None,
     *,
-    service: str,
     to_email: str,
     subject: str,
     text_body: str,
@@ -71,11 +49,6 @@ def send_resend_email(
             status_code = int(getattr(response, "status", 200))
             response_body = response.read().decode("utf-8")
             sent = 200 <= status_code < 300
-            _record_attempt(
-                db,
-                service=service,
-                attempt_status="rate_limited" if status_code == 429 else ("success" if sent else "error"),
-            )
             if not sent:
                 return ResendResult(
                     sent=False,
@@ -94,11 +67,6 @@ def send_resend_email(
             return ResendResult(sent=True, metadata={"provider_warning": "missing_message_id"})
     except HTTPError as exc:
         response_body = exc.read().decode("utf-8")
-        _record_attempt(
-            db,
-            service=service,
-            attempt_status="rate_limited" if exc.code == 429 else "error",
-        )
         return ResendResult(
             sent=False,
             metadata={
@@ -108,11 +76,6 @@ def send_resend_email(
             },
         )
     except URLError as exc:
-        _record_attempt(
-            db,
-            service=service,
-            attempt_status="error",
-        )
         return ResendResult(
             sent=False,
             metadata={"error": "resend_http_error", "detail": str(exc.reason)},

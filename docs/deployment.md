@@ -51,7 +51,7 @@ Requirements:
 
 Behavior notes:
 
-- If `ODDS_ENABLED=false`, the worker still ingests games and evaluates alerts
+- If `ODDS_API_KEY` is blank, the worker still ingests games and evaluates alerts
 - League enable/disable state is read from the database, so runtime scope can change without redeploying
 
 ## Frontend Service

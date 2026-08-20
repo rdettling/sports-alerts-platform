@@ -3,15 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getOpsNeonUsage, type OpsAdminOverviewWindow } from "../../../shared/api";
 import { useAdminData } from "../hooks/useAdminData";
-import { AdminDeliverySection } from "./admin/AdminDeliverySection";
-import { AdminJobsSection } from "./admin/AdminJobsSection";
 import { AdminLeagueSettingsPanel } from "./admin/AdminLeagueSettingsPanel";
 import { AdminOverviewSection } from "./admin/AdminOverviewSection";
-import { AdminProvidersSection } from "./admin/AdminProvidersSection";
 import { AdminTabsHeader } from "./admin/AdminTabsHeader";
 import { formatElapsedTime } from "./admin/admin-format";
 import { type AdminTab } from "./admin/admin-tabs";
-import { DevToolsView } from "./DevToolsView";
+import { AdminTestAlertsPanel } from "./AdminTestAlertsPanel";
 
 export function AdminView({ token }: { token: string }) {
   const [tab, setTab] = useState<AdminTab>("overview");
@@ -53,17 +50,11 @@ export function AdminView({ token }: { token: string }) {
             neonError={neonError}
           />
         );
-      case "providers":
-        return <AdminProvidersSection providers={summary.providers} />;
-      case "delivery":
-        return <AdminDeliverySection summary={summary} />;
-      case "jobs":
-        return <AdminJobsSection summary={summary} />;
       case "tools":
         return (
           <div className="admin-tools-layout">
-            <AdminLeagueSettingsPanel token={token} items={summary.runtime.league_settings} />
-            <DevToolsView token={token} />
+            <AdminLeagueSettingsPanel token={token} items={summary.league_settings} />
+            <AdminTestAlertsPanel token={token} items={summary.league_settings} />
           </div>
         );
     }

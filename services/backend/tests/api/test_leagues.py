@@ -72,16 +72,15 @@ def test_public_leagues_include_sport_and_live_cadence(client):
             item["league"],
             item["sport"],
             item["live_sync_interval_seconds"],
-            item["default_test_matchup"],
         )
         for item in response.json()
     ] == [
-        ("NBA", "basketball", 120, ["ATL", "BOS"]),
-        ("WNBA", "basketball", 120, ["NY", "LV"]),
-        ("NFL", "football", 120, ["KC", "BUF"]),
-        ("MLB", "baseball", 300, ["MIA", "TOR"]),
-        ("MLS", "soccer", 180, ["LAFC", "LA"]),
-        ("WORLD_CUP", "soccer", 180, ["MEX", "USA"]),
+        ("NBA", "basketball", 120),
+        ("WNBA", "basketball", 120),
+        ("NFL", "football", 120),
+        ("MLB", "baseball", 300),
+        ("MLS", "soccer", 180),
+        ("WORLD_CUP", "soccer", 180),
     ]
 
 

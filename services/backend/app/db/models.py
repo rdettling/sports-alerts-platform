@@ -89,7 +89,6 @@ class Game(Base):
     period: Mapped[int | None] = mapped_column(Integer, nullable=True)
     clock: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_final: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_test: Mapped[bool] = mapped_column(Boolean, default=False)
     last_ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -97,12 +96,10 @@ class Game(Base):
 
 class GameOddsCurrent(Base):
     __tablename__ = "game_odds_current"
-    __table_args__ = (UniqueConstraint("game_id", "provider", "market", name="uq_game_odds_current_game_provider_market"),)
+    __table_args__ = (UniqueConstraint("game_id", name="uq_game_odds_current_game_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
-    provider: Mapped[str] = mapped_column(String(32), default="the_odds_api")
-    market: Mapped[str] = mapped_column(String(16), default="h2h")
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
     bookmaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -253,45 +250,3 @@ class PushSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="push_subscriptions")
-
-
-class ApiCallRollupHourly(Base):
-    __tablename__ = "api_call_rollups_hourly"
-    __table_args__ = (
-        UniqueConstraint(
-            "bucket_start",
-            "service",
-            "provider",
-            "endpoint_key",
-            "attempt_status",
-            name="uq_api_call_rollups_hourly_bucket_dims",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    service: Mapped[str] = mapped_column(String(16), index=True)
-    provider: Mapped[str] = mapped_column(String(32), index=True)
-    endpoint_key: Mapped[str] = mapped_column(String(64), index=True)
-    attempt_status: Mapped[str] = mapped_column(String(32), index=True)
-    call_count: Mapped[int] = mapped_column(Integer, default=0)
-
-
-class WorkerJob(Base):
-    __tablename__ = "worker_jobs"
-    __table_args__ = (
-        UniqueConstraint("job_type", "league", name="uq_worker_jobs_job_type_league"),
-        Index("ix_worker_jobs_status_next_run", "status", "next_run_at"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    job_type: Mapped[str] = mapped_column(String(32), index=True)
-    league: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
-    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    max_attempts: Mapped[int] = mapped_column(Integer, default=5)
-    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    backoff_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

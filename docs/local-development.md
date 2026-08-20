@@ -60,5 +60,5 @@ If you want narrower service checks:
 
 - API root `/` returns `404` by design
 - The API seeds teams and ensures the bootstrap admin user on startup
-- If `ODDS_ENABLED=false`, games still ingest and alerts still evaluate; only odds fetches are skipped
+- If `ODDS_API_KEY` is blank, games still ingest and alerts still evaluate; only odds fetches are skipped
 - Local development is safest with `DELIVERY_MODE=log` unless you explicitly want real email delivery

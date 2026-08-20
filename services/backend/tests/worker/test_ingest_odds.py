@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models import Game, GameOddsCurrent, Team
@@ -16,7 +17,6 @@ from ingest_support import (
 
 
 def test_ingest_persists_current_odds(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
         lambda league: {
@@ -31,7 +31,7 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
     )
 
     result = run_catalog_sync(make_success_provider())
-    assert result["status"] == "success"
+    assert result.odds_snapshots_created == 1
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-1"))
     assert game is not None
@@ -40,12 +40,23 @@ def test_ingest_persists_current_odds(db_session, monkeypatch):
     assert [(item.team_side, item.price_american) for item in odds.outcomes] == [("away", 110), ("home", -130)]
 
 
+def test_odds_failure_rolls_back_catalog_writes(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.worker.odds.fetch_odds_index",
+        lambda league: (_ for _ in ()).throw(RuntimeError("odds unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="odds unavailable"):
+        run_catalog_sync(make_success_provider())
+
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "game-1")) is None
+
+
 def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeypatch):
     now = datetime.now(timezone.utc).replace(microsecond=0)
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
         lambda league: {
@@ -57,7 +68,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
     )
 
     result = run_catalog_sync(provider)
-    assert result["status"] == "success"
+    assert result.odds_snapshots_created == 1
 
     first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
     second_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-2"))
@@ -76,7 +87,6 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     first_start = now + timedelta(hours=2)
     second_start = now + timedelta(days=2, hours=2)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
         lambda league: {
@@ -87,7 +97,7 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     )
 
     result = run_catalog_sync(provider)
-    assert result["status"] == "success"
+    assert result.odds_snapshots_created == 1
 
     first_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-1"))
     second_game = db_session.scalar(select(Game).where(Game.external_game_id == "game-repeat-2"))
@@ -100,14 +110,11 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     assert second_odds is None
 
 
-def test_ingest_expected_odds_calls_tracks_refresh_decision(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
+def test_ingest_reports_odds_candidates(db_session, monkeypatch):
     monkeypatch.setattr("app.worker.odds.fetch_odds_index", lambda league: {})
 
     result = run_catalog_sync(make_success_provider())
-    assert result["status"] == "success"
-
-    assert result["next_poll_seconds"] > 0
+    assert result.odds_candidates == 1
 
 
 def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypatch):
@@ -131,10 +138,8 @@ def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypat
     first = run_catalog_sync(provider)
     second = run_catalog_sync(provider)
 
-    assert first["status"] == "success"
-    assert second["status"] == "success"
-    assert first["odds_snapshots_created"] == 1
-    assert second["odds_snapshots_created"] == 0
+    assert first.odds_snapshots_created == 1
+    assert second.odds_snapshots_created == 0
 
 
 def test_catalog_sync_uses_fixed_horizon_even_with_existing_games(db_session, monkeypatch):
@@ -155,11 +160,10 @@ def test_catalog_sync_uses_fixed_horizon_even_with_existing_games(db_session, mo
 
     provider = RecordingCatalogProvider(now + timedelta(days=3))
     monkeypatch.setattr("app.worker.ingest.datetime", type("FixedDateTime", (), {"now": staticmethod(lambda tz=None: now)}))
-    monkeypatch.setattr("app.worker.planner.datetime", type("FixedDateTime", (), {"now": staticmethod(lambda tz=None: now)}))
 
     result = run_catalog_sync(provider, league="MLB")
 
-    assert result["status"] == "success"
+    assert result.games_checked == 1
     assert provider.requests == [
         "20260617",
         "20260618",
@@ -211,26 +215,24 @@ def test_live_sync_does_not_fetch_odds(db_session, monkeypatch):
     )
 
     result = run_live_sync(provider)
-    assert result["status"] == "success"
-    assert result["games_updated"] >= 1
+    assert result.games_updated >= 1
 
 
-def test_catalog_sync_skips_odds_when_disabled(db_session, monkeypatch):
+def test_catalog_sync_skips_odds_when_api_key_is_blank(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
     provider = StaticProvider(
         [make_game(external_game_id="game-no-odds", home_external_team_id="1", away_external_team_id="2", scheduled_start_time=now + timedelta(hours=4), status="scheduled")]
     )
 
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", False)
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
-        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched when disabled")),
+        lambda league: (_ for _ in ()).throw(AssertionError("odds should not be fetched without a key")),
     )
 
     result = run_catalog_sync(provider)
-    assert result["status"] == "success"
-    assert result["odds_candidates"] == 0
-    assert result["odds_snapshots_created"] == 0
+    assert result.odds_candidates == 0
+    assert result.odds_snapshots_created == 0
 
 
 def test_nfl_preseason_catalog_sync_skips_odds_request(db_session, monkeypatch):
@@ -249,7 +251,6 @@ def test_nfl_preseason_catalog_sync_skips_odds_request(db_session, monkeypatch):
             )
         ]
     )
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
         lambda league: (_ for _ in ()).throw(AssertionError("preseason must not fetch NFL odds")),
@@ -257,9 +258,8 @@ def test_nfl_preseason_catalog_sync_skips_odds_request(db_session, monkeypatch):
 
     result = run_catalog_sync(provider, league="NFL")
 
-    assert result["status"] == "success"
-    assert result["odds_candidates"] == 0
-    assert result["odds_snapshots_created"] == 0
+    assert result.odds_candidates == 0
+    assert result.odds_snapshots_created == 0
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-nfl-preseason"))
     assert game is not None
     assert game.context_label == "Preseason · Week 2"
@@ -306,14 +306,12 @@ def test_nfl_catalog_sync_only_persists_regular_season_odds(db_session, monkeypa
             ]
         }
 
-    monkeypatch.setattr("app.worker.ingest.settings.odds_enabled", True)
     monkeypatch.setattr("app.worker.odds.fetch_odds_index", _fake_odds_index)
 
     result = run_catalog_sync(provider, league="NFL")
 
-    assert result["status"] == "success"
-    assert result["odds_candidates"] == 1
-    assert result["odds_snapshots_created"] == 1
+    assert result.odds_candidates == 1
+    assert result.odds_snapshots_created == 1
     assert calls == ["NFL"]
     preseason = db_session.scalar(select(Game).where(Game.external_game_id == "game-nfl-preseason-odds"))
     regular = db_session.scalar(select(Game).where(Game.external_game_id == "game-nfl-regular-odds"))
@@ -356,8 +354,7 @@ def test_world_cup_catalog_sync_persists_three_way_odds(db_session, monkeypatch)
     )
 
     result = run_catalog_sync(provider, league="WORLD_CUP")
-    assert result["status"] == "success"
-    assert result["odds_snapshots_created"] == 1
+    assert result.odds_snapshots_created == 1
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-world-cup-scheduled"))
     assert game is not None

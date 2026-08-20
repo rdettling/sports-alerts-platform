@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db.models import Game, Team
-from app.worker.planner import build_catalog_requests, build_live_requests
+from app.worker.planner import build_catalog_dates, build_live_requests
 
 
 def _seed_game(db_session, *, external_id: str, status: str, scheduled_start: datetime, is_final: bool = False) -> None:
@@ -22,9 +22,9 @@ def _seed_game(db_session, *, external_id: str, status: str, scheduled_start: da
     db_session.commit()
 
 
-def test_build_catalog_requests_returns_fixed_horizon(db_session):
+def test_build_catalog_dates_returns_fixed_horizon():
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
-    requests = build_catalog_requests(db_session, "NBA", now=now)
+    requests = build_catalog_dates(now)
     assert "20260502" in requests
     assert "20260510" in requests
     assert len(requests) == 9
@@ -42,10 +42,10 @@ def test_build_live_requests_tracks_live_and_imminent_scheduled_games(db_session
     assert (now + timedelta(days=2)).strftime("%Y%m%d") not in requests
 
 
-def test_build_catalog_requests_stays_fixed_when_games_exist(db_session):
+def test_build_catalog_dates_stays_fixed_when_games_exist(db_session):
     now = datetime(2026, 5, 3, 1, 0, tzinfo=timezone.utc)
     _seed_game(db_session, external_id="g-existing", status="scheduled", scheduled_start=now + timedelta(days=4))
-    requests = build_catalog_requests(db_session, "NBA", now=now)
+    requests = build_catalog_dates(now)
     assert "20260502" in requests
     assert "20260510" in requests
     assert len(requests) == 9

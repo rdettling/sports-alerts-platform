@@ -2,7 +2,7 @@
 
 ## Services
 
-- **Web** (`apps/web`): React + Vite UI for public games and teams plus authenticated alerts and admin-only runtime views
+- **Web** (`apps/web`): React + Vite UI for public games and teams plus authenticated alerts and admin-only operations views
 - **API** (`services/backend/app`): FastAPI service for auth, reads/writes, admin endpoints, startup seeding, and delivery helpers
 - **Worker** (`services/backend/app/worker`): continuous schedule sync, odds snapshots, alert evaluation, and delivery execution
 - **Postgres**: system of record for users, follows, games, odds snapshots, alert configuration, sent alerts, and lightweight ops state
@@ -17,7 +17,7 @@ At startup, the API:
 - ensures league runtime rows exist
 - ensures a bootstrap admin user exists for the configured email
 
-The worker runs continuously and manages:
+The single worker process runs continuously with an in-memory schedule and manages:
 
 - catalog sync across enabled leagues
 - narrower live sync loops by league
@@ -53,14 +53,14 @@ Each supported league has one code-owned profile containing its sport, provider 
 The API is split into a small set of route groups:
 
 - `/auth` — email sign-in start, link/code verification, auth warmup, current user
-- `/games` — game feed with league/status/finals/odds options
+- `/games` — game feed with league, status, and finals filters plus current moneyline odds
 - `/teams` — active team catalog
 - `/follows` — team follows and effective game follows
 - `/alert-preferences` — league defaults and game-level overrides
 - `/alerts` — alert history and the admin test-alert tool
 - `/notification-settings` and `/push-subscriptions` — global delivery choice and browser subscriptions
 - `/leagues` — active league metadata for the UI
-- `/ops` — admin-only telemetry, DB stats, and league runtime controls
+- `/ops` — admin-only alert activity, DB stats, and league runtime controls
 - `/healthz` — health check
 
 ## Core Data Model
@@ -82,14 +82,12 @@ Main persisted tables:
 - `alerts`
 - `alert_deliveries`
 - `push_subscriptions`
-- `api_call_rollups_hourly`
-- `worker_jobs`
 
 Notable modeling decisions:
 
 - Games are retained as normalized rows and can carry live/final state, scores, context labels, and odds associations
 - Team follows can imply effective game follows, with explicit game unfollows stored separately
-- Alert settings use canonical code defaults with sparse league and per-game overrides
+- Alert settings APIs expose one concrete settings shape for league and game rules; persistence stores only per-field differences from canonical or league baselines
 - Alerts are deduped events; channel-specific attempts and outcomes are stored as alert deliveries
 
 ## Key Flows
@@ -121,15 +119,18 @@ Notable modeling decisions:
 
 Admin-only routes expose:
 
-- provider usage rollups
-- ingest and DB health views
+- alert and delivery activity
+- DB health views
 - Neon usage when configured
 - league enable/disable controls
 - test tools
 
+Admin test alerts use transient sample objects to exercise the real Email and Push delivery paths. They return channel outcomes to the Tools view without entering game, alert history, or activity tables.
+
 ## Design Constraints
 
 - The worker is separate so ingest and delivery do not block request/response traffic
+- Scheduler state is process-local; worker logs are the source of truth for job timing and failures
 - Odds are persisted and read from the DB instead of fetched from the browser path
 - RBAC is DB-backed through `users.role`
 - Settings are strict enough that missing required env values fail early

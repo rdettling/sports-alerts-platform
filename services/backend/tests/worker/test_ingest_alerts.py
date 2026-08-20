@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from app.db.models import (
     Alert,
+    AlertDelivery,
     Game,
     PushSubscription,
     Team,
@@ -39,7 +40,7 @@ def test_ingest_uses_defaults_without_materializing_preferences(db_session):
 
     result = run_catalog_sync(make_live_close_provider())
 
-    assert result["status"] == "success"
+    assert result.alerts_created == 2
     assert sorted(
         db_session.scalars(select(Alert.alert_type).where(Alert.user_id == user.id)).all()
     ) == ["close_game_late", "game_start"]
@@ -69,10 +70,8 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     )
     db_session.commit()
 
-    first = run_catalog_sync(make_live_close_provider())
-    assert first["status"] == "success"
-    second = run_catalog_sync(make_live_close_provider())
-    assert second["status"] == "success"
+    run_catalog_sync(make_live_close_provider())
+    run_catalog_sync(make_live_close_provider())
 
     sent = db_session.scalars(select(Alert).order_by(Alert.alert_type.asc())).all()
     assert len(sent) == 2
@@ -105,8 +104,8 @@ def test_ingest_creates_email_and_push_deliveries_for_both_mode(db_session):
     first = run_catalog_sync(make_live_close_provider())
     second = run_catalog_sync(make_live_close_provider())
 
-    assert first["alerts_created"] >= 1
-    assert second["alerts_created"] == 0
+    assert first.alerts_created >= 1
+    assert second.alerts_created == 0
     alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     game_start = next(alert for alert in alerts if alert.alert_type == "game_start")
     assert [(row.channel, row.status) for row in game_start.deliveries] == [
@@ -160,12 +159,12 @@ def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
             ]
         )
 
-    assert run_catalog_sync(overtime_provider(4))["status"] == "success"
-    assert run_catalog_sync(overtime_provider(5))["status"] == "success"
-    assert run_catalog_sync(overtime_provider(5))["status"] == "success"
-    assert run_catalog_sync(overtime_provider(6))["status"] == "success"
-    assert run_catalog_sync(overtime_provider(6))["status"] == "success"
-    assert run_catalog_sync(overtime_provider(7, status="final", is_final=True))["status"] == "success"
+    run_catalog_sync(overtime_provider(4))
+    run_catalog_sync(overtime_provider(5))
+    run_catalog_sync(overtime_provider(5))
+    run_catalog_sync(overtime_provider(6))
+    run_catalog_sync(overtime_provider(6))
+    run_catalog_sync(overtime_provider(7, status="final", is_final=True))
 
     alerts = db_session.scalars(
         select(Alert)
@@ -203,8 +202,7 @@ def test_ingest_creates_final_result_alert(db_session):
     db_session.add(UserAlertPreference(user_id=user.id, league="NBA", alert_type="final_result", is_enabled_override=True))
     db_session.commit()
 
-    result = run_catalog_sync(make_final_provider())
-    assert result["status"] == "success"
+    run_catalog_sync(make_final_provider())
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 1
@@ -250,8 +248,8 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
-    assert run_catalog_sync(live_provider, league="WNBA")["status"] == "success"
+    run_catalog_sync(live_provider, league="WNBA")
+    run_catalog_sync(live_provider, league="WNBA")
 
     overtime_provider = StaticProvider(
         [
@@ -268,8 +266,8 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(overtime_provider, league="WNBA")["status"] == "success"
-    assert run_catalog_sync(overtime_provider, league="WNBA")["status"] == "success"
+    run_catalog_sync(overtime_provider, league="WNBA")
+    run_catalog_sync(overtime_provider, league="WNBA")
 
     final_provider = StaticProvider(
         [
@@ -287,8 +285,8 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(final_provider, league="WNBA")["status"] == "success"
-    assert run_catalog_sync(final_provider, league="WNBA")["status"] == "success"
+    run_catalog_sync(final_provider, league="WNBA")
+    run_catalog_sync(final_provider, league="WNBA")
 
     sent = db_session.scalars(
         select(Alert).where(Alert.user_id == user.id).order_by(Alert.alert_type.asc())
@@ -339,8 +337,8 @@ def test_nfl_creates_deduped_football_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(live_provider, league="NFL")["status"] == "success"
-    assert run_catalog_sync(live_provider, league="NFL")["status"] == "success"
+    run_catalog_sync(live_provider, league="NFL")
+    run_catalog_sync(live_provider, league="NFL")
 
     overtime_provider = StaticProvider(
         [
@@ -357,8 +355,8 @@ def test_nfl_creates_deduped_football_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(overtime_provider, league="NFL")["status"] == "success"
-    assert run_catalog_sync(overtime_provider, league="NFL")["status"] == "success"
+    run_catalog_sync(overtime_provider, league="NFL")
+    run_catalog_sync(overtime_provider, league="NFL")
 
     final_provider = StaticProvider(
         [
@@ -376,8 +374,8 @@ def test_nfl_creates_deduped_football_alerts(db_session):
             )
         ]
     )
-    assert run_catalog_sync(final_provider, league="NFL")["status"] == "success"
-    assert run_catalog_sync(final_provider, league="NFL")["status"] == "success"
+    run_catalog_sync(final_provider, league="NFL")
+    run_catalog_sync(final_provider, league="NFL")
 
     sent = db_session.scalars(
         select(Alert).where(Alert.user_id == user.id).order_by(Alert.alert_type.asc())
@@ -411,7 +409,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
             )
         ]
     )
-    assert run_catalog_sync(provider)["status"] == "success"
+    run_catalog_sync(provider)
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-live-late-follow"))
     assert game is not None
@@ -420,8 +418,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
     db_session.add(UserAlertPreference(user_id=user.id, league="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
-    result = run_catalog_sync(provider)
-    assert result["status"] == "success"
+    run_catalog_sync(provider)
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert all(row.alert_type != "game_start" for row in sent)
@@ -446,8 +443,7 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
     monkeypatch.setattr("app.worker.alerts.deliver_email_alert_now", fake_deliver)
 
     result = run_catalog_sync(make_live_close_provider())
-    assert result["status"] == "success"
-    assert result["alerts_created"] == 2
+    assert result.alerts_created == 2
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 2
@@ -457,13 +453,12 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
 
 def test_live_sync_persists_long_clock_values(db_session):
     teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc())).all()
-    result = run_catalog_sync(
+    run_catalog_sync(
         LongClockProvider(
             home_external_team_id=teams[0].external_team_id,
             away_external_team_id=teams[1].external_team_id,
         )
     )
-    assert result["status"] == "success"
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-long-clock"))
     assert game is not None
@@ -515,6 +510,7 @@ def test_ingest_respects_game_override_over_league_default(db_session):
     )
     db_session.commit()
 
+    db_session.query(AlertDelivery).delete()
     db_session.query(Alert).delete()
     db_session.commit()
 
@@ -569,8 +565,7 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
     )
     db_session.commit()
 
-    result = run_catalog_sync(make_mlb_inning_provider(), league="MLB")
-    assert result["status"] == "success"
+    run_catalog_sync(make_mlb_inning_provider(), league="MLB")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert any(row.alert_type == "inning_start" for row in sent)
@@ -626,15 +621,15 @@ def test_mlb_extra_innings_alerts_once_per_inning(db_session):
             ]
         )
 
-    assert run_catalog_sync(extra_innings_provider(9), league="MLB")["status"] == "success"
-    assert run_catalog_sync(extra_innings_provider(10), league="MLB")["status"] == "success"
-    assert run_catalog_sync(extra_innings_provider(10), league="MLB")["status"] == "success"
-    assert run_catalog_sync(extra_innings_provider(11), league="MLB")["status"] == "success"
-    assert run_catalog_sync(extra_innings_provider(11), league="MLB")["status"] == "success"
-    assert run_catalog_sync(
+    run_catalog_sync(extra_innings_provider(9), league="MLB")
+    run_catalog_sync(extra_innings_provider(10), league="MLB")
+    run_catalog_sync(extra_innings_provider(10), league="MLB")
+    run_catalog_sync(extra_innings_provider(11), league="MLB")
+    run_catalog_sync(extra_innings_provider(11), league="MLB")
+    run_catalog_sync(
         extra_innings_provider(12, status="final", is_final=True),
         league="MLB",
-    )["status"] == "success"
+    )
 
     alerts = db_session.scalars(
         select(Alert)

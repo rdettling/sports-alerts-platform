@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select
 
 from app.core.security import create_access_token
@@ -209,15 +210,19 @@ def test_alert_preferences_get_and_update(client):
     assert updated["close_game_margin_threshold"] == 3
     assert updated["close_game_time_threshold_seconds"] == 90
 
-    partial_update = client.put(
+    full_update = client.put(
         "/alert-preferences/leagues/NBA/close_game_late",
         headers=headers,
-        json={"is_enabled": False},
+        json={
+            "is_enabled": False,
+            "close_game_margin_threshold": 3,
+            "close_game_time_threshold_seconds": 90,
+        },
     )
-    assert partial_update.status_code == 200
-    assert partial_update.json()["is_enabled"] is False
-    assert partial_update.json()["close_game_margin_threshold"] == 3
-    assert partial_update.json()["close_game_time_threshold_seconds"] == 90
+    assert full_update.status_code == 200
+    assert full_update.json()["is_enabled"] is False
+    assert full_update.json()["close_game_margin_threshold"] == 3
+    assert full_update.json()["close_game_time_threshold_seconds"] == 90
 
     mls_update = client.put(
         "/alert-preferences/leagues/MLS/penalty_kicks",
@@ -308,12 +313,13 @@ def test_game_alert_override_flow(client):
     assert payload["league"] == "NBA"
     assert len(payload["items"]) == 4
     close_item = next(item for item in payload["items"] if item["alert_type"] == "close_game_late")
-    assert close_item["use_league_default"] is True
+    assert close_item["uses_league_defaults"] is True
+    assert "override" not in close_item
     assert close_item["close_game_margin_threshold"] == 5
     assert close_item["close_game_time_threshold_seconds"] == 300
     overtime_item = next(item for item in payload["items"] if item["alert_type"] == "overtime_start")
     assert overtime_item["is_enabled"] is True
-    assert overtime_item["use_league_default"] is True
+    assert overtime_item["uses_league_defaults"] is True
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == "m2-game-overrides@example.com"))
@@ -328,14 +334,14 @@ def test_game_alert_override_flow(client):
         f"/alert-preferences/games/{game_id}/close_game_late",
         headers=headers,
         json={
-            "is_enabled_override": False,
-            "close_game_margin_threshold_override": 2,
-            "close_game_time_threshold_seconds_override": 45,
+            "is_enabled": False,
+            "close_game_margin_threshold": 2,
+            "close_game_time_threshold_seconds": 45,
         },
     )
     assert update_response.status_code == 200
     updated_item = update_response.json()
-    assert updated_item["use_league_default"] is False
+    assert updated_item["uses_league_defaults"] is False
     assert updated_item["is_enabled"] is False
     assert updated_item["close_game_margin_threshold"] == 2
     assert updated_item["close_game_time_threshold_seconds"] == 45
@@ -343,7 +349,7 @@ def test_game_alert_override_flow(client):
     clear_response = client.delete(f"/alert-preferences/games/{game_id}/close_game_late", headers=headers)
     assert clear_response.status_code == 200
     cleared_item = clear_response.json()
-    assert cleared_item["use_league_default"] is True
+    assert cleared_item["uses_league_defaults"] is True
     assert cleared_item["is_enabled"] is True
     assert cleared_item["close_game_margin_threshold"] == 5
     assert cleared_item["close_game_time_threshold_seconds"] == 300
@@ -351,16 +357,16 @@ def test_game_alert_override_flow(client):
     overtime_update = client.put(
         f"/alert-preferences/games/{game_id}/overtime_start",
         headers=headers,
-        json={"is_enabled_override": False},
+        json={"is_enabled": False},
     )
     assert overtime_update.status_code == 200
     assert overtime_update.json()["is_enabled"] is False
-    assert overtime_update.json()["use_league_default"] is False
+    assert overtime_update.json()["uses_league_defaults"] is False
 
     overtime_clear = client.delete(f"/alert-preferences/games/{game_id}/overtime_start", headers=headers)
     assert overtime_clear.status_code == 200
     assert overtime_clear.json()["is_enabled"] is True
-    assert overtime_clear.json()["use_league_default"] is True
+    assert overtime_clear.json()["uses_league_defaults"] is True
 
 
 def test_extra_innings_game_alert_override_flow(client):
@@ -373,21 +379,21 @@ def test_extra_innings_game_alert_override_flow(client):
         item for item in response.json()["items"] if item["alert_type"] == "extra_innings_start"
     )
     assert extra_innings["is_enabled"] is True
-    assert extra_innings["use_league_default"] is True
+    assert extra_innings["uses_league_defaults"] is True
 
     update = client.put(
         f"/alert-preferences/games/{game_id}/extra_innings_start",
         headers=headers,
-        json={"is_enabled_override": False},
+        json={"is_enabled": False},
     )
     assert update.status_code == 200
     assert update.json()["is_enabled"] is False
-    assert update.json()["use_league_default"] is False
+    assert update.json()["uses_league_defaults"] is False
 
     clear = client.delete(f"/alert-preferences/games/{game_id}/extra_innings_start", headers=headers)
     assert clear.status_code == 200
     assert clear.json()["is_enabled"] is True
-    assert clear.json()["use_league_default"] is True
+    assert clear.json()["uses_league_defaults"] is True
 
 
 def test_noop_game_alert_overrides_are_not_stored(client):
@@ -398,7 +404,11 @@ def test_noop_game_alert_overrides_are_not_stored(client):
     league_update = client.put(
         "/alert-preferences/leagues/NBA/close_game_late",
         headers=headers,
-        json={"close_game_margin_threshold": 3},
+        json={
+            "is_enabled": True,
+            "close_game_margin_threshold": 3,
+            "close_game_time_threshold_seconds": 300,
+        },
     )
     assert league_update.status_code == 200
 
@@ -406,22 +416,21 @@ def test_noop_game_alert_overrides_are_not_stored(client):
         f"/alert-preferences/games/{game_id}/close_game_late",
         headers=headers,
         json={
-            "is_enabled_override": True,
-            "close_game_margin_threshold_override": 3,
-            "close_game_time_threshold_seconds_override": 300,
+            "is_enabled": True,
+            "close_game_margin_threshold": 3,
+            "close_game_time_threshold_seconds": 300,
         },
     )
     assert equivalent.status_code == 200
-    assert equivalent.json()["use_league_default"] is True
-    assert equivalent.json()["override"] is None
+    assert equivalent.json()["uses_league_defaults"] is True
+    assert "override" not in equivalent.json()
 
     empty = client.put(
         f"/alert-preferences/games/{game_id}/close_game_late",
         headers=headers,
         json={},
     )
-    assert empty.status_code == 200
-    assert empty.json()["use_league_default"] is True
+    assert empty.status_code == 422
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == email))
@@ -431,3 +440,108 @@ def test_noop_game_alert_overrides_are_not_stored(client):
                 UserGameAlertOverride.game_id == game_id,
             )
         ) is None
+
+
+def test_game_settings_inherit_only_fields_without_overrides(client):
+    headers = _auth_headers(client, email="per-field-inheritance@example.com")
+    game_id = _create_game()
+    league_url = "/alert-preferences/leagues/NBA/close_game_late"
+    game_url = f"/alert-preferences/games/{game_id}/close_game_late"
+
+    assert (
+        client.put(
+            league_url,
+            headers=headers,
+            json={
+                "is_enabled": True,
+                "close_game_margin_threshold": 3,
+                "close_game_time_threshold_seconds": 90,
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.put(
+            game_url,
+            headers=headers,
+            json={
+                "is_enabled": False,
+                "close_game_margin_threshold": 3,
+                "close_game_time_threshold_seconds": 45,
+            },
+        ).status_code
+        == 200
+    )
+
+    assert (
+        client.put(
+            league_url,
+            headers=headers,
+            json={
+                "is_enabled": True,
+                "close_game_margin_threshold": 4,
+                "close_game_time_threshold_seconds": 120,
+            },
+        ).status_code
+        == 200
+    )
+    item = next(
+        item
+        for item in client.get(
+            f"/alert-preferences/games/{game_id}", headers=headers
+        ).json()["items"]
+        if item["alert_type"] == "close_game_late"
+    )
+
+    assert item["uses_league_defaults"] is False
+    assert item["is_enabled"] is False
+    assert item["close_game_margin_threshold"] == 4
+    assert item["close_game_time_threshold_seconds"] == 45
+
+
+@pytest.mark.parametrize(
+    ("league", "alert_type", "payload"),
+    [
+        ("NBA", "game_start", {}),
+        ("NBA", "game_start", {"is_enabled": True, "is_enabled_override": False}),
+        ("NBA", "game_start", {"is_enabled": True, "inning_start_threshold": 7}),
+        ("NBA", "close_game_late", {"is_enabled": True}),
+        ("MLB", "inning_start", {"is_enabled": True}),
+        (
+            "MLB",
+            "inning_start",
+            {
+                "is_enabled": True,
+                "inning_start_threshold": 7,
+                "close_game_margin_threshold": 3,
+            },
+        ),
+    ],
+)
+def test_alert_settings_reject_incomplete_or_irrelevant_fields(
+    client, league, alert_type, payload
+):
+    headers = _auth_headers(client, email=f"invalid-{league}-{alert_type}@example.com")
+
+    response = client.put(
+        f"/alert-preferences/leagues/{league}/{alert_type}",
+        headers=headers,
+        json=payload,
+    )
+
+    assert response.status_code == 422
+
+
+def test_inning_settings_use_the_shared_concrete_shape(client):
+    headers = _auth_headers(client, email="inning-settings@example.com")
+    game_id = _create_game("MLB")
+
+    response = client.put(
+        f"/alert-preferences/games/{game_id}/inning_start",
+        headers=headers,
+        json={"is_enabled": True, "inning_start_threshold": 5},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["uses_league_defaults"] is False
+    assert response.json()["inning_start_threshold"] == 5

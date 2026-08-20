@@ -16,6 +16,16 @@ from app.services.resend import send_resend_email
 logger = logging.getLogger(__name__)
 
 
+def _log_email_failure(*, service: str, alert_id: int, error: object, status_code: object = None) -> None:
+    logger.warning(
+        "Alert email delivery failed service=%s alert_id=%s error=%s status_code=%s",
+        service,
+        alert_id,
+        error,
+        status_code,
+    )
+
+
 def merge_provider_data(delivery: AlertDelivery, updates: dict[str, object]) -> None:
     existing = delivery.provider_data if isinstance(delivery.provider_data, dict) else {}
     delivery.provider_data = {**existing, **updates}
@@ -36,6 +46,7 @@ def deliver_email_alert_now(
     if user is None or game is None:
         delivery.status = "failed"
         merge_provider_data(delivery, {"error": "missing_user_or_game"})
+        _log_email_failure(service=service, alert_id=alert.id, error="missing_user_or_game")
         db.flush()
         return delivery.status
 
@@ -58,13 +69,13 @@ def deliver_email_alert_now(
 
     if delivery_settings.delivery_mode != "live":
         delivery.status = "failed"
-        merge_provider_data(delivery, {"error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"})
+        error = f"unsupported_delivery_mode={delivery_settings.delivery_mode}"
+        merge_provider_data(delivery, {"error": error})
+        _log_email_failure(service=service, alert_id=alert.id, error=error)
         db.flush()
         return delivery.status
 
     result = send_resend_email(
-        db,
-        service=service,
         to_email=user.email,
         subject=subject,
         text_body=text_body,
@@ -81,6 +92,12 @@ def deliver_email_alert_now(
     delivery.status = "failed"
     if result.metadata:
         merge_provider_data(delivery, result.metadata)
+    _log_email_failure(
+        service=service,
+        alert_id=alert.id,
+        error=(result.metadata or {}).get("error", "unknown_error"),
+        status_code=(result.metadata or {}).get("status_code"),
+    )
     db.flush()
     return delivery.status
 

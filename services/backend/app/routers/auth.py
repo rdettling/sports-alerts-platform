@@ -152,8 +152,7 @@ def start_magic_link(
 
     magic_link = _make_magic_link(raw_token)
     try:
-        send_sign_in_email(email, magic_link, raw_code, db=db)
-        db.commit()
+        send_sign_in_email(email, magic_link, raw_code)
         return MagicLinkStartResponse(message=NEUTRAL_START_MESSAGE)
     except Exception:
         outcome = "error"

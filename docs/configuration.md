@@ -17,8 +17,7 @@ JWT_SECRET_KEY=replace-with-long-random-string
 WEB_BASE_URL=http://localhost:5173
 CORS_ALLOW_ORIGINS=http://localhost:5173
 
-ODDS_API_KEY=replace-with-the-odds-api-key
-ODDS_ENABLED=false
+ODDS_API_KEY=
 CATALOG_SYNC_INTERVAL_SECONDS=43200
 
 RESEND_API_KEY=replace-with-resend-api-key
@@ -39,8 +38,6 @@ Optional local overrides you may want to add:
 
 ```env
 FROM_EMAIL=alerts@example.com
-ODDS_PREGAME_WINDOW_HOURS=24
-SCHEDULER_TICK_SECONDS=15
 BOOTSTRAP_ADMIN_EMAIL=you@example.com
 ```
 
@@ -78,19 +75,17 @@ Common values:
 
 - `DATABASE_URL`
 - `CATALOG_SYNC_INTERVAL_SECONDS`
-- `SCHEDULER_TICK_SECONDS`
-- `ODDS_ENABLED`
 - `ODDS_API_KEY`
-- `ODDS_PREGAME_WINDOW_HOURS`
 - `DELIVERY_MODE`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
 
 Notes:
 
-- `ODDS_API_KEY` is still required by settings validation even when `ODDS_ENABLED=false`.
+- Odds fetching is enabled when `ODDS_API_KEY` is nonblank and disabled when it is blank.
 - League-specific live cadences and odds provider sport keys are stable values in the league registry, not environment settings.
-- The worker always handles schedule ingest and alert evaluation; `ODDS_ENABLED=false` only disables odds fetches.
+- The provider, moneyline market, region, format, request timeout, cache duration, and pregame window are fixed implementation details.
+- Disabling odds does not disable schedule ingest or alert evaluation.
 
 ## Frontend Config
 

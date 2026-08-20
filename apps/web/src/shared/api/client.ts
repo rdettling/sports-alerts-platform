@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 if (!API_BASE_URL) {
   throw new Error("Missing required env var: VITE_API_BASE_URL");
@@ -30,59 +31,53 @@ function normalizeErrorDetail(detail: unknown): string {
 
 type RequestOptions = RequestInit & {
   token?: string;
-  timeoutMs?: number;
-  retries?: number;
 };
 
-function buildHeaders(options: RequestOptions): HeadersInit {
+function buildHeaders(token: string | undefined, headers: HeadersInit | undefined): HeadersInit {
   return {
     "Content-Type": "application/json",
-    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    ...(options.headers ?? {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(headers ?? {}),
   };
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const timeoutMs = options.timeoutMs ?? 15_000;
-  const retries = options.retries ?? 0;
+  const { token, ...requestOptions } = options;
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let requestError: unknown;
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        signal: controller.signal,
-        headers: buildHeaders(options),
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...requestOptions,
+      signal: controller.signal,
+      headers: buildHeaders(token, requestOptions.headers),
+    });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(normalizeErrorDetail((body as { detail?: unknown }).detail));
-      }
-
-      if (response.status === 204) {
-        return undefined as T;
-      }
-      return response.json() as Promise<T>;
-    } catch (error) {
-      lastError = error;
-      if (attempt === retries) break;
-    } finally {
-      globalThis.clearTimeout(timeout);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(normalizeErrorDetail((body as { detail?: unknown }).detail));
     }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    requestError = error;
+  } finally {
+    globalThis.clearTimeout(timeout);
   }
 
-  if (lastError instanceof Error && lastError.name === "AbortError") {
+  if (requestError instanceof Error && requestError.name === "AbortError") {
     throw new Error("Request timed out");
   }
 
-  if (lastError instanceof Error && /fetch/i.test(lastError.message)) {
+  if (requestError instanceof Error && /fetch/i.test(requestError.message)) {
     throw new Error(
       `Unable to reach API at ${API_BASE_URL}. Make sure the API service is running.`,
     );
   }
 
-  throw lastError instanceof Error ? lastError : new Error("Request failed");
+  throw requestError instanceof Error ? requestError : new Error("Request failed");
 }
