@@ -22,6 +22,8 @@ class ScoreboardGame:
     season_slug: str | None = None
     season_week: int | None = None
     context_label: str | None = None
+    home_team_record: str | None = None
+    away_team_record: str | None = None
     home_score: int | None = None
     away_score: int | None = None
     period: int | None = None
@@ -34,6 +36,17 @@ def _clean_text(value: object) -> str | None:
         return None
     text = value.strip()
     return text or None
+
+
+def _total_record(competitor: dict[str, Any]) -> str | None:
+    records = competitor.get("records")
+    if not isinstance(records, list):
+        return None
+    total = next(
+        (record for record in records if isinstance(record, dict) and record.get("type") == "total"),
+        None,
+    )
+    return _clean_text(total.get("summary")) if total else None
 
 
 def _format_world_cup_stage(slug: str | None) -> str | None:
@@ -144,6 +157,8 @@ class EspnScoreboardClient:
             season_slug=season_slug,
             season_week=season_week,
             context_label=context_label,
+            home_team_record=_total_record(home),
+            away_team_record=_total_record(away),
             status=status,
             home_score=int(home.get("score")) if home.get("score") else None,
             away_score=int(away.get("score")) if away.get("score") else None,

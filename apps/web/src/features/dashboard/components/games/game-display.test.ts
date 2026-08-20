@@ -12,6 +12,8 @@ function game(overrides: Partial<Game>): Game {
     away_team_id: 2,
     scheduled_start_time: "2026-06-12T20:40:00Z",
     context_label: null,
+    home_team_record: null,
+    away_team_record: null,
     status: "scheduled",
     home_score: null,
     away_score: null,

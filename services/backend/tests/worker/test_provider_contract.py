@@ -25,8 +25,24 @@ def test_provider_parses_espn_payload_shape():
                             "type": {"state": "in", "name": "STATUS_IN_PROGRESS", "completed": False},
                         },
                         "competitors": [
-                            {"homeAway": "home", "score": "102", "team": {"id": "13", "abbreviation": "LAL"}},
-                            {"homeAway": "away", "score": "98", "team": {"id": "2", "abbreviation": "BOS"}},
+                            {
+                                "homeAway": "home",
+                                "score": "102",
+                                "team": {"id": "13", "abbreviation": "LAL"},
+                                "records": [
+                                    {"type": "home", "summary": "27-13"},
+                                    {"type": "total", "summary": "48-31"},
+                                ],
+                            },
+                            {
+                                "homeAway": "away",
+                                "score": "98",
+                                "team": {"id": "2", "abbreviation": "BOS"},
+                                "records": [
+                                    {"type": "total", "summary": "57-22"},
+                                    {"type": "road", "summary": "27-12"},
+                                ],
+                            },
                         ],
                     }
                 ],
@@ -45,7 +61,48 @@ def test_provider_parses_espn_payload_shape():
     assert game.status == "in_progress"
     assert game.home_score == 102
     assert game.away_score == 98
+    assert game.home_team_record == "48-31"
+    assert game.away_team_record == "57-22"
     assert game.context_label is None
+
+
+def test_provider_parses_soccer_record_and_allows_missing_record():
+    payload = {
+        "events": [
+            {
+                "id": "757653",
+                "date": "2026-09-16T19:00Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False}
+                        },
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "score": "0",
+                                "team": {"id": "359", "abbreviation": "ARS"},
+                                "records": [{"type": "total", "summary": "4-2-1"}],
+                            },
+                            {
+                                "homeAway": "away",
+                                "score": "0",
+                                "team": {"id": "364", "abbreviation": "LIV"},
+                                "records": None,
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games(
+        "PREMIER_LEAGUE", ["20260916"]
+    )[0]
+
+    assert game.home_team_record == "4-2-1"
+    assert game.away_team_record is None
 
 
 def test_soccer_competition_feeds_preserve_shared_club_ids():

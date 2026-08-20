@@ -24,6 +24,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 11,
           scheduled_start_time: "2026-06-12T20:00:00Z",
           context_label: null,
+          home_team_record: "48-31",
+          away_team_record: "39-40",
           status: "scheduled",
           home_score: null,
           away_score: null,
@@ -41,6 +43,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 13,
           scheduled_start_time: "2026-06-13T20:00:00Z",
           context_label: null,
+          home_team_record: "55-24",
+          away_team_record: "51-28",
           status: "scheduled",
           home_score: null,
           away_score: null,
@@ -58,6 +62,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 15,
           scheduled_start_time: "2026-06-13T22:00:00Z",
           context_label: null,
+          home_team_record: "24-13",
+          away_team_record: "20-16",
           status: "scheduled",
           home_score: null,
           away_score: null,
@@ -83,6 +89,8 @@ vi.mock("../hooks/useGamesData", () => ({
                     away_team_id: 11,
                     scheduled_start_time: "2026-06-12T20:00:00Z",
                     context_label: null,
+                    home_team_record: "48-31",
+                    away_team_record: "39-40",
                     status: "scheduled",
                     home_score: null,
                     away_score: null,
@@ -212,8 +220,8 @@ describe("GamesView", () => {
 
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText("BOS")).toBeInTheDocument());
-    expect(screen.queryByText("LAL")).toBeNull();
+    await waitFor(() => expect(screen.getByText("48-31")).toBeInTheDocument());
+    expect(screen.queryByText("55-24")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12");
     expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "All dates (3)" })).toBeInTheDocument();
@@ -222,9 +230,9 @@ describe("GamesView", () => {
       target: { value: "all" },
     });
 
-    await waitFor(() => expect(screen.getByText("LAL")).toBeInTheDocument());
-    expect(screen.getByText("BOS")).toBeInTheDocument();
-    expect(screen.getByText("SEA")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("55-24")).toBeInTheDocument());
+    expect(screen.getByText("48-31")).toBeInTheDocument();
+    expect(screen.getByText("20-16")).toBeInTheDocument();
   });
 
   it("moves between dates and disables navigation at boundaries", async () => {
@@ -239,12 +247,12 @@ describe("GamesView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next date" }));
 
     expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-13");
-    expect(screen.queryByText("BOS")).toBeNull();
-    expect(screen.getByText("LAL")).toBeInTheDocument();
+    expect(screen.queryByText("48-31")).toBeNull();
+    expect(screen.getByText("55-24")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next date" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Previous date" }));
-    expect(screen.getByText("BOS")).toBeInTheDocument();
+    expect(screen.getByText("48-31")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
       target: { value: "all" },
@@ -259,8 +267,8 @@ describe("GamesView", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "WNBA" }));
 
-    await waitFor(() => expect(screen.getByText("SEA")).toBeInTheDocument());
-    expect(screen.queryByText("BOS")).toBeNull();
+    await waitFor(() => expect(screen.getByText("20-16")).toBeInTheDocument());
+    expect(screen.queryByText("48-31")).toBeNull();
     expect(screen.queryByText("20m")).toBeNull();
     expect(screen.getByRole("button", { name: "WNBA" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -270,13 +278,13 @@ describe("GamesView", () => {
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 
     fireEvent.click(await screen.findByRole("button", { name: /Following 1/ }));
-    expect(screen.getByText("BOS")).toBeInTheDocument();
+    expect(screen.getByText("48-31")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
       target: { value: "all" },
     });
-    expect(screen.queryByText("LAL")).toBeNull();
-    expect(screen.queryByText("SEA")).toBeNull();
+    expect(screen.queryByText("55-24")).toBeNull();
+    expect(screen.queryByText("20-16")).toBeNull();
   });
 
   it("requests sign-in instead of following for a guest", async () => {

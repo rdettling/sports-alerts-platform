@@ -42,6 +42,8 @@ def make_game(
     clock: str | None = None,
     is_final: bool = False,
     context_label: str | None = None,
+    home_team_record: str | None = None,
+    away_team_record: str | None = None,
     season_slug: str | None = None,
     season_week: int | None = None,
 ) -> ScoreboardGame:
@@ -54,6 +56,8 @@ def make_game(
         season_slug=season_slug,
         season_week=season_week,
         context_label=context_label,
+        home_team_record=home_team_record,
+        away_team_record=away_team_record,
         home_score=home_score,
         away_score=away_score,
         period=period,

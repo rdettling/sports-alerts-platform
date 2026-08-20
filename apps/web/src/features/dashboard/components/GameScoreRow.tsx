@@ -130,7 +130,7 @@ export function GameScoreRow({
           <TeamLogo team={away} size={28} />
           <span className="game-score-team-copy">
             <strong title={away.name}>{away.name}</strong>
-            <span>{away.abbreviation}</span>
+            {game.away_team_record ? <span>{game.away_team_record}</span> : null}
           </span>
           <span className="game-score-value">{awayValueText}</span>
         </div>
@@ -138,7 +138,7 @@ export function GameScoreRow({
           <TeamLogo team={home} size={28} />
           <span className="game-score-team-copy">
             <strong title={home.name}>{home.name}</strong>
-            <span>{home.abbreviation}</span>
+            {game.home_team_record ? <span>{game.home_team_record}</span> : null}
           </span>
           <span className="game-score-value">{homeValueText}</span>
         </div>

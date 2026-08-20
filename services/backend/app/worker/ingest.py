@@ -105,7 +105,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         is_soccer = get_competition_profile(competition).sport == "soccer"
         previous_snapshot = soccer.snapshot_state(existing) if is_soccer else None
         soccer_events = soccer.classify_events(existing, payload) if is_soccer else None
-        before = (
+        state_before = (
             existing.context_label,
             existing.status,
             existing.home_score,
@@ -114,7 +114,12 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
             existing.clock,
             existing.is_final,
         )
+        record_before = (existing.home_team_record, existing.away_team_record)
         existing.context_label = payload.context_label
+        if payload.home_team_record is not None:
+            existing.home_team_record = payload.home_team_record
+        if payload.away_team_record is not None:
+            existing.away_team_record = payload.away_team_record
         existing.status = payload.status
         existing.home_score = payload.home_score
         existing.away_score = payload.away_score
@@ -122,7 +127,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         existing.clock = payload.clock
         existing.is_final = payload.is_final
         existing.last_ingested_at = datetime.now(timezone.utc)
-        after = (
+        state_after = (
             existing.context_label,
             existing.status,
             existing.home_score,
@@ -131,9 +136,16 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
             existing.clock,
             existing.is_final,
         )
-        if previous_snapshot is not None and before != after:
+        record_after = (existing.home_team_record, existing.away_team_record)
+        state_changed = state_before != state_after
+        records_changed = record_before != record_after
+        if previous_snapshot is not None and state_changed:
             soccer.log_transition(previous_snapshot, payload, soccer_events)
-        return GameUpdateResult(did_update=before != after, game_id=existing.id, soccer_events=soccer_events)
+        return GameUpdateResult(
+            did_update=state_changed or records_changed,
+            game_id=existing.id,
+            soccer_events=soccer_events,
+        )
 
     created = Game(
         external_game_id=payload.external_game_id,
@@ -142,6 +154,8 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         away_team_id=away_id,
         scheduled_start_time=payload.scheduled_start_time,
         context_label=payload.context_label,
+        home_team_record=payload.home_team_record,
+        away_team_record=payload.away_team_record,
         status=payload.status,
         home_score=payload.home_score,
         away_score=payload.away_score,

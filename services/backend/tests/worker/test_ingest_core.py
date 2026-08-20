@@ -194,6 +194,51 @@ def test_ingest_persists_and_refreshes_context_label(db_session):
     assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"
 
 
+def test_ingest_persists_refreshes_and_retains_team_records(db_session, monkeypatch, caplog):
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    initial = make_game(
+        external_game_id="mls-records",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+        status="scheduled",
+        home_team_record="6-7-8",
+        away_team_record="10-4-7",
+    )
+    run_catalog_sync(StaticProvider([initial]), competition="MLS")
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "mls-records"))
+    assert game is not None
+    assert (game.home_team_record, game.away_team_record) == ("6-7-8", "10-4-7")
+
+    refreshed = make_game(
+        external_game_id="mls-records",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+        status="scheduled",
+        home_team_record="7-7-8",
+        away_team_record="10-5-7",
+    )
+    with caplog.at_level("INFO", logger="app.worker.soccer"):
+        result = run_catalog_sync(StaticProvider([refreshed]), competition="MLS")
+
+    db_session.refresh(game)
+    assert result.games_updated == 1
+    assert (game.home_team_record, game.away_team_record) == ("7-7-8", "10-5-7")
+    assert "Soccer state transition" not in caplog.text
+
+    missing = make_game(
+        external_game_id="mls-records",
+        home_external_team_id="187",
+        away_external_team_id="18966",
+        status="scheduled",
+    )
+    result = run_catalog_sync(StaticProvider([missing]), competition="MLS")
+
+    db_session.refresh(game)
+    assert result.games_updated == 0
+    assert (game.home_team_record, game.away_team_record) == ("7-7-8", "10-5-7")
+
+
 def test_catalog_cleanup_runs_in_ingest_transaction(db_session):
     now = datetime.now(timezone.utc)
     teams = db_session.scalars(competition_teams_query("NBA").order_by(Team.id.asc()).limit(2)).all()

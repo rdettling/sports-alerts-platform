@@ -24,6 +24,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     away_team_id: 2,
     scheduled_start_time: "2026-05-28T01:00:00Z",
     context_label: null,
+    home_team_record: "48-31",
+    away_team_record: "39-40",
     status: "scheduled",
     home_score: null,
     away_score: null,
@@ -47,7 +49,7 @@ describe("GameScoreRow", () => {
   const home = makeTeam(1, "BOS", "Boston Celtics");
   const away = makeTeam(2, "ATL", "Atlanta Hawks");
 
-  it("shows full team names, abbreviations, raw odds, and competition identity", () => {
+  it("shows full team names, records, raw odds, and competition identity", () => {
     render(
       <GameScoreRow
         game={makeGame()}
@@ -61,11 +63,29 @@ describe("GameScoreRow", () => {
 
     expect(screen.getByText("Atlanta Hawks")).toBeInTheDocument();
     expect(screen.getByText("Boston Celtics")).toBeInTheDocument();
-    expect(screen.getByText("ATL")).toBeInTheDocument();
-    expect(screen.getByText("BOS")).toBeInTheDocument();
+    expect(screen.getByText("39-40")).toBeInTheDocument();
+    expect(screen.getByText("48-31")).toBeInTheDocument();
+    expect(screen.queryByText("ATL")).not.toBeInTheDocument();
+    expect(screen.queryByText("BOS")).not.toBeInTheDocument();
     expect(screen.getByText("+105")).toBeInTheDocument();
     expect(screen.getByText("-120")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "NBA logo" })).toBeInTheDocument();
+  });
+
+  it("omits the secondary team line when records are unavailable", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ home_team_record: null, away_team_record: null })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.getByText("Atlanta Hawks").parentElement?.querySelector("span")).toBeNull();
+    expect(screen.getByText("Boston Celtics").parentElement?.querySelector("span")).toBeNull();
   });
 
   it("shows follow action for unfollowed non-final games", () => {

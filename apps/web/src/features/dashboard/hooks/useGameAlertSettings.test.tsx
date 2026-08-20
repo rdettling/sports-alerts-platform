@@ -19,6 +19,8 @@ const game = {
   away_team_id: 2,
   scheduled_start_time: "2026-08-19T20:00:00Z",
   context_label: null,
+  home_team_record: null,
+  away_team_record: null,
   status: "scheduled",
   home_score: null,
   away_score: null,

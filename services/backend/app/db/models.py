@@ -89,6 +89,8 @@ class Game(Base):
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     scheduled_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     context_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    home_team_record: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    away_team_record: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="scheduled")
     home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -17,6 +17,8 @@ def _create_game() -> Game:
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+            home_team_record="48-31",
+            away_team_record="57-22",
             status="scheduled",
             is_final=False,
         )
@@ -72,6 +74,8 @@ def test_games_include_odds_when_available(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["context_label"] is None
+    assert payload[0]["home_team_record"] == "48-31"
+    assert payload[0]["away_team_record"] == "57-22"
     assert payload[0]["odds"]["outcomes"][0]["price_american"] == 125
     assert payload[0]["odds"]["outcomes"][0]["team_side"] == "away"
     assert payload[0]["odds"]["outcomes"][1]["price_american"] == -145

@@ -77,6 +77,8 @@ games = sa.Table(
     sa.Column("away_team_id", sa.ForeignKey("teams.id"), nullable=False),
     sa.Column("scheduled_start_time", sa.DateTime(timezone=True), nullable=False),
     sa.Column("context_label", sa.String(255), nullable=True),
+    sa.Column("home_team_record", sa.String(32), nullable=True),
+    sa.Column("away_team_record", sa.String(32), nullable=True),
     sa.Column("status", sa.String(32), nullable=False),
     sa.Column("home_score", sa.Integer(), nullable=True),
     sa.Column("away_score", sa.Integer(), nullable=True),
