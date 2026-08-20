@@ -146,12 +146,14 @@ def test_alert_preferences_get_and_update(client):
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert len(groups) == 6
+    assert len(groups) == 8
     nba_group = next(group for group in groups if group["league"] == "NBA")
     wnba_group = next(group for group in groups if group["league"] == "WNBA")
     nfl_group = next(group for group in groups if group["league"] == "NFL")
     mlb_group = next(group for group in groups if group["league"] == "MLB")
     mls_group = next(group for group in groups if group["league"] == "MLS")
+    la_liga_group = next(group for group in groups if group["league"] == "LA_LIGA")
+    premier_league_group = next(group for group in groups if group["league"] == "PREMIER_LEAGUE")
     world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
     assert len(nba_group["preferences"]) == 4
     assert {item["alert_type"] for item in nba_group["preferences"]} == {
@@ -192,6 +194,20 @@ def test_alert_preferences_get_and_update(client):
         "final_result",
     }
     assert all(item["is_enabled"] for item in mls_group["preferences"])
+    assert {item["alert_type"] for item in la_liga_group["preferences"]} == {
+        "game_start",
+        "second_half_start",
+        "score_changed",
+        "final_result",
+    }
+    assert all(item["is_enabled"] for item in la_liga_group["preferences"])
+    assert {item["alert_type"] for item in premier_league_group["preferences"]} == {
+        "game_start",
+        "second_half_start",
+        "score_changed",
+        "final_result",
+    }
+    assert all(item["is_enabled"] for item in premier_league_group["preferences"])
     assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"}
 
     update_response = client.put(
@@ -248,12 +264,44 @@ def test_alert_preferences_get_and_update(client):
     assert mls_penalties["is_enabled"] is False
     assert world_cup_penalties["is_enabled"] is True
 
+    for alert_type in ("extra_time_start", "penalty_kicks"):
+        unsupported_la_liga_alert = client.put(
+            f"/alert-preferences/leagues/LA_LIGA/{alert_type}",
+            headers=headers,
+            json={"is_enabled": True},
+        )
+        assert unsupported_la_liga_alert.status_code == 404
+
+    la_liga_update = client.put(
+        "/alert-preferences/leagues/LA_LIGA/score_changed",
+        headers=headers,
+        json={"is_enabled": False},
+    )
+    assert la_liga_update.status_code == 200
+    assert la_liga_update.json()["is_enabled"] is False
+
+    for alert_type in ("extra_time_start", "penalty_kicks"):
+        unsupported_premier_league_alert = client.put(
+            f"/alert-preferences/leagues/PREMIER_LEAGUE/{alert_type}",
+            headers=headers,
+            json={"is_enabled": True},
+        )
+        assert unsupported_premier_league_alert.status_code == 404
+
+    premier_league_update = client.put(
+        "/alert-preferences/leagues/PREMIER_LEAGUE/score_changed",
+        headers=headers,
+        json={"is_enabled": False},
+    )
+    assert premier_league_update.status_code == 200
+    assert premier_league_update.json()["is_enabled"] is False
+
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == "m2-preferences@example.com"))
         rows = db.scalars(
             select(UserAlertPreference).where(UserAlertPreference.user_id == user.id)
         ).all()
-        assert len(rows) == 2
+        assert len(rows) == 4
         nba_preference = next(row for row in rows if row.league == "NBA")
         assert nba_preference.is_enabled_override is False
         assert nba_preference.close_game_margin_threshold_override == 3

@@ -288,6 +288,8 @@
 }
 
 .admin-league-setting-logo.league-mls,
+.admin-league-setting-logo.league-la_liga,
+.admin-league-setting-logo.league-premier_league,
 .admin-league-setting-logo.league-world_cup {
   width: 1.2rem;
   height: 1.2rem;

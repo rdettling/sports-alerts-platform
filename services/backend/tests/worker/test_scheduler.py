@@ -214,7 +214,16 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     assert scheduler._live_mode(result) == "no_upcoming"
 
 
-@pytest.mark.parametrize(("league", "interval"), [("MLB", 300), ("MLS", 180), ("WORLD_CUP", 180)])
+@pytest.mark.parametrize(
+    ("league", "interval"),
+    [
+        ("MLB", 300),
+        ("MLS", 180),
+        ("LA_LIGA", 180),
+        ("PREMIER_LEAGUE", 180),
+        ("WORLD_CUP", 180),
+    ],
+)
 def test_run_live_sync_job_uses_league_live_interval(monkeypatch, league, interval):
     monkeypatch.setattr(
         scheduler,

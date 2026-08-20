@@ -22,6 +22,8 @@ SUPPORTED_TEST_ALERTS = {
         "score_changed",
         "final_result",
     ),
+    "LA_LIGA": ("game_start", "second_half_start", "score_changed", "final_result"),
+    "PREMIER_LEAGUE": ("game_start", "second_half_start", "score_changed", "final_result"),
     "WORLD_CUP": (
         "game_start",
         "second_half_start",

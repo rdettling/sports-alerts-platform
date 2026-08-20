@@ -258,6 +258,82 @@ describe("GameScoreRow", () => {
     );
   });
 
+  it("shows La Liga identity and club logo URLs", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ league: "LA_LIGA" })}
+        sport="soccer"
+        home={{
+          ...home,
+          external_team_id: "83",
+          league: "LA_LIGA",
+          name: "Barcelona",
+          abbreviation: "BAR",
+        }}
+        away={{
+          ...away,
+          external_team_id: "86",
+          league: "LA_LIGA",
+          name: "Real Madrid",
+          abbreviation: "RMA",
+        }}
+        isFollowed={false}
+        statusLabel="12:00 PM"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "LALIGA logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png",
+    );
+    expect(screen.getByRole("img", { name: "Real Madrid logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/soccer/500/86.png",
+    );
+    expect(screen.getByRole("img", { name: "Barcelona logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/soccer/500/83.png",
+    );
+  });
+
+  it("shows Premier League identity and club logo URLs", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ league: "PREMIER_LEAGUE" })}
+        sport="soccer"
+        home={{
+          ...home,
+          external_team_id: "359",
+          league: "PREMIER_LEAGUE",
+          name: "Arsenal",
+          abbreviation: "ARS",
+        }}
+        away={{
+          ...away,
+          external_team_id: "364",
+          league: "PREMIER_LEAGUE",
+          name: "Liverpool",
+          abbreviation: "LIV",
+        }}
+        isFollowed={false}
+        statusLabel="12:00 PM"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "EPL logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
+    );
+    expect(screen.getByRole("img", { name: "Liverpool logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/soccer/500/364.png",
+    );
+    expect(screen.getByRole("img", { name: "Arsenal logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+    );
+  });
+
   it("shows NFL identity, team logos, and two-way moneyline odds", () => {
     render(
       <GameScoreRow

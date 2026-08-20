@@ -2,7 +2,7 @@
 
 Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-The current product surface supports six leagues: `NBA`, `WNBA`, `NFL`, `MLB`, `MLS`, and `WORLD_CUP`.
+The current product surface supports eight competitions: `NBA`, `WNBA`, `NFL`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `WORLD_CUP`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -18,11 +18,12 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Optional moneyline odds display when odds snapshots are available.
 - Code-owned league profiles pair league-specific provider configuration with shared basketball, football, baseball, or soccer behavior.
 
-Alert types are defined by sport and exposed independently for each league:
+Alert types default by sport and can be restricted for a specific competition:
 
 - `NBA`, `WNBA`, and `NFL`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
 - `MLS` and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
+- `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
 
 ## Repo Layout
 

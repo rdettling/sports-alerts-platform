@@ -9,13 +9,13 @@ const PAGE_METADATA = {
   games: {
     title: "Live Game Alerts | Live Sports Scores & Email and Push Alerts",
     description:
-      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, and World Cup games.",
+      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup games.",
     canonical: "https://livegamealerts.com/",
   },
   teams: {
     title: "Sports Teams | Live Game Alerts",
     description:
-      "Browse NBA, WNBA, NFL, MLB, MLS, and World Cup teams and sign in to follow teams for live game email and push alerts.",
+      "Browse NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup teams and sign in to follow teams for live game email and push alerts.",
     canonical: "https://livegamealerts.com/teams",
   },
 } as const;

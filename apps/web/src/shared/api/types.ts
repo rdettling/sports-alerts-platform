@@ -13,7 +13,8 @@ export type UserProfile = {
   created_at: string;
 };
 
-export type League = "NBA" | "WNBA" | "NFL" | "MLB" | "MLS" | "WORLD_CUP";
+export type League =
+  "NBA" | "WNBA" | "NFL" | "MLB" | "MLS" | "LA_LIGA" | "PREMIER_LEAGUE" | "WORLD_CUP";
 export type Sport = "basketball" | "football" | "baseball" | "soccer";
 
 export type Team = {

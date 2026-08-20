@@ -25,6 +25,20 @@ const teams = [
     name: "New England Revolution",
     abbreviation: "NE",
   },
+  {
+    id: 5,
+    external_team_id: "86",
+    league: "LA_LIGA",
+    name: "Real Madrid",
+    abbreviation: "RMA",
+  },
+  {
+    id: 6,
+    external_team_id: "359",
+    league: "PREMIER_LEAGUE",
+    name: "Arsenal",
+    abbreviation: "ARS",
+  },
 ];
 
 const leagues = [
@@ -53,6 +67,24 @@ const leagues = [
     badge_label: "MLS",
     alert_types: [],
     live_sync_interval_seconds: 120,
+    is_enabled: true,
+  },
+  {
+    league: "LA_LIGA",
+    sport: "soccer",
+    label: "La Liga",
+    badge_label: "LALIGA",
+    alert_types: [],
+    live_sync_interval_seconds: 180,
+    is_enabled: true,
+  },
+  {
+    league: "PREMIER_LEAGUE",
+    sport: "soccer",
+    label: "Premier League",
+    badge_label: "EPL",
+    alert_types: [],
+    live_sync_interval_seconds: 180,
     is_enabled: true,
   },
 ];
@@ -89,13 +121,15 @@ describe("TeamsView", () => {
     expect(screen.queryByRole("group", { name: "Team scope" })).toBeNull();
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["NBA", "MLB", "MLS"]);
+    ).toEqual(["NBA", "MLB", "MLS", "La Liga", "Premier League"]);
 
     const nba = screen.getByRole("region", { name: "NBA" });
     expect(within(nba).getByText("2 teams")).toBeInTheDocument();
     expect(within(nba).getAllByRole("listitem")[0]).toHaveTextContent("Atlanta Hawks");
     expect(screen.getByRole("region", { name: "MLB" })).toHaveTextContent("1 team");
     expect(screen.getByRole("region", { name: "MLS" })).toHaveTextContent("1 team");
+    expect(screen.getByRole("region", { name: "La Liga" })).toHaveTextContent("1 team");
+    expect(screen.getByRole("region", { name: "Premier League" })).toHaveTextContent("1 team");
   });
 
   it("filters by league and keeps search text when filters change", async () => {

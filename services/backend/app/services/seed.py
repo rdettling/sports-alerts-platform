@@ -156,6 +156,52 @@ MLS_TEAMS = [
     ("9727", "Vancouver Whitecaps", "VAN"),
 ]
 
+LA_LIGA_TEAMS = [
+    ("96", "Alavés", "ALA"),
+    ("93", "Athletic Club", "ATH"),
+    ("1068", "Atlético Madrid", "ATM"),
+    ("83", "Barcelona", "BAR"),
+    ("85", "Celta Vigo", "CEL"),
+    ("90", "Deportivo", "DEP"),
+    ("3751", "Elche", "ELC"),
+    ("88", "Espanyol", "ESP"),
+    ("2922", "Getafe", "GET"),
+    ("1538", "Levante", "LEV"),
+    ("99", "Málaga", "MCF"),
+    ("97", "Osasuna", "OSA"),
+    ("87", "Racing Santander", "RAC"),
+    ("101", "Rayo Vallecano", "RAY"),
+    ("244", "Real Betis", "BET"),
+    ("86", "Real Madrid", "RMA"),
+    ("89", "Real Sociedad", "RSO"),
+    ("243", "Sevilla", "SEV"),
+    ("94", "Valencia", "VAL"),
+    ("102", "Villarreal", "VIL"),
+]
+
+PREMIER_LEAGUE_TEAMS = [
+    ("349", "AFC Bournemouth", "BOU"),
+    ("359", "Arsenal", "ARS"),
+    ("362", "Aston Villa", "AVL"),
+    ("337", "Brentford", "BRE"),
+    ("331", "Brighton & Hove Albion", "BHA"),
+    ("363", "Chelsea", "CHE"),
+    ("388", "Coventry City", "COV"),
+    ("384", "Crystal Palace", "CRY"),
+    ("368", "Everton", "EVE"),
+    ("370", "Fulham", "FUL"),
+    ("306", "Hull City", "HUL"),
+    ("373", "Ipswich Town", "IPS"),
+    ("357", "Leeds United", "LEE"),
+    ("364", "Liverpool", "LIV"),
+    ("382", "Manchester City", "MNC"),
+    ("360", "Manchester United", "MAN"),
+    ("361", "Newcastle United", "NEW"),
+    ("393", "Nottingham Forest", "NFO"),
+    ("366", "Sunderland", "SUN"),
+    ("367", "Tottenham Hotspur", "TOT"),
+]
+
 WORLD_CUP_TEAMS = [
     ("624", "Algeria", "ALG"),
     ("202", "Argentina", "ARG"),
@@ -213,6 +259,8 @@ TEAM_SEEDS_BY_LEAGUE = {
     "NFL": NFL_TEAMS,
     "MLB": MLB_TEAMS,
     "MLS": MLS_TEAMS,
+    "LA_LIGA": LA_LIGA_TEAMS,
+    "PREMIER_LEAGUE": PREMIER_LEAGUE_TEAMS,
     "WORLD_CUP": WORLD_CUP_TEAMS,
 }
 

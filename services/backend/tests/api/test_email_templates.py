@@ -255,6 +255,68 @@ def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
     assert "teamlogos/soccer/500/187.png" in html_body
 
 
+def test_la_liga_game_start_uses_club_logos_and_kickoff_copy():
+    away = Team(external_team_id="86", league="LA_LIGA", name="Real Madrid", abbreviation="RMA")
+    home = Team(external_team_id="83", league="LA_LIGA", name="Barcelona", abbreviation="BAR")
+    game = Game(
+        external_game_id="la-liga-1",
+        league="LA_LIGA",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=0,
+        away_score=0,
+        period=1,
+        clock="2'",
+    )
+    alert = _mk_alert("game_start")
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject.startswith("Kickoff · RMA @ BAR")
+    assert "Kickoff is live now" in text_body
+    assert "teamlogos/soccer/500/86.png" in html_body
+    assert "teamlogos/soccer/500/83.png" in html_body
+
+
+def test_premier_league_game_start_uses_club_logos_and_kickoff_copy():
+    away = Team(
+        external_team_id="364",
+        league="PREMIER_LEAGUE",
+        name="Liverpool",
+        abbreviation="LIV",
+    )
+    home = Team(
+        external_team_id="359",
+        league="PREMIER_LEAGUE",
+        name="Arsenal",
+        abbreviation="ARS",
+    )
+    game = Game(
+        external_game_id="premier-league-1",
+        league="PREMIER_LEAGUE",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=0,
+        away_score=0,
+        period=1,
+        clock="2'",
+    )
+    alert = _mk_alert("game_start")
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert subject.startswith("Kickoff · LIV @ ARS")
+    assert "Kickoff is live now" in text_body
+    assert "teamlogos/soccer/500/364.png" in html_body
+    assert "teamlogos/soccer/500/359.png" in html_body
+
+
 def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
     away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
     home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")

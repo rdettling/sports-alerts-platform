@@ -22,6 +22,7 @@ class LeagueProfile:
     scoreboard_url: str
     live_sync_interval_seconds: int
     odds_sport_key: str | None
+    alert_types: tuple[str, ...] | None = None
 
 
 SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
@@ -85,6 +86,26 @@ LEAGUE_PROFILES: dict[str, LeagueProfile] = {
         live_sync_interval_seconds=180,
         odds_sport_key="soccer_usa_mls",
     ),
+    "LA_LIGA": LeagueProfile(
+        league="LA_LIGA",
+        sport="soccer",
+        label="La Liga",
+        badge_label="LALIGA",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard",
+        live_sync_interval_seconds=180,
+        odds_sport_key="soccer_spain_la_liga",
+        alert_types=("game_start", "second_half_start", "score_changed", "final_result"),
+    ),
+    "PREMIER_LEAGUE": LeagueProfile(
+        league="PREMIER_LEAGUE",
+        sport="soccer",
+        label="Premier League",
+        badge_label="EPL",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+        live_sync_interval_seconds=180,
+        odds_sport_key="soccer_epl",
+        alert_types=("game_start", "second_half_start", "score_changed", "final_result"),
+    ),
     "WORLD_CUP": LeagueProfile(
         league="WORLD_CUP",
         sport="soccer",
@@ -115,7 +136,10 @@ def get_league_profile(league: str) -> LeagueProfile:
 
 
 def get_alert_types(league: str) -> tuple[str, ...]:
-    return SPORT_ALERT_TYPES[get_league_profile(league).sport]
+    profile = get_league_profile(league)
+    if profile.alert_types is not None:
+        return profile.alert_types
+    return SPORT_ALERT_TYPES[profile.sport]
 
 
 def get_scoreboard_url(league: str) -> str:

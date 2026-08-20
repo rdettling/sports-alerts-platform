@@ -4,7 +4,7 @@ import { type Team } from "../api";
 
 function teamLogoUrl(team: Team): string {
   const abbreviation = team.abbreviation.toLowerCase();
-  if (team.league === "MLS") {
+  if (team.league === "MLS" || team.league === "LA_LIGA" || team.league === "PREMIER_LEAGUE") {
     return `https://a.espncdn.com/i/teamlogos/soccer/500/${team.external_team_id}.png`;
   }
   if (team.league === "MLB") {

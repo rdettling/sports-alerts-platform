@@ -28,15 +28,21 @@ ODDS_PREGAME_WINDOW = timedelta(hours=24)
 MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
+    "athletic bilbao": "athletic club",
+    "bournemouth": "afc bournemouth",
+    "ca osasuna": "osasuna",
     "la clippers": "los angeles clippers",
     "bosnia and herzegovina": "bosnia herzegovina",
     "chicago fire fc": "chicago fire",
     "columbus crew": "columbus crew sc",
     "czech republic": "czechia",
+    "deportivo la coruna": "deportivo",
     "dr congo": "congo dr",
+    "elche cf": "elche",
     "houston dynamo fc": "houston dynamo",
     "lafc": "los angeles fc",
     "red bull new york": "new york red bulls",
+    "real racing club de santander": "racing santander",
     "turkey": "turkiye",
     "usa": "united states",
     "vancouver whitecaps": "vancouver whitecaps fc",

@@ -42,11 +42,13 @@ Current supported leagues:
 - `NFL`
 - `MLB`
 - `MLS`
+- `LA_LIGA`
+- `PREMIER_LEAGUE`
 - `WORLD_CUP`
 
 League runtime is controlled by DB-backed `league_settings`, so disabled leagues disappear from user-facing reads and worker scope without a code change.
 
-Each supported league has one code-owned profile containing its sport, provider identifiers, live cadence, and display metadata. Alert availability and shared game behavior are selected by sport: basketball, football, baseball, or soccer. User preferences remain league-specific, and presentation such as NFL season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed.
+Each supported league has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert availability and shared game behavior otherwise follow the sport: basketball, football, baseball, or soccer. La Liga and the Premier League omit extra-time and penalty alerts because their league matches cannot enter those states. User preferences remain league-specific, and presentation such as NFL season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed.
 
 ## Main API Areas
 

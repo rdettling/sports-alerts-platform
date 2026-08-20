@@ -43,6 +43,23 @@ def test_mls_name_aliases_match_seeded_names():
     assert game_key("Vancouver Whitecaps FC", "San Diego FC") == game_key("Vancouver Whitecaps", "San Diego FC")
 
 
+def test_la_liga_name_aliases_match_seeded_names():
+    assert game_key("Athletic Bilbao", "Sevilla") == game_key("Athletic Club", "Sevilla")
+    assert game_key("Real Racing Club de Santander", "Getafe") == game_key("Racing Santander", "Getafe")
+    assert game_key("Elche CF", "Barcelona") == game_key("Elche", "Barcelona")
+    assert game_key("CA Osasuna", "Levante") == game_key("Osasuna", "Levante")
+    assert game_key("Deportivo La Coruña", "Málaga") == game_key("Deportivo", "Málaga")
+    assert _odds_sport_key_for_league("LA_LIGA") == "soccer_spain_la_liga"
+
+
+def test_premier_league_names_match_seeded_names():
+    assert game_key("Bournemouth", "Manchester City") == game_key("AFC Bournemouth", "Manchester City")
+    assert game_key("Brighton and Hove Albion", "Aston Villa") == game_key(
+        "Brighton & Hove Albion", "Aston Villa"
+    )
+    assert _odds_sport_key_for_league("PREMIER_LEAGUE") == "soccer_epl"
+
+
 def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
     assert _odds_sport_key_for_league("WNBA") == "basketball_wnba"
     assert game_key("Las Vegas Aces", "New York Liberty") == ("las vegas aces", "new york liberty")

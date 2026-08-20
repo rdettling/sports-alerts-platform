@@ -160,6 +160,8 @@
 
 .game-score-league-logo.league-wnba,
 .game-score-league-logo.league-mls,
+.game-score-league-logo.league-la_liga,
+.game-score-league-logo.league-premier_league,
 .game-score-league-logo.league-world_cup {
   max-width: 1.125rem;
 }

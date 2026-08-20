@@ -18,6 +18,12 @@ def test_canonical_alert_settings():
     assert default_alert_settings("NFL", "close_game_late").close_game_margin_threshold == 8
     assert default_alert_settings("MLB", "inning_start").inning_start_threshold == 7
     assert default_alert_settings("MLS", "penalty_kicks") == AlertSettings(is_enabled=True)
+    assert default_alert_settings("LA_LIGA", "score_changed") == AlertSettings(is_enabled=True)
+    assert default_alert_settings("PREMIER_LEAGUE", "score_changed") == AlertSettings(is_enabled=True)
+    with pytest.raises(ValueError, match="Unsupported alert type"):
+        default_alert_settings("LA_LIGA", "penalty_kicks")
+    with pytest.raises(ValueError, match="Unsupported alert type"):
+        default_alert_settings("PREMIER_LEAGUE", "extra_time_start")
 
 
 def test_unsupported_alert_type_is_rejected():

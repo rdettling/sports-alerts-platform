@@ -26,12 +26,20 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   if (normalized === "MLS") {
     return "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg";
   }
+  if (normalized === "LA_LIGA") {
+    return "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png";
+  }
+  if (normalized === "PREMIER_LEAGUE") {
+    return "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png";
+  }
   if (normalized === "WORLD_CUP") return worldCupMark;
   return null;
 }
 
 export function leagueBadgeLabel(league: string | null | undefined): string {
   const normalized = (league || "").toUpperCase();
+  if (normalized === "LA_LIGA") return "LALIGA";
+  if (normalized === "PREMIER_LEAGUE") return "EPL";
   if (normalized === "WORLD_CUP") return "WC";
   return normalized || "N/A";
 }

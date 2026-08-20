@@ -6,7 +6,16 @@ from app.services.leagues import get_alert_types, get_league_profile, list_suppo
 
 
 def test_league_profiles_are_the_single_source_of_sport_and_provider_configuration():
-    assert list_supported_leagues() == ["NBA", "WNBA", "NFL", "MLB", "MLS", "WORLD_CUP"]
+    assert list_supported_leagues() == [
+        "NBA",
+        "WNBA",
+        "NFL",
+        "MLB",
+        "MLS",
+        "LA_LIGA",
+        "PREMIER_LEAGUE",
+        "WORLD_CUP",
+    ]
 
     nba = get_league_profile("NBA")
     assert (nba.sport, nba.live_sync_interval_seconds, nba.odds_sport_key) == (
@@ -50,6 +59,29 @@ def test_league_profiles_are_the_single_source_of_sport_and_provider_configurati
     )
     assert mls.scoreboard_url.endswith("/sports/soccer/usa.1/scoreboard")
 
+    la_liga = get_league_profile("LA_LIGA")
+    assert (la_liga.sport, la_liga.live_sync_interval_seconds, la_liga.odds_sport_key) == (
+        "soccer",
+        180,
+        "soccer_spain_la_liga",
+    )
+    assert la_liga.scoreboard_url.endswith("/sports/soccer/esp.1/scoreboard")
+    assert get_alert_types("LA_LIGA") == (
+        "game_start",
+        "second_half_start",
+        "score_changed",
+        "final_result",
+    )
+
+    premier_league = get_league_profile("PREMIER_LEAGUE")
+    assert (
+        premier_league.sport,
+        premier_league.live_sync_interval_seconds,
+        premier_league.odds_sport_key,
+    ) == ("soccer", 180, "soccer_epl")
+    assert premier_league.scoreboard_url.endswith("/sports/soccer/eng.1/scoreboard")
+    assert get_alert_types("PREMIER_LEAGUE") == get_alert_types("LA_LIGA")
+
     world_cup = get_league_profile("WORLD_CUP")
     assert (world_cup.sport, world_cup.live_sync_interval_seconds, world_cup.odds_sport_key) == (
         "soccer",
@@ -67,6 +99,14 @@ def test_public_leagues_include_sport_and_live_cadence(client):
     response = client.get("/leagues")
 
     assert response.status_code == 200
+    la_liga = next(item for item in response.json() if item["league"] == "LA_LIGA")
+    assert la_liga["is_enabled"] is True
+    assert la_liga["label"] == "La Liga"
+    assert la_liga["badge_label"] == "LALIGA"
+    premier_league = next(item for item in response.json() if item["league"] == "PREMIER_LEAGUE")
+    assert premier_league["is_enabled"] is True
+    assert premier_league["label"] == "Premier League"
+    assert premier_league["badge_label"] == "EPL"
     assert [
         (
             item["league"],
@@ -80,6 +120,8 @@ def test_public_leagues_include_sport_and_live_cadence(client):
         ("NFL", "football", 120),
         ("MLB", "baseball", 300),
         ("MLS", "soccer", 180),
+        ("LA_LIGA", "soccer", 180),
+        ("PREMIER_LEAGUE", "soccer", 180),
         ("WORLD_CUP", "soccer", 180),
     ]
 
@@ -92,6 +134,38 @@ def test_mls_team_catalog_contains_all_current_clubs(client):
 
     assert count == 30
     assert {"LA", "LAFC", "MIA", "RBNY", "SD"} <= abbreviations
+
+
+def test_la_liga_team_catalog_contains_all_current_clubs(client):
+    client.get("/leagues")
+    with SessionLocal() as db:
+        teams = db.scalars(select(Team).where(Team.league == "LA_LIGA")).all()
+
+    assert len(teams) == 20
+    assert {(team.external_team_id, team.abbreviation) for team in teams} >= {
+        ("83", "BAR"),
+        ("86", "RMA"),
+        ("87", "RAC"),
+        ("90", "DEP"),
+        ("99", "MCF"),
+        ("1068", "ATM"),
+    }
+
+
+def test_premier_league_team_catalog_contains_all_current_clubs(client):
+    client.get("/leagues")
+    with SessionLocal() as db:
+        teams = db.scalars(select(Team).where(Team.league == "PREMIER_LEAGUE")).all()
+
+    assert len(teams) == 20
+    assert {(team.external_team_id, team.abbreviation) for team in teams} >= {
+        ("306", "HUL"),
+        ("359", "ARS"),
+        ("360", "MAN"),
+        ("364", "LIV"),
+        ("382", "MNC"),
+        ("388", "COV"),
+    }
 
 
 def test_wnba_team_catalog_contains_all_current_clubs(client):
