@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent
-from app.services.leagues import get_league_profile
+from app.services.competitions import get_competition_profile
 from app.worker.config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,8 +49,8 @@ TEAM_NAME_ALIASES = {
 }
 
 _CACHE_LOCK = threading.Lock()
-_CACHE_FETCHED_AT_BY_LEAGUE: dict[str, float] = {}
-_CACHE_DATA_BY_LEAGUE: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
+_CACHE_FETCHED_AT_BY_COMPETITION: dict[str, float] = {}
+_CACHE_DATA_BY_COMPETITION: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
 
 
 @dataclass(frozen=True)
@@ -168,7 +168,7 @@ def select_best_for_game(
 
 def games_missing_pregame_snapshot(
     db: Session,
-    league: str,
+    competition: str,
     now: datetime,
     *,
     eligible_external_ids: set[str] | None = None,
@@ -177,7 +177,7 @@ def games_missing_pregame_snapshot(
         return []
     pregame_cutoff = now + ODDS_PREGAME_WINDOW
     stmt = select(Game).where(
-        Game.league == league,
+        Game.competition == competition,
         Game.is_final.is_(False),
         Game.status == "scheduled",
         Game.scheduled_start_time >= now,
@@ -266,14 +266,14 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
     return None
 
 
-def _odds_sport_key_for_league(league: str) -> str:
-    sport_key = get_league_profile(league).odds_sport_key
+def _odds_sport_key_for_competition(competition: str) -> str:
+    sport_key = get_competition_profile(competition).odds_sport_key
     if sport_key is None:
-        raise ValueError(f"Odds are not supported for league: {league}")
+        raise ValueError(f"Odds are not supported for competition: {competition}")
     return sport_key
 
 
-def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
+def _fetch_from_provider(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     query = urlencode(
         {
             "apiKey": settings.odds_api_key.strip(),
@@ -282,7 +282,7 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
             "oddsFormat": ODDS_FORMAT,
         }
     )
-    sport_key = _odds_sport_key_for_league(league)
+    sport_key = _odds_sport_key_for_competition(competition)
     url = f"{ODDS_API_BASE_URL}/{sport_key}/odds?{query}"
 
     with urlopen(url, timeout=ODDS_TIMEOUT_SECONDS) as response:  # noqa: S310
@@ -308,13 +308,13 @@ def _fetch_from_provider(league: str) -> dict[tuple[str, str], list[OddsSnapshot
     return odds_index
 
 
-def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
+def fetch_odds_index(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
     if not settings.odds_api_key.strip():
         return {}
 
-    normalized = league.strip().upper()
+    normalized = competition.strip().upper()
     try:
-        profile = get_league_profile(normalized)
+        profile = get_competition_profile(normalized)
     except ValueError:
         return {}
     if profile.odds_sport_key is None:
@@ -322,8 +322,8 @@ def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
 
     now = monotonic()
     with _CACHE_LOCK:
-        cached = _CACHE_DATA_BY_LEAGUE.get(normalized)
-        fetched_at = _CACHE_FETCHED_AT_BY_LEAGUE.get(normalized, 0.0)
+        cached = _CACHE_DATA_BY_COMPETITION.get(normalized)
+        fetched_at = _CACHE_FETCHED_AT_BY_COMPETITION.get(normalized, 0.0)
         if cached and now - fetched_at < ODDS_CACHE_SECONDS:
             return cached
 
@@ -334,6 +334,6 @@ def fetch_odds_index(league: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
         return {}
 
     with _CACHE_LOCK:
-        _CACHE_DATA_BY_LEAGUE[normalized] = fresh_data
-        _CACHE_FETCHED_AT_BY_LEAGUE[normalized] = monotonic()
-        return _CACHE_DATA_BY_LEAGUE[normalized]
+        _CACHE_DATA_BY_COMPETITION[normalized] = fresh_data
+        _CACHE_FETCHED_AT_BY_COMPETITION[normalized] = monotonic()
+        return _CACHE_DATA_BY_COMPETITION[normalized]

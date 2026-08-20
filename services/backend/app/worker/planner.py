@@ -26,11 +26,11 @@ def build_catalog_dates(now: datetime | None = None) -> list[str]:
     return sorted(_default_catalog_dates(at))
 
 
-def build_live_requests(db: Session, league: str, now: datetime | None = None) -> list[str]:
+def build_live_requests(db: Session, competition: str, now: datetime | None = None) -> list[str]:
     at = now or datetime.now(timezone.utc)
     candidate_rows = db.execute(
         select(Game.scheduled_start_time).where(
-            Game.league == league,
+            Game.competition == competition,
             Game.is_final.is_(False),
             or_(
                 Game.status.in_(("in_progress", "live")),

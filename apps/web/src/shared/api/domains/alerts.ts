@@ -8,7 +8,8 @@ import type {
   DeliveryStatus,
   GameAlertPreferenceItem,
   GameAlertPreferences,
-  League,
+  Competition,
+  Sport,
 } from "../types";
 
 export function listAlertPreferences(token: string): Promise<AlertPreferenceGroup[]> {
@@ -17,11 +18,11 @@ export function listAlertPreferences(token: string): Promise<AlertPreferenceGrou
 
 export function updateAlertPreference(
   token: string,
-  league: League,
+  sport: Sport,
   alertType: string,
   payload: AlertSettingsUpdate,
 ): Promise<AlertPreference> {
-  return apiRequest<AlertPreference>(`/alert-preferences/leagues/${league}/${alertType}`, {
+  return apiRequest<AlertPreference>(`/alert-preferences/sports/${sport}/${alertType}`, {
     method: "PUT",
     token,
     body: JSON.stringify(payload),
@@ -73,9 +74,9 @@ export function listAlertHistory(
 
 export function sendAdminTestAlert(
   token: string,
-  payload: { league: League; alert_type: AlertType },
+  payload: { competition: Competition; alert_type: AlertType },
 ): Promise<{
-  league: League;
+  competition: Competition;
   alert_type: AlertType;
   deliveries: Array<{
     channel: string;
@@ -84,7 +85,7 @@ export function sendAdminTestAlert(
   }>;
 }> {
   return apiRequest<{
-    league: League;
+    competition: Competition;
     alert_type: AlertType;
     deliveries: Array<{
       channel: string;

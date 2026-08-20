@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { type LeagueSetting, updateOpsLeagueSetting } from "../../../../shared/api";
+import { type CompetitionSetting, updateOpsCompetitionSetting } from "../../../../shared/api";
 import {
-  leagueBadgeLabel,
-  leagueLogoUrl,
+  competitionBadgeLabel,
+  competitionLogoUrl,
   messageFromUnknown,
 } from "../../../../shared/lib/dashboard-ui";
 
@@ -13,19 +13,24 @@ function formatSyncCadence(seconds: number): string {
   return `Every ${seconds}s`;
 }
 
-export function AdminLeagueSettingsPanel({
+export function AdminCompetitionSettingsPanel({
   token,
   items,
 }: {
   token: string;
-  items: LeagueSetting[];
+  items: CompetitionSetting[];
 }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
   const toggleMutation = useMutation({
-    mutationFn: ({ league, isEnabled }: { league: LeagueSetting["league"]; isEnabled: boolean }) =>
-      updateOpsLeagueSetting(token, league, isEnabled),
+    mutationFn: ({
+      competition,
+      isEnabled,
+    }: {
+      competition: CompetitionSetting["competition"];
+      isEnabled: boolean;
+    }) => updateOpsCompetitionSetting(token, competition, isEnabled),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["admin-page", token] });
       await queryClient.invalidateQueries({ queryKey: ["games-page", token] });
@@ -35,11 +40,11 @@ export function AdminLeagueSettingsPanel({
   });
 
   return (
-    <section className="admin-panel surface" aria-labelledby="admin-league-runtime-title">
+    <section className="admin-panel surface" aria-labelledby="admin-competition-runtime-title">
       <div className="admin-panel-header surface-header">
         <div>
-          <h2 id="admin-league-runtime-title">League Runtime</h2>
-          <p>Control which leagues consume sync resources and appear in the app.</p>
+          <h2 id="admin-competition-runtime-title">Competition Runtime</h2>
+          <p>Control which competitions consume sync resources and appear in the app.</p>
         </div>
       </div>
       {error ? (
@@ -47,36 +52,40 @@ export function AdminLeagueSettingsPanel({
           {error}
         </p>
       ) : null}
-      <div className="admin-league-settings-list">
+      <div className="admin-competition-settings-list">
         {items.map((item) => {
-          const busy = toggleMutation.isPending && toggleMutation.variables?.league === item.league;
-          const logoUrl = leagueLogoUrl(item.league);
+          const busy =
+            toggleMutation.isPending && toggleMutation.variables?.competition === item.competition;
+          const logoUrl = competitionLogoUrl(item.competition);
           return (
             <button
-              key={item.league}
-              className="admin-league-setting-btn"
+              key={item.competition}
+              className="admin-competition-setting-btn"
               type="button"
               aria-label={`${item.is_enabled ? "Disable" : "Enable"} ${item.label}`}
               disabled={busy}
               onClick={() =>
-                toggleMutation.mutate({ league: item.league, isEnabled: !item.is_enabled })
+                toggleMutation.mutate({
+                  competition: item.competition,
+                  isEnabled: !item.is_enabled,
+                })
               }
             >
-              <span className="admin-league-setting-main">
-                <span className="admin-league-setting-mark" aria-hidden>
+              <span className="admin-competition-setting-main">
+                <span className="admin-competition-setting-mark" aria-hidden>
                   {logoUrl ? (
                     <img
                       src={logoUrl}
                       alt=""
-                      className={`admin-league-setting-logo league-${item.league.toLowerCase()}`.trim()}
+                      className={`admin-competition-setting-logo competition-${item.competition.toLowerCase()}`.trim()}
                     />
                   ) : (
-                    <span className="admin-league-setting-fallback">
-                      {leagueBadgeLabel(item.league)}
+                    <span className="admin-competition-setting-fallback">
+                      {competitionBadgeLabel(item.competition)}
                     </span>
                   )}
                 </span>
-                <span className="admin-league-setting-copy">
+                <span className="admin-competition-setting-copy">
                   <strong>{item.label}</strong>
                   <span>
                     {item.is_enabled ? "Enabled" : "Disabled"} ·{" "}
@@ -84,7 +93,7 @@ export function AdminLeagueSettingsPanel({
                   </span>
                 </span>
               </span>
-              <span className="admin-league-setting-action">
+              <span className="admin-competition-setting-action">
                 {busy ? "Saving..." : item.is_enabled ? "Disable" : "Enable"}
               </span>
             </button>

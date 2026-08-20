@@ -67,7 +67,7 @@ class StaticProvider:
         self.games = games or []
         self.error = error
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         if self.error is not None:
             raise self.error
         return list(self.games)
@@ -88,7 +88,7 @@ class SequenceWorldCupProvider:
         self._home_external_team_id = home_external_team_id
         self._away_external_team_id = away_external_team_id
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         snapshot = self._snapshots[min(self._index, len(self._snapshots) - 1)]
         self._index += 1
         return [
@@ -111,7 +111,7 @@ class LongClockProvider:
         self.home_external_team_id = home_external_team_id
         self.away_external_team_id = away_external_team_id
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         return [
             make_game(
                 external_game_id="game-long-clock",
@@ -132,7 +132,7 @@ class RepeatMatchupProvider:
         self.first_start = first_start
         self.second_start = second_start
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         return [
             make_game(
                 external_game_id="game-repeat-1",
@@ -155,7 +155,7 @@ class ContextLabelProvider:
     def __init__(self, context_label: str | None):
         self.context_label = context_label
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         return [
             make_game(
                 external_game_id="game-context",
@@ -172,13 +172,13 @@ class RecordingCatalogProvider:
         self.scheduled_start_time = scheduled_start_time
         self.requests: list[str] = []
 
-    def fetch_games(self, league, requests):
+    def fetch_games(self, competition, requests):
         self.requests = list(requests)
         return [
             make_game(
-                external_game_id=f"{league.lower()}-catalog-game",
-                home_external_team_id="10" if league == "MLB" else "660",
-                away_external_team_id="2" if league == "MLB" else "203",
+                external_game_id=f"{competition.lower()}-catalog-game",
+                home_external_team_id="10" if competition == "MLB" else "660",
+                away_external_team_id="2" if competition == "MLB" else "203",
                 scheduled_start_time=self.scheduled_start_time,
                 status="scheduled",
             )

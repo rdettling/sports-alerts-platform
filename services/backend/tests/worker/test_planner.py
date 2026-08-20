@@ -11,7 +11,7 @@ def _seed_game(db_session, *, external_id: str, status: str, scheduled_start: da
     db_session.add(
         Game(
             external_game_id=external_id,
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=scheduled_start,

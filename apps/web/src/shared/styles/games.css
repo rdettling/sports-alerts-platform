@@ -137,7 +137,7 @@
   gap: 0.125rem;
 }
 
-.game-score-league-mark {
+.game-score-competition-mark {
   flex: 0 0 2.5rem;
   width: 2.5rem;
   height: 1.125rem;
@@ -146,7 +146,7 @@
   justify-content: flex-start;
 }
 
-.game-score-league-logo {
+.game-score-competition-logo {
   display: block;
   width: auto;
   max-width: 2.5rem;
@@ -154,19 +154,19 @@
   object-fit: contain;
 }
 
-.game-score-league-logo.league-nba {
+.game-score-competition-logo.competition-nba {
   max-width: 0.875rem;
 }
 
-.game-score-league-logo.league-wnba,
-.game-score-league-logo.league-mls,
-.game-score-league-logo.league-la_liga,
-.game-score-league-logo.league-premier_league,
-.game-score-league-logo.league-world_cup {
+.game-score-competition-logo.competition-wnba,
+.game-score-competition-logo.competition-mls,
+.game-score-competition-logo.competition-la_liga,
+.game-score-competition-logo.competition-premier_competition,
+.game-score-competition-logo.competition-world_cup {
   max-width: 1.125rem;
 }
 
-.game-score-league-fallback {
+.game-score-competition-fallback {
   flex: 0 0 auto;
   color: var(--text-secondary);
   font-size: 0.65rem;

@@ -14,11 +14,11 @@ def _mk_alert(alert_type: str) -> Alert:
 
 
 def test_mlb_inning_start_uses_mlb_logos_and_non_nba_details():
-    away = Team(external_team_id="MIA", league="MLB", name="Miami Marlins", abbreviation="MIA")
-    home = Team(external_team_id="TOR", league="MLB", name="Toronto Blue Jays", abbreviation="TOR")
+    away = Team(external_team_id="MIA", name="Miami Marlins", abbreviation="MIA")
+    home = Team(external_team_id="TOR", name="Toronto Blue Jays", abbreviation="TOR")
     game = Game(
         external_game_id="mlb-1",
-        league="MLB",
+        competition="MLB",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -42,11 +42,11 @@ def test_mlb_inning_start_uses_mlb_logos_and_non_nba_details():
 
 
 def test_mlb_extra_innings_start_uses_ordinal_inning_copy():
-    away = Team(external_team_id="MIA", league="MLB", name="Miami Marlins", abbreviation="MIA")
-    home = Team(external_team_id="TOR", league="MLB", name="Toronto Blue Jays", abbreviation="TOR")
+    away = Team(external_team_id="MIA", name="Miami Marlins", abbreviation="MIA")
+    home = Team(external_team_id="TOR", name="Toronto Blue Jays", abbreviation="TOR")
     game = Game(
         external_game_id="mlb-extra-innings",
-        league="MLB",
+        competition="MLB",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -73,11 +73,11 @@ def test_mlb_extra_innings_start_uses_ordinal_inning_copy():
 
 
 def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
-    away = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
-    home = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
+    away = Team(external_team_id="2", name="Boston Celtics", abbreviation="BOS")
+    home = Team(external_team_id="13", name="Los Angeles Lakers", abbreviation="LAL")
     game = Game(
         external_game_id="nba-1",
-        league="NBA",
+        competition="NBA",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -96,11 +96,11 @@ def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
 
 
 def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
-    away = Team(external_team_id="17", league="WNBA", name="Las Vegas Aces", abbreviation="LV")
-    home = Team(external_team_id="9", league="WNBA", name="New York Liberty", abbreviation="NY")
+    away = Team(external_team_id="17", name="Las Vegas Aces", abbreviation="LV")
+    home = Team(external_team_id="9", name="New York Liberty", abbreviation="NY")
     game = Game(
         external_game_id="wnba-1",
-        league="WNBA",
+        competition="WNBA",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -118,11 +118,11 @@ def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
 
 
 def test_nfl_alerts_use_football_copy_periods_and_logos():
-    away = Team(external_team_id="12", league="NFL", name="Kansas City Chiefs", abbreviation="KC")
-    home = Team(external_team_id="2", league="NFL", name="Buffalo Bills", abbreviation="BUF")
+    away = Team(external_team_id="12", name="Kansas City Chiefs", abbreviation="KC")
+    home = Team(external_team_id="2", name="Buffalo Bills", abbreviation="BUF")
     game = Game(
         external_game_id="nfl-1",
-        league="NFL",
+        competition="NFL",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -151,11 +151,11 @@ def test_nfl_alerts_use_football_copy_periods_and_logos():
 
 
 def test_nba_overtime_start_uses_period_aware_copy():
-    away = Team(external_team_id="13", league="NBA", name="Los Angeles Lakers", abbreviation="LAL")
-    home = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
+    away = Team(external_team_id="13", name="Los Angeles Lakers", abbreviation="LAL")
+    home = Team(external_team_id="2", name="Boston Celtics", abbreviation="BOS")
     game = Game(
         external_game_id="nba-overtime",
-        league="NBA",
+        competition="NBA",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -178,12 +178,12 @@ def test_nba_overtime_start_uses_period_aware_copy():
     assert "OT2 is live now · LAL 112–112 BOS" in html_body
 
 
-def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
-    away = Team(external_team_id="X1", league="NHL", name="Away Team", abbreviation="AWY")
-    home = Team(external_team_id="X2", league="NHL", name="Home Team", abbreviation="HOM")
+def test_unknown_competition_falls_back_to_generic_and_no_logo_urls():
+    away = Team(external_team_id="X1", name="Away Team", abbreviation="AWY")
+    home = Team(external_team_id="X2", name="Home Team", abbreviation="HOM")
     game = Game(
         external_game_id="other-1",
-        league="NHL",
+        competition="NHL",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -202,11 +202,11 @@ def test_unknown_league_falls_back_to_generic_and_no_logo_urls():
 
 
 def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-1",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -228,11 +228,11 @@ def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
 
 
 def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
-    away = Team(external_team_id="18966", league="MLS", name="LAFC", abbreviation="LAFC")
-    home = Team(external_team_id="187", league="MLS", name="LA Galaxy", abbreviation="LA")
+    away = Team(external_team_id="18966", name="LAFC", abbreviation="LAFC")
+    home = Team(external_team_id="187", name="LA Galaxy", abbreviation="LA")
     game = Game(
         external_game_id="mls-penalties",
-        league="MLS",
+        competition="MLS",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -256,11 +256,11 @@ def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
 
 
 def test_la_liga_game_start_uses_club_logos_and_kickoff_copy():
-    away = Team(external_team_id="86", league="LA_LIGA", name="Real Madrid", abbreviation="RMA")
-    home = Team(external_team_id="83", league="LA_LIGA", name="Barcelona", abbreviation="BAR")
+    away = Team(external_team_id="86", name="Real Madrid", abbreviation="RMA")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
         external_game_id="la-liga-1",
-        league="LA_LIGA",
+        competition="LA_LIGA",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -281,22 +281,18 @@ def test_la_liga_game_start_uses_club_logos_and_kickoff_copy():
     assert "teamlogos/soccer/500/83.png" in html_body
 
 
-def test_premier_league_game_start_uses_club_logos_and_kickoff_copy():
+def test_premier_competition_game_start_uses_club_logos_and_kickoff_copy():
     away = Team(
-        external_team_id="364",
-        league="PREMIER_LEAGUE",
-        name="Liverpool",
+        external_team_id="364", name="Liverpool",
         abbreviation="LIV",
     )
     home = Team(
-        external_team_id="359",
-        league="PREMIER_LEAGUE",
-        name="Arsenal",
+        external_team_id="359", name="Arsenal",
         abbreviation="ARS",
     )
     game = Game(
-        external_game_id="premier-league-1",
-        league="PREMIER_LEAGUE",
+        external_game_id="premier-competition-1",
+        competition="PREMIER_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -318,11 +314,11 @@ def test_premier_league_game_start_uses_club_logos_and_kickoff_copy():
 
 
 def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-2",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -354,11 +350,11 @@ def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
 
 
 def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-3",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -390,11 +386,11 @@ def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
 
 
 def test_world_cup_second_half_start_uses_resume_copy():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-4",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -416,11 +412,11 @@ def test_world_cup_second_half_start_uses_resume_copy():
 
 
 def test_world_cup_extra_time_start_uses_literal_copy():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-extra-time",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -442,11 +438,11 @@ def test_world_cup_extra_time_start_uses_literal_copy():
 
 
 def test_world_cup_penalty_kicks_uses_anticipatory_copy():
-    away = Team(external_team_id="203", league="WORLD_CUP", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", league="WORLD_CUP", name="United States", abbreviation="USA")
+    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
+    home = Team(external_team_id="660", name="United States", abbreviation="USA")
     game = Game(
         external_game_id="world-cup-5",
-        league="WORLD_CUP",
+        competition="WORLD_CUP",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),

@@ -3,28 +3,28 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.db.models import LeagueSetting
-from app.services.leagues import ensure_league_settings, get_league_profile
+from app.db.models import CompetitionSetting
+from app.services.competitions import ensure_competition_settings, get_competition_profile
 from app.worker import scheduler
 from app.worker.ingest import CatalogSyncResult, LiveSyncResult
 
 
 def _job(
     job_type: scheduler.JobType = scheduler.CATALOG_SYNC_JOB,
-    league: str = "MLB",
+    competition: str = "MLB",
     next_run_at: datetime | None = None,
 ) -> scheduler.ScheduledJob:
     return scheduler.ScheduledJob(
         job_type=job_type,
-        league=league,
+        competition=competition,
         next_run_at=next_run_at or datetime.now(timezone.utc),
     )
 
 
-def _catalog_result(league: str = "MLB", **overrides) -> CatalogSyncResult:
+def _catalog_result(competition: str = "MLB", **overrides) -> CatalogSyncResult:
     return replace(
         CatalogSyncResult(
-            league=league,
+            competition=competition,
             games_checked=0,
             games_updated=0,
             alerts_created=0,
@@ -37,10 +37,10 @@ def _catalog_result(league: str = "MLB", **overrides) -> CatalogSyncResult:
     )
 
 
-def _live_result(league: str = "MLB", **overrides) -> LiveSyncResult:
+def _live_result(competition: str = "MLB", **overrides) -> LiveSyncResult:
     return replace(
         LiveSyncResult(
-            league=league,
+            competition=competition,
             games_checked=0,
             games_updated=0,
             alerts_created=0,
@@ -51,7 +51,7 @@ def _live_result(league: str = "MLB", **overrides) -> LiveSyncResult:
     )
 
 
-def test_sync_jobs_creates_active_league_jobs():
+def test_sync_jobs_creates_active_competition_jobs():
     now = datetime.now(timezone.utc)
     jobs: scheduler.JobSchedule = {}
 
@@ -66,7 +66,7 @@ def test_sync_jobs_creates_active_league_jobs():
     assert all(job.next_run_at == now for job in jobs.values())
 
 
-def test_sync_jobs_adds_enabled_and_removes_disabled_leagues():
+def test_sync_jobs_adds_enabled_and_removes_disabled_competitions():
     now = datetime.now(timezone.utc)
     jobs: scheduler.JobSchedule = {}
     scheduler._sync_jobs(jobs, ["MLB"], now)
@@ -79,20 +79,20 @@ def test_sync_jobs_adds_enabled_and_removes_disabled_leagues():
     assert all(job.next_run_at == later for job in jobs.values())
 
 
-def test_load_active_leagues_skips_disabled_leagues(db_session):
-    ensure_league_settings(db_session)
-    row = db_session.get(LeagueSetting, "MLB")
+def test_load_active_competitions_skips_disabled_competitions(db_session):
+    ensure_competition_settings(db_session)
+    row = db_session.get(CompetitionSetting, "MLB")
     assert row is not None
     row.is_enabled = False
     db_session.commit()
 
-    active = scheduler._load_active_leagues()
+    active = scheduler._load_active_competitions()
 
     assert "MLB" not in active
     assert "NBA" in active
 
 
-def test_next_due_job_prefers_catalog_then_league_name():
+def test_next_due_job_prefers_catalog_then_competition_name():
     now = datetime.now(timezone.utc)
     jobs = {
         (scheduler.LIVE_SYNC_JOB, "MLB"): _job(scheduler.LIVE_SYNC_JOB, "MLB", now),
@@ -159,17 +159,17 @@ def test_run_logs_failure_and_stops_after_requested_iteration(monkeypatch, caplo
 
     now = datetime.now(timezone.utc)
     monkeypatch.setattr(scheduler, "_utcnow", lambda: now)
-    monkeypatch.setattr(scheduler, "_load_active_leagues", lambda: ["MLB"])
+    monkeypatch.setattr(scheduler, "_load_active_competitions", lambda: ["MLB"])
     monkeypatch.setattr(
         scheduler,
         "_run_catalog_sync_job",
-        lambda _jobs, _league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+        lambda _jobs, _competition: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
     )
 
     with caplog.at_level("INFO", logger="app.worker.scheduler"):
         scheduler.run(OneIteration())
 
-    assert "Job failed job_type=catalog_sync league=MLB failure_count=1 retry_in_seconds=30" in caplog.text
+    assert "Job failed job_type=catalog_sync competition=MLB failure_count=1 retry_in_seconds=30" in caplog.text
     assert caplog.text.count("Job failed") == 1
     assert "Scheduler loop stopped" in caplog.text
 
@@ -179,7 +179,7 @@ def test_run_live_sync_job_sleeps_until_next_scheduled_start(monkeypatch):
     monkeypatch.setattr(
         scheduler,
         "run_live_sync",
-        lambda provider, league: _live_result(league, next_scheduled_start_at=target),
+        lambda provider, competition: _live_result(competition, next_scheduled_start_at=target),
     )
 
     next_seconds, result = scheduler._run_live_sync_job("MLB")
@@ -193,19 +193,19 @@ def test_run_live_sync_job_uses_live_interval_when_start_is_overdue(monkeypatch)
     monkeypatch.setattr(
         scheduler,
         "run_live_sync",
-        lambda provider, league: _live_result(league, next_scheduled_start_at=start),
+        lambda provider, competition: _live_result(competition, next_scheduled_start_at=start),
     )
 
     next_seconds, _ = scheduler._run_live_sync_job("MLB")
 
-    assert next_seconds == get_league_profile("MLB").live_sync_interval_seconds
+    assert next_seconds == get_competition_profile("MLB").live_sync_interval_seconds
 
 
 def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
     monkeypatch.setattr(
         scheduler,
         "run_live_sync",
-        lambda provider, league: _live_result(league),
+        lambda provider, competition: _live_result(competition),
     )
 
     next_seconds, result = scheduler._run_live_sync_job("MLB")
@@ -215,7 +215,7 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("league", "interval"),
+    ("competition", "interval"),
     [
         ("MLB", 300),
         ("MLS", 180),
@@ -224,24 +224,24 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
         ("WORLD_CUP", 180),
     ],
 )
-def test_run_live_sync_job_uses_league_live_interval(monkeypatch, league, interval):
+def test_run_live_sync_job_uses_competition_live_interval(monkeypatch, competition, interval):
     monkeypatch.setattr(
         scheduler,
         "run_live_sync",
-        lambda provider, league: _live_result(league, has_live_games=True),
+        lambda provider, competition: _live_result(competition, has_live_games=True),
     )
 
-    next_seconds, result = scheduler._run_live_sync_job(league)
+    next_seconds, result = scheduler._run_live_sync_job(competition)
 
     assert next_seconds == interval
-    assert result.league == league
+    assert result.competition == competition
 
 
 def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
     monkeypatch.setattr(
         scheduler,
         "run_live_sync",
-        lambda provider, league: _live_result(league, alerts_created=2),
+        lambda provider, competition: _live_result(competition, alerts_created=2),
     )
 
     _, result = scheduler._run_live_sync_job("MLB")
@@ -254,12 +254,12 @@ def test_run_catalog_sync_job_uses_fixed_cadence_and_pulls_live_forward(monkeypa
     monkeypatch.setattr(
         scheduler,
         "run_catalog_sync",
-        lambda provider, league: _catalog_result(league, next_live_sync_at=target),
+        lambda provider, competition: _catalog_result(competition, next_live_sync_at=target),
     )
     called = []
 
-    def fake_pull(jobs, league, desired):
-        called.append((jobs, league, desired))
+    def fake_pull(jobs, competition, desired):
+        called.append((jobs, competition, desired))
 
     monkeypatch.setattr(scheduler, "_pull_live_sync_forward", fake_pull)
 
@@ -268,7 +268,7 @@ def test_run_catalog_sync_job_uses_fixed_cadence_and_pulls_live_forward(monkeypa
 
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
     assert called == [(jobs, "MLB", target)]
-    assert result.league == "MLB"
+    assert result.competition == "MLB"
 
 
 @pytest.mark.parametrize(
@@ -282,7 +282,7 @@ def test_sync_job_wrappers_propagate_failures(monkeypatch, runner, wrapper):
     monkeypatch.setattr(
         scheduler,
         runner,
-        lambda provider, league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+        lambda provider, competition: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
     )
 
     with pytest.raises(RuntimeError, match="provider unavailable"):
@@ -306,7 +306,7 @@ def test_log_job_success_emits_compact_summary(caplog):
         )
 
     assert (
-        "Job completed job_type=live_sync league=MLB duration_ms=145 "
+        "Job completed job_type=live_sync competition=MLB duration_ms=145 "
         "next_run_seconds=300 games_checked=23 games_updated=2 alerts_created=1 "
         "has_live_games=True mode=live"
     ) in caplog.text
@@ -329,7 +329,7 @@ def test_log_catalog_success_includes_all_job_counts(caplog):
 
     assert caplog.text.count("Job completed") == 1
     assert (
-        "Job completed job_type=catalog_sync league=MLB duration_ms=210 next_run_seconds=43200 "
+        "Job completed job_type=catalog_sync competition=MLB duration_ms=210 next_run_seconds=43200 "
         "games_checked=12 games_updated=3 alerts_created=2 odds_candidates=4 "
         "odds_snapshots_created=1 games_removed=5"
     ) in caplog.text

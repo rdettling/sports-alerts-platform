@@ -16,7 +16,7 @@ from app.schemas.alert import (
     AlertHistoryResponse,
 )
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
-from app.services.leagues import get_active_leagues, get_alert_types, get_league_profile
+from app.services.competitions import competition_teams_query, get_active_competitions, get_alert_types, get_competition_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -64,8 +64,8 @@ ADMIN_TEST_SPORT_OVERRIDES = {
 }
 
 
-def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
-    teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc()).limit(2)).all()
+def _resolve_admin_test_teams(db: Session, competition: str) -> tuple[Team, Team]:
+    teams = db.scalars(competition_teams_query(competition).order_by(Team.id.asc()).limit(2)).all()
     if len(teams) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough teams available for test alerts")
     return teams[0], teams[1]
@@ -74,17 +74,17 @@ def _resolve_admin_test_teams(db: Session, league: str) -> tuple[Team, Team]:
 def _build_admin_test_objects(
     *,
     user_id: int,
-    league: str,
+    competition: str,
     alert_type: str,
     away_team: Team,
     home_team: Team,
 ) -> tuple[Game, Alert]:
-    sport = get_league_profile(league).sport
+    sport = get_competition_profile(competition).sport
     state = ADMIN_TEST_SPORT_OVERRIDES.get((sport, alert_type), ADMIN_TEST_GAME_STATES[alert_type])
     game = Game(
         id=0,
         external_game_id="admin-test",
-        league=league,
+        competition=competition,
         home_team_id=home_team.id,
         away_team_id=away_team.id,
         scheduled_start_time=datetime.now(timezone.utc) + state.start_offset,
@@ -127,7 +127,7 @@ def get_alert_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AlertHistoryResponse:
-    active_leagues = get_active_leagues(db)
+    active_competitions = get_active_competitions(db)
     home_team = aliased(Team)
     away_team = aliased(Team)
     stmt = (
@@ -136,7 +136,7 @@ def get_alert_history(
         .join(home_team, home_team.id == Game.home_team_id)
         .join(away_team, away_team.id == Game.away_team_id)
         .where(Alert.user_id == current_user.id)
-        .where(Game.league.in_(active_leagues))
+        .where(Game.competition.in_(active_competitions))
     )
     if alert_type:
         stmt = stmt.where(Alert.alert_type == alert_type)
@@ -184,25 +184,25 @@ def create_admin_test_alert(
     current_user: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
 ) -> AdminTestAlertResponse:
-    league = payload.league.strip().upper()
+    competition = payload.competition.strip().upper()
     try:
-        allowed_alert_types = set(get_alert_types(league))
+        allowed_alert_types = set(get_alert_types(competition))
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league") from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid competition") from exc
     if not allowed_alert_types:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid league")
-    if league not in set(get_active_leagues(db)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="League is disabled")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid competition")
+    if competition not in set(get_active_competitions(db)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is disabled")
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid alert type '{payload.alert_type}' for league '{league}'",
+            detail=f"Invalid alert type '{payload.alert_type}' for competition '{competition}'",
         )
 
-    away_team, home_team = _resolve_admin_test_teams(db, league)
+    away_team, home_team = _resolve_admin_test_teams(db, competition)
     target_game, alert = _build_admin_test_objects(
         user_id=current_user.id,
-        league=league,
+        competition=competition,
         alert_type=payload.alert_type,
         away_team=away_team,
         home_team=home_team,
@@ -236,7 +236,7 @@ def create_admin_test_alert(
         deliveries.append(push_delivery)
     db.commit()
     return AdminTestAlertResponse(
-        league=league,
+        competition=competition,
         alert_type=payload.alert_type,
         deliveries=[
             AlertDeliveryOut(

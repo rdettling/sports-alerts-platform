@@ -1,28 +1,28 @@
 import { useState } from "react";
 
-import { type League, type LeagueSetting } from "../../../../shared/api";
-import { LeagueTabs, ScopeToggle } from "../DashboardFilters";
+import { type Competition, type CompetitionSetting } from "../../../../shared/api";
+import { CompetitionTabs, ScopeToggle } from "../DashboardFilters";
 import { type DayOption, localDateKey } from "./games-view-utils";
 
 export function GamesFilterToolbar({
-  activeLeagues,
-  leagueFilter,
-  onLeagueFilterChange,
+  activeCompetitions,
+  competitionFilter,
+  onCompetitionFilterChange,
   dayFilter,
   onDayFilterChange,
-  totalLeagueGames,
+  totalCompetitionGames,
   dayOptions,
   showScopeFilter,
   gameScope,
   onGameScopeChange,
   followedGameCount,
 }: {
-  activeLeagues: LeagueSetting[];
-  leagueFilter: "all" | League;
-  onLeagueFilterChange: (value: "all" | League) => void;
+  activeCompetitions: CompetitionSetting[];
+  competitionFilter: "all" | Competition;
+  onCompetitionFilterChange: (value: "all" | Competition) => void;
   dayFilter: "all" | string;
   onDayFilterChange: (value: "all" | string) => void;
-  totalLeagueGames: number;
+  totalCompetitionGames: number;
   dayOptions: DayOption[];
   showScopeFilter: boolean;
   gameScope: "all" | "following";
@@ -51,14 +51,14 @@ export function GamesFilterToolbar({
           onChange={onGameScopeChange}
         />
       ) : null}
-      <LeagueTabs
-        ariaLabel="League"
+      <CompetitionTabs
+        ariaLabel="Competition"
         options={[
-          { value: "all", label: "All", ariaLabel: "All leagues" },
-          ...activeLeagues.map(({ league, label }) => ({ value: league, label })),
+          { value: "all", label: "All", ariaLabel: "All competitions" },
+          ...activeCompetitions.map(({ competition, label }) => ({ value: competition, label })),
         ]}
-        value={leagueFilter}
-        onChange={onLeagueFilterChange}
+        value={competitionFilter}
+        onChange={onCompetitionFilterChange}
       />
       <div className="games-date-filter" role="group" aria-label="Game date">
         <button
@@ -76,7 +76,7 @@ export function GamesFilterToolbar({
           value={dayFilter}
           onChange={(event) => onDayFilterChange(event.target.value)}
         >
-          <option value="all">All dates ({totalLeagueGames})</option>
+          <option value="all">All dates ({totalCompetitionGames})</option>
           {dayOptions.map((day) => (
             <option key={day.key} value={day.key}>
               {day.key === todayKey ? "Today" : day.label} ({day.count})

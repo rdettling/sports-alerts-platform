@@ -1,6 +1,6 @@
 import { apiRequest } from "../client";
 import type {
-  LeagueSetting,
+  CompetitionSetting,
   OpsAdminSummaryResponse,
   OpsAdminOverviewWindow,
   OpsNeonUsageResponse,
@@ -20,12 +20,12 @@ export function getOpsNeonUsage(token: string): Promise<OpsNeonUsageResponse> {
   return apiRequest<OpsNeonUsageResponse>("/ops/db/neon-usage", { token });
 }
 
-export function updateOpsLeagueSetting(
+export function updateOpsCompetitionSetting(
   token: string,
-  league: LeagueSetting["league"],
+  competition: CompetitionSetting["competition"],
   isEnabled: boolean,
-): Promise<LeagueSetting> {
-  return apiRequest<LeagueSetting>(`/ops/leagues/${league}`, {
+): Promise<CompetitionSetting> {
+  return apiRequest<CompetitionSetting>(`/ops/competitions/${competition}`, {
     method: "PUT",
     token,
     body: JSON.stringify({ is_enabled: isEnabled }),

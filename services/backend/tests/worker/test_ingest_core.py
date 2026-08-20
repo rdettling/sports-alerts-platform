@@ -3,8 +3,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Game, LeagueSetting, Team
-from app.services.leagues import ensure_league_settings
+from app.db.models import Game, CompetitionSetting, Team
+from app.services.competitions import competition_teams_query, ensure_competition_settings
 from app.worker.ingest import run_catalog_sync, run_live_sync
 
 from ingest_support import (
@@ -35,11 +35,11 @@ def test_ingest_run_failure(db_session):
 
 def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    teams = db_session.scalars(competition_teams_query("MLB").order_by(Team.id.asc()).limit(2)).all()
     db_session.add(
         Game(
             external_game_id="mlb-upcoming-1",
-            league="MLB",
+            competition="MLB",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=now + timedelta(hours=2),
@@ -49,25 +49,25 @@ def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):
     )
     db_session.commit()
 
-    result = run_live_sync(StaticProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), competition="MLB")
     assert result.has_live_games is False
     assert result.next_scheduled_start_at is not None
     assert result.next_scheduled_start_at.tzinfo is not None
 
 
 def test_live_sync_returns_no_upcoming_when_schedule_empty(db_session):
-    result = run_live_sync(StaticProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), competition="MLB")
     assert result.has_live_games is False
     assert result.next_scheduled_start_at is None
 
 
 def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    teams = db_session.scalars(competition_teams_query("MLB").order_by(Team.id.asc()).limit(2)).all()
     db_session.add(
         Game(
             external_game_id="mlb-overdue-1",
-            league="MLB",
+            competition="MLB",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=now - timedelta(minutes=20),
@@ -77,21 +77,21 @@ def test_live_sync_keeps_recently_overdue_scheduled_games_hot(db_session):
     )
     db_session.commit()
 
-    result = run_live_sync(StaticProvider(), league="MLB")
+    result = run_live_sync(StaticProvider(), competition="MLB")
     assert result.has_live_games is False
     assert result.next_scheduled_start_at is not None
     assert result.next_scheduled_start_at < now
 
 
-def test_catalog_sync_fails_for_disabled_league(db_session):
-    ensure_league_settings(db_session)
-    row = db_session.get(LeagueSetting, "MLB")
+def test_catalog_sync_fails_for_disabled_competition(db_session):
+    ensure_competition_settings(db_session)
+    row = db_session.get(CompetitionSetting, "MLB")
     assert row is not None
     row.is_enabled = False
     db_session.commit()
 
-    with pytest.raises(ValueError, match="League disabled: MLB"):
-        run_catalog_sync(StaticProvider(), league="MLB")
+    with pytest.raises(ValueError, match="Competition disabled: MLB"):
+        run_catalog_sync(StaticProvider(), competition="MLB")
 
 
 def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
@@ -107,8 +107,8 @@ def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
     )
 
     with pytest.raises(RuntimeError, match="No MLS games could be mapped to catalog teams"):
-        run_catalog_sync(provider, league="MLS")
-    assert db_session.scalar(select(Game).where(Game.league == "MLS")) is None
+        run_catalog_sync(provider, competition="MLS")
+    assert db_session.scalar(select(Game).where(Game.competition == "MLS")) is None
 
 
 def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
@@ -130,21 +130,21 @@ def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
         ]
     )
 
-    result = run_catalog_sync(provider, league="MLS")
+    result = run_catalog_sync(provider, competition="MLS")
 
     assert result.games_checked == 2
     assert result.games_updated == 1
-    games = db_session.scalars(select(Game).where(Game.league == "MLS")).all()
+    games = db_session.scalars(select(Game).where(Game.competition == "MLS")).all()
     assert [game.external_game_id for game in games] == ["mls-mapped"]
 
 
 def test_live_sync_promotes_scheduled_game_to_live(db_session):
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    teams = db_session.scalars(select(Team).where(Team.league == "MLB").order_by(Team.id.asc()).limit(2)).all()
+    teams = db_session.scalars(competition_teams_query("MLB").order_by(Team.id.asc()).limit(2)).all()
     db_session.add(
         Game(
             external_game_id="mlb-angels-like",
-            league="MLB",
+            competition="MLB",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=now - timedelta(minutes=15),
@@ -171,24 +171,24 @@ def test_live_sync_promotes_scheduled_game_to_live(db_session):
         ]
     )
 
-    result = run_live_sync(provider, league="MLB")
+    result = run_live_sync(provider, competition="MLB")
     assert result.has_live_games is True
     assert result.games_updated >= 1
 
     db_session.expire_all()
-    game = db_session.scalar(select(Game).where(Game.external_game_id == "mlb-angels-like", Game.league == "MLB"))
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "mlb-angels-like", Game.competition == "MLB"))
     assert game is not None
     assert game.status == "in_progress"
 
 
 def test_ingest_persists_and_refreshes_context_label(db_session):
-    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · NY leads series 3-1"), league="NBA")
+    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · NY leads series 3-1"), competition="NBA")
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "game-context"))
     assert game is not None
     assert game.context_label == "NBA Finals - Game 5 · NY leads series 3-1"
 
-    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · Series tied 3-3"), league="NBA")
+    run_catalog_sync(ContextLabelProvider("NBA Finals - Game 5 · Series tied 3-3"), competition="NBA")
 
     db_session.refresh(game)
     assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"
@@ -196,11 +196,11 @@ def test_ingest_persists_and_refreshes_context_label(db_session):
 
 def test_catalog_cleanup_runs_in_ingest_transaction(db_session):
     now = datetime.now(timezone.utc)
-    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc()).limit(2)).all()
+    teams = db_session.scalars(competition_teams_query("NBA").order_by(Team.id.asc()).limit(2)).all()
     db_session.add(
         Game(
             external_game_id="old-cleanup-game",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=now - timedelta(days=3),
@@ -218,11 +218,11 @@ def test_catalog_cleanup_runs_in_ingest_transaction(db_session):
 
 def test_cleanup_failure_rolls_back_entire_catalog_sync(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
-    teams = db_session.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc()).limit(2)).all()
+    teams = db_session.scalars(competition_teams_query("NBA").order_by(Team.id.asc()).limit(2)).all()
     db_session.add(
         Game(
             external_game_id="existing-before-cleanup-failure",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=now,

@@ -8,7 +8,7 @@ const apiMocks = vi.hoisted(() => ({
   listGames: vi.fn(async () => []),
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
-  listLeagues: vi.fn(async () => []),
+  listCompetitions: vi.fn(async () => []),
 }));
 
 vi.mock("../../../shared/api", () => apiMocks);
@@ -29,7 +29,7 @@ describe("useGamesData", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(apiMocks.listGames).toHaveBeenCalled();
     expect(apiMocks.listTeams).toHaveBeenCalled();
-    expect(apiMocks.listLeagues).toHaveBeenCalled();
+    expect(apiMocks.listCompetitions).toHaveBeenCalled();
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
     expect(result.current.data?.follows).toEqual({ teams: [], games: [] });
   });

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.db.models import UserAlertPreference, UserGameAlertOverride
-from app.services.leagues import get_alert_types, get_league_profile, normalize_league
+from app.services.competitions import get_sport_alert_types, normalize_sport
 
 
 @dataclass(frozen=True)
@@ -14,18 +14,14 @@ class AlertSettings:
     inning_start_threshold: int | None = None
 
 
-def default_alert_settings(league: str, alert_type: str) -> AlertSettings:
-    normalized_league = normalize_league(league)
-    if alert_type not in get_alert_types(normalized_league):
-        raise ValueError(
-            f"Unsupported alert type for {normalized_league}: {alert_type}"
-        )
+def default_alert_settings(sport: str, alert_type: str) -> AlertSettings:
+    normalized_sport = normalize_sport(sport)
+    if alert_type not in get_sport_alert_types(normalized_sport):
+        raise ValueError(f"Unsupported alert type for {normalized_sport}: {alert_type}")
     if alert_type == "close_game_late":
         return AlertSettings(
             is_enabled=True,
-            close_game_margin_threshold=8
-            if get_league_profile(normalized_league).sport == "football"
-            else 5,
+            close_game_margin_threshold=8 if normalized_sport == "football" else 5,
             close_game_time_threshold_seconds=300,
         )
     if alert_type == "inning_start":
@@ -34,12 +30,12 @@ def default_alert_settings(league: str, alert_type: str) -> AlertSettings:
 
 
 def resolve_alert_settings(
-    league: str,
+    sport: str,
     alert_type: str,
     preference: UserAlertPreference | None = None,
     game_override: UserGameAlertOverride | None = None,
 ) -> AlertSettings:
-    defaults = default_alert_settings(league, alert_type)
+    defaults = default_alert_settings(sport, alert_type)
     return AlertSettings(
         is_enabled=_resolve_value(
             defaults.is_enabled,

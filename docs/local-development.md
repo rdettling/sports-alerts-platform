@@ -45,6 +45,14 @@ If you want narrower service checks:
 - Worker: `cd services/backend && uv run pytest -q tests/worker`
 - Web build: `cd apps/web && npm run build`
 
+The destructive reset path has an opt-in Postgres integration test. It only accepts a local Postgres URL whose database name contains `reset_test`:
+
+```sh
+cd services/backend
+POSTGRES_RESET_TEST_DATABASE_URL=postgresql+psycopg://sports:sports@127.0.0.1:5432/sports_reset_test \
+  uv run pytest -q tests/api/test_postgres_reset.py
+```
+
 ## Local Verification Checklist
 
 - `GET /healthz` returns `200`

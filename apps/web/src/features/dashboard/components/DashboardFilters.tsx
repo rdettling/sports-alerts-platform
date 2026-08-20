@@ -1,4 +1,4 @@
-type LeagueTabOption<T extends string> = {
+type CompetitionTabOption<T extends string> = {
   value: T;
   label: string;
   ariaLabel?: string;
@@ -39,23 +39,23 @@ export function ScopeToggle({
   );
 }
 
-export function LeagueTabs<T extends string>({
+export function CompetitionTabs<T extends string>({
   ariaLabel,
   options,
   value,
   onChange,
 }: {
   ariaLabel: string;
-  options: Array<LeagueTabOption<T>>;
+  options: Array<CompetitionTabOption<T>>;
   value: T | null;
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="league-tabs" role="group" aria-label={ariaLabel}>
+    <div className="competition-tabs" role="group" aria-label={ariaLabel}>
       {options.map((option) => (
         <button
           key={option.value}
-          className={`league-tab ${value === option.value ? "active" : ""}`.trim()}
+          className={`competition-tab ${value === option.value ? "active" : ""}`.trim()}
           type="button"
           aria-label={option.ariaLabel}
           aria-pressed={value === option.value}

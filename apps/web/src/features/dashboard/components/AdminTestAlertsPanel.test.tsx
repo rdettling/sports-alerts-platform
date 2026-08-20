@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type LeagueSetting } from "../../../shared/api";
+import { type CompetitionSetting } from "../../../shared/api";
 import { AdminTestAlertsPanel } from "./AdminTestAlertsPanel";
 
 const sendAdminTestAlertMock = vi.hoisted(() => vi.fn());
@@ -11,9 +11,9 @@ vi.mock("../../../shared/api", async () => {
   return { ...actual, sendAdminTestAlert: sendAdminTestAlertMock };
 });
 
-const items: LeagueSetting[] = [
+const items: CompetitionSetting[] = [
   {
-    league: "NBA",
+    competition: "NBA",
     sport: "basketball",
     label: "NBA",
     badge_label: "NBA",
@@ -22,7 +22,7 @@ const items: LeagueSetting[] = [
     is_enabled: true,
   },
   {
-    league: "NFL",
+    competition: "NFL",
     sport: "football",
     label: "NFL",
     badge_label: "NFL",
@@ -31,7 +31,7 @@ const items: LeagueSetting[] = [
     is_enabled: false,
   },
   {
-    league: "MLB",
+    competition: "MLB",
     sport: "baseball",
     label: "MLB",
     badge_label: "MLB",
@@ -50,7 +50,7 @@ describe("AdminTestAlertsPanel", () => {
     }));
   });
 
-  it("shows only enabled leagues and their supported alert actions", () => {
+  it("shows only enabled competitions and their supported alert actions", () => {
     render(<AdminTestAlertsPanel token="token" items={items} />);
 
     expect(screen.queryByRole("button", { name: "NFL" })).toBeNull();
@@ -69,7 +69,7 @@ describe("AdminTestAlertsPanel", () => {
 
     await waitFor(() =>
       expect(sendAdminTestAlertMock).toHaveBeenCalledWith("token", {
-        league: "NBA",
+        competition: "NBA",
         alert_type: "close_game_late",
       }),
     );
@@ -86,7 +86,7 @@ describe("AdminTestAlertsPanel", () => {
     expect(await screen.findByText("Test delivery failed")).toBeInTheDocument();
   });
 
-  it("shows an empty state when every league is disabled", () => {
+  it("shows an empty state when every competition is disabled", () => {
     render(
       <AdminTestAlertsPanel
         token="token"
@@ -94,7 +94,7 @@ describe("AdminTestAlertsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Enable a league to send test alerts.")).toBeInTheDocument();
+    expect(screen.getByText("Enable a competition to send test alerts.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Test alert actions")).toBeNull();
   });
 });

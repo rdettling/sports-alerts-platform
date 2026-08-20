@@ -1,5 +1,5 @@
 from app.worker import odds
-from app.worker.odds import _odds_sport_key_for_league, game_key
+from app.worker.odds import _odds_sport_key_for_competition, game_key
 
 
 def test_blank_api_key_disables_fetch(monkeypatch):
@@ -7,7 +7,7 @@ def test_blank_api_key_disables_fetch(monkeypatch):
     monkeypatch.setattr(
         odds,
         "_fetch_from_provider",
-        lambda _league: (_ for _ in ()).throw(AssertionError("provider should not be called")),
+        lambda _competition: (_ for _ in ()).throw(AssertionError("provider should not be called")),
     )
 
     assert odds.fetch_odds_index("NBA") == {}
@@ -18,7 +18,7 @@ def test_provider_failure_returns_no_odds(monkeypatch, caplog):
     monkeypatch.setattr(
         odds,
         "_fetch_from_provider",
-        lambda _league: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+        lambda _competition: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
     )
 
     with caplog.at_level("WARNING", logger="app.worker.odds"):
@@ -49,19 +49,19 @@ def test_la_liga_name_aliases_match_seeded_names():
     assert game_key("Elche CF", "Barcelona") == game_key("Elche", "Barcelona")
     assert game_key("CA Osasuna", "Levante") == game_key("Osasuna", "Levante")
     assert game_key("Deportivo La Coruña", "Málaga") == game_key("Deportivo", "Málaga")
-    assert _odds_sport_key_for_league("LA_LIGA") == "soccer_spain_la_liga"
+    assert _odds_sport_key_for_competition("LA_LIGA") == "soccer_spain_la_liga"
 
 
-def test_premier_league_names_match_seeded_names():
+def test_premier_competition_names_match_seeded_names():
     assert game_key("Bournemouth", "Manchester City") == game_key("AFC Bournemouth", "Manchester City")
     assert game_key("Brighton and Hove Albion", "Aston Villa") == game_key(
         "Brighton & Hove Albion", "Aston Villa"
     )
-    assert _odds_sport_key_for_league("PREMIER_LEAGUE") == "soccer_epl"
+    assert _odds_sport_key_for_competition("PREMIER_LEAGUE") == "soccer_epl"
 
 
 def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
-    assert _odds_sport_key_for_league("WNBA") == "basketball_wnba"
+    assert _odds_sport_key_for_competition("WNBA") == "basketball_wnba"
     assert game_key("Las Vegas Aces", "New York Liberty") == ("las vegas aces", "new york liberty")
     assert game_key("Golden State Valkyries", "Toronto Tempo") == (
         "golden state valkyries",
@@ -70,7 +70,7 @@ def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
 
 
 def test_nfl_uses_regular_season_odds_feed():
-    assert _odds_sport_key_for_league("NFL") == "americanfootball_nfl"
+    assert _odds_sport_key_for_competition("NFL") == "americanfootball_nfl"
     assert game_key("Buffalo Bills", "Kansas City Chiefs") == (
         "buffalo bills",
         "kansas city chiefs",

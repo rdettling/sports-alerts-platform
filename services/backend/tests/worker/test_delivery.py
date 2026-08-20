@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
 from app.services import alert_delivery, resend
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
+from app.services.competitions import competition_teams_query
 from app.services.email_branding import APP_BRAND_NAME
 
 
@@ -17,7 +18,7 @@ def _seed_alert(db_session) -> tuple[Alert, AlertDelivery]:
     teams = db_session.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
     game = Game(
         external_game_id="delivery-game",
-        league="NBA",
+        competition="NBA",
         home_team_id=teams[0].id,
         away_team_id=teams[1].id,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -249,12 +250,14 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
     db_session.commit()
     db_session.refresh(user)
 
-    teams = db_session.scalars(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()).limit(2)).all()
+    home = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
+    away = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "203"))
+    assert home is not None and away is not None
     game = Game(
         external_game_id="delivery-world-cup-game",
-        league="WORLD_CUP",
-        home_team_id=teams[0].id,
-        away_team_id=teams[1].id,
+        competition="WORLD_CUP",
+        home_team_id=home.id,
+        away_team_id=away.id,
         scheduled_start_time=datetime.now(timezone.utc),
         status="in_progress",
         home_score=2,
@@ -303,7 +306,7 @@ def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, mon
 
     def fake_urlopen(request, timeout):
         body = request.data.decode("utf-8")
-        assert "Score update \\u00b7 USA 2\\u20132 MEX" in body
+        assert "Score update \\u00b7 MEX 2\\u20132 USA" in body
         assert "68'" in body
         return Response()
 

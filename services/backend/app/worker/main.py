@@ -2,7 +2,7 @@ import logging
 import signal
 import threading
 
-from app.services.leagues import get_league_profile, list_supported_leagues
+from app.services.competitions import get_competition_profile, list_supported_competitions
 
 from app.worker import scheduler
 from app.worker.config import settings
@@ -24,8 +24,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop_worker)
 
     live_intervals = ", ".join(
-        f"{league.lower()}={get_league_profile(league).live_sync_interval_seconds}s"
-        for league in list_supported_leagues()
+        f"{competition.lower()}={get_competition_profile(competition).live_sync_interval_seconds}s"
+        for competition in list_supported_competitions()
     )
     logger.info(
         "Worker started intervals(catalog=%ss live=%s)",

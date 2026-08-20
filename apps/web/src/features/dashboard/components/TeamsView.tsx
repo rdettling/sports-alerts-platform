@@ -4,15 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   followTeam,
   listFollows,
-  listLeagues,
+  listCompetitions,
   listTeams,
   type CurrentFollows,
-  type League,
+  type Competition,
   unfollowTeam,
 } from "../../../shared/api";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { LeagueTabs, ScopeToggle } from "./DashboardFilters";
+import { CompetitionTabs, ScopeToggle } from "./DashboardFilters";
 
 const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
 
@@ -25,7 +25,7 @@ export function TeamsView({
 }) {
   const queryClient = useQueryClient();
   const [teamScope, setTeamScope] = useState<"all" | "following">("all");
-  const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
+  const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
   const [teamSearch, setTeamSearch] = useState("");
   const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,17 +37,17 @@ export function TeamsView({
   } = useQuery({
     queryKey: ["teams-page", token ?? "anonymous"],
     queryFn: async () => {
-      const [teams, leagues, follows] = await Promise.all([
+      const [teams, competitions, follows] = await Promise.all([
         listTeams(),
-        listLeagues(),
+        listCompetitions(),
         token ? listFollows(token) : Promise.resolve(EMPTY_FOLLOWS),
       ]);
-      return { teams, leagues, follows };
+      return { teams, competitions, follows };
     },
     refetchInterval: 120_000,
   });
 
-  const leagues = data?.leagues ?? [];
+  const competitions = data?.competitions ?? [];
   const followedTeamIds = useMemo(
     () => new Set((data?.follows.teams ?? []).map((team) => team.id)),
     [data?.follows.teams],
@@ -58,15 +58,20 @@ export function TeamsView({
   }, [teamScope, token]);
 
   useEffect(() => {
-    if (leagueFilter !== "all" && !leagues.some((item) => item.league === leagueFilter)) {
-      setLeagueFilter("all");
+    if (
+      competitionFilter !== "all" &&
+      !competitions.some((item) => item.competition === competitionFilter)
+    ) {
+      setCompetitionFilter("all");
     }
-  }, [leagueFilter, leagues]);
+  }, [competitionFilter, competitions]);
 
   const visibleTeams = useMemo(() => {
     const search = teamSearch.trim().toLowerCase();
     return [...(data?.teams ?? [])]
-      .filter((team) => leagueFilter === "all" || team.league === leagueFilter)
+      .filter(
+        (team) => competitionFilter === "all" || team.competitions.includes(competitionFilter),
+      )
       .filter((team) => teamScope === "all" || followedTeamIds.has(team.id))
       .filter(
         (team) => !search || `${team.name} ${team.abbreviation}`.toLowerCase().includes(search),
@@ -76,19 +81,22 @@ export function TeamsView({
           Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
         return followedDifference || a.name.localeCompare(b.name);
       });
-  }, [data?.teams, followedTeamIds, leagueFilter, teamScope, teamSearch]);
+  }, [data?.teams, followedTeamIds, competitionFilter, teamScope, teamSearch]);
 
-  const teamGroups = useMemo(
-    () =>
-      leagues
-        .filter((league) => leagueFilter === "all" || league.league === leagueFilter)
-        .map((league) => ({
-          league: league.league,
-          label: league.label,
-          teams: visibleTeams.filter((team) => team.league === league.league),
-        }))
-        .filter((group) => group.teams.length > 0),
-    [leagueFilter, leagues, visibleTeams],
+  const teamGroups = useMemo(() => {
+    if (visibleTeams.length === 0) return [];
+    const selectedCompetition = competitions.find((item) => item.competition === competitionFilter);
+    return [
+      {
+        competition: competitionFilter,
+        label: selectedCompetition?.label ?? "All teams",
+        teams: visibleTeams,
+      },
+    ];
+  }, [competitionFilter, competitions, visibleTeams]);
+  const competitionLabels = useMemo(
+    () => new Map(competitions.map((item) => [item.competition, item.badge_label] as const)),
+    [competitions],
   );
 
   const toggleMutation = useMutation({
@@ -135,17 +143,17 @@ export function TeamsView({
               />
             ) : null}
 
-            <LeagueTabs
-              ariaLabel="League filter"
+            <CompetitionTabs
+              ariaLabel="Competition filter"
               options={[
                 { value: "all", label: "All" },
-                ...leagues.map((league) => ({
-                  value: league.league,
-                  label: league.label,
+                ...competitions.map((competition) => ({
+                  value: competition.competition,
+                  label: competition.label,
                 })),
               ]}
-              value={leagueFilter}
-              onChange={setLeagueFilter}
+              value={competitionFilter}
+              onChange={setCompetitionFilter}
             />
 
             <input
@@ -162,16 +170,16 @@ export function TeamsView({
 
           <section className="teams-results-scroll" aria-label="Team directory">
             {teamGroups.length > 0 ? (
-              <div className="teams-league-list">
+              <div className="teams-competition-list">
                 {teamGroups.map((group) => {
-                  const headingId = `teams-league-${group.league.toLowerCase()}`;
+                  const headingId = `teams-competition-${group.competition.toLowerCase()}`;
                   return (
                     <section
-                      key={group.league}
-                      className="teams-league-board surface"
+                      key={group.competition}
+                      className="teams-competition-board surface"
                       aria-labelledby={headingId}
                     >
-                      <div className="teams-league-header surface-header">
+                      <div className="teams-competition-header surface-header">
                         <h2 id={headingId}>{group.label}</h2>
                         <span>
                           {group.teams.length} {group.teams.length === 1 ? "team" : "teams"}
@@ -189,7 +197,14 @@ export function TeamsView({
                                 <TeamLogo team={team} size={30} />
                                 <span className="team-directory-copy">
                                   <strong title={team.name}>{team.name}</strong>
-                                  <span>{team.abbreviation}</span>
+                                  <span className="team-directory-meta">
+                                    <span>{team.abbreviation}</span>
+                                    {team.competitions.map((competition) => (
+                                      <span className="team-competition-badge" key={competition}>
+                                        {competitionLabels.get(competition) ?? competition}
+                                      </span>
+                                    ))}
+                                  </span>
                                 </span>
                               </span>
                               <button

@@ -220,12 +220,12 @@
   text-decoration: underline;
 }
 
-.admin-league-settings-list,
+.admin-competition-settings-list,
 .admin-action-list {
   display: grid;
 }
 
-.admin-league-setting-btn:last-child,
+.admin-competition-setting-btn:last-child,
 .admin-test-btn:last-child {
   border-bottom: 0;
 }
@@ -240,7 +240,7 @@
   gap: 0.75rem;
 }
 
-.admin-league-setting-btn,
+.admin-competition-setting-btn,
 .admin-test-btn {
   display: flex;
   align-items: center;
@@ -256,19 +256,19 @@
   text-align: left;
 }
 
-.admin-league-setting-btn:hover:not(:disabled),
+.admin-competition-setting-btn:hover:not(:disabled),
 .admin-test-btn:hover:not(:disabled) {
   background: #f8fafc;
 }
 
-.admin-league-setting-main {
+.admin-competition-setting-main {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
 }
 
-.admin-league-setting-mark {
+.admin-competition-setting-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -277,37 +277,37 @@
   height: 1.875rem;
 }
 
-.admin-league-setting-logo {
+.admin-competition-setting-logo {
   width: 1.35rem;
   height: 1.35rem;
   object-fit: contain;
 }
 
-.admin-league-setting-logo.league-mlb {
+.admin-competition-setting-logo.competition-mlb {
   width: 1.55rem;
 }
 
-.admin-league-setting-logo.league-mls,
-.admin-league-setting-logo.league-la_liga,
-.admin-league-setting-logo.league-premier_league,
-.admin-league-setting-logo.league-world_cup {
+.admin-competition-setting-logo.competition-mls,
+.admin-competition-setting-logo.competition-la_liga,
+.admin-competition-setting-logo.competition-premier_competition,
+.admin-competition-setting-logo.competition-world_cup {
   width: 1.2rem;
   height: 1.2rem;
 }
 
-.admin-league-setting-fallback {
+.admin-competition-setting-fallback {
   color: var(--accent);
   font-size: 0.7rem;
   font-weight: 750;
 }
 
-.admin-league-setting-copy {
+.admin-competition-setting-copy {
   display: grid;
   gap: 0.05rem;
   min-width: 0;
 }
 
-.admin-league-setting-copy strong,
+.admin-competition-setting-copy strong,
 .admin-test-btn > span:first-child {
   overflow: hidden;
   font-size: 0.75rem;
@@ -316,15 +316,15 @@
   white-space: nowrap;
 }
 
-.admin-league-setting-copy span,
-.admin-league-setting-action,
+.admin-competition-setting-copy span,
+.admin-competition-setting-action,
 .admin-test-btn > span:last-child {
   color: var(--text-muted);
   font-size: 0.675rem;
   font-weight: 625;
 }
 
-.admin-league-setting-action,
+.admin-competition-setting-action,
 .admin-test-btn > span:last-child {
   flex: 0 0 auto;
   color: var(--accent);
@@ -357,7 +357,7 @@
     flex-direction: row;
   }
 
-  .admin-tools-header .league-tabs {
+  .admin-tools-header .competition-tabs {
     max-width: 60%;
   }
 }
@@ -415,7 +415,7 @@
     border-right: 0;
   }
 
-  .admin-tools-header .league-tabs {
+  .admin-tools-header .competition-tabs {
     width: 100%;
     max-width: none;
   }

@@ -10,7 +10,7 @@ def test_cleanup_removes_games_outside_window(db_session):
     teams = db_session.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
     old_game = Game(
         external_game_id="old-outside-window",
-        league="NBA",
+        competition="NBA",
         home_team_id=teams[0].id,
         away_team_id=teams[1].id,
         scheduled_start_time=datetime.now(timezone.utc) - timedelta(days=8),
@@ -19,7 +19,7 @@ def test_cleanup_removes_games_outside_window(db_session):
     )
     current_game = Game(
         external_game_id="current-in-window",
-        league="NBA",
+        competition="NBA",
         home_team_id=teams[0].id,
         away_team_id=teams[1].id,
         scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),

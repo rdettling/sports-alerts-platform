@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
 
-class LeagueSettingOut(BaseModel):
-    league: str
+class CompetitionSettingOut(BaseModel):
+    competition: str
     sport: str
     label: str
     badge_label: str
@@ -11,5 +11,5 @@ class LeagueSettingOut(BaseModel):
     is_enabled: bool
 
 
-class UpdateLeagueSettingRequest(BaseModel):
+class UpdateCompetitionSettingRequest(BaseModel):
     is_enabled: bool

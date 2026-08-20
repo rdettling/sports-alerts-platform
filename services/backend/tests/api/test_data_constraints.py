@@ -7,10 +7,20 @@ from app.db.models import Alert, AlertDelivery, Team, User, UserTeamFollow
 from app.db.session import SessionLocal
 
 
+def _team(external_team_id: str, name: str, abbreviation: str) -> Team:
+    return Team(
+        sport="basketball",
+        provider_scope="constraints",
+        external_team_id=external_team_id,
+        name=name,
+        abbreviation=abbreviation,
+    )
+
+
 def test_user_team_follow_unique_constraint():
     db = SessionLocal()
     user = User(email="u@example.com")
-    team = Team(external_team_id="1", league="NBA", name="Atlanta Hawks", abbreviation="ATL")
+    team = _team("1", "Atlanta Hawks", "ATL")
     db.add_all([user, team])
     db.commit()
     db.refresh(user)
@@ -29,8 +39,8 @@ def test_user_team_follow_unique_constraint():
 def test_alert_event_key_unique():
     db = SessionLocal()
     user = User(email="v@example.com")
-    home = Team(external_team_id="2", league="NBA", name="Boston Celtics", abbreviation="BOS")
-    away = Team(external_team_id="17", league="NBA", name="Brooklyn Nets", abbreviation="BKN")
+    home = _team("2", "Boston Celtics", "BOS")
+    away = _team("17", "Brooklyn Nets", "BKN")
     db.add_all([user, home, away])
     db.commit()
     db.refresh(user)
@@ -41,7 +51,7 @@ def test_alert_event_key_unique():
 
     game = Game(
         external_game_id="game-1",
-        league="NBA",
+        competition="NBA",
         home_team_id=home.id,
         away_team_id=away.id,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -70,8 +80,8 @@ def test_alert_event_key_unique():
 def test_alert_delivery_channel_unique_per_alert():
     db = SessionLocal()
     user = User(email="delivery-constraint@example.com")
-    home = Team(external_team_id="constraint-home", league="NBA", name="Home", abbreviation="HOM")
-    away = Team(external_team_id="constraint-away", league="NBA", name="Away", abbreviation="AWY")
+    home = _team("constraint-home", "Home", "HOM")
+    away = _team("constraint-away", "Away", "AWY")
     db.add_all([user, home, away])
     db.commit()
 
@@ -79,7 +89,7 @@ def test_alert_delivery_channel_unique_per_alert():
 
     game = Game(
         external_game_id="delivery-constraint-game",
-        league="NBA",
+        competition="NBA",
         home_team_id=home.id,
         away_team_id=away.id,
         scheduled_start_time=datetime.now(timezone.utc),

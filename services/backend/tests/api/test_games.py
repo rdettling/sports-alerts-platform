@@ -2,8 +2,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, LeagueSetting, Team
+from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, CompetitionSetting, Team
 from app.db.session import SessionLocal
+from app.services.competitions import competition_teams_query
 
 
 def _create_game() -> Game:
@@ -12,7 +13,7 @@ def _create_game() -> Game:
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
         game = Game(
             external_game_id="test-odds-game",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -33,7 +34,7 @@ def _create_old_game() -> None:
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
         old_game = Game(
             external_game_id="test-old-game",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) - timedelta(days=10),
@@ -81,10 +82,10 @@ def test_games_include_odds_when_available(client):
 def test_games_include_world_cup_draw_odds(client):
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(competition_teams_query("WORLD_CUP").order_by(Team.id.asc()).limit(2)).all()
         game = Game(
             external_game_id="test-world-cup-odds",
-            league="WORLD_CUP",
+            competition="WORLD_CUP",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -111,7 +112,7 @@ def test_games_include_world_cup_draw_odds(client):
     finally:
         db.close()
 
-    response = client.get("/games?league=WORLD_CUP")
+    response = client.get("/games?competition=WORLD_CUP")
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
@@ -128,7 +129,7 @@ def test_games_excludes_rows_outside_retention_window(client):
     assert payload[0]["external_game_id"] == "test-odds-game"
 
 
-def test_games_supports_league_filter(client):
+def test_games_supports_competition_filter(client):
     _create_game()
     db = SessionLocal()
     try:
@@ -136,7 +137,7 @@ def test_games_supports_league_filter(client):
         db.add(
             Game(
                 external_game_id="test-mlb-game",
-                league="MLB",
+                competition="MLB",
                 home_team_id=teams[0].id,
                 away_team_id=teams[1].id,
                 scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=3),
@@ -148,11 +149,11 @@ def test_games_supports_league_filter(client):
     finally:
         db.close()
 
-    response = client.get("/games?league=NBA")
+    response = client.get("/games?competition=NBA")
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
-    assert payload[0]["league"] == "NBA"
+    assert payload[0]["competition"] == "NBA"
 
 
 def test_games_include_finals_when_requested(client):
@@ -162,7 +163,7 @@ def test_games_include_finals_when_requested(client):
         db.add(
             Game(
                 external_game_id="test-final-game",
-                league="MLB",
+                competition="MLB",
                 home_team_id=teams[0].id,
                 away_team_id=teams[1].id,
                 scheduled_start_time=datetime.now(timezone.utc) - timedelta(hours=1),
@@ -174,28 +175,28 @@ def test_games_include_finals_when_requested(client):
     finally:
         db.close()
 
-    default_response = client.get("/games?league=MLB")
+    default_response = client.get("/games?competition=MLB")
     assert default_response.status_code == 200
     default_ids = {row["external_game_id"] for row in default_response.json()}
     assert "test-final-game" not in default_ids
 
-    include_response = client.get("/games?league=MLB&include_finals=true&limit=200")
+    include_response = client.get("/games?competition=MLB&include_finals=true&limit=200")
     assert include_response.status_code == 200
     include_ids = {row["external_game_id"] for row in include_response.json()}
     assert "test-final-game" in include_ids
 
 
-def test_games_hide_disabled_league(client):
+def test_games_hide_disabled_competition(client):
     db = SessionLocal()
     try:
-        settings = db.get(LeagueSetting, "MLB")
+        settings = db.get(CompetitionSetting, "MLB")
         assert settings is not None
         settings.is_enabled = False
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
         db.add(
             Game(
                 external_game_id="hidden-mlb-game",
-                league="MLB",
+                competition="MLB",
                 home_team_id=teams[0].id,
                 away_team_id=teams[1].id,
                 scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -219,7 +220,7 @@ def test_games_return_context_label(client):
         db.add(
             Game(
                 external_game_id="test-context-game",
-                league="NBA",
+                competition="NBA",
                 home_team_id=teams[0].id,
                 away_team_id=teams[1].id,
                 scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -232,7 +233,7 @@ def test_games_return_context_label(client):
     finally:
         db.close()
 
-    response = client.get("/games?league=NBA")
+    response = client.get("/games?competition=NBA")
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
@@ -242,11 +243,11 @@ def test_games_return_context_label(client):
 def test_games_filter_by_wnba(client):
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).where(Team.league == "WNBA").order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(competition_teams_query("WNBA").order_by(Team.id.asc()).limit(2)).all()
         db.add(
             Game(
                 external_game_id="test-wnba-game",
-                league="WNBA",
+                competition="WNBA",
                 home_team_id=teams[0].id,
                 away_team_id=teams[1].id,
                 scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -258,7 +259,7 @@ def test_games_filter_by_wnba(client):
     finally:
         db.close()
 
-    response = client.get("/games?league=WNBA")
+    response = client.get("/games?competition=WNBA")
 
     assert response.status_code == 200
     assert [game["external_game_id"] for game in response.json()] == ["test-wnba-game"]

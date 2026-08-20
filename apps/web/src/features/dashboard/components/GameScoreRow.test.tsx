@@ -8,7 +8,8 @@ function makeTeam(id: number, abbreviation: string, name: string): Team {
   return {
     id,
     external_team_id: abbreviation,
-    league: "NBA",
+    sport: "basketball",
+    competitions: ["NBA"],
     name,
     abbreviation,
   };
@@ -18,7 +19,7 @@ function makeGame(overrides: Partial<Game> = {}): Game {
   return {
     id: 11,
     external_game_id: "ext-11",
-    league: "NBA",
+    competition: "NBA",
     home_team_id: 1,
     away_team_id: 2,
     scheduled_start_time: "2026-05-28T01:00:00Z",
@@ -46,7 +47,7 @@ describe("GameScoreRow", () => {
   const home = makeTeam(1, "BOS", "Boston Celtics");
   const away = makeTeam(2, "ATL", "Atlanta Hawks");
 
-  it("shows full team names, abbreviations, raw odds, and league identity", () => {
+  it("shows full team names, abbreviations, raw odds, and competition identity", () => {
     render(
       <GameScoreRow
         game={makeGame()}
@@ -181,7 +182,7 @@ describe("GameScoreRow", () => {
     render(
       <GameScoreRow
         game={makeGame({
-          league: "WORLD_CUP",
+          competition: "WORLD_CUP",
           odds: {
             bookmaker: null,
             last_update: null,
@@ -203,8 +204,8 @@ describe("GameScoreRow", () => {
           },
         })}
         sport="soccer"
-        home={{ ...home, league: "WORLD_CUP" }}
-        away={{ ...away, league: "WORLD_CUP" }}
+        home={{ ...home, sport: "soccer", competitions: ["WORLD_CUP"] }}
+        away={{ ...away, sport: "soccer", competitions: ["WORLD_CUP"] }}
         isFollowed={false}
         statusLabel="7:00 PM"
       />,
@@ -215,10 +216,10 @@ describe("GameScoreRow", () => {
     expect(screen.getByRole("img", { name: "WC logo" })).toBeInTheDocument();
   });
 
-  it("uses a text fallback when a league has no logo", () => {
+  it("uses a text fallback when a competition has no logo", () => {
     render(
       <GameScoreRow
-        game={makeGame({ league: "UNKNOWN" as Game["league"] })}
+        game={makeGame({ competition: "UNKNOWN" as Game["competition"] })}
         sport="basketball"
         home={home}
         away={away}
@@ -230,16 +231,23 @@ describe("GameScoreRow", () => {
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
   });
 
-  it("keeps MLS league and team logo URLs", () => {
+  it("keeps MLS competition and team logo URLs", () => {
     render(
       <GameScoreRow
-        game={makeGame({ league: "MLS" })}
+        game={makeGame({ competition: "MLS" })}
         sport="soccer"
-        home={{ ...home, external_team_id: "187", league: "MLS", name: "LA Galaxy" }}
+        home={{
+          ...home,
+          sport: "soccer",
+          external_team_id: "187",
+          competitions: ["MLS"],
+          name: "LA Galaxy",
+        }}
         away={{
           ...away,
           external_team_id: "18966",
-          league: "MLS",
+          sport: "soccer",
+          competitions: ["MLS"],
           name: "LAFC",
           abbreviation: "LAFC",
         }}
@@ -261,19 +269,21 @@ describe("GameScoreRow", () => {
   it("shows La Liga identity and club logo URLs", () => {
     render(
       <GameScoreRow
-        game={makeGame({ league: "LA_LIGA" })}
+        game={makeGame({ competition: "LA_LIGA" })}
         sport="soccer"
         home={{
           ...home,
           external_team_id: "83",
-          league: "LA_LIGA",
+          sport: "soccer",
+          competitions: ["LA_LIGA"],
           name: "Barcelona",
           abbreviation: "BAR",
         }}
         away={{
           ...away,
           external_team_id: "86",
-          league: "LA_LIGA",
+          sport: "soccer",
+          competitions: ["LA_LIGA"],
           name: "Real Madrid",
           abbreviation: "RMA",
         }}
@@ -299,19 +309,21 @@ describe("GameScoreRow", () => {
   it("shows Premier League identity and club logo URLs", () => {
     render(
       <GameScoreRow
-        game={makeGame({ league: "PREMIER_LEAGUE" })}
+        game={makeGame({ competition: "PREMIER_LEAGUE" })}
         sport="soccer"
         home={{
           ...home,
           external_team_id: "359",
-          league: "PREMIER_LEAGUE",
+          sport: "soccer",
+          competitions: ["PREMIER_LEAGUE"],
           name: "Arsenal",
           abbreviation: "ARS",
         }}
         away={{
           ...away,
           external_team_id: "364",
-          league: "PREMIER_LEAGUE",
+          sport: "soccer",
+          competitions: ["PREMIER_LEAGUE"],
           name: "Liverpool",
           abbreviation: "LIV",
         }}
@@ -337,19 +349,21 @@ describe("GameScoreRow", () => {
   it("shows NFL identity, team logos, and two-way moneyline odds", () => {
     render(
       <GameScoreRow
-        game={makeGame({ league: "NFL" })}
+        game={makeGame({ competition: "NFL" })}
         sport="football"
         home={{
           ...home,
           external_team_id: "2",
-          league: "NFL",
+          sport: "football",
+          competitions: ["NFL"],
           name: "Buffalo Bills",
           abbreviation: "BUF",
         }}
         away={{
           ...away,
           external_team_id: "12",
-          league: "NFL",
+          sport: "football",
+          competitions: ["NFL"],
           name: "Kansas City Chiefs",
           abbreviation: "KC",
         }}

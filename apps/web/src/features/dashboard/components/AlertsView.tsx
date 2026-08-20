@@ -3,15 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listAlertHistory,
   listAlertPreferences,
-  listLeagues,
   updateAlertPreference,
   type AlertHistoryItem,
   type AlertPreference,
   type AlertPreferenceGroup,
-  type League,
+  type Sport,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { LeagueTabs } from "./DashboardFilters";
+import { CompetitionTabs } from "./DashboardFilters";
 import { AlertDeliverySettings } from "./alerts/AlertDeliverySettings";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
 import {
@@ -19,6 +18,13 @@ import {
   getRuleFieldValue,
   ruleFieldsFor,
 } from "./alerts/alert-rule-config";
+
+const SPORT_LABELS: Record<Sport, string> = {
+  basketball: "Basketball",
+  football: "Football",
+  baseball: "Baseball",
+  soccer: "Soccer",
+};
 
 function localDayKey(dateIso: string): string {
   const date = new Date(dateIso);
@@ -38,33 +44,28 @@ function historyDayLabel(dateIso: string): string {
 }
 
 export function AlertsView({ token }: { token: string }) {
-  const [activeLeague, setActiveLeague] = useState<League | null>(null);
+  const [activeSport, setActiveSport] = useState<Sport | null>(null);
   const [busyAlertType, setBusyAlertType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [preferenceGroups, setPreferenceGroups] = useState<AlertPreferenceGroup[]>([]);
   const [historyItems, setHistoryItems] = useState<AlertHistoryItem[]>([]);
-  const [activeLeagues, setActiveLeagues] = useState<
-    Array<{ league: League; label: string; alert_types: string[] }>
-  >([]);
 
   const loadAlertData = useCallback(
     async (showLoading = false) => {
       setError(null);
       if (showLoading) setLoading(true);
       try {
-        const [preferenceResponse, historyResponse, leaguesResponse] = await Promise.all([
+        const [preferenceResponse, historyResponse] = await Promise.all([
           listAlertPreferences(token),
           listAlertHistory(token, { sinceHours: 24 * 7, limit: 100 }),
-          listLeagues(),
         ]);
         setPreferenceGroups(preferenceResponse);
         setHistoryItems(historyResponse.items);
-        setActiveLeagues(leaguesResponse);
-        setActiveLeague((current) =>
-          current && leaguesResponse.some((item) => item.league === current)
+        setActiveSport((current) =>
+          current && preferenceResponse.some((item) => item.sport === current)
             ? current
-            : (leaguesResponse[0]?.league ?? null),
+            : (preferenceResponse[0]?.sport ?? null),
         );
       } finally {
         if (showLoading) setLoading(false);
@@ -96,19 +97,19 @@ export function AlertsView({ token }: { token: string }) {
           fieldValue: number;
         },
   ) => {
-    const busyKey = `${preference.league}:${preference.alert_type}`;
+    const busyKey = `${preference.sport}:${preference.alert_type}`;
     setError(null);
     setBusyAlertType(busyKey);
     try {
       const updated = await updateAlertPreference(
         token,
-        preference.league,
+        preference.sport,
         preference.alert_type,
         buildAlertSettingsPayload(preference, change),
       );
       setPreferenceGroups((groups) =>
         groups.map((group) =>
-          group.league === updated.league
+          group.sport === updated.sport
             ? {
                 ...group,
                 preferences: group.preferences.map((item) =>
@@ -126,16 +127,9 @@ export function AlertsView({ token }: { token: string }) {
   };
 
   const activeGroup = useMemo(() => {
-    if (!activeLeague) return null;
-    const raw = preferenceGroups.find((group) => group.league === activeLeague) ?? null;
-    if (!raw) return null;
-    const league = activeLeagues.find((item) => item.league === activeLeague);
-    const allowed = new Set(league?.alert_types ?? []);
-    return {
-      ...raw,
-      preferences: raw.preferences.filter((preference) => allowed.has(preference.alert_type)),
-    };
-  }, [activeLeague, activeLeagues, preferenceGroups]);
+    if (!activeSport) return null;
+    return preferenceGroups.find((group) => group.sport === activeSport) ?? null;
+  }, [activeSport, preferenceGroups]);
 
   const historyGroups = useMemo(() => {
     const groups: Array<{ key: string; label: string; items: AlertHistoryItem[] }> = [];
@@ -175,14 +169,14 @@ export function AlertsView({ token }: { token: string }) {
             >
               <div className="alerts-panel-header alerts-rules-header surface-header">
                 <h2 id="alert-rules-title">Alert Rules</h2>
-                <LeagueTabs
-                  ariaLabel="Rule league"
-                  options={activeLeagues.map((league) => ({
-                    value: league.league,
-                    label: league.label,
+                <CompetitionTabs
+                  ariaLabel="Rule sport"
+                  options={preferenceGroups.map((group) => ({
+                    value: group.sport,
+                    label: SPORT_LABELS[group.sport],
                   }))}
-                  value={activeLeague}
-                  onChange={setActiveLeague}
+                  value={activeSport}
+                  onChange={setActiveSport}
                 />
               </div>
 
@@ -195,10 +189,10 @@ export function AlertsView({ token }: { token: string }) {
                       const fields = ruleFieldsFor(preference.alert_type, preference.is_enabled);
                       const inlineField = fields.length === 1 ? fields[0] : null;
                       const isBusy =
-                        busyAlertType === `${preference.league}:${preference.alert_type}`;
+                        busyAlertType === `${preference.sport}:${preference.alert_type}`;
                       return (
                         <AlertRuleCard
-                          key={`${preference.league}:${preference.alert_type}`}
+                          key={`${preference.sport}:${preference.alert_type}`}
                           title={label}
                           isDisabled={!preference.is_enabled}
                           endSlot={
@@ -280,7 +274,7 @@ export function AlertsView({ token }: { token: string }) {
                     })}
                   </ul>
                 ) : (
-                  <p className="muted alerts-empty">No rules for this league.</p>
+                  <p className="muted alerts-empty">No rules for this sport.</p>
                 )}
               </div>
             </section>

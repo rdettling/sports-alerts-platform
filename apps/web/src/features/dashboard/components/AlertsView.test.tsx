@@ -6,7 +6,6 @@ import { AlertsView } from "./AlertsView";
 const apiMocks = vi.hoisted(() => ({
   listAlertHistory: vi.fn(),
   listAlertPreferences: vi.fn(),
-  listLeagues: vi.fn(),
   updateAlertPreference: vi.fn(),
 }));
 
@@ -16,22 +15,9 @@ vi.mock("./alerts/AlertDeliverySettings", () => ({
   AlertDeliverySettings: () => <section aria-label="Delivery settings">Delivery settings</section>,
 }));
 
-const leagues = [
+const basketballPreferences = [
   {
-    league: "WNBA",
-    label: "WNBA",
-    alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
-  },
-  {
-    league: "MLB",
-    label: "MLB",
-    alert_types: ["game_start", "inning_start", "extra_innings_start", "final_result"],
-  },
-];
-
-const wnbaPreferences = [
-  {
-    league: "WNBA",
+    sport: "basketball",
     alert_type: "game_start",
     is_enabled: true,
     close_game_margin_threshold: null,
@@ -39,7 +25,7 @@ const wnbaPreferences = [
     inning_start_threshold: null,
   },
   {
-    league: "WNBA",
+    sport: "basketball",
     alert_type: "close_game_late",
     is_enabled: true,
     close_game_margin_threshold: 5,
@@ -47,7 +33,7 @@ const wnbaPreferences = [
     inning_start_threshold: null,
   },
   {
-    league: "WNBA",
+    sport: "basketball",
     alert_type: "overtime_start",
     is_enabled: false,
     close_game_margin_threshold: null,
@@ -55,16 +41,8 @@ const wnbaPreferences = [
     inning_start_threshold: null,
   },
   {
-    league: "WNBA",
+    sport: "basketball",
     alert_type: "final_result",
-    is_enabled: true,
-    close_game_margin_threshold: null,
-    close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
-  },
-  {
-    league: "WNBA",
-    alert_type: "score_changed",
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
@@ -72,9 +50,9 @@ const wnbaPreferences = [
   },
 ];
 
-const mlbPreferences = [
+const baseballPreferences = [
   {
-    league: "MLB",
+    sport: "baseball",
     alert_type: "game_start",
     is_enabled: true,
     close_game_margin_threshold: null,
@@ -82,7 +60,7 @@ const mlbPreferences = [
     inning_start_threshold: null,
   },
   {
-    league: "MLB",
+    sport: "baseball",
     alert_type: "inning_start",
     is_enabled: true,
     close_game_margin_threshold: null,
@@ -92,8 +70,8 @@ const mlbPreferences = [
 ];
 
 const preferenceGroups = [
-  { league: "WNBA", preferences: wnbaPreferences },
-  { league: "MLB", preferences: mlbPreferences },
+  { sport: "basketball", preferences: basketballPreferences },
+  { sport: "baseball", preferences: baseballPreferences },
 ];
 
 const historyItems = [
@@ -138,9 +116,8 @@ describe("AlertsView", () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-08-13T18:00:00-07:00").getTime());
     apiMocks.listAlertPreferences.mockResolvedValue(preferenceGroups);
     apiMocks.listAlertHistory.mockResolvedValue({ items: historyItems });
-    apiMocks.listLeagues.mockResolvedValue(leagues);
-    apiMocks.updateAlertPreference.mockImplementation((_token, league, alertType, payload) =>
-      Promise.resolve({ league, alert_type: alertType, ...payload }),
+    apiMocks.updateAlertPreference.mockImplementation((_token, sport, alertType, payload) =>
+      Promise.resolve({ sport, alert_type: alertType, ...payload }),
     );
   });
 
@@ -148,12 +125,15 @@ describe("AlertsView", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads the first active league and groups recent history by local day", async () => {
+  it("loads the first active sport and groups recent history by local day", async () => {
     render(<AlertsView token="token" />);
     expect(screen.getByText("Loading alerts...")).toBeInTheDocument();
 
     expect(await screen.findByRole("heading", { name: "Alert Rules" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "WNBA" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Basketball" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(screen.getByText("Close game late")).toBeInTheDocument();
     expect(screen.queryByText("Score change")).toBeNull();
     expect(screen.getByRole("switch", { name: "Overtime start alerts" })).toHaveAttribute(
@@ -175,11 +155,14 @@ describe("AlertsView", () => {
     expect(within(yesterday).getByText("Email failed")).toHaveClass("status-failed");
   });
 
-  it("switches leagues and only shows supported rules", async () => {
+  it("switches sports and shows that sport's rules", async () => {
     render(<AlertsView token="token" />);
-    fireEvent.click(await screen.findByRole("button", { name: "MLB" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Baseball" }));
 
-    expect(screen.getByRole("button", { name: "MLB" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Baseball" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(screen.getByRole("switch", { name: "Inning start alerts" })).toBeInTheDocument();
     expect(screen.queryByText("Close game late")).toBeNull();
   });
@@ -189,7 +172,7 @@ describe("AlertsView", () => {
     apiMocks.updateAlertPreference.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finishUpdate = () => resolve({ ...wnbaPreferences[0], is_enabled: false });
+          finishUpdate = () => resolve({ ...basketballPreferences[0], is_enabled: false });
         }),
     );
     render(<AlertsView token="token" />);
@@ -198,12 +181,17 @@ describe("AlertsView", () => {
     fireEvent.click(toggle);
     expect(toggle).toBeDisabled();
     await waitFor(() =>
-      expect(apiMocks.updateAlertPreference).toHaveBeenCalledWith("token", "WNBA", "game_start", {
-        is_enabled: false,
-        close_game_margin_threshold: null,
-        close_game_time_threshold_seconds: null,
-        inning_start_threshold: null,
-      }),
+      expect(apiMocks.updateAlertPreference).toHaveBeenCalledWith(
+        "token",
+        "basketball",
+        "game_start",
+        {
+          is_enabled: false,
+          close_game_margin_threshold: null,
+          close_game_time_threshold_seconds: null,
+          inning_start_threshold: null,
+        },
+      ),
     );
 
     finishUpdate?.();
@@ -220,7 +208,7 @@ describe("AlertsView", () => {
     await waitFor(() =>
       expect(apiMocks.updateAlertPreference).toHaveBeenCalledWith(
         "token",
-        "WNBA",
+        "basketball",
         "close_game_late",
         {
           is_enabled: true,
@@ -245,7 +233,7 @@ describe("AlertsView", () => {
     apiMocks.listAlertPreferences.mockResolvedValue([]);
     apiMocks.listAlertHistory.mockResolvedValue({ items: [] });
     render(<AlertsView token="token" />);
-    expect(await screen.findByText("No rules for this league.")).toBeInTheDocument();
+    expect(await screen.findByText("No rules for this sport.")).toBeInTheDocument();
     expect(screen.getByText("No alert history yet.")).toBeInTheDocument();
     expect(screen.getByText("Last 7 days · 0 events")).toBeInTheDocument();
   });

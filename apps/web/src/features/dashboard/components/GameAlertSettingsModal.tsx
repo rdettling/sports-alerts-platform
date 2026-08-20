@@ -82,7 +82,7 @@ export function GameAlertSettingsModal({
                   controlsClassName="game-alert-rule-controls"
                   endSlot={
                     <div className="alert-rule-header-end">
-                      {!item.uses_league_defaults ? (
+                      {!item.uses_sport_defaults ? (
                         <button
                           className="game-alert-reset"
                           type="button"
@@ -93,7 +93,7 @@ export function GameAlertSettingsModal({
                             );
                           }}
                         >
-                          Use league settings
+                          Use sport settings
                         </button>
                       ) : null}
                       {inlineField ? (

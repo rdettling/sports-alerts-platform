@@ -8,42 +8,66 @@ const apiMocks = vi.hoisted(() => ({
   followTeam: vi.fn(),
   unfollowTeam: vi.fn(),
   listFollows: vi.fn(),
-  listLeagues: vi.fn(),
+  listCompetitions: vi.fn(),
   listTeams: vi.fn(),
 }));
 
 vi.mock("../../../shared/api", () => apiMocks);
 
 const teams = [
-  { id: 2, external_team_id: "2", league: "NBA", name: "Boston Celtics", abbreviation: "BOS" },
-  { id: 1, external_team_id: "1", league: "NBA", name: "Atlanta Hawks", abbreviation: "ATL" },
-  { id: 3, external_team_id: "3", league: "MLB", name: "New York Yankees", abbreviation: "NYY" },
+  {
+    id: 2,
+    sport: "basketball",
+    external_team_id: "2",
+    competitions: ["NBA"],
+    name: "Boston Celtics",
+    abbreviation: "BOS",
+  },
+  {
+    id: 1,
+    sport: "basketball",
+    external_team_id: "1",
+    competitions: ["NBA"],
+    name: "Atlanta Hawks",
+    abbreviation: "ATL",
+  },
+  {
+    id: 3,
+    sport: "baseball",
+    external_team_id: "3",
+    competitions: ["MLB"],
+    name: "New York Yankees",
+    abbreviation: "NYY",
+  },
   {
     id: 4,
     external_team_id: "4",
-    league: "MLS",
+    sport: "soccer",
+    competitions: ["MLS"],
     name: "New England Revolution",
     abbreviation: "NE",
   },
   {
     id: 5,
     external_team_id: "86",
-    league: "LA_LIGA",
+    sport: "soccer",
+    competitions: ["LA_LIGA"],
     name: "Real Madrid",
     abbreviation: "RMA",
   },
   {
     id: 6,
     external_team_id: "359",
-    league: "PREMIER_LEAGUE",
+    sport: "soccer",
+    competitions: ["PREMIER_LEAGUE", "LA_LIGA"],
     name: "Arsenal",
     abbreviation: "ARS",
   },
 ];
 
-const leagues = [
+const competitions = [
   {
-    league: "NBA",
+    competition: "NBA",
     sport: "basketball",
     label: "NBA",
     badge_label: "NBA",
@@ -52,7 +76,7 @@ const leagues = [
     is_enabled: true,
   },
   {
-    league: "MLB",
+    competition: "MLB",
     sport: "baseball",
     label: "MLB",
     badge_label: "MLB",
@@ -61,7 +85,7 @@ const leagues = [
     is_enabled: true,
   },
   {
-    league: "MLS",
+    competition: "MLS",
     sport: "soccer",
     label: "MLS",
     badge_label: "MLS",
@@ -70,7 +94,7 @@ const leagues = [
     is_enabled: true,
   },
   {
-    league: "LA_LIGA",
+    competition: "LA_LIGA",
     sport: "soccer",
     label: "La Liga",
     badge_label: "LALIGA",
@@ -79,7 +103,7 @@ const leagues = [
     is_enabled: true,
   },
   {
-    league: "PREMIER_LEAGUE",
+    competition: "PREMIER_LEAGUE",
     sport: "soccer",
     label: "Premier League",
     badge_label: "EPL",
@@ -106,41 +130,34 @@ describe("TeamsView", () => {
   beforeEach(() => {
     Object.values(apiMocks).forEach((mock) => mock.mockReset());
     apiMocks.listTeams.mockResolvedValue(teams);
-    apiMocks.listLeagues.mockResolvedValue(leagues);
+    apiMocks.listCompetitions.mockResolvedValue(competitions);
     apiMocks.listFollows.mockResolvedValue({ teams: [], games: [] });
     apiMocks.followTeam.mockResolvedValue({ status: "ok" });
     apiMocks.unfollowTeam.mockResolvedValue({ status: "ok" });
   });
 
-  it("defaults to all teams and groups them in active-league order", async () => {
+  it("defaults to one canonical all-teams directory with membership badges", async () => {
     renderTeamsView(null);
 
     expect(await screen.findByText("Boston Celtics")).toBeInTheDocument();
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("group", { name: "Team scope" })).toBeNull();
-    expect(
-      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["NBA", "MLB", "MLS", "La Liga", "Premier League"]);
-
-    const nba = screen.getByRole("region", { name: "NBA" });
-    expect(within(nba).getByText("2 teams")).toBeInTheDocument();
-    expect(within(nba).getAllByRole("listitem")[0]).toHaveTextContent("Atlanta Hawks");
-    expect(screen.getByRole("region", { name: "MLB" })).toHaveTextContent("1 team");
-    expect(screen.getByRole("region", { name: "MLS" })).toHaveTextContent("1 team");
-    expect(screen.getByRole("region", { name: "La Liga" })).toHaveTextContent("1 team");
-    expect(screen.getByRole("region", { name: "Premier League" })).toHaveTextContent("1 team");
+    const directory = screen.getByRole("region", { name: "All teams" });
+    expect(within(directory).getByText("6 teams")).toBeInTheDocument();
+    expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Arsenal");
+    expect(within(directory).getByText("EPL")).toBeInTheDocument();
+    expect(within(directory).getAllByText("LALIGA")).toHaveLength(2);
   });
 
-  it("filters by league and keeps search text when filters change", async () => {
+  it("filters by competition and keeps search text when filters change", async () => {
     renderTeamsView(null);
     await screen.findByText("Boston Celtics");
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search teams" }), {
       target: { value: "Boston" },
     });
-    expect(screen.getByRole("region", { name: "NBA" })).toHaveTextContent("1 team");
-    expect(screen.queryByRole("region", { name: "MLB" })).toBeNull();
+    expect(screen.getByRole("region", { name: "All teams" })).toHaveTextContent("1 team");
 
     fireEvent.click(screen.getByRole("button", { name: "MLB" }));
     expect(screen.getByRole("searchbox", { name: "Search teams" })).toHaveValue("Boston");
@@ -164,7 +181,7 @@ describe("TeamsView", () => {
     expect(following).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Atlanta Hawks")).toBeInTheDocument();
     expect(screen.queryByText("Boston Celtics")).toBeNull();
-    expect(screen.queryByRole("region", { name: "MLB" })).toBeNull();
+    expect(screen.getByRole("region", { name: "All teams" })).toHaveTextContent("1 team");
   });
 
   it("returns to all teams if authentication disappears", async () => {
@@ -185,7 +202,7 @@ describe("TeamsView", () => {
     expect(screen.getByText("New York Yankees")).toBeInTheDocument();
   });
 
-  it("sorts followed teams first within their league and unfollows them", async () => {
+  it("sorts followed teams first in the canonical directory and unfollows them", async () => {
     let followedTeams = [teams[0]];
     apiMocks.listFollows.mockImplementation(async () => ({ teams: followedTeams, games: [] }));
     apiMocks.unfollowTeam.mockImplementation(async () => {
@@ -194,13 +211,13 @@ describe("TeamsView", () => {
     });
     renderTeamsView("token");
 
-    const nba = await screen.findByRole("region", { name: "NBA" });
-    expect(within(nba).getAllByRole("listitem")[0]).toHaveTextContent("Boston Celtics");
+    const directory = await screen.findByRole("region", { name: "All teams" });
+    expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Boston Celtics");
 
     fireEvent.click(screen.getByRole("button", { name: "Unfollow" }));
     await waitFor(() => expect(apiMocks.unfollowTeam).toHaveBeenCalledWith("token", 2));
     await waitFor(() => expect(screen.getByRole("button", { name: "Following 0" })).toBeVisible());
-    expect(within(nba).getAllByRole("listitem")[0]).toHaveTextContent("Atlanta Hawks");
+    expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Arsenal");
   });
 
   it("prompts a guest to sign in without calling the follow API", async () => {
@@ -222,7 +239,7 @@ describe("TeamsView", () => {
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Follow" }))[0]);
 
-    await waitFor(() => expect(apiMocks.followTeam).toHaveBeenCalledWith("token", 1));
+    await waitFor(() => expect(apiMocks.followTeam).toHaveBeenCalledWith("token", 6));
     await waitFor(() => expect(screen.getByRole("button", { name: "Unfollow" })).toBeVisible());
     expect(screen.getByRole("button", { name: "Following 1" })).toBeVisible();
   });

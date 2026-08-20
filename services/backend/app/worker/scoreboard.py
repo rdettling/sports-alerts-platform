@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 import httpx
 
-from app.services.leagues import get_league_profile, get_scoreboard_url
+from app.services.competitions import get_competition_profile, get_scoreboard_url
 
 logger = logging.getLogger(__name__)
 
@@ -55,21 +55,21 @@ class EspnScoreboardClient:
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
 
-    def _default_fetch_json(self, league: str, params: dict[str, str]) -> dict[str, Any]:
-        scoreboard_url = get_scoreboard_url(league)
+    def _default_fetch_json(self, competition: str, params: dict[str, str]) -> dict[str, Any]:
+        scoreboard_url = get_scoreboard_url(competition)
         response = httpx.get(scoreboard_url, params=params, timeout=15.0)
         response.raise_for_status()
         return response.json()
 
-    def _parse_event(self, league: str, event: dict[str, Any]) -> ScoreboardGame | None:
-        competition = (event.get("competitions") or [{}])[0]
-        notes = competition.get("notes") or []
+    def _parse_event(self, competition: str, event: dict[str, Any]) -> ScoreboardGame | None:
+        event_competition = (event.get("competitions") or [{}])[0]
+        notes = event_competition.get("notes") or []
         for note in notes:
             headline = str(note.get("headline") or "").lower()
             if "if necessary" in headline:
                 return None
 
-        competitors = competition.get("competitors") or []
+        competitors = event_competition.get("competitors") or []
         if len(competitors) < 2:
             return None
 
@@ -87,7 +87,7 @@ class EspnScoreboardClient:
         if home_external_team_id.startswith("-") or away_external_team_id.startswith("-"):
             return None
 
-        status_type = ((competition.get("status") or {}).get("type") or {})
+        status_type = ((event_competition.get("status") or {}).get("type") or {})
         status_state = status_type.get("state", "")
         status_name = status_type.get("name", "")
         status_description = str(status_type.get("description") or "").lower()
@@ -104,12 +104,12 @@ class EspnScoreboardClient:
             return None
         scheduled_start_time = datetime.fromisoformat(game_date.replace("Z", "+00:00"))
 
-        status_payload = competition.get("status", {}) or {}
+        status_payload = event_competition.get("status", {}) or {}
         period = status_payload.get("period")
         clock = status_payload.get("displayClock")
         short_detail = str(status_type.get("shortDetail") or "").strip()
-        normalized_league = league.upper()
-        sport = get_league_profile(normalized_league).sport
+        normalized_competition = competition.upper()
+        sport = get_competition_profile(normalized_competition).sport
         if sport in {"baseball", "soccer"} and short_detail:
             clock = short_detail
         completed = bool(status_type.get("completed"))
@@ -120,18 +120,18 @@ class EspnScoreboardClient:
         season_week = int(raw_season_week) if isinstance(raw_season_week, int) else None
         context_label: str | None = None
         if sport == "basketball":
-            round_label = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
-            series_summary = _clean_text(((competition.get("series") or {}).get("summary")))
+            round_label = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
+            series_summary = _clean_text(((event_competition.get("series") or {}).get("summary")))
             context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary
         elif sport == "football":
-            event_note = _clean_text(((competition.get("notes") or [{}])[0]).get("headline"))
+            event_note = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
             if event_note:
                 context_label = event_note
             elif season_slug == "preseason":
                 context_label = f"Preseason · Week {season_week}" if season_week is not None else "Preseason"
             elif season_slug == "post-season":
                 context_label = "Postseason"
-        elif normalized_league == "WORLD_CUP":
+        elif normalized_competition == "WORLD_CUP":
             season_type = season.get("type")
             season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
             context_label = _format_world_cup_stage(season_slug) or season_type_name
@@ -152,15 +152,15 @@ class EspnScoreboardClient:
             is_final=status == "final" and completed,
         )
 
-    def _fetch_events_for_dates(self, league: str, dates: list[str]) -> list[dict[str, Any]]:
+    def _fetch_events_for_dates(self, competition: str, dates: list[str]) -> list[dict[str, Any]]:
         by_id: dict[str, dict[str, Any]] = {}
         for date in dates:
             try:
-                payload = self._fetch_json(league, {"dates": date})
+                payload = self._fetch_json(competition, {"dates": date})
             except Exception as exc:  # pragma: no cover
                 logger.warning(
-                    "ESPN request failed league=%s date=%s error=%s; preserving stale game rows until next cycle",
-                    league,
+                    "ESPN request failed competition=%s date=%s error=%s; preserving stale game rows until next cycle",
+                    competition,
                     date,
                     exc,
                 )
@@ -171,8 +171,8 @@ class EspnScoreboardClient:
                     by_id[event_id] = event
         return list(by_id.values())
 
-    def fetch_games(self, league: str, dates: list[str]) -> list[ScoreboardGame]:
+    def fetch_games(self, competition: str, dates: list[str]) -> list[ScoreboardGame]:
         request_dates = sorted(set(dates)) or [datetime.now(UTC).date().strftime("%Y%m%d")]
-        events = self._fetch_events_for_dates(league, request_dates)
-        games = [self._parse_event(league, event) for event in events]
+        events = self._fetch_events_for_dates(competition, request_dates)
+        games = [self._parse_event(competition, event) for event in events]
         return [game for game in games if game]

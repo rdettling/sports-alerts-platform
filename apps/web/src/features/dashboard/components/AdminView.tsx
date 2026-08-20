@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getOpsNeonUsage, type OpsAdminOverviewWindow } from "../../../shared/api";
 import { useAdminData } from "../hooks/useAdminData";
-import { AdminLeagueSettingsPanel } from "./admin/AdminLeagueSettingsPanel";
+import { AdminCompetitionSettingsPanel } from "./admin/AdminCompetitionSettingsPanel";
 import { AdminOverviewSection } from "./admin/AdminOverviewSection";
 import { AdminTabsHeader } from "./admin/AdminTabsHeader";
 import { formatElapsedTime } from "./admin/admin-format";
@@ -53,8 +53,8 @@ export function AdminView({ token }: { token: string }) {
       case "tools":
         return (
           <div className="admin-tools-layout">
-            <AdminLeagueSettingsPanel token={token} items={summary.league_settings} />
-            <AdminTestAlertsPanel token={token} items={summary.league_settings} />
+            <AdminCompetitionSettingsPanel token={token} items={summary.competition_settings} />
+            <AdminTestAlertsPanel token={token} items={summary.competition_settings} />
           </div>
         );
     }

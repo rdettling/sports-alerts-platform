@@ -25,11 +25,11 @@ class AlertHistoryResponse(BaseModel):
 
 
 class AdminTestAlertRequest(BaseModel):
-    league: str
+    competition: str
     alert_type: str
 
 
 class AdminTestAlertResponse(BaseModel):
-    league: str
+    competition: str
     alert_type: str
     deliveries: list[AlertDeliveryOut]

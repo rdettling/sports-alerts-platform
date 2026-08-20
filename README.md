@@ -9,14 +9,14 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 ## What The App Does Today
 
 - Email magic-link and one-time-code sign-in with JWT-backed API sessions.
-- Public `Games` dashboard with league/day filters, live status, follow/unfollow actions, and game-level alert settings.
-- Public `Teams` directory with league/search filters and team follow controls.
+- Public `Games` dashboard with competition/day filters, live status, follow/unfollow actions, and game-level alert settings.
+- Public canonical `Teams` directory with competition/search filters, membership badges, and one follow state per team across every competition.
 - Authenticated Games filter for direct and team-derived follows.
-- `Alerts` dashboard for league defaults plus alert history.
-- Admin-only operations area for alert delivery activity, DB stats, league controls, and test tools.
+- `Alerts` dashboard for sport-wide defaults plus alert history.
+- Admin-only operations area for alert delivery activity, DB stats, competition controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
-- Code-owned league profiles pair league-specific provider configuration with shared basketball, football, baseball, or soccer behavior.
+- Code-owned competition profiles pair competition-specific provider configuration with shared basketball, football, baseball, or soccer behavior.
 
 Alert types default by sport and can be restricted for a specific competition:
 
@@ -63,7 +63,7 @@ For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 - The API owns auth, user-facing reads/writes, admin endpoints, and startup seeding.
 - The worker owns schedule sync, odds snapshots, alert evaluation, and delivery execution.
 - Postgres stores users, teams, games, follows, alert settings, sent alerts, odds snapshots, and lightweight ops data.
-- League runtime is DB-backed through `league_settings`, so a league can be disabled without redeploying.
+- Competition runtime is DB-backed through `competition_settings`, so a competition can be disabled without redeploying.
 
 ## Canonical Docs
 

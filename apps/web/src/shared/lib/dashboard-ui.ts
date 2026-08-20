@@ -17,8 +17,8 @@ export function messageFromUnknown(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-export function leagueLogoUrl(league: string | null | undefined): string | null {
-  const normalized = (league || "").toUpperCase();
+export function competitionLogoUrl(competition: string | null | undefined): string | null {
+  const normalized = (competition || "").toUpperCase();
   if (normalized === "NBA") return "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg";
   if (normalized === "WNBA") return "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png";
   if (normalized === "NFL") return "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png";
@@ -36,8 +36,8 @@ export function leagueLogoUrl(league: string | null | undefined): string | null 
   return null;
 }
 
-export function leagueBadgeLabel(league: string | null | undefined): string {
-  const normalized = (league || "").toUpperCase();
+export function competitionBadgeLabel(competition: string | null | undefined): string {
+  const normalized = (competition || "").toUpperCase();
   if (normalized === "LA_LIGA") return "LALIGA";
   if (normalized === "PREMIER_LEAGUE") return "EPL";
   if (normalized === "WORLD_CUP") return "WC";

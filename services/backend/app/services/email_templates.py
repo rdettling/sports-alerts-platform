@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from app.db.models import Alert, Game, Team
 from app.services.email_branding import APP_BRAND_NAME
-from app.services.leagues import get_league_profile
+from app.services.competitions import get_competition_profile
 
 ALERT_LABELS = {
     "game_start": "Game start",
@@ -25,34 +25,30 @@ def _team_abbr(team: Team | None, fallback: str) -> str:
     return (team.abbreviation if team and team.abbreviation else fallback).upper()
 
 
-def _normalize_league(game: Game, home: Team | None, away: Team | None) -> str:
-    for raw in (game.league, home.league if home else None, away.league if away else None):
-        value = (raw or "").strip().upper()
-        if value:
-            return value
-    return "UNKNOWN"
+def _normalize_competition(game: Game) -> str:
+    return game.competition.strip().upper() or "UNKNOWN"
 
 
-def _sport_for_league(league: str) -> str | None:
+def _sport_for_competition(competition: str) -> str | None:
     try:
-        return get_league_profile(league).sport
+        return get_competition_profile(competition).sport
     except ValueError:
         return None
 
 
-def _team_logo_url(team: Team | None, fallback_abbr: str, league: str) -> str:
-    if league in {"MLS", "LA_LIGA", "PREMIER_LEAGUE"} and team and team.external_team_id:
+def _team_logo_url(team: Team | None, fallback_abbr: str, competition: str) -> str:
+    if competition in {"MLS", "LA_LIGA", "PREMIER_LEAGUE"} and team and team.external_team_id:
         return f"https://a.espncdn.com/i/teamlogos/soccer/500/{team.external_team_id}.png"
     abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
     if not abbr:
         return ""
-    if league in {"NBA", "WNBA"}:
-        return f"https://a.espncdn.com/i/teamlogos/{league.lower()}/500/{abbr}.png"
-    if league == "MLB":
+    if competition in {"NBA", "WNBA"}:
+        return f"https://a.espncdn.com/i/teamlogos/{competition.lower()}/500/{abbr}.png"
+    if competition == "MLB":
         return f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbr}.png"
-    if league == "NFL":
+    if competition == "NFL":
         return f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbr}.png"
-    if league == "WORLD_CUP":
+    if competition == "WORLD_CUP":
         return f"https://a.espncdn.com/i/teamlogos/countries/500/{abbr}.png"
     return ""
 
@@ -239,8 +235,8 @@ def _primary_status_line(
 def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team | None) -> str:
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
-    league = _normalize_league(game, home, away)
-    sport = _sport_for_league(league)
+    competition = _normalize_competition(game)
+    sport = _sport_for_competition(competition)
     if alert.alert_type == "final_result":
         return f"Final · {away_abbr} {_scoreline(game)} {home_abbr}"
     if alert.alert_type == "game_start":
@@ -280,8 +276,8 @@ def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team 
 def build_alert_push_content(alert: Alert, game: Game, home: Team | None, away: Team | None) -> tuple[str, str]:
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
-    league = _normalize_league(game, home, away)
-    sport = _sport_for_league(league)
+    competition = _normalize_competition(game)
+    sport = _sport_for_competition(competition)
     return (
         build_alert_subject(alert, game, home, away),
         _primary_status_line(alert, game, away_abbr, home_abbr, sport),
@@ -293,10 +289,10 @@ def build_alert_email_content(alert: Alert, game: Game, home: Team | None, away:
     away_name = away.name if away else f"Team {game.away_team_id}"
     away_abbr = _team_abbr(away, "AWAY")
     home_abbr = _team_abbr(home, "HOME")
-    league = _normalize_league(game, home, away)
-    sport = _sport_for_league(league)
-    away_logo = _team_logo_url(away, away_abbr, league)
-    home_logo = _team_logo_url(home, home_abbr, league)
+    competition = _normalize_competition(game)
+    sport = _sport_for_competition(competition)
+    away_logo = _team_logo_url(away, away_abbr, competition)
+    home_logo = _team_logo_url(home, home_abbr, competition)
     _, _, score_changed_away_score, score_changed_home_score, _, _ = _score_changed_values(alert, game)
     resolved_away_score = score_changed_away_score if alert.alert_type == "score_changed" else game.away_score
     resolved_home_score = score_changed_home_score if alert.alert_type == "score_changed" else game.home_score

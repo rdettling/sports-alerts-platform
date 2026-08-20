@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.models import Game, GameOddsCurrent
 from app.db.session import get_db
 from app.schemas.game import GameOddsOut, GameOddsOutcomeOut, GameOut
-from app.services.leagues import get_active_leagues, normalize_league
+from app.services.competitions import get_active_competitions, normalize_competition
 
 router = APIRouter(tags=["games"])
 GAMES_RETENTION_PAST_HOURS = 36
@@ -17,24 +17,24 @@ GAMES_RETENTION_FUTURE_DAYS = 7
 @router.get("/games", response_model=list[GameOut])
 def list_games(
     status: str | None = Query(default=None, description="Filter by game status"),
-    league: str | None = Query(default=None, description="Filter by league, e.g. NBA or MLB"),
+    competition: str | None = Query(default=None, description="Filter by competition, e.g. NBA or MLB"),
     include_finals: bool = Query(default=False, description="Include final games in results"),
     limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
-    active_leagues = get_active_leagues(db)
+    active_competitions = get_active_competitions(db)
     now = datetime.now(timezone.utc)
     lower = now - timedelta(hours=max(1, GAMES_RETENTION_PAST_HOURS))
     upper = now + timedelta(days=max(1, GAMES_RETENTION_FUTURE_DAYS))
     stmt = (
         select(Game)
-        .where(Game.league.in_(active_leagues))
+        .where(Game.competition.in_(active_competitions))
         .where(Game.scheduled_start_time >= lower, Game.scheduled_start_time <= upper)
         .order_by(Game.scheduled_start_time.asc())
         .limit(limit)
     )
-    if league:
-        stmt = stmt.where(Game.league == normalize_league(league))
+    if competition:
+        stmt = stmt.where(Game.competition == normalize_competition(competition))
     if status:
         stmt = stmt.where(Game.status == status)
     elif not include_finals:

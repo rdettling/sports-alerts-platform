@@ -8,10 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Alert, AlertDelivery, LeagueSetting, User
+from app.db.models import Alert, AlertDelivery, CompetitionSetting, User
 from app.db.session import get_db
 from app.deps import require_admin_user
-from app.schemas.league import LeagueSettingOut, UpdateLeagueSettingRequest
+from app.schemas.competition import CompetitionSettingOut, UpdateCompetitionSettingRequest
 from app.schemas.ops import (
     OpsAdminDeliveryOut,
     OpsAdminDeliveryStatsOut,
@@ -19,7 +19,7 @@ from app.schemas.ops import (
     OpsAdminSummaryOverviewOut,
     NeonUsageOut,
 )
-from app.services.leagues import get_alert_types, get_league_profile, list_league_settings, normalize_league
+from app.services.competitions import get_alert_types, get_competition_profile, list_competition_settings, normalize_competition
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -33,14 +33,14 @@ def _window_start(window: str) -> datetime:
     return datetime.now(timezone.utc) - timedelta(hours=WINDOW_TO_HOURS[window])
 
 
-def _league_setting_out(row: LeagueSetting) -> LeagueSettingOut:
-    profile = get_league_profile(row.league)
-    return LeagueSettingOut(
-        league=row.league,
+def _competition_setting_out(row: CompetitionSetting) -> CompetitionSettingOut:
+    profile = get_competition_profile(row.competition)
+    return CompetitionSettingOut(
+        competition=row.competition,
         sport=profile.sport,
         label=profile.label,
         badge_label=profile.badge_label,
-        alert_types=list(get_alert_types(row.league)),
+        alert_types=list(get_alert_types(row.competition)),
         live_sync_interval_seconds=profile.live_sync_interval_seconds,
         is_enabled=row.is_enabled,
     )
@@ -52,21 +52,21 @@ def _resolve_neon_dashboard_url(project_id: str) -> str:
     return f"https://console.neon.tech/app/projects/{project_id}"
 
 
-@router.put("/leagues/{league}", response_model=LeagueSettingOut)
-def update_league_setting(
-    league: str,
-    payload: UpdateLeagueSettingRequest,
+@router.put("/competitions/{competition}", response_model=CompetitionSettingOut)
+def update_competition_setting(
+    competition: str,
+    payload: UpdateCompetitionSettingRequest,
     _: User = Depends(require_admin_user),
     db: Session = Depends(get_db),
-) -> LeagueSettingOut:
-    normalized = normalize_league(league)
-    row = next((item for item in list_league_settings(db) if item.league == normalized), None)
+) -> CompetitionSettingOut:
+    normalized = normalize_competition(competition)
+    row = next((item for item in list_competition_settings(db) if item.competition == normalized), None)
     if row is None:
-        raise HTTPException(status_code=404, detail="League not found")
+        raise HTTPException(status_code=404, detail="Competition not found")
     row.is_enabled = payload.is_enabled
     db.commit()
     db.refresh(row)
-    return _league_setting_out(row)
+    return _competition_setting_out(row)
 
 
 @router.get("/admin/summary", response_model=OpsAdminSummaryOut)
@@ -110,7 +110,7 @@ def admin_summary(
                 failed=push_counts.get("failed", 0),
             ),
         ),
-        league_settings=[_league_setting_out(row) for row in list_league_settings(db)],
+        competition_settings=[_competition_setting_out(row) for row in list_competition_settings(db)],
     )
 
 

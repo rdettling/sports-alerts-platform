@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
-from app.services.leagues import list_supported_leagues
+from app.services.competitions import list_supported_sports
 
-SUPPORTED_LEAGUES = list_supported_leagues()
+SUPPORTED_SPORTS = list_supported_sports()
 
 
 class AlertSettingsOut(BaseModel):
@@ -12,7 +12,7 @@ class AlertSettingsOut(BaseModel):
 
 
 class AlertPreferenceOut(AlertSettingsOut):
-    league: str
+    sport: str
     alert_type: str
 
     model_config = {"from_attributes": True}
@@ -28,15 +28,16 @@ class UpdateAlertSettingsRequest(BaseModel):
 
 
 class AlertPreferenceGroupOut(BaseModel):
-    league: str
+    sport: str
     preferences: list[AlertPreferenceOut]
 
 
 class GameAlertPreferenceItemOut(AlertPreferenceOut):
-    uses_league_defaults: bool
+    uses_sport_defaults: bool
 
 
 class GameAlertPreferencesOut(BaseModel):
     game_id: int
-    league: str
+    competition: str
+    sport: str
     items: list[GameAlertPreferenceItemOut]

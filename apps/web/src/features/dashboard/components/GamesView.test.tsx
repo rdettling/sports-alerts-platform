@@ -19,7 +19,7 @@ vi.mock("../hooks/useGamesData", () => ({
         {
           id: 1,
           external_game_id: "today-game",
-          league: "NBA",
+          competition: "NBA",
           home_team_id: 10,
           away_team_id: 11,
           scheduled_start_time: "2026-06-12T20:00:00Z",
@@ -36,7 +36,7 @@ vi.mock("../hooks/useGamesData", () => ({
         {
           id: 2,
           external_game_id: "tomorrow-game",
-          league: "NBA",
+          competition: "NBA",
           home_team_id: 12,
           away_team_id: 13,
           scheduled_start_time: "2026-06-13T20:00:00Z",
@@ -53,7 +53,7 @@ vi.mock("../hooks/useGamesData", () => ({
         {
           id: 3,
           external_game_id: "tomorrow-wnba-game",
-          league: "WNBA",
+          competition: "WNBA",
           home_team_id: 14,
           away_team_id: 15,
           scheduled_start_time: "2026-06-13T22:00:00Z",
@@ -78,7 +78,7 @@ vi.mock("../hooks/useGamesData", () => ({
                   {
                     id: 1,
                     external_game_id: "today-game",
-                    league: "NBA",
+                    competition: "NBA",
                     home_team_id: 10,
                     away_team_id: 11,
                     scheduled_start_time: "2026-06-12T20:00:00Z",
@@ -99,49 +99,55 @@ vi.mock("../hooks/useGamesData", () => ({
         {
           id: 10,
           external_team_id: "10",
-          league: "NBA",
+          sport: "basketball",
+          competitions: ["NBA"],
           name: "Boston Celtics",
           abbreviation: "BOS",
         },
         {
           id: 11,
           external_team_id: "11",
-          league: "NBA",
+          sport: "basketball",
+          competitions: ["NBA"],
           name: "Atlanta Hawks",
           abbreviation: "ATL",
         },
         {
           id: 12,
           external_team_id: "12",
-          league: "NBA",
+          sport: "basketball",
+          competitions: ["NBA"],
           name: "Los Angeles Lakers",
           abbreviation: "LAL",
         },
         {
           id: 13,
           external_team_id: "13",
-          league: "NBA",
+          sport: "basketball",
+          competitions: ["NBA"],
           name: "New York Knicks",
           abbreviation: "NY",
         },
         {
           id: 14,
           external_team_id: "14",
-          league: "WNBA",
+          sport: "basketball",
+          competitions: ["WNBA"],
           name: "Las Vegas Aces",
           abbreviation: "LV",
         },
         {
           id: 15,
           external_team_id: "15",
-          league: "WNBA",
+          sport: "basketball",
+          competitions: ["WNBA"],
           name: "Seattle Storm",
           abbreviation: "SEA",
         },
       ],
-      leagues: [
+      competitions: [
         {
-          league: "NBA",
+          competition: "NBA",
           sport: "basketball",
           label: "NBA",
           badge_label: "NBA",
@@ -150,7 +156,7 @@ vi.mock("../hooks/useGamesData", () => ({
           is_enabled: true,
         },
         {
-          league: "WNBA",
+          competition: "WNBA",
           sport: "basketball",
           label: "WNBA",
           badge_label: "WNBA",
@@ -247,7 +253,7 @@ describe("GamesView", () => {
     expect(screen.getByRole("button", { name: "Next date" })).toBeDisabled();
   });
 
-  it("filters by league without showing sync telemetry", async () => {
+  it("filters by competition without showing sync telemetry", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T18:20:00Z").getTime());
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
 

@@ -2,37 +2,45 @@ import { useState } from "react";
 
 import {
   type AlertType,
-  type League,
-  type LeagueSetting,
+  type Competition,
+  type CompetitionSetting,
   sendAdminTestAlert,
 } from "../../../shared/api";
 import { PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { LeagueTabs } from "./DashboardFilters";
+import { CompetitionTabs } from "./DashboardFilters";
 
-export function AdminTestAlertsPanel({ token, items }: { token: string; items: LeagueSetting[] }) {
-  const [selectedLeague, setSelectedLeague] = useState<League>("NBA");
+export function AdminTestAlertsPanel({
+  token,
+  items,
+}: {
+  token: string;
+  items: CompetitionSetting[];
+}) {
+  const [selectedCompetition, setSelectedCompetition] = useState<Competition>("NBA");
   const [busyAlertType, setBusyAlertType] = useState<AlertType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const enabledLeagues = items.filter((item) => item.is_enabled);
-  const activeLeague =
-    enabledLeagues.find((item) => item.league === selectedLeague) ?? enabledLeagues[0] ?? null;
+  const enabledCompetitions = items.filter((item) => item.is_enabled);
+  const activeCompetition =
+    enabledCompetitions.find((item) => item.competition === selectedCompetition) ??
+    enabledCompetitions[0] ??
+    null;
 
   const onSendTest = async (alertType: AlertType) => {
-    if (!activeLeague) return;
+    if (!activeCompetition) return;
     setError(null);
     setResult(null);
     setBusyAlertType(alertType);
     try {
       const response = await sendAdminTestAlert(token, {
-        league: activeLeague.league,
+        competition: activeCompetition.competition,
         alert_type: alertType,
       });
       const statuses = response.deliveries
         .map((delivery) => `${delivery.channel} ${delivery.status}`)
         .join(", ");
       setResult(
-        `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} test for ${response.league.replace("_", " ")}: ${statuses}.`,
+        `${PREFERENCE_LABELS[response.alert_type] ?? response.alert_type} test for ${response.competition.replace("_", " ")}: ${statuses}.`,
       );
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
@@ -48,22 +56,22 @@ export function AdminTestAlertsPanel({ token, items }: { token: string; items: L
           <h2 id="admin-test-alerts-title">Test Alerts</h2>
           <p>Send one synthetic alert to validate the delivery flow.</p>
         </div>
-        {activeLeague ? (
-          <LeagueTabs
-            ariaLabel="Test alert league"
-            options={enabledLeagues.map((league) => ({
-              value: league.league,
-              label: league.label,
+        {activeCompetition ? (
+          <CompetitionTabs
+            ariaLabel="Test alert competition"
+            options={enabledCompetitions.map((competition) => ({
+              value: competition.competition,
+              label: competition.label,
             }))}
-            value={activeLeague.league}
-            onChange={setSelectedLeague}
+            value={activeCompetition.competition}
+            onChange={setSelectedCompetition}
           />
         ) : null}
       </div>
       <div className="admin-tools-body">
-        {activeLeague ? (
+        {activeCompetition ? (
           <div className="admin-action-list" aria-label="Test alert actions">
-            {activeLeague.alert_types.map((alertType) => (
+            {activeCompetition.alert_types.map((alertType) => (
               <button
                 key={alertType}
                 className="admin-test-btn"
@@ -77,7 +85,7 @@ export function AdminTestAlertsPanel({ token, items }: { token: string; items: L
             ))}
           </div>
         ) : (
-          <p className="admin-panel-message">Enable a league to send test alerts.</p>
+          <p className="admin-panel-message">Enable a competition to send test alerts.</p>
         )}
 
         {error ? (

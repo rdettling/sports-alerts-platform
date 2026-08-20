@@ -1,6 +1,7 @@
 from sqlalchemy import select
 
 from app.db.models import Alert, Team, User, UserAlertPreference, UserTeamFollow
+from app.services.competitions import competition_teams_query
 from app.worker.ingest import run_catalog_sync
 
 from ingest_support import SequenceWorldCupProvider, StaticProvider, make_game
@@ -12,11 +13,11 @@ def test_world_cup_score_changed_creates_inferred_goal_alert(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -25,8 +26,8 @@ def test_world_cup_score_changed_creates_inferred_goal_alert(db_session):
             {"home_score": 0, "away_score": 1, "period": 1, "clock": "18'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 1
@@ -42,11 +43,11 @@ def test_world_cup_score_changed_creates_generic_alert_for_ambiguous_jump(db_ses
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -55,8 +56,8 @@ def test_world_cup_score_changed_creates_generic_alert_for_ambiguous_jump(db_ses
             {"home_score": 2, "away_score": 2, "period": 2, "clock": "68'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 1
@@ -70,11 +71,11 @@ def test_world_cup_score_changed_ignores_score_decreases(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -83,8 +84,8 @@ def test_world_cup_score_changed_ignores_score_decreases(db_session):
             {"home_score": 1, "away_score": 0, "period": 2, "clock": "61'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "score_changed")).all()
     assert len(sent) == 0
@@ -96,11 +97,11 @@ def test_world_cup_second_half_start_alert_triggers_once_on_resume(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="second_half_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="second_half_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -111,10 +112,10 @@ def test_world_cup_second_half_start_alert_triggers_once_on_resume(db_session):
             {"home_score": 0, "away_score": 0, "period": 2, "clock": "48'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "second_half_start")).all()
     assert len(sent) == 1
@@ -128,11 +129,11 @@ def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="second_half_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="second_half_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -141,8 +142,8 @@ def test_world_cup_second_half_start_does_not_trigger_at_halftime(db_session):
             {"home_score": 0, "away_score": 0, "period": 2, "clock": "HT"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "second_half_start")).all()
     assert len(sent) == 0
@@ -154,11 +155,11 @@ def test_world_cup_extra_time_start_alert_triggers_once_on_period_three_transiti
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="extra_time_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="extra_time_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -169,10 +170,10 @@ def test_world_cup_extra_time_start_alert_triggers_once_on_period_three_transiti
             {"home_score": 2, "away_score": 2, "period": 3, "clock": "94'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "extra_time_start")).all()
     assert len(sent) == 1
@@ -186,11 +187,11 @@ def test_world_cup_extra_time_start_does_not_trigger_before_period_three(db_sess
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="extra_time_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="extra_time_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -199,8 +200,8 @@ def test_world_cup_extra_time_start_does_not_trigger_before_period_three(db_sess
             {"home_score": 2, "away_score": 2, "period": 2, "clock": "ET"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "extra_time_start")).all()
     assert len(sent) == 0
@@ -215,8 +216,8 @@ def test_world_cup_transition_logging_captures_stoppage_and_extra_time_states(db
     )
 
     with caplog.at_level("INFO", logger="app.worker.soccer"):
-        run_catalog_sync(provider, league="WORLD_CUP")
-        run_catalog_sync(provider, league="WORLD_CUP")
+        run_catalog_sync(provider, competition="WORLD_CUP")
+        run_catalog_sync(provider, competition="WORLD_CUP")
 
     assert "Soccer state transition external_game_id=game-world-cup-live" in caplog.text
     assert "period=2->3" in caplog.text
@@ -233,11 +234,11 @@ def test_world_cup_penalty_kicks_alert_triggers_once_in_late_tied_extra_time(db_
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="penalty_kicks", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="penalty_kicks", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -247,9 +248,9 @@ def test_world_cup_penalty_kicks_alert_triggers_once_in_late_tied_extra_time(db_
             {"home_score": 1, "away_score": 1, "period": 3, "clock": "118'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "penalty_kicks")).all()
     assert len(sent) == 1
@@ -263,11 +264,11 @@ def test_world_cup_penalty_kicks_alert_does_not_trigger_before_threshold_or_with
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "WORLD_CUP").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="WORLD_CUP", alert_type="penalty_kicks", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="penalty_kicks", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -277,9 +278,9 @@ def test_world_cup_penalty_kicks_alert_does_not_trigger_before_threshold_or_with
             {"home_score": 2, "away_score": 1, "period": 3, "clock": "117'"},
         ]
     )
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
-    run_catalog_sync(provider, league="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
+    run_catalog_sync(provider, competition="WORLD_CUP")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id, Alert.alert_type == "penalty_kicks")).all()
     assert len(sent) == 0
@@ -294,8 +295,8 @@ def test_world_cup_transition_logging_marks_penalty_kicks_window(db_session, cap
     )
 
     with caplog.at_level("INFO", logger="app.worker.soccer"):
-        run_catalog_sync(provider, league="WORLD_CUP")
-        run_catalog_sync(provider, league="WORLD_CUP")
+        run_catalog_sync(provider, competition="WORLD_CUP")
+        run_catalog_sync(provider, competition="WORLD_CUP")
 
     assert "Soccer state transition external_game_id=game-world-cup-live" in caplog.text
     assert "period=3->3" in caplog.text
@@ -308,12 +309,12 @@ def test_mls_direct_shootout_triggers_penalties_without_extra_time_or_score_chan
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("extra_time_start", "penalty_kicks", "score_changed"):
-        db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -327,7 +328,7 @@ def test_mls_direct_shootout_triggers_penalties_without_extra_time_or_score_chan
         away_external_team_id="18966",
     )
     for _ in range(3):
-        run_catalog_sync(provider, league="MLS")
+        run_catalog_sync(provider, competition="MLS")
 
     alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert [alert.alert_type for alert in alerts] == ["penalty_kicks"]
@@ -340,12 +341,12 @@ def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("extra_time_start", "penalty_kicks"):
-        db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -360,7 +361,7 @@ def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
         away_external_team_id="18966",
     )
     for _ in range(4):
-        run_catalog_sync(provider, league="MLS")
+        run_catalog_sync(provider, competition="MLS")
 
     alerts = db_session.scalars(
         select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
@@ -374,12 +375,12 @@ def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("second_half_start", "score_changed"):
-        db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceWorldCupProvider(
@@ -393,7 +394,7 @@ def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
         away_external_team_id="18966",
     )
     for _ in range(3):
-        run_catalog_sync(provider, league="MLS")
+        run_catalog_sync(provider, competition="MLS")
 
     alerts = db_session.scalars(
         select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
@@ -408,11 +409,11 @@ def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    team = db_session.scalar(select(Team).where(Team.league == "MLS").order_by(Team.id.asc()))
+    team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, league="MLS", alert_type="final_result", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="final_result", is_enabled_override=True))
     db_session.commit()
 
     provider = StaticProvider(
@@ -430,7 +431,7 @@ def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
             )
         ]
     )
-    run_catalog_sync(provider, league="MLS")
+    run_catalog_sync(provider, competition="MLS")
 
     alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert [alert.alert_type for alert in alerts] == ["final_result"]

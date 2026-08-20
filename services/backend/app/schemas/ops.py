@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.schemas.league import LeagueSettingOut
+from app.schemas.competition import CompetitionSettingOut
 
 
 class OpsAdminSummaryOverviewOut(BaseModel):
@@ -27,7 +27,7 @@ class OpsAdminDeliveryOut(BaseModel):
 class OpsAdminSummaryOut(BaseModel):
     overview: OpsAdminSummaryOverviewOut
     delivery: OpsAdminDeliveryOut
-    league_settings: list[LeagueSettingOut]
+    competition_settings: list[CompetitionSettingOut]
 
 
 class NeonUsageOut(BaseModel):

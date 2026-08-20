@@ -19,7 +19,7 @@ from app.db.models import (
 )
 from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.alert_preferences import AlertSettings, resolve_alert_settings
-from app.services.leagues import get_alert_types
+from app.services.competitions import get_alert_types, get_competition_profile
 from app.worker.alert_rules import detect_alerts
 from app.worker.soccer import SoccerDerivedEvents
 
@@ -72,20 +72,20 @@ def _load_game_watch_times(db: Session, games: list[Game]) -> dict[int, dict[int
     return by_game
 
 
-def _load_preferences_by_user_league(
+def _load_preferences_by_user_sport(
     db: Session,
     user_ids: set[int],
-    leagues: set[str],
+    sports: set[str],
 ) -> dict[tuple[int, str, str], UserAlertPreference]:
-    if not user_ids or not leagues:
+    if not user_ids or not sports:
         return {}
     rows = db.scalars(
         select(UserAlertPreference).where(
             UserAlertPreference.user_id.in_(sorted(user_ids)),
-            UserAlertPreference.league.in_(sorted(leagues)),
+            UserAlertPreference.sport.in_(sorted(sports)),
         )
     ).all()
-    return {(row.user_id, row.league, row.alert_type): row for row in rows}
+    return {(row.user_id, row.sport, row.alert_type): row for row in rows}
 
 
 def _load_overrides_by_user_game(db: Session, user_ids: set[int], game_ids: list[int]) -> dict[tuple[int, int, str], UserGameAlertOverride]:
@@ -107,14 +107,15 @@ def _resolve_settings_for_user_game(
     user_id: int,
     game: Game,
 ) -> dict[str, AlertSettings]:
+    sport = get_competition_profile(game.competition).sport
     return {
         alert_type: resolve_alert_settings(
-            game.league,
+            sport,
             alert_type,
-            preferences_by_key.get((user_id, game.league, alert_type)),
+            preferences_by_key.get((user_id, sport, alert_type)),
             overrides_by_key.get((user_id, game.id, alert_type)),
         )
-        for alert_type in get_alert_types(game.league)
+        for alert_type in get_alert_types(game.competition)
     }
 
 
@@ -153,8 +154,8 @@ def evaluate_and_record_alerts(
     soccer_events = soccer_events or {}
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
-    leagues = {game.league for game in games}
-    preferences_by_key = _load_preferences_by_user_league(db, all_user_ids, leagues)
+    sports = {get_competition_profile(game.competition).sport for game in games}
+    preferences_by_key = _load_preferences_by_user_sport(db, all_user_ids, sports)
     overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, [game.id for game in games])
 
     candidate_alerts: list[Alert] = []

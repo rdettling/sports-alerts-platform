@@ -19,7 +19,7 @@ class GameOddsOut(BaseModel):
 class GameOut(BaseModel):
     id: int
     external_game_id: str
-    league: str
+    competition: str
     home_team_id: int
     away_team_id: int
     scheduled_start_time: datetime

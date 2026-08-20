@@ -4,23 +4,23 @@ import { type Team } from "../api";
 
 function teamLogoUrl(team: Team): string {
   const abbreviation = team.abbreviation.toLowerCase();
-  if (team.league === "MLS" || team.league === "LA_LIGA" || team.league === "PREMIER_LEAGUE") {
+  if (team.competitions.includes("WORLD_CUP")) {
+    return `https://a.espncdn.com/i/teamlogos/countries/500/${abbreviation}.png`;
+  }
+  if (team.sport === "soccer") {
     return `https://a.espncdn.com/i/teamlogos/soccer/500/${team.external_team_id}.png`;
   }
-  if (team.league === "MLB") {
+  if (team.sport === "baseball") {
     return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbreviation}.png`;
   }
-  if (team.league === "NBA") {
+  if (team.competitions.includes("NBA")) {
     return `https://a.espncdn.com/i/teamlogos/nba/500/${abbreviation}.png`;
   }
-  if (team.league === "WNBA") {
+  if (team.competitions.includes("WNBA")) {
     return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbreviation}.png`;
   }
-  if (team.league === "NFL") {
+  if (team.sport === "football") {
     return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbreviation}.png`;
-  }
-  if (team.league === "WORLD_CUP") {
-    return `https://a.espncdn.com/i/teamlogos/countries/500/${abbreviation}.png`;
   }
   return "";
 }

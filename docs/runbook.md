@@ -54,9 +54,9 @@ Expected behavior:
 Checks:
 
 1. Confirm the worker is running and logging sync activity
-2. Confirm a relevant league is enabled in `league_settings`
+2. Confirm a relevant competition is enabled in `competition_settings`
 3. Confirm users follow teams or games that should produce alert candidates
-4. Confirm the resolved league or per-game settings have the alert type enabled; per-game fields inherit league values until explicitly changed
+4. Confirm the resolved competition or per-game settings have the alert type enabled; per-game fields inherit competition values until explicitly changed
 5. For real delivery, confirm `DELIVERY_MODE=live`
 6. For email failures, confirm the Resend settings
 7. For Push failures, confirm `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, then inspect the aggregate `provider_data`
@@ -86,22 +86,23 @@ Escalation path:
 
 `make reset` deletes local DB data, including local sign-in/session state in the database.
 
-## Sports Data Reset And Reseed
+## Complete Database Reset And Reseed
 
-Use this when you want to keep the repo shape but clear sports-domain state.
+Use this only when you intend to delete users, login state, push subscriptions, follows, preferences, alerts, and sports data. The script rebuilds the single Alembic baseline and restores the code-owned competition and team catalogs.
+
+For the one-time league-to-competition production cutover, follow the ordered procedure in [deployment.md](deployment.md#competition-domain-cutover). The reset must run from the new code before the new API starts.
 
 1. Stop or pause the worker
 2. Run:
 
 ```sh
 cd services/backend
-uv run alembic upgrade head
-uv run python scripts/reset_sports_data.py --yes
+uv run python scripts/reset_database.py --yes
 ```
 
 3. Restart API and worker
-4. Confirm teams were reseeded and ingest resumes cleanly
-5. Confirm user identity/auth data still looks correct before resuming normal use
+4. Confirm competitions and canonical teams were reseeded and ingest resumes cleanly
+5. Sign in again and restore any desired follows and preferences
 
 ## Strict Env Startup Failures
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { followGame, type League, type Team, unfollowGame } from "../../../shared/api";
+import { followGame, type Competition, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
@@ -11,7 +11,7 @@ import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import {
   buildDayOptions,
   filterGamesByDay,
-  filterGamesByLeague,
+  filterGamesByCompetition,
   gameStatusLabel,
   groupGamesByDay,
   localDateKey,
@@ -29,7 +29,7 @@ export function GamesView({
   const { data, isLoading } = useGamesData(token);
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
-  const [leagueFilter, setLeagueFilter] = useState<"all" | League>("all");
+  const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
   const [gameScope, setGameScope] = useState<"all" | "following">("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
@@ -62,10 +62,10 @@ export function GamesView({
   const games = data?.games ?? [];
   const follows = data?.follows;
   const teams = data?.teams ?? [];
-  const activeLeagues = data?.leagues ?? [];
-  const leagueProfiles = useMemo(
-    () => new Map(activeLeagues.map((profile) => [profile.league, profile] as const)),
-    [activeLeagues],
+  const activeCompetitions = data?.competitions ?? [];
+  const competitionProfiles = useMemo(
+    () => new Map(activeCompetitions.map((profile) => [profile.competition, profile] as const)),
+    [activeCompetitions],
   );
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
@@ -82,14 +82,17 @@ export function GamesView({
         : sortedGames,
     [followedGameIds, gameScope, sortedGames],
   );
-  const leagueFilteredGames = useMemo(
-    () => filterGamesByLeague(scopeFilteredGames, leagueFilter),
-    [scopeFilteredGames, leagueFilter],
+  const competitionFilteredGames = useMemo(
+    () => filterGamesByCompetition(scopeFilteredGames, competitionFilter),
+    [scopeFilteredGames, competitionFilter],
   );
-  const dayOptions = useMemo(() => buildDayOptions(leagueFilteredGames), [leagueFilteredGames]);
+  const dayOptions = useMemo(
+    () => buildDayOptions(competitionFilteredGames),
+    [competitionFilteredGames],
+  );
   const visibleGames = useMemo(
-    () => filterGamesByDay(leagueFilteredGames, dayFilter),
-    [leagueFilteredGames, dayFilter],
+    () => filterGamesByDay(competitionFilteredGames, dayFilter),
+    [competitionFilteredGames, dayFilter],
   );
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
   useEffect(() => {
@@ -97,10 +100,13 @@ export function GamesView({
   }, [gameScope, token]);
 
   useEffect(() => {
-    if (leagueFilter !== "all" && !activeLeagues.some((item) => item.league === leagueFilter)) {
-      setLeagueFilter("all");
+    if (
+      competitionFilter !== "all" &&
+      !activeCompetitions.some((item) => item.competition === competitionFilter)
+    ) {
+      setCompetitionFilter("all");
     }
-  }, [activeLeagues, leagueFilter]);
+  }, [activeCompetitions, competitionFilter]);
 
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
@@ -136,12 +142,12 @@ export function GamesView({
       {!isLoading ? (
         <div className="games-layout">
           <GamesFilterToolbar
-            activeLeagues={activeLeagues}
-            leagueFilter={leagueFilter}
-            onLeagueFilterChange={setLeagueFilter}
+            activeCompetitions={activeCompetitions}
+            competitionFilter={competitionFilter}
+            onCompetitionFilterChange={setCompetitionFilter}
             dayFilter={dayFilter}
             onDayFilterChange={setDayFilter}
-            totalLeagueGames={leagueFilteredGames.length}
+            totalCompetitionGames={competitionFilteredGames.length}
             dayOptions={dayOptions}
             showScopeFilter={Boolean(token)}
             gameScope={gameScope}
@@ -174,19 +180,19 @@ export function GamesView({
                         {group.items.map((game) => {
                           const home = teamMap.get(game.home_team_id);
                           const away = teamMap.get(game.away_team_id);
-                          const leagueProfile = leagueProfiles.get(game.league);
-                          if (!home || !away || !leagueProfile) return null;
+                          const competitionProfile = competitionProfiles.get(game.competition);
+                          if (!home || !away || !competitionProfile) return null;
                           const isFollowed = followedGameIds.has(game.id);
 
                           return (
                             <GameScoreRow
                               key={game.id}
                               game={game}
-                              sport={leagueProfile.sport}
+                              sport={competitionProfile.sport}
                               home={home}
                               away={away}
                               isFollowed={isFollowed}
-                              statusLabel={gameStatusLabel(game, leagueProfile.sport)}
+                              statusLabel={gameStatusLabel(game, competitionProfile.sport)}
                               actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
                               onFollow={() => {
                                 if (!token) {

@@ -83,7 +83,7 @@ Common values:
 Notes:
 
 - Odds fetching is enabled when `ODDS_API_KEY` is nonblank and disabled when it is blank.
-- League-specific live cadences and odds provider sport keys are stable values in the league registry, not environment settings.
+- Competition-specific live cadences and odds provider sport keys are stable values in the competition registry, not environment settings.
 - The provider, moneyline market, region, format, request timeout, cache duration, and pregame window are fixed implementation details.
 - Disabling odds does not disable schedule ingest or alert evaluation.
 

@@ -65,13 +65,13 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     summary = client.get("/ops/admin/summary?window=24h", headers=headers)
     assert summary.status_code == 200
     summary_json = summary.json()
-    assert set(summary_json) == {"overview", "delivery", "league_settings"}
+    assert set(summary_json) == {"overview", "delivery", "competition_settings"}
     assert set(summary_json["overview"]) == {"window", "total_alerts_created", "last_updated_at"}
     assert set(summary_json["delivery"]) == {"email_alerts", "push_alerts"}
     assert summary_json["overview"]["total_alerts_created"] == 2
     assert summary_json["delivery"]["email_alerts"] == {"attempted": 2, "sent": 1, "failed": 1}
     assert summary_json["delivery"]["push_alerts"] == {"attempted": 1, "sent": 0, "failed": 1}
-    assert [item["league"] for item in summary_json["league_settings"]] == [
+    assert [item["competition"] for item in summary_json["competition_settings"]] == [
         "NBA",
         "WNBA",
         "NFL",
@@ -101,11 +101,11 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "message": "NEON_API_KEY is not configured.",
     }
 
-    league_update = client.put(
-        "/ops/leagues/MLB",
+    competition_update = client.put(
+        "/ops/competitions/MLB",
         headers=headers,
         json={"is_enabled": False},
     )
-    assert league_update.status_code == 200
-    assert league_update.json()["league"] == "MLB"
-    assert league_update.json()["is_enabled"] is False
+    assert competition_update.status_code == 200
+    assert competition_update.json()["competition"] == "MLB"
+    assert competition_update.json()["is_enabled"] is False

@@ -52,7 +52,7 @@ Requirements:
 Behavior notes:
 
 - If `ODDS_API_KEY` is blank, the worker still ingests games and evaluates alerts
-- League enable/disable state is read from the database, so runtime scope can change without redeploying
+- Competition enable/disable state is read from the database, so runtime scope can change without redeploying
 
 ## Frontend Service
 
@@ -81,9 +81,26 @@ Requirements:
 - Network access from both services
 - A connection string compatible with SQLAlchemy / psycopg
 
-The repo stores both user data and disposable sports-domain state in Postgres. User identity matters more than sports data, so operationally it is acceptable to reset sports-domain data if needed, but do not treat user/auth data casually.
+The repo stores both user data and disposable sports-domain state in Postgres. The current baseline is intentionally self-contained and has no compatibility path from the previous league-scoped schema. Deploy this cutover only after a complete database reset during a maintenance window; the reset deletes user and auth data as well as sports data.
 
-The current baseline is intentionally self-contained. Replacing it requires an explicit full schema reset during a maintenance window; do not point a rewritten baseline at an existing schema.
+### Competition-Domain Cutover
+
+The previous database reports Alembic revision `0008_remove_test_games`, but the new release contains only `0001_baseline`. The API image runs `alembic upgrade head` before starting, so it cannot boot against the previous schema. Reset the database with the new code before starting the new API.
+
+1. Put the application into a maintenance window and pause the worker.
+2. Build the new release or check out the new commit without starting its API or worker.
+3. Verify that `DATABASE_URL` points to the intended production database.
+4. From `services/backend` in the new release, run:
+
+   ```sh
+   uv run python scripts/reset_database.py --yes
+   ```
+
+5. Start the new API. Its automatic Alembic command should be a no-op against `0001_baseline`.
+6. Deploy the worker and frontend. Deploy the frontend with the API because the old `/leagues` contract no longer exists.
+7. Sign in with the bootstrap admin email, resubscribe notification devices, and complete the checks below.
+
+Do not deploy the new API first and plan to reset afterward: its startup migration will fail before the service can become healthy.
 
 ## Post-Deploy Checks
 

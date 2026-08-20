@@ -1,6 +1,6 @@
 import { type Game, type Sport, type Team } from "../../../shared/api";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
-import { leagueBadgeLabel, leagueLogoUrl } from "../../../shared/lib/dashboard-ui";
+import { competitionBadgeLabel, competitionLogoUrl } from "../../../shared/lib/dashboard-ui";
 import {
   drawOdds,
   formatMoneyline,
@@ -52,8 +52,8 @@ export function GameScoreRow({
     : game.odds
       ? formatMoneyline(oddsOutcomeByTeamSide(game, "home"))
       : "—";
-  const league = leagueBadgeLabel(game.league);
-  const logoUrl = leagueLogoUrl(game.league);
+  const competition = competitionBadgeLabel(game.competition);
+  const logoUrl = competitionLogoUrl(game.competition);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
   const statusTone: GameStateTone = isLive
     ? "live"
@@ -72,15 +72,15 @@ export function GameScoreRow({
       <div className="game-score-header">
         <div className="game-score-meta">
           {logoUrl ? (
-            <span className="game-score-league-mark" aria-label={`${league} league`}>
+            <span className="game-score-competition-mark" aria-label={`${competition} competition`}>
               <img
                 src={logoUrl}
-                alt={`${league} logo`}
-                className={`game-score-league-logo league-${game.league.toLowerCase()}`}
+                alt={`${competition} logo`}
+                className={`game-score-competition-logo competition-${game.competition.toLowerCase()}`}
               />
             </span>
           ) : (
-            <span className="game-score-league-fallback">{league}</span>
+            <span className="game-score-competition-fallback">{competition}</span>
           )}
           {game.context_label ? (
             <span className="game-score-context" title={game.context_label}>

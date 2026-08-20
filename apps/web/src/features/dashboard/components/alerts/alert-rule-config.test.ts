@@ -7,7 +7,7 @@ import {
 } from "./alert-rule-config";
 
 describe("alert rule settings", () => {
-  it("builds the same full payload for boolean league and game settings", () => {
+  it("builds the same full payload for boolean competition and game settings", () => {
     expect(
       buildAlertSettingsPayload(
         {

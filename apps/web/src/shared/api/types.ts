@@ -13,22 +13,23 @@ export type UserProfile = {
   created_at: string;
 };
 
-export type League =
+export type Competition =
   "NBA" | "WNBA" | "NFL" | "MLB" | "MLS" | "LA_LIGA" | "PREMIER_LEAGUE" | "WORLD_CUP";
 export type Sport = "basketball" | "football" | "baseball" | "soccer";
 
 export type Team = {
   id: number;
+  sport: Sport;
   external_team_id: string;
-  league: League;
   name: string;
   abbreviation: string;
+  competitions: Competition[];
 };
 
 export type Game = {
   id: number;
   external_game_id: string;
-  league: League;
+  competition: Competition;
   home_team_id: number;
   away_team_id: number;
   scheduled_start_time: string;
@@ -52,8 +53,8 @@ export type Game = {
   } | null;
 };
 
-export type LeagueSetting = {
-  league: League;
+export type CompetitionSetting = {
+  competition: Competition;
   sport: Sport;
   label: string;
   badge_label: string;
@@ -74,24 +75,25 @@ export type AlertSettings = {
 export type AlertSettingsUpdate = AlertSettings;
 
 export type AlertPreference = AlertSettings & {
-  league: League;
+  sport: Sport;
   alert_type: string;
 };
 
 export type AlertPreferenceGroup = {
-  league: League;
+  sport: Sport;
   preferences: AlertPreference[];
 };
 
 export type GameAlertPreferenceItem = AlertSettings & {
-  league: League;
+  sport: Sport;
   alert_type: string;
-  uses_league_defaults: boolean;
+  uses_sport_defaults: boolean;
 };
 
 export type GameAlertPreferences = {
   game_id: number;
-  league: League;
+  competition: Competition;
+  sport: Sport;
   items: GameAlertPreferenceItem[];
 };
 
@@ -159,7 +161,7 @@ export type OpsAdminSummaryResponse = {
       failed: number;
     };
   };
-  league_settings: LeagueSetting[];
+  competition_settings: CompetitionSetting[];
 };
 
 export type OpsNeonUsageResponse = {

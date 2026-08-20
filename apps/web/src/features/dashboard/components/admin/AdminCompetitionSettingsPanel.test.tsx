@@ -2,19 +2,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type LeagueSetting } from "../../../../shared/api";
-import { AdminLeagueSettingsPanel } from "./AdminLeagueSettingsPanel";
+import { type CompetitionSetting } from "../../../../shared/api";
+import { AdminCompetitionSettingsPanel } from "./AdminCompetitionSettingsPanel";
 
-const updateOpsLeagueSettingMock = vi.hoisted(() => vi.fn());
+const updateOpsCompetitionSettingMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../../shared/api", async () => {
   const actual =
     await vi.importActual<typeof import("../../../../shared/api")>("../../../../shared/api");
-  return { ...actual, updateOpsLeagueSetting: updateOpsLeagueSettingMock };
+  return { ...actual, updateOpsCompetitionSetting: updateOpsCompetitionSettingMock };
 });
 
-const item: LeagueSetting = {
-  league: "WNBA",
+const item: CompetitionSetting = {
+  competition: "WNBA",
   sport: "basketball",
   label: "WNBA",
   badge_label: "WNBA",
@@ -28,24 +28,24 @@ function renderPanel() {
   const invalidate = vi.spyOn(client, "invalidateQueries");
   render(
     <QueryClientProvider client={client}>
-      <AdminLeagueSettingsPanel token="token" items={[item]} />
+      <AdminCompetitionSettingsPanel token="token" items={[item]} />
     </QueryClientProvider>,
   );
   return { invalidate };
 }
 
-describe("AdminLeagueSettingsPanel", () => {
+describe("AdminCompetitionSettingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateOpsLeagueSettingMock.mockResolvedValue({ ...item, is_enabled: false });
+    updateOpsCompetitionSettingMock.mockResolvedValue({ ...item, is_enabled: false });
   });
 
-  it("updates a league and invalidates the affected views", async () => {
+  it("updates a competition and invalidates the affected views", async () => {
     const { invalidate } = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Disable WNBA" }));
 
     await waitFor(() =>
-      expect(updateOpsLeagueSettingMock).toHaveBeenCalledWith("token", "WNBA", false),
+      expect(updateOpsCompetitionSettingMock).toHaveBeenCalledWith("token", "WNBA", false),
     );
     await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(3));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin-page", "token"] });
@@ -55,7 +55,7 @@ describe("AdminLeagueSettingsPanel", () => {
 
   it("shows saving and error states", async () => {
     let rejectUpdate: ((error: Error) => void) | undefined;
-    updateOpsLeagueSettingMock.mockImplementation(
+    updateOpsCompetitionSettingMock.mockImplementation(
       () =>
         new Promise((_, reject) => {
           rejectUpdate = reject;
@@ -68,7 +68,7 @@ describe("AdminLeagueSettingsPanel", () => {
     await waitFor(() => expect(action).toBeDisabled());
     expect(action).toHaveTextContent("Saving...");
 
-    rejectUpdate?.(new Error("League update failed"));
-    expect(await screen.findByText("League update failed")).toBeInTheDocument();
+    rejectUpdate?.(new Error("Competition update failed"));
+    expect(await screen.findByText("Competition update failed")).toBeInTheDocument();
   });
 });

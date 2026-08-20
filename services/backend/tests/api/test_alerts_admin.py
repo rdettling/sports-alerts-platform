@@ -2,8 +2,9 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.security import create_access_token
-from app.db.models import Alert, AlertDelivery, Game, LeagueSetting, PushSubscription, Team, User
+from app.db.models import Alert, AlertDelivery, Game, CompetitionSetting, PushSubscription, Team, User
 from app.db.session import SessionLocal
+from app.services.competitions import competition_teams_query
 from app.routers.alerts import _build_admin_test_objects
 from app.services import alert_delivery
 from app.services.resend import ResendResult
@@ -75,26 +76,26 @@ def test_admin_test_alert_requires_admin(client):
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "game_start"},
+        json={"competition": "NBA", "alert_type": "game_start"},
     )
     assert response.status_code == 403
 
 
 @pytest.mark.parametrize(
-    ("league", "alert_type"),
-    [(league, alert_type) for league, alert_types in SUPPORTED_TEST_ALERTS.items() for alert_type in alert_types],
+    ("competition", "alert_type"),
+    [(competition, alert_type) for competition, alert_types in SUPPORTED_TEST_ALERTS.items() for alert_type in alert_types],
 )
-def test_admin_test_alert_supports_every_league_alert_combination(client, league, alert_type):
-    headers = _auth_headers(client, email=f"admin-{league.lower()}-{alert_type}@example.com")
+def test_admin_test_alert_supports_every_competition_alert_combination(client, competition, alert_type):
+    headers = _auth_headers(client, email=f"admin-{competition.lower()}-{alert_type}@example.com")
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": league, "alert_type": alert_type},
+        json={"competition": competition, "alert_type": alert_type},
     )
 
     assert response.status_code == 200
     assert response.json() == {
-        "league": league,
+        "competition": competition,
         "alert_type": alert_type,
         "deliveries": [
             {
@@ -107,7 +108,7 @@ def test_admin_test_alert_supports_every_league_alert_combination(client, league
 
 
 @pytest.mark.parametrize(
-    ("league", "alert_type", "expected"),
+    ("competition", "alert_type", "expected"),
     [
         ("NBA", "overtime_start", ("in_progress", 112, 112, 5, "05:00")),
         ("NFL", "close_game_late", ("in_progress", 20, 17, 4, "04:30")),
@@ -115,16 +116,16 @@ def test_admin_test_alert_supports_every_league_alert_combination(client, league
         ("MLS", "final_result", ("final", 2, 1, 2, "FT")),
     ],
 )
-def test_admin_test_scenarios_keep_representative_sport_state(client, league, alert_type, expected):
+def test_admin_test_scenarios_keep_representative_sport_state(client, competition, alert_type, expected):
     _auth_headers(client)
     db = SessionLocal()
     try:
         away, home = db.scalars(
-            select(Team).where(Team.league == league).order_by(Team.id.asc()).limit(2)
+            competition_teams_query(competition).order_by(Team.id.asc()).limit(2)
         ).all()
         game, _ = _build_admin_test_objects(
             user_id=1,
-            league=league,
+            competition=competition,
             alert_type=alert_type,
             away_team=away,
             home_team=home,
@@ -142,11 +143,11 @@ def test_admin_test_alert_is_response_only(client):
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "final_result"},
+        json={"competition": "NBA", "alert_type": "final_result"},
     )
 
     assert response.status_code == 200
-    assert set(response.json()) == {"league", "alert_type", "deliveries"}
+    assert set(response.json()) == {"competition", "alert_type", "deliveries"}
     assert _sports_counts() == before
     assert client.get("/alerts/history", headers=headers).json() == {"items": []}
     summary = client.get("/ops/admin/summary?window=24h", headers=headers).json()
@@ -175,7 +176,7 @@ def test_admin_test_alert_honors_both_delivery_mode(client):
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "game_start"},
+        json={"competition": "NBA", "alert_type": "game_start"},
     )
 
     assert response.status_code == 200
@@ -198,7 +199,7 @@ def test_admin_test_alert_returns_expected_delivery_failure(client, monkeypatch)
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "game_start"},
+        json={"competition": "NBA", "alert_type": "game_start"},
     )
 
     assert response.status_code == 200
@@ -237,7 +238,7 @@ def test_admin_test_push_commits_expired_subscription_cleanup(client, monkeypatc
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "game_start"},
+        json={"competition": "NBA", "alert_type": "game_start"},
     )
 
     assert response.status_code == 200
@@ -252,8 +253,8 @@ def test_admin_test_push_commits_expired_subscription_cleanup(client, monkeypatc
 @pytest.mark.parametrize(
     ("payload", "detail"),
     [
-        ({"league": "UNKNOWN", "alert_type": "game_start"}, "Invalid league"),
-        ({"league": "MLB", "alert_type": "close_game_late"}, "Invalid alert type"),
+        ({"competition": "UNKNOWN", "alert_type": "game_start"}, "Invalid competition"),
+        ({"competition": "MLB", "alert_type": "close_game_late"}, "Invalid alert type"),
     ],
 )
 def test_admin_test_alert_rejects_invalid_requests(client, payload, detail):
@@ -263,11 +264,11 @@ def test_admin_test_alert_rejects_invalid_requests(client, payload, detail):
     assert detail in response.json()["detail"]
 
 
-def test_admin_test_alert_rejects_disabled_league(client):
+def test_admin_test_alert_rejects_disabled_competition(client):
     headers = _auth_headers(client)
     db = SessionLocal()
     try:
-        db.get(LeagueSetting, "MLB").is_enabled = False
+        db.get(CompetitionSetting, "MLB").is_enabled = False
         db.commit()
     finally:
         db.close()
@@ -275,17 +276,17 @@ def test_admin_test_alert_rejects_disabled_league(client):
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "MLB", "alert_type": "game_start"},
+        json={"competition": "MLB", "alert_type": "game_start"},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "League is disabled"
+    assert response.json()["detail"] == "Competition is disabled"
 
 
 def test_admin_test_alert_requires_two_seeded_teams(client):
     headers = _auth_headers(client)
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).where(Team.league == "NBA").order_by(Team.id.asc())).all()
+        teams = db.scalars(competition_teams_query("NBA").order_by(Team.id.asc())).all()
         for team in teams[1:]:
             db.delete(team)
         db.commit()
@@ -295,7 +296,7 @@ def test_admin_test_alert_requires_two_seeded_teams(client):
     response = client.post(
         "/alerts/admin/test",
         headers=headers,
-        json={"league": "NBA", "alert_type": "game_start"},
+        json={"competition": "NBA", "alert_type": "game_start"},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Not enough teams available for test alerts"

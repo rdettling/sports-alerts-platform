@@ -23,7 +23,7 @@
 }
 
 .scope-toggle-button,
-.league-tab {
+.competition-tab {
   border: 0;
   color: var(--text-secondary);
   background: transparent;
@@ -50,7 +50,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.league-tabs {
+.competition-tabs {
   display: flex;
   align-items: stretch;
   gap: 0.125rem;
@@ -61,11 +61,11 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.league-tabs::-webkit-scrollbar {
+.competition-tabs::-webkit-scrollbar {
   display: none;
 }
 
-.league-tab {
+.competition-tab {
   position: relative;
   flex: 0 0 auto;
   min-height: 2rem;
@@ -73,12 +73,12 @@
   white-space: nowrap;
 }
 
-.league-tab:hover:not(:disabled),
-.league-tab.active {
+.competition-tab:hover:not(:disabled),
+.competition-tab.active {
   color: var(--accent);
 }
 
-.league-tab.active::after {
+.competition-tab.active::after {
   position: absolute;
   right: 0.5rem;
   bottom: -1px;

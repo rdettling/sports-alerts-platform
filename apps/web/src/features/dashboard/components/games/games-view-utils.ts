@@ -1,4 +1,4 @@
-import { type Game, type League, type Sport } from "../../../../shared/api";
+import { type Game, type Competition, type Sport } from "../../../../shared/api";
 import { formatGameStatusLabel, formatGameTime } from "./game-display";
 
 export type GameDayGroup = { label: string; items: Game[] };
@@ -20,9 +20,12 @@ export function sortGamesByStart(games: Game[]): Game[] {
   );
 }
 
-export function filterGamesByLeague(games: Game[], leagueFilter: "all" | League): Game[] {
-  if (leagueFilter === "all") return games;
-  return games.filter((game) => game.league === leagueFilter);
+export function filterGamesByCompetition(
+  games: Game[],
+  competitionFilter: "all" | Competition,
+): Game[] {
+  if (competitionFilter === "all") return games;
+  return games.filter((game) => game.competition === competitionFilter);
 }
 
 export function buildDayOptions(games: Game[]): DayOption[] {

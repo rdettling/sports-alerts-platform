@@ -37,12 +37,13 @@ describe("GameAlertSettingsModal", () => {
         alertsBusy={false}
         gameAlertState={{
           game_id: 12,
-          league: "WNBA",
+          competition: "WNBA",
+          sport: "basketball",
           items: [
             {
-              league: "WNBA",
+              sport: "basketball",
               alert_type: "game_start",
-              uses_league_defaults: false,
+              uses_sport_defaults: false,
               is_enabled: true,
               close_game_margin_threshold: null,
               close_game_time_threshold_seconds: null,
@@ -69,11 +70,11 @@ describe("GameAlertSettingsModal", () => {
       inning_start_threshold: null,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Use league settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use sport settings" }));
     expect(onResetGameAlertSettings).toHaveBeenCalledWith(12, "game_start");
   });
 
-  it("hides reset for game alerts already using league settings", () => {
+  it("hides reset for game alerts already using sport settings", () => {
     render(
       <GameAlertSettingsModal
         isOpen
@@ -81,12 +82,13 @@ describe("GameAlertSettingsModal", () => {
         alertsBusy={false}
         gameAlertState={{
           game_id: 12,
-          league: "WNBA",
+          competition: "WNBA",
+          sport: "basketball",
           items: [
             {
-              league: "WNBA",
+              sport: "basketball",
               alert_type: "game_start",
-              uses_league_defaults: true,
+              uses_sport_defaults: true,
               is_enabled: true,
               close_game_margin_threshold: null,
               close_game_time_threshold_seconds: null,
@@ -100,6 +102,6 @@ describe("GameAlertSettingsModal", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Use league settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use sport settings" })).toBeNull();
   });
 });

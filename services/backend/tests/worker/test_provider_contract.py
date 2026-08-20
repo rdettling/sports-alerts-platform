@@ -2,13 +2,13 @@ from app.worker.scoreboard import EspnScoreboardClient
 
 
 def test_provider_failure_logs_compact_request_context(caplog):
-    def fail_fetch(_league, _params):
+    def fail_fetch(_competition, _params):
         raise RuntimeError("provider unavailable")
 
     games = EspnScoreboardClient(fetch_json=fail_fetch).fetch_games("NBA", ["20260406"])
 
     assert games == []
-    assert "ESPN request failed league=NBA date=20260406 error=provider unavailable" in caplog.text
+    assert "ESPN request failed competition=NBA date=20260406 error=provider unavailable" in caplog.text
 
 
 def test_provider_parses_espn_payload_shape():
@@ -46,6 +46,52 @@ def test_provider_parses_espn_payload_shape():
     assert game.home_score == 102
     assert game.away_score == 98
     assert game.context_label is None
+
+
+def test_soccer_competition_feeds_preserve_shared_club_ids():
+    def payload(game_id: str) -> dict:
+        return {
+            "events": [
+                {
+                    "id": game_id,
+                    "date": "2026-09-01T19:00Z",
+                    "competitions": [
+                        {
+                            "status": {
+                                "period": 0,
+                                "displayClock": "0:00",
+                                "type": {
+                                    "state": "pre",
+                                    "name": "STATUS_SCHEDULED",
+                                    "completed": False,
+                                },
+                            },
+                            "competitors": [
+                                {
+                                    "homeAway": "home",
+                                    "score": "0",
+                                    "team": {"id": "359", "abbreviation": "ARS"},
+                                },
+                                {
+                                    "homeAway": "away",
+                                    "score": "0",
+                                    "team": {"id": "364", "abbreviation": "LIV"},
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+
+    provider = EspnScoreboardClient(
+        fetch_json=lambda competition, _: payload(f"{competition.lower()}-game")
+    )
+    premier_game = provider.fetch_games("PREMIER_LEAGUE", ["20260901"])[0]
+    la_liga_game = provider.fetch_games("LA_LIGA", ["20260901"])[0]
+
+    assert premier_game.home_external_team_id == la_liga_game.home_external_team_id == "359"
+    assert premier_game.away_external_team_id == la_liga_game.away_external_team_id == "364"
 
 
 def test_provider_builds_nba_context_label_from_round_and_series():

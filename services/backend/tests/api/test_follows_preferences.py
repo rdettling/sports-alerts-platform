@@ -4,8 +4,18 @@ import pytest
 from sqlalchemy import select
 
 from app.core.security import create_access_token
-from app.db.models import Game, Team, User, UserAlertPreference, UserGameAlertOverride
+from app.db.models import (
+    CompetitionSetting,
+    CompetitionTeam,
+    Game,
+    Team,
+    User,
+    UserAlertPreference,
+    UserGameAlertOverride,
+    UserTeamFollow,
+)
 from app.db.session import SessionLocal
+from app.services.competitions import competition_teams_query
 
 
 def _auth_headers(client, email: str = "m2@example.com") -> dict[str, str]:
@@ -23,13 +33,13 @@ def _auth_headers(client, email: str = "m2@example.com") -> dict[str, str]:
         db.close()
 
 
-def _create_game(league: str = "NBA") -> int:
+def _create_game(competition: str = "NBA") -> int:
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).where(Team.league == league).order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(competition_teams_query(competition).order_by(Team.id.asc()).limit(2)).all()
         game = Game(
-            external_game_id=f"test-game-m2-{league.lower()}",
-            league=league,
+            external_game_id=f"test-game-m2-{competition.lower()}",
+            competition=competition,
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -50,7 +60,7 @@ def _create_game_for_team(team_id: int) -> int:
         assert opponent is not None
         game = Game(
             external_game_id=f"test-team-game-{team_id}-{datetime.now(timezone.utc).timestamp()}",
-            league="NBA",
+            competition="NBA",
             home_team_id=team_id,
             away_team_id=opponent.id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=4),
@@ -140,52 +150,128 @@ def test_team_follow_includes_team_games_with_per_game_override(client):
     assert game_id in game_ids_after_refollow
 
 
+def test_canonical_team_follow_spans_competitions_and_survives_membership_changes(client):
+    headers = _auth_headers(client, email="canonical-team@example.com")
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        arsenal = db.scalar(
+            competition_teams_query("PREMIER_LEAGUE").where(Team.external_team_id == "359")
+        )
+        premier_opponent = db.scalar(
+            competition_teams_query("PREMIER_LEAGUE").where(Team.external_team_id != "359")
+        )
+        la_liga_opponent = db.scalar(competition_teams_query("LA_LIGA"))
+        mls_opponent = db.scalar(competition_teams_query("MLS"))
+        assert arsenal and premier_opponent and la_liga_opponent and mls_opponent
+
+        db.add(CompetitionTeam(competition="LA_LIGA", team_id=arsenal.id))
+        games = [
+            Game(
+                external_game_id="arsenal-premier-test",
+                competition="PREMIER_LEAGUE",
+                home_team_id=arsenal.id,
+                away_team_id=premier_opponent.id,
+                scheduled_start_time=now + timedelta(hours=1),
+                status="scheduled",
+            ),
+            Game(
+                external_game_id="arsenal-la-liga-test",
+                competition="LA_LIGA",
+                home_team_id=arsenal.id,
+                away_team_id=la_liga_opponent.id,
+                scheduled_start_time=now + timedelta(hours=2),
+                status="scheduled",
+            ),
+        ]
+        db.add_all(games)
+        db.commit()
+        arsenal_id = arsenal.id
+        premier_game_id, la_liga_game_id = (game.id for game in games)
+
+    arsenal_rows = [team for team in client.get("/teams").json() if team["id"] == arsenal_id]
+    assert len(arsenal_rows) == 1
+    assert arsenal_rows[0]["sport"] == "soccer"
+    assert set(arsenal_rows[0]["competitions"]) == {"PREMIER_LEAGUE", "LA_LIGA"}
+
+    assert client.post(f"/follows/teams/{arsenal_id}", headers=headers).status_code == 201
+    followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
+    assert {premier_game_id, la_liga_game_id} <= followed_game_ids
+
+    assert client.delete(f"/follows/games/{la_liga_game_id}", headers=headers).status_code == 200
+    followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
+    assert premier_game_id in followed_game_ids
+    assert la_liga_game_id not in followed_game_ids
+
+    with SessionLocal() as db:
+        la_liga_membership = db.get(CompetitionTeam, ("LA_LIGA", arsenal_id))
+        assert la_liga_membership is not None
+        db.delete(la_liga_membership)
+        db.add(CompetitionTeam(competition="MLS", team_id=arsenal_id))
+        mls_opponent = db.scalar(competition_teams_query("MLS").where(Team.id != arsenal_id))
+        assert mls_opponent is not None
+        mls_game = Game(
+            external_game_id="arsenal-mls-test",
+            competition="MLS",
+            home_team_id=arsenal_id,
+            away_team_id=mls_opponent.id,
+            scheduled_start_time=now + timedelta(hours=3),
+            status="scheduled",
+        )
+        db.add(mls_game)
+        db.commit()
+        mls_game_id = mls_game.id
+        assert db.scalar(
+            select(UserTeamFollow).where(UserTeamFollow.team_id == arsenal_id)
+        ) is not None
+
+    moved_arsenal = next(team for team in client.get("/teams").json() if team["id"] == arsenal_id)
+    assert set(moved_arsenal["competitions"]) == {"PREMIER_LEAGUE", "MLS"}
+    followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
+    assert mls_game_id in followed_game_ids
+
+    with SessionLocal() as db:
+        db.get(CompetitionSetting, "MLS").is_enabled = False
+        db.commit()
+
+    hidden_arsenal = next(team for team in client.get("/teams").json() if team["id"] == arsenal_id)
+    assert hidden_arsenal["competitions"] == ["PREMIER_LEAGUE"]
+    follows = client.get("/follows", headers=headers).json()
+    assert follows["teams"][0]["id"] == arsenal_id
+    assert mls_game_id not in {game["id"] for game in follows["games"]}
+
+
 def test_alert_preferences_get_and_update(client):
     headers = _auth_headers(client, email="m2-preferences@example.com")
 
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert len(groups) == 8
-    nba_group = next(group for group in groups if group["league"] == "NBA")
-    wnba_group = next(group for group in groups if group["league"] == "WNBA")
-    nfl_group = next(group for group in groups if group["league"] == "NFL")
-    mlb_group = next(group for group in groups if group["league"] == "MLB")
-    mls_group = next(group for group in groups if group["league"] == "MLS")
-    la_liga_group = next(group for group in groups if group["league"] == "LA_LIGA")
-    premier_league_group = next(group for group in groups if group["league"] == "PREMIER_LEAGUE")
-    world_cup_group = next(group for group in groups if group["league"] == "WORLD_CUP")
-    assert len(nba_group["preferences"]) == 4
-    assert {item["alert_type"] for item in nba_group["preferences"]} == {
+    assert [group["sport"] for group in groups] == ["basketball", "football", "baseball", "soccer"]
+    basketball = next(group for group in groups if group["sport"] == "basketball")
+    football = next(group for group in groups if group["sport"] == "football")
+    baseball = next(group for group in groups if group["sport"] == "baseball")
+    soccer = next(group for group in groups if group["sport"] == "soccer")
+    assert {item["alert_type"] for item in basketball["preferences"]} == {
         "game_start",
         "close_game_late",
         "overtime_start",
         "final_result",
     }
-    assert {item["alert_type"] for item in wnba_group["preferences"]} == {
+    assert {item["alert_type"] for item in football["preferences"]} == {
         "game_start",
         "close_game_late",
         "overtime_start",
         "final_result",
     }
-    assert next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")["is_enabled"] is True
-    assert {item["alert_type"] for item in nfl_group["preferences"]} == {
-        "game_start",
-        "close_game_late",
-        "overtime_start",
-        "final_result",
-    }
-    nfl_close = next(item for item in nfl_group["preferences"] if item["alert_type"] == "close_game_late")
-    assert nfl_close["close_game_margin_threshold"] == 8
-    assert nfl_close["close_game_time_threshold_seconds"] == 300
-    assert {item["alert_type"] for item in mlb_group["preferences"]} == {
+    football_close = next(item for item in football["preferences"] if item["alert_type"] == "close_game_late")
+    assert football_close["close_game_margin_threshold"] == 8
+    assert {item["alert_type"] for item in baseball["preferences"]} == {
         "game_start",
         "inning_start",
         "extra_innings_start",
         "final_result",
     }
-    assert next(item for item in mlb_group["preferences"] if item["alert_type"] == "extra_innings_start")["is_enabled"] is True
-    assert {item["alert_type"] for item in mls_group["preferences"]} == {
+    assert {item["alert_type"] for item in soccer["preferences"]} == {
         "game_start",
         "second_half_start",
         "extra_time_start",
@@ -193,25 +279,9 @@ def test_alert_preferences_get_and_update(client):
         "score_changed",
         "final_result",
     }
-    assert all(item["is_enabled"] for item in mls_group["preferences"])
-    assert {item["alert_type"] for item in la_liga_group["preferences"]} == {
-        "game_start",
-        "second_half_start",
-        "score_changed",
-        "final_result",
-    }
-    assert all(item["is_enabled"] for item in la_liga_group["preferences"])
-    assert {item["alert_type"] for item in premier_league_group["preferences"]} == {
-        "game_start",
-        "second_half_start",
-        "score_changed",
-        "final_result",
-    }
-    assert all(item["is_enabled"] for item in premier_league_group["preferences"])
-    assert {item["alert_type"] for item in world_cup_group["preferences"]} == {"game_start", "second_half_start", "extra_time_start", "penalty_kicks", "score_changed", "final_result"}
 
     update_response = client.put(
-        "/alert-preferences/leagues/NBA/close_game_late",
+        "/alert-preferences/sports/basketball/close_game_late",
         headers=headers,
         json={
             "is_enabled": True,
@@ -221,13 +291,13 @@ def test_alert_preferences_get_and_update(client):
     )
     assert update_response.status_code == 200
     updated = update_response.json()
-    assert updated["league"] == "NBA"
+    assert updated["sport"] == "basketball"
     assert updated["alert_type"] == "close_game_late"
     assert updated["close_game_margin_threshold"] == 3
     assert updated["close_game_time_threshold_seconds"] == 90
 
     full_update = client.put(
-        "/alert-preferences/leagues/NBA/close_game_late",
+        "/alert-preferences/sports/basketball/close_game_late",
         headers=headers,
         json={
             "is_enabled": False,
@@ -240,75 +310,35 @@ def test_alert_preferences_get_and_update(client):
     assert full_update.json()["close_game_margin_threshold"] == 3
     assert full_update.json()["close_game_time_threshold_seconds"] == 90
 
-    mls_update = client.put(
-        "/alert-preferences/leagues/MLS/penalty_kicks",
+    soccer_update = client.put(
+        "/alert-preferences/sports/soccer/penalty_kicks",
         headers=headers,
         json={"is_enabled": False},
     )
-    assert mls_update.status_code == 200
+    assert soccer_update.status_code == 200
     refreshed = client.get("/alert-preferences", headers=headers).json()
-    mls_penalties = next(
+    soccer_penalties = next(
         item
         for group in refreshed
-        if group["league"] == "MLS"
+        if group["sport"] == "soccer"
         for item in group["preferences"]
         if item["alert_type"] == "penalty_kicks"
     )
-    world_cup_penalties = next(
-        item
-        for group in refreshed
-        if group["league"] == "WORLD_CUP"
-        for item in group["preferences"]
-        if item["alert_type"] == "penalty_kicks"
-    )
-    assert mls_penalties["is_enabled"] is False
-    assert world_cup_penalties["is_enabled"] is True
-
-    for alert_type in ("extra_time_start", "penalty_kicks"):
-        unsupported_la_liga_alert = client.put(
-            f"/alert-preferences/leagues/LA_LIGA/{alert_type}",
-            headers=headers,
-            json={"is_enabled": True},
-        )
-        assert unsupported_la_liga_alert.status_code == 404
-
-    la_liga_update = client.put(
-        "/alert-preferences/leagues/LA_LIGA/score_changed",
-        headers=headers,
-        json={"is_enabled": False},
-    )
-    assert la_liga_update.status_code == 200
-    assert la_liga_update.json()["is_enabled"] is False
-
-    for alert_type in ("extra_time_start", "penalty_kicks"):
-        unsupported_premier_league_alert = client.put(
-            f"/alert-preferences/leagues/PREMIER_LEAGUE/{alert_type}",
-            headers=headers,
-            json={"is_enabled": True},
-        )
-        assert unsupported_premier_league_alert.status_code == 404
-
-    premier_league_update = client.put(
-        "/alert-preferences/leagues/PREMIER_LEAGUE/score_changed",
-        headers=headers,
-        json={"is_enabled": False},
-    )
-    assert premier_league_update.status_code == 200
-    assert premier_league_update.json()["is_enabled"] is False
+    assert soccer_penalties["is_enabled"] is False
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == "m2-preferences@example.com"))
         rows = db.scalars(
             select(UserAlertPreference).where(UserAlertPreference.user_id == user.id)
         ).all()
-        assert len(rows) == 4
-        nba_preference = next(row for row in rows if row.league == "NBA")
-        assert nba_preference.is_enabled_override is False
-        assert nba_preference.close_game_margin_threshold_override == 3
-        assert nba_preference.close_game_time_threshold_seconds_override == 90
+        assert len(rows) == 2
+        basketball_preference = next(row for row in rows if row.sport == "basketball")
+        assert basketball_preference.is_enabled_override is False
+        assert basketball_preference.close_game_margin_threshold_override == 3
+        assert basketball_preference.close_game_time_threshold_seconds_override == 90
 
     reset = client.put(
-        "/alert-preferences/leagues/NBA/close_game_late",
+        "/alert-preferences/sports/basketball/close_game_late",
         headers=headers,
         json={
             "is_enabled": True,
@@ -323,7 +353,7 @@ def test_alert_preferences_get_and_update(client):
         assert db.scalar(
             select(UserAlertPreference).where(
                 UserAlertPreference.user_id == user.id,
-                UserAlertPreference.league == "NBA",
+                UserAlertPreference.sport == "basketball",
             )
         ) is None
 
@@ -333,12 +363,12 @@ def test_alert_preferences_get_does_not_materialize_defaults(client):
     headers = _auth_headers(client, email=email)
     response = client.get("/alert-preferences", headers=headers)
     assert response.status_code == 200
-    nba_group = next(group for group in response.json() if group["league"] == "NBA")
-    overtime = next(item for item in nba_group["preferences"] if item["alert_type"] == "overtime_start")
+    basketball_group = next(group for group in response.json() if group["sport"] == "basketball")
+    overtime = next(item for item in basketball_group["preferences"] if item["alert_type"] == "overtime_start")
     assert overtime["is_enabled"] is True
-    mlb_group = next(group for group in response.json() if group["league"] == "MLB")
+    baseball_group = next(group for group in response.json() if group["sport"] == "baseball")
     extra_innings = next(
-        item for item in mlb_group["preferences"] if item["alert_type"] == "extra_innings_start"
+        item for item in baseball_group["preferences"] if item["alert_type"] == "extra_innings_start"
     )
     assert extra_innings["is_enabled"] is True
 
@@ -358,16 +388,16 @@ def test_game_alert_override_flow(client):
     assert get_response.status_code == 200
     payload = get_response.json()
     assert payload["game_id"] == game_id
-    assert payload["league"] == "NBA"
+    assert payload["competition"] == "NBA"
     assert len(payload["items"]) == 4
     close_item = next(item for item in payload["items"] if item["alert_type"] == "close_game_late")
-    assert close_item["uses_league_defaults"] is True
+    assert close_item["uses_sport_defaults"] is True
     assert "override" not in close_item
     assert close_item["close_game_margin_threshold"] == 5
     assert close_item["close_game_time_threshold_seconds"] == 300
     overtime_item = next(item for item in payload["items"] if item["alert_type"] == "overtime_start")
     assert overtime_item["is_enabled"] is True
-    assert overtime_item["uses_league_defaults"] is True
+    assert overtime_item["uses_sport_defaults"] is True
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == "m2-game-overrides@example.com"))
@@ -389,7 +419,7 @@ def test_game_alert_override_flow(client):
     )
     assert update_response.status_code == 200
     updated_item = update_response.json()
-    assert updated_item["uses_league_defaults"] is False
+    assert updated_item["uses_sport_defaults"] is False
     assert updated_item["is_enabled"] is False
     assert updated_item["close_game_margin_threshold"] == 2
     assert updated_item["close_game_time_threshold_seconds"] == 45
@@ -397,7 +427,7 @@ def test_game_alert_override_flow(client):
     clear_response = client.delete(f"/alert-preferences/games/{game_id}/close_game_late", headers=headers)
     assert clear_response.status_code == 200
     cleared_item = clear_response.json()
-    assert cleared_item["uses_league_defaults"] is True
+    assert cleared_item["uses_sport_defaults"] is True
     assert cleared_item["is_enabled"] is True
     assert cleared_item["close_game_margin_threshold"] == 5
     assert cleared_item["close_game_time_threshold_seconds"] == 300
@@ -409,12 +439,12 @@ def test_game_alert_override_flow(client):
     )
     assert overtime_update.status_code == 200
     assert overtime_update.json()["is_enabled"] is False
-    assert overtime_update.json()["uses_league_defaults"] is False
+    assert overtime_update.json()["uses_sport_defaults"] is False
 
     overtime_clear = client.delete(f"/alert-preferences/games/{game_id}/overtime_start", headers=headers)
     assert overtime_clear.status_code == 200
     assert overtime_clear.json()["is_enabled"] is True
-    assert overtime_clear.json()["uses_league_defaults"] is True
+    assert overtime_clear.json()["uses_sport_defaults"] is True
 
 
 def test_extra_innings_game_alert_override_flow(client):
@@ -427,7 +457,7 @@ def test_extra_innings_game_alert_override_flow(client):
         item for item in response.json()["items"] if item["alert_type"] == "extra_innings_start"
     )
     assert extra_innings["is_enabled"] is True
-    assert extra_innings["uses_league_defaults"] is True
+    assert extra_innings["uses_sport_defaults"] is True
 
     update = client.put(
         f"/alert-preferences/games/{game_id}/extra_innings_start",
@@ -436,12 +466,12 @@ def test_extra_innings_game_alert_override_flow(client):
     )
     assert update.status_code == 200
     assert update.json()["is_enabled"] is False
-    assert update.json()["uses_league_defaults"] is False
+    assert update.json()["uses_sport_defaults"] is False
 
     clear = client.delete(f"/alert-preferences/games/{game_id}/extra_innings_start", headers=headers)
     assert clear.status_code == 200
     assert clear.json()["is_enabled"] is True
-    assert clear.json()["uses_league_defaults"] is True
+    assert clear.json()["uses_sport_defaults"] is True
 
 
 def test_noop_game_alert_overrides_are_not_stored(client):
@@ -449,8 +479,8 @@ def test_noop_game_alert_overrides_are_not_stored(client):
     headers = _auth_headers(client, email=email)
     game_id = _create_game()
 
-    league_update = client.put(
-        "/alert-preferences/leagues/NBA/close_game_late",
+    competition_update = client.put(
+        "/alert-preferences/sports/basketball/close_game_late",
         headers=headers,
         json={
             "is_enabled": True,
@@ -458,7 +488,7 @@ def test_noop_game_alert_overrides_are_not_stored(client):
             "close_game_time_threshold_seconds": 300,
         },
     )
-    assert league_update.status_code == 200
+    assert competition_update.status_code == 200
 
     equivalent = client.put(
         f"/alert-preferences/games/{game_id}/close_game_late",
@@ -470,7 +500,7 @@ def test_noop_game_alert_overrides_are_not_stored(client):
         },
     )
     assert equivalent.status_code == 200
-    assert equivalent.json()["uses_league_defaults"] is True
+    assert equivalent.json()["uses_sport_defaults"] is True
     assert "override" not in equivalent.json()
 
     empty = client.put(
@@ -493,12 +523,12 @@ def test_noop_game_alert_overrides_are_not_stored(client):
 def test_game_settings_inherit_only_fields_without_overrides(client):
     headers = _auth_headers(client, email="per-field-inheritance@example.com")
     game_id = _create_game()
-    league_url = "/alert-preferences/leagues/NBA/close_game_late"
+    competition_url = "/alert-preferences/sports/basketball/close_game_late"
     game_url = f"/alert-preferences/games/{game_id}/close_game_late"
 
     assert (
         client.put(
-            league_url,
+            competition_url,
             headers=headers,
             json={
                 "is_enabled": True,
@@ -523,7 +553,7 @@ def test_game_settings_inherit_only_fields_without_overrides(client):
 
     assert (
         client.put(
-            league_url,
+            competition_url,
             headers=headers,
             json={
                 "is_enabled": True,
@@ -541,22 +571,22 @@ def test_game_settings_inherit_only_fields_without_overrides(client):
         if item["alert_type"] == "close_game_late"
     )
 
-    assert item["uses_league_defaults"] is False
+    assert item["uses_sport_defaults"] is False
     assert item["is_enabled"] is False
     assert item["close_game_margin_threshold"] == 4
     assert item["close_game_time_threshold_seconds"] == 45
 
 
 @pytest.mark.parametrize(
-    ("league", "alert_type", "payload"),
+    ("sport", "alert_type", "payload"),
     [
-        ("NBA", "game_start", {}),
-        ("NBA", "game_start", {"is_enabled": True, "is_enabled_override": False}),
-        ("NBA", "game_start", {"is_enabled": True, "inning_start_threshold": 7}),
-        ("NBA", "close_game_late", {"is_enabled": True}),
-        ("MLB", "inning_start", {"is_enabled": True}),
+        ("basketball", "game_start", {}),
+        ("basketball", "game_start", {"is_enabled": True, "is_enabled_override": False}),
+        ("basketball", "game_start", {"is_enabled": True, "inning_start_threshold": 7}),
+        ("basketball", "close_game_late", {"is_enabled": True}),
+        ("baseball", "inning_start", {"is_enabled": True}),
         (
-            "MLB",
+            "baseball",
             "inning_start",
             {
                 "is_enabled": True,
@@ -567,12 +597,12 @@ def test_game_settings_inherit_only_fields_without_overrides(client):
     ],
 )
 def test_alert_settings_reject_incomplete_or_irrelevant_fields(
-    client, league, alert_type, payload
+    client, sport, alert_type, payload
 ):
-    headers = _auth_headers(client, email=f"invalid-{league}-{alert_type}@example.com")
+    headers = _auth_headers(client, email=f"invalid-{sport}-{alert_type}@example.com")
 
     response = client.put(
-        f"/alert-preferences/leagues/{league}/{alert_type}",
+        f"/alert-preferences/sports/{sport}/{alert_type}",
         headers=headers,
         json=payload,
     )
@@ -591,5 +621,5 @@ def test_inning_settings_use_the_shared_concrete_shape(client):
     )
 
     assert response.status_code == 200
-    assert response.json()["uses_league_defaults"] is False
+    assert response.json()["uses_sport_defaults"] is False
     assert response.json()["inning_start_threshold"] == 5

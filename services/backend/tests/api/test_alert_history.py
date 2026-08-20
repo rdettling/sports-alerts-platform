@@ -30,7 +30,7 @@ def test_alert_history_returns_alert_events_with_deliveries(client):
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
         game = Game(
             external_game_id="history-game",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc),
@@ -76,7 +76,7 @@ def test_alert_history_filters_by_type_and_time(client):
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
         game = Game(
             external_game_id="history-game-filters",
-            league="NBA",
+            competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc),

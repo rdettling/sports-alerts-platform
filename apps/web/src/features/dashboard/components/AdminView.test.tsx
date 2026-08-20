@@ -17,9 +17,9 @@ vi.mock("../../../shared/api", async () => {
 
 vi.mock("../hooks/useAdminData", () => ({ useAdminData: mocks.useAdminData }));
 
-const leagueSettings: OpsAdminSummaryResponse["league_settings"] = [
+const competitionSettings: OpsAdminSummaryResponse["competition_settings"] = [
   {
-    league: "WNBA",
+    competition: "WNBA",
     sport: "basketball",
     label: "WNBA",
     badge_label: "WNBA",
@@ -28,7 +28,7 @@ const leagueSettings: OpsAdminSummaryResponse["league_settings"] = [
     is_enabled: true,
   },
   {
-    league: "MLB",
+    competition: "MLB",
     sport: "baseball",
     label: "MLB",
     badge_label: "MLB",
@@ -48,7 +48,7 @@ const baseSummary: OpsAdminSummaryResponse = {
     email_alerts: { attempted: 3, sent: 2, failed: 1 },
     push_alerts: { attempted: 0, sent: 0, failed: 0 },
   },
-  league_settings: leagueSettings,
+  competition_settings: competitionSettings,
 };
 
 function adminData(

@@ -7,7 +7,7 @@ function makeGame(overrides: Partial<Game>): Game {
   return {
     id: 1,
     external_game_id: "g-1",
-    league: "MLB",
+    competition: "MLB",
     home_team_id: 10,
     away_team_id: 11,
     scheduled_start_time: "2026-05-28T17:10:00Z",

@@ -14,7 +14,7 @@ vi.mock("../../../shared/api", () => apiMocks);
 const game = {
   id: 12,
   external_game_id: "game-12",
-  league: "WNBA" as const,
+  competition: "WNBA" as const,
   home_team_id: 1,
   away_team_id: 2,
   scheduled_start_time: "2026-08-19T20:00:00Z",
@@ -30,9 +30,9 @@ const game = {
 };
 
 const inheritedItem = {
-  league: "WNBA" as const,
+  competition: "WNBA" as const,
   alert_type: "game_start",
-  uses_league_defaults: true,
+  uses_sport_defaults: true,
   is_enabled: true,
   close_game_margin_threshold: null,
   close_game_time_threshold_seconds: null,
@@ -44,14 +44,14 @@ describe("useGameAlertSettings", () => {
     vi.clearAllMocks();
     apiMocks.getGameAlertPreferences.mockResolvedValue({
       game_id: game.id,
-      league: game.league,
+      competition: game.competition,
       items: [inheritedItem],
     });
   });
 
   it("updates and resets local state without refetching", async () => {
     const setError = vi.fn();
-    const overridden = { ...inheritedItem, uses_league_defaults: false, is_enabled: false };
+    const overridden = { ...inheritedItem, uses_sport_defaults: false, is_enabled: false };
     apiMocks.updateGameAlertSettings.mockResolvedValue(overridden);
     apiMocks.resetGameAlertSettings.mockResolvedValue(inheritedItem);
     const { result } = renderHook(() => useGameAlertSettings("token", setError));

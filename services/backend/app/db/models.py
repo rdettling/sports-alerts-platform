@@ -51,34 +51,46 @@ class EmailLoginToken(Base):
 
 class Team(Base):
     __tablename__ = "teams"
-    __table_args__ = (UniqueConstraint("external_team_id", "league", name="uq_teams_external_league"),)
+    __table_args__ = (UniqueConstraint("provider_scope", "external_team_id", name="uq_teams_provider_scope_external"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    sport: Mapped[str] = mapped_column(String(16), index=True)
+    provider_scope: Mapped[str] = mapped_column(String(32))
     external_team_id: Mapped[str] = mapped_column(String(64))
-    league: Mapped[str] = mapped_column(String(16), default="NBA")
     name: Mapped[str] = mapped_column(String(120))
     abbreviation: Mapped[str] = mapped_column(String(10))
 
+    competition_memberships = relationship("CompetitionTeam", back_populates="team", cascade="all, delete-orphan")
 
-class LeagueSetting(Base):
-    __tablename__ = "league_settings"
 
-    league: Mapped[str] = mapped_column(String(16), primary_key=True)
+class CompetitionSetting(Base):
+    __tablename__ = "competition_settings"
+
+    competition: Mapped[str] = mapped_column(String(32), primary_key=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class CompetitionTeam(Base):
+    __tablename__ = "competition_teams"
+
+    competition: Mapped[str] = mapped_column(ForeignKey("competition_settings.competition"), primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), primary_key=True)
+
+    team = relationship("Team", back_populates="competition_memberships")
+
+
 class Game(Base):
     __tablename__ = "games"
     __table_args__ = (
-        UniqueConstraint("external_game_id", "league", name="uq_games_external_league"),
-        Index("ix_games_league_is_final_status_sched", "league", "is_final", "status", "scheduled_start_time"),
+        UniqueConstraint("external_game_id", "competition", name="uq_games_external_competition"),
+        Index("ix_games_competition_is_final_status_sched", "competition", "is_final", "status", "scheduled_start_time"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     external_game_id: Mapped[str] = mapped_column(String(64))
-    league: Mapped[str] = mapped_column(String(16), default="NBA")
+    competition: Mapped[str] = mapped_column(ForeignKey("competition_settings.competition"))
     home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     scheduled_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -168,11 +180,11 @@ class UserGameUnfollow(Base):
 
 class UserAlertPreference(Base):
     __tablename__ = "user_alert_preferences"
-    __table_args__ = (UniqueConstraint("user_id", "league", "alert_type", name="uq_user_alert_preferences_user_league_type"),)
+    __table_args__ = (UniqueConstraint("user_id", "sport", "alert_type", name="uq_user_alert_preferences_user_sport_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    league: Mapped[str] = mapped_column(String(16))
+    sport: Mapped[str] = mapped_column(String(16))
     alert_type: Mapped[str] = mapped_column(String(32))
     is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)

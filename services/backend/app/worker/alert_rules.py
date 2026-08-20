@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from app.db.models import Game
 from app.services.alert_preferences import AlertSettings
-from app.services.leagues import get_league_profile
+from app.services.competitions import get_competition_profile
 from app.worker.soccer import SoccerDerivedEvents, is_penalty_kicks_window
 
 
@@ -70,7 +70,7 @@ def _should_trigger_inning_start(game: Game, settings: AlertSettings) -> bool:
 def _should_trigger_overtime_start(game: Game, settings: AlertSettings) -> bool:
     return (
         settings.is_enabled
-        and get_league_profile(game.league).sport in {"basketball", "football"}
+        and get_competition_profile(game.competition).sport in {"basketball", "football"}
         and not game.is_final
         and game.status in {"in_progress", "live"}
         and (game.period or 0) >= 5
@@ -80,7 +80,7 @@ def _should_trigger_overtime_start(game: Game, settings: AlertSettings) -> bool:
 def _should_trigger_extra_innings_start(game: Game, settings: AlertSettings) -> bool:
     return (
         settings.is_enabled
-        and get_league_profile(game.league).sport == "baseball"
+        and get_competition_profile(game.competition).sport == "baseball"
         and not game.is_final
         and game.status in {"in_progress", "live"}
         and (game.period or 0) >= 10

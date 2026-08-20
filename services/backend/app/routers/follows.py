@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select, union
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, Team, User, UserGameFollow, UserGameUnfollow, UserTeamFollow
+from app.db.models import CompetitionTeam, Game, Team, User, UserGameFollow, UserGameUnfollow, UserTeamFollow
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.schemas.follow import CurrentFollowsOut
 from app.schemas.game import GameOut
-from app.schemas.team import TeamOut
-from app.services.leagues import get_active_leagues
+from app.schemas.team import TeamOut, build_team_out
+from app.services.competitions import get_active_competitions
 
 router = APIRouter(prefix="/follows", tags=["follows"])
 
@@ -20,14 +20,19 @@ def list_current_follows(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CurrentFollowsOut:
-    active_leagues = get_active_leagues(db)
-    teams = db.scalars(
-        select(Team)
+    active_competitions = get_active_competitions(db)
+    team_rows = db.execute(
+        select(Team, CompetitionTeam.competition)
         .join(UserTeamFollow, UserTeamFollow.team_id == Team.id)
+        .join(CompetitionTeam, CompetitionTeam.team_id == Team.id)
         .where(UserTeamFollow.user_id == current_user.id)
-        .where(Team.league.in_(active_leagues))
-        .order_by(Team.name.asc())
+        .where(CompetitionTeam.competition.in_(active_competitions))
+        .order_by(Team.name.asc(), CompetitionTeam.competition.asc())
     ).all()
+    teams: dict[int, TeamOut] = {}
+    for team, competition in team_rows:
+        item = teams.setdefault(team.id, build_team_out(team, []))
+        item.competitions.append(competition)
 
     followed_team_ids = select(UserTeamFollow.team_id).where(UserTeamFollow.user_id == current_user.id)
     unfollowed_game_ids = select(UserGameUnfollow.game_id).where(UserGameUnfollow.user_id == current_user.id)
@@ -43,11 +48,11 @@ def list_current_follows(
     games = db.scalars(
         select(Game)
         .join(effective_game_ids, effective_game_ids.c.game_id == Game.id)
-        .where(Game.league.in_(active_leagues))
+        .where(Game.competition.in_(active_competitions))
         .order_by(Game.scheduled_start_time.asc())
     ).all()
     return CurrentFollowsOut(
-        teams=[TeamOut.model_validate(team) for team in teams],
+        teams=list(teams.values()),
         games=[GameOut.model_validate(game) for game in games],
     )
 
