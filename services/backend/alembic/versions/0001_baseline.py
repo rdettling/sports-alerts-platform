@@ -24,10 +24,9 @@ users = sa.Table(
     sa.Column("id", sa.Integer(), primary_key=True, index=True),
     sa.Column("email", sa.String(320), nullable=False, unique=True, index=True),
     sa.Column("role", sa.Enum("user", "admin", name="user_role"), nullable=False, index=True),
-    sa.Column("alert_delivery_mode", sa.String(16), nullable=False, server_default="email"),
+    sa.Column("email_alerts_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp),
-    sa.CheckConstraint("alert_delivery_mode IN ('email', 'push', 'both')", name="ck_users_alert_delivery_mode"),
 )
 
 email_login_tokens = sa.Table(

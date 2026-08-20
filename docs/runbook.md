@@ -70,10 +70,10 @@ Checks:
 2. Confirm notification permission is granted for the site
 3. On iPhone or iPad, confirm the site was added to the Home Screen and opened from there
 4. Confirm the current device is subscribed on the Alerts page
-5. Confirm the user selected Push or Both
+5. Confirm Push is enabled on the intended device; email settings do not control Push enrollment
 6. Check the push delivery row; expired endpoints (`404` or `410`) are removed automatically
 
-Push has no email fallback. A Push-only alert remains failed if no active device accepts it.
+Push has no email fallback. Email alerts and per-device Push enrollment are independent.
 
 ## Bad Local State
 
@@ -90,7 +90,7 @@ Escalation path:
 
 Use this only when you intend to delete users, login state, push subscriptions, follows, preferences, alerts, and sports data. The script rebuilds the single Alembic baseline and restores the code-owned competition and team catalogs.
 
-For the one-time league-to-competition production cutover, follow the ordered procedure in [deployment.md](deployment.md#competition-domain-cutover). The reset must run from the new code before the new API starts.
+For a production baseline cutover, follow the ordered procedure in [deployment.md](deployment.md#clean-baseline-cutover). The reset must run from the new code before the new API starts.
 
 1. Stop or pause the worker
 2. Run:

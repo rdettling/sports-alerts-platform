@@ -8,9 +8,10 @@ from app.db.models import PushSubscription, User
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.schemas.notification import (
-    DeletePushSubscriptionRequest,
     NotificationSettingsOut,
+    PushSubscriptionEndpointRequest,
     PushSubscriptionRequest,
+    PushSubscriptionStatusOut,
     UpdateNotificationSettingsRequest,
 )
 from app.services.delivery_settings import delivery_settings
@@ -24,8 +25,8 @@ def _settings_out(db: Session, user: User) -> NotificationSettingsOut:
     ) or 0
     public_key = delivery_settings.vapid_public_key.strip()
     return NotificationSettingsOut(
-        delivery_mode=user.alert_delivery_mode,
-        subscription_count=subscription_count,
+        email_alerts_enabled=user.email_alerts_enabled,
+        push_subscription_count=subscription_count,
         push_configured=bool(public_key and delivery_settings.vapid_private_key.strip()),
         vapid_public_key=public_key or None,
     )
@@ -45,22 +46,25 @@ def update_notification_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> NotificationSettingsOut:
-    if payload.delivery_mode in {"push", "both"}:
-        subscription_count = db.scalar(
-            select(func.count(PushSubscription.id)).where(PushSubscription.user_id == current_user.id)
-        ) or 0
-        if subscription_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Enable push on this device before selecting push delivery.",
-            )
-    else:
-        db.execute(delete(PushSubscription).where(PushSubscription.user_id == current_user.id))
-
-    current_user.alert_delivery_mode = payload.delivery_mode
+    current_user.email_alerts_enabled = payload.email_alerts_enabled
     db.commit()
     db.refresh(current_user)
     return _settings_out(db, current_user)
+
+
+@router.post("/push-subscriptions/status", response_model=PushSubscriptionStatusOut)
+def get_push_subscription_status(
+    payload: PushSubscriptionEndpointRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PushSubscriptionStatusOut:
+    subscription_id = db.scalar(
+        select(PushSubscription.id).where(
+            PushSubscription.user_id == current_user.id,
+            PushSubscription.endpoint == str(payload.endpoint),
+        )
+    )
+    return PushSubscriptionStatusOut(is_subscribed=subscription_id is not None)
 
 
 @router.post("/push-subscriptions", status_code=status.HTTP_204_NO_CONTENT)
@@ -93,7 +97,7 @@ def save_push_subscription(
 
 @router.delete("/push-subscriptions", status_code=status.HTTP_204_NO_CONTENT)
 def delete_push_subscription(
-    payload: DeletePushSubscriptionRequest,
+    payload: PushSubscriptionEndpointRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:

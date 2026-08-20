@@ -80,39 +80,57 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     assert all(row.deliveries[0].status == "sent" for row in sent)
 
 
-def test_ingest_creates_email_and_push_deliveries_for_both_mode(db_session):
-    user = User(email="both@example.com", alert_delivery_mode="both")
-    db_session.add(user)
+def test_ingest_supports_every_email_and_push_combination(db_session):
+    users = {
+        "email": User(email="email-only@example.com"),
+        "push": User(email="push-only@example.com", email_alerts_enabled=False),
+        "both": User(email="both@example.com"),
+        "neither": User(email="neither@example.com", email_alerts_enabled=False),
+    }
+    db_session.add_all(users.values())
     db_session.commit()
-    db_session.refresh(user)
+    for user in users.values():
+        db_session.refresh(user)
 
     team = db_session.scalar(competition_teams_query("NBA").order_by(Team.id.asc()))
     assert team is not None
-    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(
-        UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True)
-    )
-    db_session.add(
-        PushSubscription(
-            user_id=user.id,
-            endpoint="https://push.example/both",
-            p256dh="p" * 43,
-            auth="a" * 22,
+    for label, user in users.items():
+        db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="basketball",
+                alert_type="game_start",
+                is_enabled_override=True,
+            )
         )
-    )
+        if label in {"push", "both"}:
+            db_session.add(
+                PushSubscription(
+                    user_id=user.id,
+                    endpoint=f"https://push.example/{label}",
+                    p256dh="p" * 43,
+                    auth="a" * 22,
+                )
+            )
     db_session.commit()
 
     first = run_catalog_sync(make_live_close_provider())
     second = run_catalog_sync(make_live_close_provider())
 
-    assert first.alerts_created >= 1
+    assert first.alerts_created >= 4
     assert second.alerts_created == 0
-    alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
-    game_start = next(alert for alert in alerts if alert.alert_type == "game_start")
-    assert [(row.channel, row.status) for row in game_start.deliveries] == [
-        ("email", "sent"),
-        ("push", "sent"),
-    ]
+    expected_channels = {
+        "email": ["email"],
+        "push": ["push"],
+        "both": ["email", "push"],
+        "neither": [],
+    }
+    for label, user in users.items():
+        alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
+        game_start = next(alert for alert in alerts if alert.alert_type == "game_start")
+        assert [row.channel for row in game_start.deliveries] == expected_channels[label]
+        assert all(row.status == "sent" for row in game_start.deliveries)
 
 
 def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):

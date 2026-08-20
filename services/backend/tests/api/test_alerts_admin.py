@@ -41,17 +41,17 @@ def _auth_headers(
     *,
     email: str = "admin-alerts@example.com",
     role: str = "admin",
-    delivery_mode: str = "email",
+    email_alerts_enabled: bool = True,
 ) -> dict[str, str]:
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == email))
         if user is None:
-            user = User(email=email, role=role, alert_delivery_mode=delivery_mode)
+            user = User(email=email, role=role, email_alerts_enabled=email_alerts_enabled)
             db.add(user)
         else:
             user.role = role
-            user.alert_delivery_mode = delivery_mode
+            user.email_alerts_enabled = email_alerts_enabled
         db.commit()
         db.refresh(user)
         return {"Authorization": f"Bearer {create_access_token(subject=str(user.id))}"}
@@ -155,9 +155,9 @@ def test_admin_test_alert_is_response_only(client):
     assert summary["delivery"]["email_alerts"] == {"attempted": 0, "sent": 0, "failed": 0}
 
 
-def test_admin_test_alert_honors_both_delivery_mode(client):
+def test_admin_test_alert_sends_email_and_push_when_both_are_enabled(client):
     email = "admin-both@example.com"
-    headers = _auth_headers(client, email=email, delivery_mode="both")
+    headers = _auth_headers(client, email=email)
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == email))
@@ -187,6 +187,23 @@ def test_admin_test_alert_honors_both_delivery_mode(client):
     assert _sports_counts() == (0, 0, 0)
 
 
+def test_admin_test_alert_returns_no_deliveries_when_both_channels_are_off(client):
+    headers = _auth_headers(
+        client,
+        email="admin-no-delivery@example.com",
+        email_alerts_enabled=False,
+    )
+
+    response = client.post(
+        "/alerts/admin/test",
+        headers=headers,
+        json={"competition": "NBA", "alert_type": "game_start"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deliveries"] == []
+
+
 def test_admin_test_alert_returns_expected_delivery_failure(client, monkeypatch):
     headers = _auth_headers(client)
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
@@ -209,7 +226,7 @@ def test_admin_test_alert_returns_expected_delivery_failure(client, monkeypatch)
 
 def test_admin_test_push_commits_expired_subscription_cleanup(client, monkeypatch):
     email = "admin-expired-push@example.com"
-    headers = _auth_headers(client, email=email, delivery_mode="push")
+    headers = _auth_headers(client, email=email, email_alerts_enabled=False)
     db = SessionLocal()
     try:
         user = db.scalar(select(User).where(User.email == email))

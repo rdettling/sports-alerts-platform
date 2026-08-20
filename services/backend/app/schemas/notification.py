@@ -1,20 +1,15 @@
-from typing import Literal
-
 from pydantic import BaseModel, Field, HttpUrl
 
 
-DeliveryMode = Literal["email", "push", "both"]
-
-
 class NotificationSettingsOut(BaseModel):
-    delivery_mode: DeliveryMode
-    subscription_count: int
+    email_alerts_enabled: bool
+    push_subscription_count: int
     push_configured: bool
     vapid_public_key: str | None
 
 
 class UpdateNotificationSettingsRequest(BaseModel):
-    delivery_mode: DeliveryMode
+    email_alerts_enabled: bool
 
 
 class PushSubscriptionKeys(BaseModel):
@@ -27,5 +22,9 @@ class PushSubscriptionRequest(BaseModel):
     keys: PushSubscriptionKeys
 
 
-class DeletePushSubscriptionRequest(BaseModel):
+class PushSubscriptionEndpointRequest(BaseModel):
     endpoint: HttpUrl
+
+
+class PushSubscriptionStatusOut(BaseModel):
+    is_subscribed: bool

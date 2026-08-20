@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import Alert, AlertDelivery, Game, Team, User
+from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
 from app.db.session import get_db
 from app.deps import get_current_user, require_admin_user
 from app.schemas.alert import (
@@ -208,7 +208,7 @@ def create_admin_test_alert(
         home_team=home_team,
     )
     deliveries: list[AlertDelivery] = []
-    if current_user.alert_delivery_mode in {"email", "both"}:
+    if current_user.email_alerts_enabled:
         email_delivery = AlertDelivery(id=0, alert_id=0, channel="email", status="pending")
         deliver_email_alert_now(
             db,
@@ -221,7 +221,10 @@ def create_admin_test_alert(
             service="api-test",
         )
         deliveries.append(email_delivery)
-    if current_user.alert_delivery_mode in {"push", "both"}:
+    push_enabled = db.scalar(
+        select(PushSubscription.id).where(PushSubscription.user_id == current_user.id).limit(1)
+    )
+    if push_enabled is not None:
         push_delivery = AlertDelivery(id=0, alert_id=0, channel="push", status="pending")
         deliver_push_alert_now(
             db,

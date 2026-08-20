@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
 import {
+  deletePushSubscription,
   getNotificationSettings,
+  getPushSubscriptionStatus,
   savePushSubscription,
   updateNotificationSettings,
-  type DeliveryMode,
   type NotificationSettings,
 } from "../../../../shared/api";
 import {
@@ -24,19 +25,21 @@ export function AlertDeliverySettings({ token }: { token: string }) {
 
   const load = async () => {
     const currentSettings = await getNotificationSettings(token);
-    let currentSubscription: PushSubscription | null = null;
-    if (pushSupported) {
-      currentSubscription = await getCurrentPushSubscription();
-      if (currentSubscription && currentSettings.delivery_mode !== "email") {
-        await savePushSubscription(token, pushSubscriptionPayload(currentSubscription));
-      }
+    setSettings(currentSettings);
+    if (!pushSupported) {
+      setDeviceSubscribed(false);
+      return;
     }
-    setDeviceSubscribed(Boolean(currentSubscription));
-    setSettings(
-      currentSubscription && currentSettings.delivery_mode !== "email"
-        ? await getNotificationSettings(token)
-        : currentSettings,
+    const currentSubscription = await getCurrentPushSubscription();
+    if (!currentSubscription) {
+      setDeviceSubscribed(false);
+      return;
+    }
+    const status = await getPushSubscriptionStatus(
+      token,
+      pushSubscriptionPayload(currentSubscription).endpoint,
     );
+    setDeviceSubscribed(status.is_subscribed);
   };
 
   useEffect(() => {
@@ -52,11 +55,37 @@ export function AlertDeliverySettings({ token }: { token: string }) {
     setDeviceSubscribed(true);
   };
 
-  const enablePushThisDevice = async () => {
+  const toggleEmailAlerts = async () => {
+    if (!settings) return;
     setError(null);
     setBusy(true);
     try {
-      await subscribeThisDevice();
+      setSettings(await updateNotificationSettings(token, !settings.email_alerts_enabled));
+    } catch (requestError) {
+      setError(messageFromUnknown(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePushThisDevice = async () => {
+    if (!settings) return;
+    setError(null);
+    setBusy(true);
+    try {
+      if (deviceSubscribed) {
+        const currentSubscription = await getCurrentPushSubscription();
+        if (currentSubscription) {
+          await deletePushSubscription(
+            token,
+            pushSubscriptionPayload(currentSubscription).endpoint,
+          );
+          await currentSubscription.unsubscribe().catch(() => false);
+        }
+        setDeviceSubscribed(false);
+      } else {
+        await subscribeThisDevice();
+      }
       setSettings(await getNotificationSettings(token));
     } catch (requestError) {
       setError(messageFromUnknown(requestError));
@@ -65,85 +94,76 @@ export function AlertDeliverySettings({ token }: { token: string }) {
     }
   };
 
-  const changeDeliveryMode = async (mode: DeliveryMode) => {
-    if (!settings || mode === settings.delivery_mode) return;
-    setError(null);
-    setBusy(true);
-    try {
-      if (mode === "email") {
-        const currentSubscription = await getCurrentPushSubscription().catch(() => null);
-        const nextSettings = await updateNotificationSettings(token, "email");
-        await currentSubscription?.unsubscribe().catch(() => false);
-        setDeviceSubscribed(false);
-        setSettings(nextSettings);
-        return;
-      }
-      await subscribeThisDevice();
-      setSettings(await updateNotificationSettings(token, mode));
-    } catch (requestError) {
-      setError(messageFromUnknown(requestError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <section className="alerts-delivery-bar surface" aria-labelledby="alert-delivery-title">
-      <div className="alerts-delivery-copy">
+    <section className="alerts-delivery-panel surface" aria-labelledby="alert-delivery-title">
+      <div className="alerts-delivery-header">
         <h2 id="alert-delivery-title">Delivery</h2>
-        <p>Choose how you receive alerts. Email is the default.</p>
+        <p>Choose where sports alerts reach you.</p>
         {error ? (
           <p className="error alerts-delivery-error" role="alert">
             {error}
           </p>
         ) : null}
       </div>
-      <div className="alerts-delivery-controls">
-        <div className="alerts-delivery-modes" role="group" aria-label="Alert delivery method">
-          {(["email", "push", "both"] as const).map((mode) => (
-            <button
-              key={mode}
-              className={`alerts-delivery-mode ${settings?.delivery_mode === mode ? "active" : ""}`.trim()}
-              type="button"
-              aria-pressed={settings?.delivery_mode === mode}
-              disabled={
-                busy ||
-                !settings ||
-                (mode !== "email" && (!pushSupported || !settings.push_configured))
-              }
-              onClick={() => changeDeliveryMode(mode)}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
+      <div className="alerts-delivery-options">
+        <div className="alerts-delivery-option">
+          <div className="alerts-delivery-option-copy">
+            <strong>Email alerts</strong>
+            <span>Sports alerts only. Sign-in emails are still sent when requested.</span>
+          </div>
+          <button
+            className={`alert-toggle alerts-delivery-switch ${settings?.email_alerts_enabled ? "on" : "off"}`}
+            type="button"
+            role="switch"
+            aria-label="Email alerts"
+            aria-checked={settings?.email_alerts_enabled ?? false}
+            disabled={busy || !settings}
+            onClick={toggleEmailAlerts}
+          >
+            <span className="alert-toggle-label" aria-hidden>
+              {settings?.email_alerts_enabled ? "On" : "Off"}
+            </span>
+            <span className="alert-toggle-track" aria-hidden>
+              <span className="alert-toggle-thumb" />
+            </span>
+          </button>
         </div>
-        <div className="alerts-device-row">
-          <span className="alerts-device-status" role="status">
-            {!settings
-              ? "Loading delivery settings..."
-              : !pushSupported
-                ? "Push is unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
-                : !settings.push_configured
-                  ? "Push is not configured yet."
-                  : deviceSubscribed
-                    ? `This device is subscribed · ${settings.subscription_count} total`
-                    : "This device is not subscribed"}
-          </span>
-          {pushSupported &&
-          settings?.push_configured &&
-          settings.delivery_mode !== "email" &&
-          !deviceSubscribed ? (
-            <button
-              className="alerts-device-action text-action"
-              type="button"
-              disabled={busy}
-              onClick={enablePushThisDevice}
-            >
-              Enable on this device
-            </button>
-          ) : null}
+        <div className="alerts-delivery-option">
+          <div className="alerts-delivery-option-copy">
+            <strong>Push on this device</strong>
+            <span role="status">
+              {!settings
+                ? "Loading push settings..."
+                : !pushSupported
+                  ? "Unavailable here. On iPhone or iPad, add this site to your Home Screen and open it there."
+                  : !settings.push_configured
+                    ? "Push is not configured yet."
+                    : `${deviceSubscribed ? "On" : "Off"} for this device · ${settings.push_subscription_count} ${settings.push_subscription_count === 1 ? "device" : "devices"} enabled`}
+            </span>
+          </div>
+          <button
+            className={`alert-toggle alerts-delivery-switch ${deviceSubscribed ? "on" : "off"}`}
+            type="button"
+            role="switch"
+            aria-label="Push on this device"
+            aria-checked={deviceSubscribed}
+            disabled={busy || !settings || !pushSupported || !settings.push_configured}
+            onClick={togglePushThisDevice}
+          >
+            <span className="alert-toggle-label" aria-hidden>
+              {deviceSubscribed ? "On" : "Off"}
+            </span>
+            <span className="alert-toggle-track" aria-hidden>
+              <span className="alert-toggle-thumb" />
+            </span>
+          </button>
         </div>
       </div>
+      {settings && !settings.email_alerts_enabled && settings.push_subscription_count === 0 ? (
+        <p className="alerts-delivery-warning" role="status">
+          Alerts are currently off. Enable email or push on a device to receive them.
+        </p>
+      ) : null}
     </section>
   );
 }

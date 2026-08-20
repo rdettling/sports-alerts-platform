@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AlertDeliverySettings } from "./AlertDeliverySettings";
 
 const mocks = vi.hoisted(() => ({
+  deletePushSubscription: vi.fn(),
   getNotificationSettings: vi.fn(),
+  getPushSubscriptionStatus: vi.fn(),
   updateNotificationSettings: vi.fn(),
   savePushSubscription: vi.fn(),
   getCurrentPushSubscription: vi.fn(),
@@ -13,14 +15,26 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const emailSettings = {
-  delivery_mode: "email" as const,
-  subscription_count: 0,
+  email_alerts_enabled: true,
+  push_subscription_count: 0,
   push_configured: true,
   vapid_public_key: "public-key",
 };
 
+function subscription(endpoint = "https://push.example/device") {
+  return {
+    unsubscribe: vi.fn().mockResolvedValue(true),
+    payload: {
+      endpoint,
+      keys: { p256dh: "key", auth: "auth" },
+    },
+  };
+}
+
 vi.mock("../../../../shared/api", () => ({
+  deletePushSubscription: mocks.deletePushSubscription,
   getNotificationSettings: mocks.getNotificationSettings,
+  getPushSubscriptionStatus: mocks.getPushSubscriptionStatus,
   updateNotificationSettings: mocks.updateNotificationSettings,
   savePushSubscription: mocks.savePushSubscription,
 }));
@@ -28,7 +42,7 @@ vi.mock("../../../../shared/api", () => ({
 vi.mock("../../../../shared/lib/push-notifications", () => ({
   getCurrentPushSubscription: mocks.getCurrentPushSubscription,
   pushIsSupported: mocks.pushIsSupported,
-  pushSubscriptionPayload: vi.fn((subscription) => subscription.payload),
+  pushSubscriptionPayload: vi.fn((current) => current.payload),
   subscribeCurrentBrowser: mocks.subscribeCurrentBrowser,
 }));
 
@@ -37,127 +51,132 @@ describe("AlertDeliverySettings", () => {
     vi.clearAllMocks();
     mocks.getNotificationSettings.mockResolvedValue(emailSettings);
     mocks.getCurrentPushSubscription.mockResolvedValue(null);
+    mocks.getPushSubscriptionStatus.mockResolvedValue({ is_subscribed: false });
     mocks.pushIsSupported.mockReturnValue(true);
   });
 
-  it("subscribes the browser before switching to Push", async () => {
-    const subscription = {
-      payload: {
-        endpoint: "https://push.example/device",
-        keys: { p256dh: "key", auth: "auth" },
-      },
-    };
-    mocks.subscribeCurrentBrowser.mockResolvedValue(subscription);
-    mocks.updateNotificationSettings.mockResolvedValue({
-      ...emailSettings,
-      delivery_mode: "push",
-      subscription_count: 1,
-    });
-    render(<AlertDeliverySettings token="token" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Push" }));
-
-    await waitFor(() => {
-      expect(mocks.subscribeCurrentBrowser).toHaveBeenCalledWith("public-key");
-      expect(mocks.savePushSubscription).toHaveBeenCalledWith("token", subscription.payload);
-      expect(mocks.updateNotificationSettings).toHaveBeenCalledWith("token", "push");
-    });
-    expect(screen.getByText(/This device is subscribed/)).toBeInTheDocument();
-  });
-
-  it("enables Push on a new device without changing the active global mode", async () => {
-    const pushSettings = {
-      ...emailSettings,
-      delivery_mode: "push" as const,
-      subscription_count: 1,
-    };
-    const subscription = {
-      payload: {
-        endpoint: "https://push.example/iphone",
-        keys: { p256dh: "iphone-key", auth: "iphone-auth" },
-      },
-    };
-    mocks.getNotificationSettings
-      .mockResolvedValueOnce(pushSettings)
-      .mockResolvedValueOnce({ ...pushSettings, subscription_count: 2 });
-    mocks.subscribeCurrentBrowser.mockResolvedValue(subscription);
-    render(<AlertDeliverySettings token="token" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
-
-    await waitFor(() => {
-      expect(mocks.subscribeCurrentBrowser).toHaveBeenCalledWith("public-key");
-      expect(mocks.savePushSubscription).toHaveBeenCalledWith("token", subscription.payload);
-    });
-    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
-    expect(screen.getByText("This device is subscribed · 2 total")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Push" })).toHaveClass("active");
-  });
-
-  it("keeps the global mode unchanged when new-device enrollment is denied", async () => {
+  it("loads current-device status without silently registering the browser", async () => {
+    const currentSubscription = subscription();
+    mocks.getCurrentPushSubscription.mockResolvedValue(currentSubscription);
+    mocks.getPushSubscriptionStatus.mockResolvedValue({ is_subscribed: true });
     mocks.getNotificationSettings.mockResolvedValue({
       ...emailSettings,
-      delivery_mode: "push",
-      subscription_count: 1,
+      push_subscription_count: 1,
     });
+
+    render(<AlertDeliverySettings token="token" />);
+
+    expect(await screen.findByText("On for this device · 1 device enabled")).toBeInTheDocument();
+    expect(mocks.getPushSubscriptionStatus).toHaveBeenCalledWith(
+      "token",
+      currentSubscription.payload.endpoint,
+    );
+    expect(mocks.savePushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stale local browser subscription off until the user enables it", async () => {
+    mocks.getCurrentPushSubscription.mockResolvedValue(subscription());
+
+    render(<AlertDeliverySettings token="token" />);
+
+    expect(await screen.findByText("Off for this device · 0 devices enabled")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Push on this device" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(mocks.savePushSubscription).not.toHaveBeenCalled();
+  });
+
+  it("toggles email independently from push", async () => {
+    mocks.updateNotificationSettings.mockResolvedValue({
+      ...emailSettings,
+      email_alerts_enabled: false,
+    });
+    render(<AlertDeliverySettings token="token" />);
+
+    fireEvent.click(await screen.findByRole("switch", { name: "Email alerts" }));
+
+    await waitFor(() =>
+      expect(mocks.updateNotificationSettings).toHaveBeenCalledWith("token", false),
+    );
+    expect(mocks.savePushSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText(/Alerts are currently off/)).toBeInTheDocument();
+  });
+
+  it("enables push on this device and refreshes the device count", async () => {
+    const currentSubscription = subscription();
+    mocks.subscribeCurrentBrowser.mockResolvedValue(currentSubscription);
+    mocks.getNotificationSettings
+      .mockResolvedValueOnce(emailSettings)
+      .mockResolvedValueOnce({ ...emailSettings, push_subscription_count: 1 });
+    render(<AlertDeliverySettings token="token" />);
+
+    fireEvent.click(await screen.findByRole("switch", { name: "Push on this device" }));
+
+    await waitFor(() => {
+      expect(mocks.subscribeCurrentBrowser).toHaveBeenCalledWith("public-key");
+      expect(mocks.savePushSubscription).toHaveBeenCalledWith("token", currentSubscription.payload);
+    });
+    expect(screen.getByText("On for this device · 1 device enabled")).toBeInTheDocument();
+    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
+  });
+
+  it("disables only this device and refreshes the device count", async () => {
+    const currentSubscription = subscription();
+    mocks.getCurrentPushSubscription.mockResolvedValue(currentSubscription);
+    mocks.getPushSubscriptionStatus.mockResolvedValue({ is_subscribed: true });
+    mocks.getNotificationSettings
+      .mockResolvedValueOnce({ ...emailSettings, push_subscription_count: 2 })
+      .mockResolvedValueOnce({ ...emailSettings, push_subscription_count: 1 });
+    render(<AlertDeliverySettings token="token" />);
+
+    const pushSwitch = await screen.findByRole("switch", { name: "Push on this device" });
+    await waitFor(() => expect(pushSwitch).toHaveAttribute("aria-checked", "true"));
+    fireEvent.click(pushSwitch);
+
+    await waitFor(() => {
+      expect(mocks.deletePushSubscription).toHaveBeenCalledWith(
+        "token",
+        currentSubscription.payload.endpoint,
+      );
+      expect(currentSubscription.unsubscribe).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText("Off for this device · 1 device enabled")).toBeInTheDocument();
+  });
+
+  it("leaves push off when notification permission is denied", async () => {
     mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
     render(<AlertDeliverySettings token="token" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Enable on this device" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Push on this device" }));
 
     expect(await screen.findByText("Permission denied")).toBeInTheDocument();
     expect(mocks.savePushSubscription).not.toHaveBeenCalled();
-    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Push" })).toHaveClass("active");
-    expect(screen.getByText("This device is not subscribed")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Push on this device" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 
-  it("leaves the previous mode unchanged when browser subscription fails", async () => {
-    mocks.subscribeCurrentBrowser.mockRejectedValue(new Error("Permission denied"));
-    render(<AlertDeliverySettings token="token" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Push" }));
-
-    expect(await screen.findByText("Permission denied")).toBeInTheDocument();
-    expect(mocks.updateNotificationSettings).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Email" })).toHaveClass("active");
-  });
-
-  it("explains the Home Screen requirement when Push is unsupported", async () => {
+  it("explains the Home Screen requirement when push is unsupported", async () => {
     mocks.pushIsSupported.mockReturnValue(false);
     render(<AlertDeliverySettings token="token" />);
 
     expect(
       await screen.findByText(/On iPhone or iPad, add this site to your Home Screen/),
     ).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Push on this device" })).toBeDisabled();
   });
 
-  it("selecting Email clears server settings and unsubscribes this browser", async () => {
-    const unsubscribe = vi.fn().mockResolvedValue(true);
-    const subscription = {
-      unsubscribe,
-      payload: {
-        endpoint: "https://push.example/device",
-        keys: { p256dh: "key", auth: "auth" },
-      },
-    };
+  it("disables the push switch when server push is not configured", async () => {
     mocks.getNotificationSettings.mockResolvedValue({
       ...emailSettings,
-      delivery_mode: "both",
-      subscription_count: 2,
+      push_configured: false,
+      vapid_public_key: null,
     });
-    mocks.getCurrentPushSubscription.mockResolvedValue(subscription);
-    mocks.updateNotificationSettings.mockResolvedValue(emailSettings);
     render(<AlertDeliverySettings token="token" />);
 
-    const emailButton = await screen.findByRole("button", { name: "Email" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Both" })).toHaveClass("active"));
-    fireEvent.click(emailButton);
-
-    await waitFor(() => {
-      expect(mocks.updateNotificationSettings).toHaveBeenCalledWith("token", "email");
-      expect(unsubscribe).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.getByRole("button", { name: "Email" })).toHaveClass("active");
+    expect(await screen.findByText("Push is not configured yet.")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Push on this device" })).toBeDisabled();
   });
 });

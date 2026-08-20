@@ -29,6 +29,9 @@ def test_fresh_baseline_matches_current_schema(tmp_path):
     for table in Base.metadata.sorted_tables:
         actual_columns = {column["name"] for column in inspector.get_columns(table.name)}
         assert actual_columns == set(table.columns.keys())
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    assert "email_alerts_enabled" in user_columns
+    assert "alert_delivery_mode" not in user_columns
 
     _alembic(database_url, "downgrade", "base")
     assert inspect(create_engine(database_url)).get_table_names() == ["alembic_version"]

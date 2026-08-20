@@ -50,8 +50,8 @@ def test_complete_reset_replaces_old_postgres_revision_and_data():
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO users (email, role, alert_delivery_mode) "
-                "VALUES ('old-user@example.com', 'user', 'email')"
+                "INSERT INTO users (email, role, email_alerts_enabled) "
+                "VALUES ('old-user@example.com', 'user', true)"
             )
         )
         connection.execute(text("CREATE TABLE legacy_marker (id integer primary key)"))

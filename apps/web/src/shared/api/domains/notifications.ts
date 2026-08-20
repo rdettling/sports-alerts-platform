@@ -1,5 +1,9 @@
 import { apiRequest } from "../client";
-import type { DeliveryMode, NotificationSettings, PushSubscriptionPayload } from "../types";
+import type {
+  NotificationSettings,
+  PushSubscriptionPayload,
+  PushSubscriptionStatus,
+} from "../types";
 
 export function getNotificationSettings(token: string): Promise<NotificationSettings> {
   return apiRequest<NotificationSettings>("/notification-settings", { token });
@@ -7,12 +11,23 @@ export function getNotificationSettings(token: string): Promise<NotificationSett
 
 export function updateNotificationSettings(
   token: string,
-  deliveryMode: DeliveryMode,
+  emailAlertsEnabled: boolean,
 ): Promise<NotificationSettings> {
   return apiRequest<NotificationSettings>("/notification-settings", {
     method: "PUT",
     token,
-    body: JSON.stringify({ delivery_mode: deliveryMode }),
+    body: JSON.stringify({ email_alerts_enabled: emailAlertsEnabled }),
+  });
+}
+
+export function getPushSubscriptionStatus(
+  token: string,
+  endpoint: string,
+): Promise<PushSubscriptionStatus> {
+  return apiRequest<PushSubscriptionStatus>("/push-subscriptions/status", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ endpoint }),
   });
 }
 

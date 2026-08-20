@@ -124,13 +124,16 @@ export type AlertType =
   | "score_changed"
   | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
-export type DeliveryMode = "email" | "push" | "both";
 
 export type NotificationSettings = {
-  delivery_mode: DeliveryMode;
-  subscription_count: number;
+  email_alerts_enabled: boolean;
+  push_subscription_count: number;
   push_configured: boolean;
   vapid_public_key: string | null;
+};
+
+export type PushSubscriptionStatus = {
+  is_subscribed: boolean;
 };
 
 export type PushSubscriptionPayload = {

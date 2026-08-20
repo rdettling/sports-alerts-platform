@@ -9,6 +9,7 @@ from app.db.models import (
     Alert,
     AlertDelivery,
     Game,
+    PushSubscription,
     Team,
     User,
     UserAlertPreference,
@@ -202,6 +203,13 @@ def evaluate_and_record_alerts(
         user.id: user
         for user in db.scalars(select(User).where(User.id.in_(sorted({alert.user_id for alert in to_insert})))).all()
     }
+    push_user_ids = set(
+        db.scalars(
+            select(PushSubscription.user_id)
+            .where(PushSubscription.user_id.in_(sorted(users_by_id)))
+            .distinct()
+        ).all()
+    )
     games_by_id = {game.id: game for game in games}
     teams_by_id = {
         team.id: team
@@ -214,8 +222,7 @@ def evaluate_and_record_alerts(
     for alert in to_insert:
         game = games_by_id.get(alert.game_id)
         user = users_by_id.get(alert.user_id)
-        mode = user.alert_delivery_mode if user else "email"
-        if mode in {"email", "both"}:
+        if user and user.email_alerts_enabled:
             email_delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
             db.add(email_delivery)
             db.flush()
@@ -229,7 +236,7 @@ def evaluate_and_record_alerts(
                 away=teams_by_id.get(game.away_team_id) if game else None,
                 service="worker",
             )
-        if mode in {"push", "both"}:
+        if user and user.id in push_user_ids:
             push_delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
             db.add(push_delivery)
             db.flush()
