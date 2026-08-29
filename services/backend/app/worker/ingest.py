@@ -8,7 +8,7 @@ from typing import Protocol
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Game
+from app.db.models import CompetitionTeam, Game, Team
 from app.db.session import SessionLocal
 from app.services.competitions import competition_supports_odds, competition_teams_query, get_active_competitions, get_competition_profile, normalize_competition
 from app.worker import odds, soccer
@@ -85,6 +85,50 @@ def _competition_team_maps(db: Session, competition: str) -> tuple[dict[str, int
         {team.external_team_id: team.id for team in rows},
         {team.id: team.name for team in rows},
     )
+
+
+def _register_fbs_opponents(
+    db: Session,
+    scoreboard_games: list[ScoreboardGame],
+    team_map: dict[str, int],
+    team_names: dict[int, str],
+) -> None:
+    for game in scoreboard_games:
+        provider_teams = (
+            (
+                game.home_external_team_id,
+                game.home_team_name,
+                game.home_team_abbreviation,
+            ),
+            (
+                game.away_external_team_id,
+                game.away_team_name,
+                game.away_team_abbreviation,
+            ),
+        )
+        for external_team_id, name, abbreviation in provider_teams:
+            if external_team_id in team_map or not name or not abbreviation:
+                continue
+            team = db.scalar(
+                select(Team).where(
+                    Team.provider_scope == "cfb",
+                    Team.external_team_id == external_team_id,
+                )
+            )
+            if team is None:
+                team = Team(
+                    sport="football",
+                    provider_scope="cfb",
+                    external_team_id=external_team_id,
+                    name=name,
+                    abbreviation=abbreviation,
+                )
+                db.add(team)
+                db.flush()
+            db.add(CompetitionTeam(competition="FBS", team_id=team.id))
+            team_map[external_team_id] = team.id
+            team_names[team.id] = team.name
+    db.flush()
 
 
 def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_map: dict[str, int]) -> GameUpdateResult:
@@ -178,6 +222,8 @@ def _upsert_games_and_collect(
     *,
     only_external_ids: set[str] | None = None,
 ) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, soccer.SoccerDerivedEvents]]:
+    if competition == "FBS":
+        _register_fbs_opponents(db, scoreboard_games, team_map, team_names)
     updated = 0
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}

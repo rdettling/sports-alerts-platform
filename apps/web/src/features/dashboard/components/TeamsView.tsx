@@ -12,7 +12,8 @@ import {
 } from "../../../shared/api";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { CompetitionTabs, ScopeToggle } from "./DashboardFilters";
+import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "./DashboardFilters";
+import { fbsConferenceOptions } from "./fbs-conferences";
 
 const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
 
@@ -26,7 +27,9 @@ export function TeamsView({
   const queryClient = useQueryClient();
   const [teamScope, setTeamScope] = useState<"all" | "following">("all");
   const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
+  const [conferenceFilter, setConferenceFilter] = useState<"all" | string>("all");
   const [teamSearch, setTeamSearch] = useState("");
+  const [expandedConferences, setExpandedConferences] = useState<Set<string>>(new Set());
   const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +55,7 @@ export function TeamsView({
     () => new Set((data?.follows.teams ?? []).map((team) => team.id)),
     [data?.follows.teams],
   );
+  const conferenceOptions = useMemo(() => fbsConferenceOptions(data?.teams ?? []), [data?.teams]);
 
   useEffect(() => {
     if (!token && teamScope !== "all") setTeamScope("all");
@@ -66,11 +70,26 @@ export function TeamsView({
     }
   }, [competitionFilter, competitions]);
 
+  useEffect(() => {
+    if (
+      competitionFilter !== "FBS" ||
+      (conferenceFilter !== "all" && !conferenceOptions.includes(conferenceFilter))
+    ) {
+      setConferenceFilter("all");
+    }
+  }, [competitionFilter, conferenceFilter, conferenceOptions]);
+
   const visibleTeams = useMemo(() => {
     const search = teamSearch.trim().toLowerCase();
     return [...(data?.teams ?? [])]
       .filter(
         (team) => competitionFilter === "all" || team.competitions.includes(competitionFilter),
+      )
+      .filter(
+        (team) =>
+          competitionFilter !== "FBS" ||
+          conferenceFilter === "all" ||
+          team.conference === conferenceFilter,
       )
       .filter((team) => teamScope === "all" || followedTeamIds.has(team.id))
       .filter(
@@ -81,19 +100,51 @@ export function TeamsView({
           Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
         return followedDifference || a.name.localeCompare(b.name);
       });
-  }, [data?.teams, followedTeamIds, competitionFilter, teamScope, teamSearch]);
+  }, [data?.teams, followedTeamIds, competitionFilter, conferenceFilter, teamScope, teamSearch]);
 
   const teamGroups = useMemo(() => {
     if (visibleTeams.length === 0) return [];
     const selectedCompetition = competitions.find((item) => item.competition === competitionFilter);
+    if (competitionFilter === "FBS") {
+      const followedTeams = visibleTeams.filter((team) => followedTeamIds.has(team.id));
+      const grouped = new Map<string, typeof visibleTeams>();
+      visibleTeams.forEach((team) => {
+        const key = team.conference ?? "OTHER";
+        grouped.set(key, [...(grouped.get(key) ?? []), team]);
+      });
+      return [
+        ...(followedTeams.length
+          ? [{ key: "following", label: "Following", teams: followedTeams, collapsible: false }]
+          : []),
+        ...conferenceOptions
+          .filter((conference) => grouped.has(conference))
+          .map((conference) => ({
+            key: conference,
+            label: conference,
+            teams: grouped.get(conference) ?? [],
+            collapsible: true,
+          })),
+        ...(grouped.has("OTHER")
+          ? [
+              {
+                key: "OTHER",
+                label: "Other opponents",
+                teams: grouped.get("OTHER") ?? [],
+                collapsible: true,
+              },
+            ]
+          : []),
+      ];
+    }
     return [
       {
-        competition: competitionFilter,
+        key: competitionFilter,
         label: selectedCompetition?.label ?? "All teams",
         teams: visibleTeams,
+        collapsible: false,
       },
     ];
-  }, [competitionFilter, competitions, visibleTeams]);
+  }, [competitionFilter, competitions, conferenceOptions, followedTeamIds, visibleTeams]);
   const competitionLabels = useMemo(
     () => new Map(competitions.map((item) => [item.competition, item.badge_label] as const)),
     [competitions],
@@ -130,7 +181,7 @@ export function TeamsView({
       {!isLoading ? (
         <div className="teams-layout">
           <section
-            className={`filter-toolbar teams-filter-toolbar ${token ? "" : "without-scope"}`.trim()}
+            className={`filter-toolbar teams-filter-toolbar ${token ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""}`.trim()}
             aria-label="Team filters"
           >
             {token ? (
@@ -156,6 +207,14 @@ export function TeamsView({
               onChange={setCompetitionFilter}
             />
 
+            {competitionFilter === "FBS" ? (
+              <ConferenceSelect
+                options={conferenceOptions}
+                value={conferenceFilter}
+                onChange={setConferenceFilter}
+              />
+            ) : null}
+
             <input
               className="teams-search"
               type="search"
@@ -171,73 +230,99 @@ export function TeamsView({
           <section className="teams-results-scroll" aria-label="Team directory">
             {teamGroups.length > 0 ? (
               <div className="teams-competition-list">
-                {teamGroups.map((group) => {
-                  const headingId = `teams-competition-${group.competition.toLowerCase()}`;
+                {teamGroups.map((group, groupIndex) => {
+                  const headingId = `teams-group-${groupIndex}`;
+                  const canCollapse =
+                    group.collapsible && conferenceFilter === "all" && !teamSearch.trim();
+                  const isExpanded = !canCollapse || expandedConferences.has(group.key);
                   return (
                     <section
-                      key={group.competition}
+                      key={group.key}
                       className="teams-competition-board surface"
                       aria-labelledby={headingId}
                     >
                       <div className="teams-competition-header surface-header">
-                        <h2 id={headingId}>{group.label}</h2>
+                        <h2 id={headingId}>
+                          {canCollapse ? (
+                            <button
+                              className="teams-group-toggle"
+                              type="button"
+                              aria-expanded={isExpanded}
+                              onClick={() =>
+                                setExpandedConferences((current) => {
+                                  const next = new Set(current);
+                                  if (isExpanded) next.delete(group.key);
+                                  else next.add(group.key);
+                                  return next;
+                                })
+                              }
+                            >
+                              <span aria-hidden>{isExpanded ? "−" : "+"}</span>
+                              {group.label}
+                            </button>
+                          ) : (
+                            group.label
+                          )}
+                        </h2>
                         <span>
                           {group.teams.length} {group.teams.length === 1 ? "team" : "teams"}
                         </span>
                       </div>
-                      <ul className="teams-directory-grid">
-                        {group.teams.map((team) => {
-                          const isFollowed = followedTeamIds.has(team.id);
-                          return (
-                            <li
-                              key={team.id}
-                              className={`team-directory-row ${isFollowed ? "followed" : ""}`.trim()}
-                            >
-                              <span className="team-directory-main">
-                                <TeamLogo team={team} size={30} />
-                                <span className="team-directory-copy">
-                                  <strong title={team.name}>{team.name}</strong>
-                                  <span className="team-directory-meta">
-                                    <span>{team.abbreviation}</span>
-                                    {team.competitions.map((competition) => (
-                                      <span className="team-competition-badge" key={competition}>
-                                        {competitionLabels.get(competition) ?? competition}
-                                      </span>
-                                    ))}
+                      {isExpanded ? (
+                        <ul className="teams-directory-grid">
+                          {group.teams.map((team) => {
+                            const isFollowed = followedTeamIds.has(team.id);
+                            return (
+                              <li
+                                key={team.id}
+                                className={`team-directory-row ${isFollowed ? "followed" : ""}`.trim()}
+                              >
+                                <span className="team-directory-main">
+                                  <TeamLogo team={team} size={30} />
+                                  <span className="team-directory-copy">
+                                    <strong title={team.name}>{team.name}</strong>
+                                    <span className="team-directory-meta">
+                                      <span>{team.abbreviation}</span>
+                                      {team.competitions.map((competition) => (
+                                        <span className="team-competition-badge" key={competition}>
+                                          {competitionLabels.get(competition) ?? competition}
+                                        </span>
+                                      ))}
+                                    </span>
                                   </span>
                                 </span>
-                              </span>
-                              <button
-                                className="team-directory-action text-action"
-                                type="button"
-                                disabled={busyTeamId === team.id || toggleMutation.isPending}
-                                onClick={async () => {
-                                  if (!token) {
-                                    onSignInRequired();
-                                    return;
-                                  }
-                                  setError(null);
-                                  setBusyTeamId(team.id);
-                                  try {
-                                    await toggleMutation.mutateAsync({
-                                      teamId: team.id,
-                                      isFollowed,
-                                    });
-                                  } finally {
-                                    setBusyTeamId(null);
-                                  }
-                                }}
-                              >
-                                {busyTeamId === team.id
-                                  ? "Saving..."
-                                  : isFollowed
-                                    ? "Unfollow"
-                                    : "Follow"}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                                <button
+                                  className="team-directory-action text-action"
+                                  type="button"
+                                  disabled={busyTeamId === team.id || toggleMutation.isPending}
+                                  onClick={async () => {
+                                    if (!token) {
+                                      onSignInRequired();
+                                      return;
+                                    }
+                                    setError(null);
+                                    setBusyTeamId(team.id);
+                                    try {
+                                      await toggleMutation.mutateAsync({
+                                        teamId: team.id,
+                                        isFollowed,
+                                      });
+                                    } finally {
+                                      setBusyTeamId(null);
+                                    }
+                                  }}
+                                >
+                                  {busyTeamId === team.id
+                                    ? "Saving..."
+                                    : isFollowed
+                                      ? "Unfollow"
+                                      : "Follow"}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
                     </section>
                   );
                 })}

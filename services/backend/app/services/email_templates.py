@@ -39,6 +39,8 @@ def _sport_for_competition(competition: str) -> str | None:
 def _team_logo_url(team: Team | None, fallback_abbr: str, competition: str) -> str:
     if competition in {"MLS", "LA_LIGA", "PREMIER_LEAGUE"} and team and team.external_team_id:
         return f"https://a.espncdn.com/i/teamlogos/soccer/500/{team.external_team_id}.png"
+    if competition == "FBS" and team and team.external_team_id:
+        return f"https://a.espncdn.com/i/teamlogos/ncaa/500/{team.external_team_id}.png"
     abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
     if not abbr:
         return ""

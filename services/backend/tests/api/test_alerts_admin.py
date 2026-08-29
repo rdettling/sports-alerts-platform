@@ -14,6 +14,7 @@ SUPPORTED_TEST_ALERTS = {
     "NBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
     "WNBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
     "NFL": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "FBS": ("game_start", "close_game_late", "overtime_start", "final_result"),
     "MLB": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "MLS": (
         "game_start",

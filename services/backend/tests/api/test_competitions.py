@@ -8,6 +8,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
         "NBA",
         "WNBA",
         "NFL",
+        "FBS",
         "MLB",
         "MLS",
         "LA_LIGA",
@@ -40,6 +41,16 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     )
     assert nfl.scoreboard_url.endswith("/sports/football/nfl/scoreboard")
     assert get_alert_types("NFL") == ("game_start", "close_game_late", "overtime_start", "final_result")
+
+    fbs = get_competition_profile("FBS")
+    assert (fbs.sport, fbs.live_sync_interval_seconds, fbs.odds_sport_key) == (
+        "football",
+        120,
+        "americanfootball_ncaaf",
+    )
+    assert fbs.scoreboard_url.endswith("/sports/football/college-football/scoreboard")
+    assert dict(fbs.scoreboard_params) == {"groups": "80", "limit": "1000"}
+    assert get_alert_types("FBS") == get_alert_types("NFL")
 
     mlb = get_competition_profile("MLB")
     assert (mlb.sport, mlb.live_sync_interval_seconds, mlb.odds_sport_key) == (
@@ -116,6 +127,7 @@ def test_public_competitions_include_sport_and_live_cadence(client):
         ("NBA", "basketball", 120),
         ("WNBA", "basketball", 120),
         ("NFL", "football", 120),
+        ("FBS", "football", 120),
         ("MLB", "baseball", 300),
         ("MLS", "soccer", 180),
         ("LA_LIGA", "soccer", 180),
@@ -131,6 +143,17 @@ def test_mls_team_catalog_contains_all_current_clubs(client):
 
     assert len(teams) == 30
     assert {"LA", "LAFC", "MIA", "RBNY", "SD"} <= {team.abbreviation for team in teams}
+
+
+def test_fbs_team_catalog_contains_all_current_programs(client):
+    client.get("/competitions")
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("FBS")).all()
+
+    assert len(teams) == 138
+    assert {"ALA", "NDSU", "ND", "OSU", "SAC", "UGA"} <= {
+        team.abbreviation for team in teams
+    }
 
 
 def test_la_liga_team_catalog_contains_all_current_clubs(client):

@@ -138,6 +138,38 @@ def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
     assert [game.external_game_id for game in games] == ["mls-mapped"]
 
 
+def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monkeypatch):
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="fbs-vs-fcs",
+                home_external_team_id="333",
+                home_team_name="Alabama Crimson Tide",
+                home_team_abbreviation="ALA",
+                away_external_team_id="999999",
+                away_team_name="Example State Bears",
+                away_team_abbreviation="EXST",
+                status="scheduled",
+            )
+        ]
+    )
+
+    result = run_catalog_sync(provider, competition="FBS")
+
+    opponent = db_session.scalar(
+        competition_teams_query("FBS").where(Team.external_team_id == "999999")
+    )
+    game = db_session.scalar(
+        select(Game).where(Game.competition == "FBS", Game.external_game_id == "fbs-vs-fcs")
+    )
+    assert result.games_updated == 1
+    assert opponent is not None
+    assert (opponent.name, opponent.abbreviation) == ("Example State Bears", "EXST")
+    assert game is not None
+    assert game.away_team_id == opponent.id
+
+
 def test_live_sync_promotes_scheduled_game_to_live(db_session):
     now = datetime.now(timezone.utc).replace(microsecond=0)
     teams = db_session.scalars(competition_teams_query("MLB").order_by(Team.id.asc()).limit(2)).all()

@@ -67,3 +67,30 @@ export function CompetitionTabs<T extends string>({
     </div>
   );
 }
+
+export function ConferenceSelect({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: "all" | string;
+  onChange: (value: "all" | string) => void;
+}) {
+  return (
+    <div className="conference-filter">
+      <select
+        aria-label="Conference"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="all">All conferences</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}

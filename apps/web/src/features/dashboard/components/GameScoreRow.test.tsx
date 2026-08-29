@@ -10,6 +10,7 @@ function makeTeam(id: number, abbreviation: string, name: string): Team {
     external_team_id: abbreviation,
     sport: "basketball",
     competitions: ["NBA"],
+    conference: null,
     name,
     abbreviation,
   };
@@ -405,5 +406,42 @@ describe("GameScoreRow", () => {
       "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
     );
     expect(screen.queryByText("Draw")).not.toBeInTheDocument();
+  });
+
+  it("shows FBS team logos from the NCAA catalog", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ competition: "FBS" })}
+        sport="football"
+        home={{
+          ...home,
+          external_team_id: "333",
+          sport: "football",
+          competitions: ["FBS"],
+          name: "Alabama Crimson Tide",
+          abbreviation: "ALA",
+        }}
+        away={{
+          ...away,
+          external_team_id: "2",
+          sport: "football",
+          competitions: ["FBS"],
+          name: "Auburn Tigers",
+          abbreviation: "AUB",
+        }}
+        isFollowed={false}
+        statusLabel="4:30 PM"
+      />,
+    );
+
+    expect(screen.getByText("FBS")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Alabama Crimson Tide logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png",
+    );
+    expect(screen.getByRole("img", { name: "Auburn Tigers logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/ncaa/500/2.png",
+    );
   });
 });

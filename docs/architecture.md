@@ -40,6 +40,7 @@ Current supported competitions:
 - `NBA`
 - `WNBA`
 - `NFL`
+- `FBS`
 - `MLB`
 - `MLS`
 - `LA_LIGA`
@@ -48,7 +49,7 @@ Current supported competitions:
 
 Competition runtime is controlled by DB-backed `competition_settings`, so disabled competitions disappear from user-facing reads and worker scope without a code change.
 
-Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as NFL season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed.
+Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as football season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed. FBS uses ESPN's FBS group and the NCAAF odds feed; schedule opponents outside FBS are discovered during ingest so those games remain mappable.
 
 ## Main API Areas
 
@@ -89,6 +90,7 @@ Main persisted tables:
 Notable modeling decisions:
 
 - Teams are canonical provider entities and use `competition_teams` for current many-to-many competition membership
+- FBS conference names come from the code-owned team catalog and are exposed as a secondary UI facet, not stored as standalone competitions or database state
 - Games retain their competition and can carry live/final state, scores, context labels, and odds associations
 - A team follow applies to that team's games in every enabled competition, with explicit game unfollows stored separately
 - Alert preference persistence stores sport-wide per-field differences from canonical defaults; competition profiles restrict which rules apply to each game
@@ -107,7 +109,7 @@ Notable modeling decisions:
 ### Game Sync
 
 1. Worker fetches provider schedule/state for enabled competitions
-2. Worker maps provider team IDs to the API-seeded catalog and upserts games into Postgres
+2. Worker maps provider team IDs to the API-seeded catalog, discovers non-FBS opponents on FBS schedules, and upserts games into Postgres
 3. Worker snapshots odds for eligible pregame windows when enabled
 4. Web reads the DB-backed game state through `/games`
 

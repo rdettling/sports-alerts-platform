@@ -150,6 +150,33 @@ def test_nfl_alerts_use_football_copy_periods_and_logos():
     assert build_alert_subject(overtime, game, home, away) == "OT1 · KC 20–20 BUF"
 
 
+def test_fbs_alerts_use_football_copy_and_ncaa_team_logos():
+    away = Team(external_team_id="2", name="Auburn Tigers", abbreviation="AUB")
+    home = Team(external_team_id="333", name="Alabama Crimson Tide", abbreviation="ALA")
+    game = Game(
+        external_game_id="fbs-1",
+        competition="FBS",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=24,
+        away_score=21,
+        period=4,
+        clock="02:00",
+    )
+
+    subject = build_alert_subject(_mk_alert("game_start"), game, home, away)
+    text_body, html_body = build_alert_email_content(
+        _mk_alert("close_game_late"), game, home, away
+    )
+
+    assert subject == "Kickoff · AUB @ ALA"
+    assert "AUB 21–24 ALA • Q4 • 02:00 left" in text_body
+    assert "teamlogos/ncaa/500/2.png" in html_body
+    assert "teamlogos/ncaa/500/333.png" in html_body
+
+
 def test_nba_overtime_start_uses_period_aware_copy():
     away = Team(external_team_id="13", name="Los Angeles Lakers", abbreviation="LAL")
     home = Team(external_team_id="2", name="Boston Celtics", abbreviation="BOS")

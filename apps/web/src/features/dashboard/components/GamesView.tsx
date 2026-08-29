@@ -7,6 +7,7 @@ import { useGamesData } from "../hooks/useGamesData";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameScoreRow } from "./GameScoreRow";
+import { fbsConferenceOptions } from "./fbs-conferences";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import {
   buildDayOptions,
@@ -30,6 +31,7 @@ export function GamesView({
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
+  const [conferenceFilter, setConferenceFilter] = useState<"all" | string>("all");
   const [gameScope, setGameScope] = useState<"all" | "following">("all");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
@@ -69,6 +71,7 @@ export function GamesView({
   );
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
+  const conferenceOptions = useMemo(() => fbsConferenceOptions(teams), [teams]);
   const followedGameIds = useMemo(
     () => new Set((follows?.games ?? []).map((game) => game.id)),
     [follows?.games],
@@ -86,13 +89,23 @@ export function GamesView({
     () => filterGamesByCompetition(scopeFilteredGames, competitionFilter),
     [scopeFilteredGames, competitionFilter],
   );
+  const conferenceFilteredGames = useMemo(() => {
+    if (competitionFilter !== "FBS" || conferenceFilter === "all") {
+      return competitionFilteredGames;
+    }
+    return competitionFilteredGames.filter((game) => {
+      const homeConference = teamMap.get(game.home_team_id)?.conference;
+      const awayConference = teamMap.get(game.away_team_id)?.conference;
+      return homeConference === conferenceFilter || awayConference === conferenceFilter;
+    });
+  }, [competitionFilter, competitionFilteredGames, conferenceFilter, teamMap]);
   const dayOptions = useMemo(
-    () => buildDayOptions(competitionFilteredGames),
-    [competitionFilteredGames],
+    () => buildDayOptions(conferenceFilteredGames),
+    [conferenceFilteredGames],
   );
   const visibleGames = useMemo(
-    () => filterGamesByDay(competitionFilteredGames, dayFilter),
-    [competitionFilteredGames, dayFilter],
+    () => filterGamesByDay(conferenceFilteredGames, dayFilter),
+    [conferenceFilteredGames, dayFilter],
   );
   const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
   useEffect(() => {
@@ -107,6 +120,15 @@ export function GamesView({
       setCompetitionFilter("all");
     }
   }, [activeCompetitions, competitionFilter]);
+
+  useEffect(() => {
+    if (
+      competitionFilter !== "FBS" ||
+      (conferenceFilter !== "all" && !conferenceOptions.includes(conferenceFilter))
+    ) {
+      setConferenceFilter("all");
+    }
+  }, [competitionFilter, conferenceFilter, conferenceOptions]);
 
   useEffect(() => {
     if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
@@ -147,12 +169,15 @@ export function GamesView({
             onCompetitionFilterChange={setCompetitionFilter}
             dayFilter={dayFilter}
             onDayFilterChange={setDayFilter}
-            totalCompetitionGames={competitionFilteredGames.length}
+            totalCompetitionGames={conferenceFilteredGames.length}
             dayOptions={dayOptions}
             showScopeFilter={Boolean(token)}
             gameScope={gameScope}
             onGameScopeChange={setGameScope}
             followedGameCount={followedGameIds.size}
+            conferenceOptions={conferenceOptions}
+            conferenceFilter={conferenceFilter}
+            onConferenceFilterChange={setConferenceFilter}
           />
 
           <section className="games-feed-scroll" aria-label="Games feed">

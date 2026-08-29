@@ -88,6 +88,20 @@
   content: "";
 }
 
+.conference-filter {
+  display: block;
+  min-width: 0;
+}
+
+.conference-filter select {
+  width: 100%;
+  min-width: 0;
+  height: 2.125rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
 @media (min-width: 1024px) {
   .filter-toolbar {
     position: static;

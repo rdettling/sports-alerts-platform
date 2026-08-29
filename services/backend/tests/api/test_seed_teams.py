@@ -1,9 +1,15 @@
 from sqlalchemy import func, select
 
-from app.db.models import Team
+from app.db.models import CompetitionTeam, Team
 from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query, get_competition_profile
-from app.services.seed import COMPETITION_TEAM_IDS, TEAM_CATALOG, ensure_seeded_teams
+from app.services.seed import ensure_seeded_teams
+from app.services.team_catalog import (
+    COMPETITION_TEAM_IDS,
+    FBS_TEAM_CONFERENCES,
+    FBS_TEAMS_BY_CONFERENCE,
+    TEAM_CATALOG,
+)
 
 
 def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams():
@@ -48,3 +54,45 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
         assert (restored_mls.name, restored_mls.abbreviation) == (mls_name, mls_abbreviation)
         assert unknown is not None
         assert db.scalar(select(func.count()).select_from(Team)) == len(TEAM_CATALOG) + 1
+
+
+def test_ensure_seeded_teams_preserves_discovered_fbs_opponents():
+    with SessionLocal() as db:
+        ensure_seeded_teams(db)
+        opponent = Team(
+            sport="football",
+            provider_scope="cfb",
+            external_team_id="999999",
+            name="Example State Bears",
+            abbreviation="EXST",
+        )
+        db.add(opponent)
+        db.flush()
+        db.add(CompetitionTeam(competition="FBS", team_id=opponent.id))
+        db.commit()
+
+        ensure_seeded_teams(db)
+
+        assert db.scalar(
+            competition_teams_query("FBS").where(Team.external_team_id == "999999")
+        ) is not None
+
+
+def test_ensure_seeded_teams_assigns_every_fbs_program_to_a_conference():
+    catalog_ids = [
+        external_team_id
+        for teams in FBS_TEAMS_BY_CONFERENCE.values()
+        for external_team_id, _, _ in teams
+    ]
+    assert len(FBS_TEAMS_BY_CONFERENCE) == 11
+    assert len(catalog_ids) == len(set(catalog_ids)) == 138
+    assert set(FBS_TEAM_CONFERENCES) == set(COMPETITION_TEAM_IDS["FBS"])
+    assert FBS_TEAM_CONFERENCES["333"] == "SEC"
+
+    with SessionLocal() as db:
+        ensure_seeded_teams(db)
+        memberships = db.scalars(
+            select(CompetitionTeam).where(CompetitionTeam.competition == "FBS")
+        ).all()
+
+        assert len(memberships) == 138

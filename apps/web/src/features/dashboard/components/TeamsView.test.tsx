@@ -113,6 +113,46 @@ const competitions = [
   },
 ];
 
+const fbsTeams = [
+  {
+    id: 101,
+    sport: "football",
+    external_team_id: "333",
+    competitions: ["FBS"],
+    conference: "SEC",
+    name: "Alabama Crimson Tide",
+    abbreviation: "ALA",
+  },
+  {
+    id: 102,
+    sport: "football",
+    external_team_id: "2",
+    competitions: ["FBS"],
+    conference: "SEC",
+    name: "Auburn Tigers",
+    abbreviation: "AUB",
+  },
+  {
+    id: 103,
+    sport: "football",
+    external_team_id: "130",
+    competitions: ["FBS"],
+    conference: "Big Ten",
+    name: "Michigan Wolverines",
+    abbreviation: "MICH",
+  },
+];
+
+const fbsCompetition = {
+  competition: "FBS",
+  sport: "football",
+  label: "College Football",
+  badge_label: "FBS",
+  alert_types: [],
+  live_sync_interval_seconds: 120,
+  is_enabled: true,
+};
+
 function renderTeamsView(token: string | null, onSignInRequired = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
@@ -182,6 +222,52 @@ describe("TeamsView", () => {
     expect(screen.getByText("Atlanta Hawks")).toBeInTheDocument();
     expect(screen.queryByText("Boston Celtics")).toBeNull();
     expect(screen.getByRole("region", { name: "All teams" })).toHaveTextContent("1 team");
+  });
+
+  it("groups FBS teams into collapsible conferences and filters them", async () => {
+    apiMocks.listTeams.mockResolvedValue([...teams, ...fbsTeams]);
+    apiMocks.listCompetitions.mockResolvedValue([...competitions, fbsCompetition]);
+    renderTeamsView(null);
+
+    fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
+
+    const conference = screen.getByRole("combobox", { name: "Conference" });
+    expect(conference).toHaveValue("all");
+    expect(screen.queryByText("Conference", { exact: true })).toBeNull();
+    expect(
+      within(conference)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["All conferences", "Big Ten", "SEC"]);
+    expect(screen.getByRole("button", { name: "Big Ten" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "SEC" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Alabama Crimson Tide")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "SEC" }));
+    expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
+    expect(screen.getByText("Auburn Tigers")).toBeInTheDocument();
+    expect(screen.queryByText("Michigan Wolverines")).toBeNull();
+
+    fireEvent.change(conference, { target: { value: "Big Ten" } });
+    expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
+    expect(screen.queryByText("Alabama Crimson Tide")).toBeNull();
+  });
+
+  it("surfaces followed FBS teams above collapsed conferences", async () => {
+    apiMocks.listTeams.mockResolvedValue([...teams, ...fbsTeams]);
+    apiMocks.listCompetitions.mockResolvedValue([...competitions, fbsCompetition]);
+    apiMocks.listFollows.mockResolvedValue({ teams: [fbsTeams[0]], games: [] });
+    renderTeamsView("token");
+
+    fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
+
+    expect(screen.getByRole("region", { name: "Following" })).toHaveTextContent(
+      "Alabama Crimson Tide",
+    );
+    expect(screen.getByRole("button", { name: "SEC" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("returns to all teams if authentication disappears", async () => {

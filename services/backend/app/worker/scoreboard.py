@@ -19,6 +19,10 @@ class ScoreboardGame:
     away_external_team_id: str
     scheduled_start_time: datetime
     status: str
+    home_team_name: str | None = None
+    home_team_abbreviation: str | None = None
+    away_team_name: str | None = None
+    away_team_abbreviation: str | None = None
     season_slug: str | None = None
     season_week: int | None = None
     context_label: str | None = None
@@ -154,6 +158,10 @@ class EspnScoreboardClient:
             home_external_team_id=home_external_team_id,
             away_external_team_id=away_external_team_id,
             scheduled_start_time=scheduled_start_time,
+            home_team_name=_clean_text(home_team.get("displayName")),
+            home_team_abbreviation=_clean_text(home_team.get("abbreviation")),
+            away_team_name=_clean_text(away_team.get("displayName")),
+            away_team_abbreviation=_clean_text(away_team.get("abbreviation")),
             season_slug=season_slug,
             season_week=season_week,
             context_label=context_label,
@@ -169,9 +177,13 @@ class EspnScoreboardClient:
 
     def _fetch_events_for_dates(self, competition: str, dates: list[str]) -> list[dict[str, Any]]:
         by_id: dict[str, dict[str, Any]] = {}
+        profile = get_competition_profile(competition)
         for date in dates:
             try:
-                payload = self._fetch_json(competition, {"dates": date})
+                payload = self._fetch_json(
+                    competition,
+                    {**dict(profile.scoreboard_params), "dates": date},
+                )
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "ESPN request failed competition=%s date=%s error=%s; preserving stale game rows until next cycle",

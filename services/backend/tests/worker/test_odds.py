@@ -75,3 +75,11 @@ def test_nfl_uses_regular_season_odds_feed():
         "buffalo bills",
         "kansas city chiefs",
     )
+
+
+def test_fbs_uses_college_football_odds_feed():
+    assert _odds_sport_key_for_competition("FBS") == "americanfootball_ncaaf"
+    assert game_key("Alabama Crimson Tide", "Auburn Tigers") == (
+        "alabama crimson tide",
+        "auburn tigers",
+    )

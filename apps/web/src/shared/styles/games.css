@@ -396,6 +396,14 @@
     grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
   }
 
+  .games-filter-toolbar.with-conference {
+    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 190px) minmax(210px, 250px);
+  }
+
+  .games-filter-toolbar.without-scope.with-conference {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(210px, 250px);
+  }
+
   .games-feed-scroll {
     height: 100%;
     overflow: auto;

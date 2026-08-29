@@ -14,7 +14,7 @@ export type UserProfile = {
 };
 
 export type Competition =
-  "NBA" | "WNBA" | "NFL" | "MLB" | "MLS" | "LA_LIGA" | "PREMIER_LEAGUE" | "WORLD_CUP";
+  "NBA" | "WNBA" | "NFL" | "FBS" | "MLB" | "MLS" | "LA_LIGA" | "PREMIER_LEAGUE" | "WORLD_CUP";
 export type Sport = "basketball" | "football" | "baseball" | "soccer";
 
 export type Team = {
@@ -24,6 +24,7 @@ export type Team = {
   name: string;
   abbreviation: string;
   competitions: Competition[];
+  conference: string | null;
 };
 
 export type Game = {

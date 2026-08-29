@@ -2,7 +2,7 @@
 
 Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-The current product surface supports eight competitions: `NBA`, `WNBA`, `NFL`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `WORLD_CUP`.
+The current product surface supports nine competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `WORLD_CUP`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -11,6 +11,7 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Email magic-link and one-time-code sign-in with JWT-backed API sessions.
 - Public `Games` dashboard with competition/day filters, live status, follow/unfollow actions, and game-level alert settings.
 - Public canonical `Teams` directory with competition/search filters, membership badges, and one follow state per team across every competition.
+- FBS conference filtering on Games plus collapsible conference groups and followed-team prioritization in Teams.
 - Authenticated Games filter for direct and team-derived follows.
 - `Alerts` dashboard for sport-wide defaults plus alert history.
 - Admin-only operations area for alert delivery activity, DB stats, competition controls, and test tools.
@@ -20,7 +21,7 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 
 Alert types default by sport and can be restricted for a specific competition:
 
-- `NBA`, `WNBA`, and `NFL`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NBA`, `WNBA`, `NFL`, and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
 - `MLS` and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`

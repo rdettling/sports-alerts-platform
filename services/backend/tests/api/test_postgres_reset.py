@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from app.db.models import Base
-from app.services.seed import COMPETITION_TEAM_IDS, TEAM_CATALOG
+from app.services.team_catalog import COMPETITION_TEAM_IDS, TEAM_CATALOG
 
 
 def _run(database_url: str, *command: str) -> None:

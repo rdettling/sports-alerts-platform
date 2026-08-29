@@ -23,6 +23,7 @@ class CompetitionProfile:
     scoreboard_url: str
     live_sync_interval_seconds: int
     odds_sport_key: str | None
+    scoreboard_params: tuple[tuple[str, str], ...] = ()
     supported_alert_types: tuple[str, ...] | None = None
 
 
@@ -72,6 +73,17 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
         live_sync_interval_seconds=120,
         odds_sport_key="americanfootball_nfl",
+    ),
+    "FBS": CompetitionProfile(
+        competition="FBS",
+        sport="football",
+        provider_team_scope="cfb",
+        label="College Football",
+        badge_label="FBS",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
+        scoreboard_params=(("groups", "80"), ("limit", "1000")),
+        live_sync_interval_seconds=120,
+        odds_sport_key="americanfootball_ncaaf",
     ),
     "MLB": CompetitionProfile(
         competition="MLB",

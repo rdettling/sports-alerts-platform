@@ -75,6 +75,7 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "NBA",
         "WNBA",
         "NFL",
+        "FBS",
         "MLB",
         "MLS",
         "LA_LIGA",

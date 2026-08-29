@@ -73,6 +73,44 @@ vi.mock("../hooks/useGamesData", () => ({
           last_ingested_at: "2026-06-12T18:00:00Z",
           odds: null,
         },
+        {
+          id: 4,
+          external_game_id: "fbs-cross-conference-game",
+          competition: "FBS",
+          home_team_id: 16,
+          away_team_id: 17,
+          scheduled_start_time: "2026-06-13T23:00:00Z",
+          context_label: "Week 1",
+          home_team_record: "0-0",
+          away_team_record: "0-0",
+          status: "scheduled",
+          home_score: null,
+          away_score: null,
+          period: null,
+          clock: null,
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 5,
+          external_game_id: "fbs-sec-game",
+          competition: "FBS",
+          home_team_id: 18,
+          away_team_id: 19,
+          scheduled_start_time: "2026-06-13T23:30:00Z",
+          context_label: "Week 1",
+          home_team_record: "0-0",
+          away_team_record: "0-0",
+          status: "scheduled",
+          home_score: null,
+          away_score: null,
+          period: null,
+          clock: null,
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
       ],
       follows:
         token === "empty-token"
@@ -152,6 +190,42 @@ vi.mock("../hooks/useGamesData", () => ({
           name: "Seattle Storm",
           abbreviation: "SEA",
         },
+        {
+          id: 16,
+          external_team_id: "333",
+          sport: "football",
+          competitions: ["FBS"],
+          conference: "SEC",
+          name: "Alabama Crimson Tide",
+          abbreviation: "ALA",
+        },
+        {
+          id: 17,
+          external_team_id: "130",
+          sport: "football",
+          competitions: ["FBS"],
+          conference: "Big Ten",
+          name: "Michigan Wolverines",
+          abbreviation: "MICH",
+        },
+        {
+          id: 18,
+          external_team_id: "2",
+          sport: "football",
+          competitions: ["FBS"],
+          conference: "SEC",
+          name: "Auburn Tigers",
+          abbreviation: "AUB",
+        },
+        {
+          id: 19,
+          external_team_id: "61",
+          sport: "football",
+          competitions: ["FBS"],
+          conference: "SEC",
+          name: "Georgia Bulldogs",
+          abbreviation: "UGA",
+        },
       ],
       competitions: [
         {
@@ -168,6 +242,15 @@ vi.mock("../hooks/useGamesData", () => ({
           sport: "basketball",
           label: "WNBA",
           badge_label: "WNBA",
+          alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
+          live_sync_interval_seconds: 120,
+          is_enabled: true,
+        },
+        {
+          competition: "FBS",
+          sport: "football",
+          label: "College Football",
+          badge_label: "FBS",
           alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
           live_sync_interval_seconds: 120,
           is_enabled: true,
@@ -224,7 +307,7 @@ describe("GamesView", () => {
     expect(screen.queryByText("55-24")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12");
     expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "All dates (3)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "All dates (5)" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
       target: { value: "all" },
@@ -271,6 +354,24 @@ describe("GamesView", () => {
     expect(screen.queryByText("48-31")).toBeNull();
     expect(screen.queryByText("20m")).toBeNull();
     expect(screen.getByRole("button", { name: "WNBA" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("filters FBS games when either team belongs to a conference", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
+    const conference = screen.getByRole("combobox", { name: "Conference" });
+    expect(conference).toHaveValue("all");
+    expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
+    expect(screen.getByText("Auburn Tigers")).toBeInTheDocument();
+
+    fireEvent.change(conference, { target: { value: "Big Ten" } });
+
+    expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
+    expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
+    expect(screen.queryByText("Auburn Tigers")).toBeNull();
+    expect(screen.getByRole("option", { name: "All dates (1)" })).toBeInTheDocument();
   });
 
   it("filters to effective followed games for an authenticated user", async () => {

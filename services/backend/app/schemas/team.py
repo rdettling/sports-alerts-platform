@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 
 from app.db.models import Team
+from app.services.team_catalog import FBS_TEAM_CONFERENCES
 
 
 class TeamOut(BaseModel):
@@ -10,6 +11,7 @@ class TeamOut(BaseModel):
     name: str
     abbreviation: str
     competitions: list[str]
+    conference: str | None
 
 
 def build_team_out(team: Team, competitions: list[str]) -> TeamOut:
@@ -20,4 +22,9 @@ def build_team_out(team: Team, competitions: list[str]) -> TeamOut:
         name=team.name,
         abbreviation=team.abbreviation,
         competitions=competitions,
+        conference=(
+            FBS_TEAM_CONFERENCES.get(team.external_team_id)
+            if team.provider_scope == "cfb"
+            else None
+        ),
     )

@@ -53,6 +53,27 @@
   font-variant-numeric: tabular-nums;
 }
 
+.teams-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.teams-group-toggle span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
 .teams-directory-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(17.5rem, 100%), 1fr));
@@ -140,6 +161,18 @@
 
   .teams-filter-toolbar.without-scope {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 280px) auto;
+  }
+
+  .teams-filter-toolbar.with-conference {
+    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 190px) minmax(190px, 240px);
+  }
+
+  .teams-filter-toolbar.without-scope.with-conference {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(190px, 240px);
+  }
+
+  .teams-filter-toolbar.with-conference .teams-helper {
+    grid-column: 1 / -1;
   }
 
   .teams-results-scroll {

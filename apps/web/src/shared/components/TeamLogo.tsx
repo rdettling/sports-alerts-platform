@@ -19,6 +19,9 @@ function teamLogoUrl(team: Team): string {
   if (team.competitions.includes("WNBA")) {
     return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbreviation}.png`;
   }
+  if (team.competitions.includes("FBS")) {
+    return `https://a.espncdn.com/i/teamlogos/ncaa/500/${team.external_team_id}.png`;
+  }
   if (team.sport === "football") {
     return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbreviation}.png`;
   }

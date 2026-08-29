@@ -217,6 +217,7 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
 @pytest.mark.parametrize(
     ("competition", "interval"),
     [
+        ("FBS", 120),
         ("MLB", 300),
         ("MLS", 180),
         ("LA_LIGA", 180),

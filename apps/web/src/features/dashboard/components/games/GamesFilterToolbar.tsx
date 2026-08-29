@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { type Competition, type CompetitionSetting } from "../../../../shared/api";
-import { CompetitionTabs, ScopeToggle } from "../DashboardFilters";
+import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "../DashboardFilters";
 import { type DayOption, localDateKey } from "./games-view-utils";
 
 export function GamesFilterToolbar({
@@ -16,6 +16,9 @@ export function GamesFilterToolbar({
   gameScope,
   onGameScopeChange,
   followedGameCount,
+  conferenceOptions,
+  conferenceFilter,
+  onConferenceFilterChange,
 }: {
   activeCompetitions: CompetitionSetting[];
   competitionFilter: "all" | Competition;
@@ -28,6 +31,9 @@ export function GamesFilterToolbar({
   gameScope: "all" | "following";
   onGameScopeChange: (value: "all" | "following") => void;
   followedGameCount: number;
+  conferenceOptions: string[];
+  conferenceFilter: "all" | string;
+  onConferenceFilterChange: (value: "all" | string) => void;
 }) {
   const selectedDayIndex = dayOptions.findIndex((day) => day.key === dayFilter);
   const [todayKey] = useState(() => localDateKey(new Date(Date.now()).toISOString()));
@@ -39,7 +45,7 @@ export function GamesFilterToolbar({
 
   return (
     <section
-      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"}`.trim()}
+      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""}`.trim()}
       aria-label="Game filters"
     >
       {showScopeFilter ? (
@@ -60,6 +66,13 @@ export function GamesFilterToolbar({
         value={competitionFilter}
         onChange={onCompetitionFilterChange}
       />
+      {competitionFilter === "FBS" ? (
+        <ConferenceSelect
+          options={conferenceOptions}
+          value={conferenceFilter}
+          onChange={onConferenceFilterChange}
+        />
+      ) : null}
       <div className="games-date-filter" role="group" aria-label="Game date">
         <button
           className="games-date-step"
