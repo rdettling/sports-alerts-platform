@@ -47,10 +47,11 @@ describe("AdminCompetitionSettingsPanel", () => {
     await waitFor(() =>
       expect(updateOpsCompetitionSettingMock).toHaveBeenCalledWith("token", "WNBA", false),
     );
-    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(4));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["admin-page", "token"] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["games-page", "token"] });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["teams-page", "token"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["games"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["teams"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["competitions"] });
   });
 
   it("shows saving and error states", async () => {

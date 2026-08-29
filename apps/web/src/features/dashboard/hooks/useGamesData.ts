@@ -1,33 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
-  listFollows,
-  listGames,
-  listCompetitions,
-  listTeams,
-  type CurrentFollows,
-} from "../../../shared/api";
-
-const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
+  competitionsQueryOptions,
+  followsQueryOptions,
+  gamesQueryOptions,
+  teamsQueryOptions,
+} from "./dashboard-query-options";
 
 export function useGamesData(token: string | null) {
-  return useQuery({
-    queryKey: ["games-page", token ?? "anonymous"],
-    queryFn: async () => {
-      const [availableGames, follows, teams, competitions] = await Promise.all([
-        listGames({ includeFinals: true, limit: 500 }),
-        token ? listFollows(token) : Promise.resolve(EMPTY_FOLLOWS),
-        listTeams(),
-        listCompetitions(),
-      ]);
+  const games = useQuery(gamesQueryOptions());
+  const follows = useQuery(followsQueryOptions(token));
+  const teams = useQuery(teamsQueryOptions());
+  const competitions = useQuery(competitionsQueryOptions());
 
-      return {
-        games: availableGames,
-        follows,
-        teams,
-        competitions,
-      };
+  return {
+    data: {
+      games: games.data ?? [],
+      follows: follows.data ?? { teams: [], games: [] },
+      teams: teams.data ?? [],
+      competitions: competitions.data ?? [],
     },
-    refetchInterval: 120_000,
-  });
+    isLoading: games.isLoading || follows.isLoading || teams.isLoading || competitions.isLoading,
+    isSuccess: games.isSuccess && follows.isSuccess && teams.isSuccess && competitions.isSuccess,
+    error: games.error ?? follows.error ?? teams.error ?? competitions.error,
+  };
 }

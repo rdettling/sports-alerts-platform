@@ -399,6 +399,24 @@ describe("GamesView", () => {
     expect(screen.queryByRole("button", { name: /Following/ })).toBeNull();
   });
 
+  it("refreshes only follows after changing a game follow", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    render(
+      <QueryClientProvider client={client}>
+        <GamesView token="token" onSignInRequired={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Unfollow" }));
+
+    await waitFor(() => expect(apiMocks.unfollowGame).toHaveBeenCalledWith("token", 1));
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["follows", "token"] }),
+    );
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the followed-games empty state", async () => {
     render(<GamesView token="empty-token" onSignInRequired={vi.fn()} />, { wrapper });
 

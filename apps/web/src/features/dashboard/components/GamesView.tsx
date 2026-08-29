@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { followGame, type Competition, type Team, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
+import { dashboardQueryKeys } from "../hooks/dashboard-query-options";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameScoreRow } from "./GameScoreRow";
@@ -56,7 +57,7 @@ export function GamesView({
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["games-page", token] });
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.follows(token) });
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });

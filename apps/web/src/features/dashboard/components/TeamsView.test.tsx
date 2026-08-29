@@ -328,6 +328,9 @@ describe("TeamsView", () => {
     await waitFor(() => expect(apiMocks.followTeam).toHaveBeenCalledWith("token", 6));
     await waitFor(() => expect(screen.getByRole("button", { name: "Unfollow" })).toBeVisible());
     expect(screen.getByRole("button", { name: "Following 1" })).toBeVisible();
+    expect(apiMocks.listFollows).toHaveBeenCalledTimes(2);
+    expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
   });
 
   it("shows Saving and disables actions while a follow change is pending", async () => {

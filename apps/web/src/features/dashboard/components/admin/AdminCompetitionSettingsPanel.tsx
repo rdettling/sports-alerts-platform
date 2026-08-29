@@ -7,6 +7,7 @@ import {
   competitionLogoUrl,
   messageFromUnknown,
 } from "../../../../shared/lib/dashboard-ui";
+import { dashboardQueryKeys } from "../../hooks/dashboard-query-options";
 
 function formatSyncCadence(seconds: number): string {
   if (seconds % 60 === 0) return `Every ${seconds / 60}m`;
@@ -32,9 +33,12 @@ export function AdminCompetitionSettingsPanel({
       isEnabled: boolean;
     }) => updateOpsCompetitionSetting(token, competition, isEnabled),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin-page", token] });
-      await queryClient.invalidateQueries({ queryKey: ["games-page", token] });
-      await queryClient.invalidateQueries({ queryKey: ["teams-page", token] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-page", token] }),
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.games }),
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.teams }),
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.competitions }),
+      ]);
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });

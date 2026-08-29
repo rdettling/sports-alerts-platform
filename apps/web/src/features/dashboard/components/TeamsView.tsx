@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  followTeam,
-  listFollows,
-  listCompetitions,
-  listTeams,
-  type CurrentFollows,
-  type Competition,
-  unfollowTeam,
-} from "../../../shared/api";
+import { followTeam, type Competition, unfollowTeam } from "../../../shared/api";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import {
+  competitionsQueryOptions,
+  dashboardQueryKeys,
+  followsQueryOptions,
+  teamsQueryOptions,
+} from "../hooks/dashboard-query-options";
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "./DashboardFilters";
 import { fbsConferenceOptions } from "./fbs-conferences";
-
-const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
 
 export function TeamsView({
   token,
@@ -33,29 +29,20 @@ export function TeamsView({
   const [busyTeamId, setBusyTeamId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const {
-    data,
-    isLoading,
-    error: queryError,
-  } = useQuery({
-    queryKey: ["teams-page", token ?? "anonymous"],
-    queryFn: async () => {
-      const [teams, competitions, follows] = await Promise.all([
-        listTeams(),
-        listCompetitions(),
-        token ? listFollows(token) : Promise.resolve(EMPTY_FOLLOWS),
-      ]);
-      return { teams, competitions, follows };
-    },
-    refetchInterval: 120_000,
-  });
+  const teamsQuery = useQuery(teamsQueryOptions());
+  const competitionsQuery = useQuery(competitionsQueryOptions());
+  const followsQuery = useQuery(followsQueryOptions(token));
+  const teams = teamsQuery.data ?? [];
+  const competitions = competitionsQuery.data ?? [];
+  const followedTeams = followsQuery.data?.teams ?? [];
+  const isLoading = teamsQuery.isLoading || competitionsQuery.isLoading || followsQuery.isLoading;
+  const queryError = teamsQuery.error ?? competitionsQuery.error ?? followsQuery.error;
 
-  const competitions = data?.competitions ?? [];
   const followedTeamIds = useMemo(
-    () => new Set((data?.follows.teams ?? []).map((team) => team.id)),
-    [data?.follows.teams],
+    () => new Set(followedTeams.map((team) => team.id)),
+    [followedTeams],
   );
-  const conferenceOptions = useMemo(() => fbsConferenceOptions(data?.teams ?? []), [data?.teams]);
+  const conferenceOptions = useMemo(() => fbsConferenceOptions(teams), [teams]);
 
   useEffect(() => {
     if (!token && teamScope !== "all") setTeamScope("all");
@@ -81,7 +68,7 @@ export function TeamsView({
 
   const visibleTeams = useMemo(() => {
     const search = teamSearch.trim().toLowerCase();
-    return [...(data?.teams ?? [])]
+    return [...teams]
       .filter(
         (team) => competitionFilter === "all" || team.competitions.includes(competitionFilter),
       )
@@ -100,7 +87,7 @@ export function TeamsView({
           Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
         return followedDifference || a.name.localeCompare(b.name);
       });
-  }, [data?.teams, followedTeamIds, competitionFilter, conferenceFilter, teamScope, teamSearch]);
+  }, [teams, followedTeamIds, competitionFilter, conferenceFilter, teamScope, teamSearch]);
 
   const teamGroups = useMemo(() => {
     if (visibleTeams.length === 0) return [];
@@ -157,10 +144,7 @@ export function TeamsView({
       else await followTeam(token, teamId);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["teams-page", token] }),
-        queryClient.invalidateQueries({ queryKey: ["games-page", token] }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.follows(token) });
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });
