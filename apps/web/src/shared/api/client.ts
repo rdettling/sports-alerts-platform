@@ -5,6 +5,10 @@ if (!API_BASE_URL) {
   throw new Error("Missing required env var: VITE_API_BASE_URL");
 }
 
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 function normalizeErrorDetail(detail: unknown): string {
   if (typeof detail === "string" && detail.trim().length > 0) {
     return detail;
@@ -48,7 +52,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   let requestError: unknown;
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(apiUrl(path), {
       ...requestOptions,
       signal: controller.signal,
       headers: buildHeaders(token, requestOptions.headers),

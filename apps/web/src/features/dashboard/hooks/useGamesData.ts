@@ -6,12 +6,19 @@ import {
   gamesQueryOptions,
   teamsQueryOptions,
 } from "./dashboard-query-options";
+import { useGameRefresh } from "./useGameRefresh";
 
 export function useGamesData(token: string | null) {
   const games = useQuery(gamesQueryOptions());
   const follows = useQuery(followsQueryOptions(token));
   const teams = useQuery(teamsQueryOptions());
   const competitions = useQuery(competitionsQueryOptions());
+
+  useGameRefresh({
+    games: games.data,
+    dataUpdatedAt: games.dataUpdatedAt,
+    isFetching: games.isFetching,
+  });
 
   return {
     data: {

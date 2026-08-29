@@ -9,6 +9,7 @@ from typing import Literal
 
 from app.db.session import SessionLocal
 from app.services.competitions import get_active_competitions, get_competition_profile
+from app.worker import updates
 from app.worker.config import settings
 from app.worker.ingest import CatalogSyncResult, LiveSyncResult, run_catalog_sync, run_live_sync
 from app.worker.scoreboard import EspnScoreboardClient
@@ -131,6 +132,7 @@ def _run_catalog_sync_job(jobs: JobSchedule, competition: str) -> tuple[int, Cat
     provider = EspnScoreboardClient()
     result = run_catalog_sync(provider=provider, competition=competition)
     _pull_live_sync_forward(jobs, result.competition, result.next_live_sync_at)
+    _notify_game_changes(result)
     return max(1, settings.catalog_sync_interval_seconds), result
 
 
@@ -156,6 +158,7 @@ def _live_mode(result: LiveSyncResult) -> str:
 def _run_live_sync_job(competition: str) -> tuple[int, LiveSyncResult]:
     provider = EspnScoreboardClient()
     result = run_live_sync(provider=provider, competition=competition)
+    _notify_game_changes(result)
     if result.has_live_games:
         return _competition_live_interval_seconds(competition), result
 
@@ -169,6 +172,26 @@ def _run_live_sync_job(competition: str) -> tuple[int, LiveSyncResult]:
         return _competition_live_interval_seconds(competition), result
 
     return max(1, settings.catalog_sync_interval_seconds), result
+
+
+def _notify_game_changes(result: CatalogSyncResult | LiveSyncResult) -> None:
+    if isinstance(result, CatalogSyncResult):
+        changed = bool(
+            result.games_updated or result.odds_snapshots_created or result.games_removed
+        )
+    else:
+        changed = bool(result.games_updated)
+
+    if not changed:
+        return
+
+    try:
+        updates.notify_games_changed(result.competition)
+    except Exception:
+        logger.exception(
+            "Unexpected live update delivery error competition=%s",
+            result.competition,
+        )
 
 
 def run(stop_event: threading.Event) -> None:

@@ -9,7 +9,7 @@
 
 ## Runtime Shape
 
-The web app talks only to the API. The API and worker both read and write the same Postgres database.
+The web app talks only to the API. The API and worker both read and write the same Postgres database. After a changed sync commits, the worker also sends a small authenticated notification to the API so connected Games screens can refresh without polling the database continuously.
 
 At startup, the API:
 
@@ -64,6 +64,8 @@ The API is split into a small set of route groups:
 - `/notification-settings` and `/push-subscriptions` — global delivery choice and browser subscriptions
 - `/competitions` — active competition metadata for the UI
 - `/ops` — admin-only alert activity, DB stats, and competition runtime controls
+- `/updates/games` — public SSE notifications containing no game or user data
+- `/internal/updates/games` — authenticated worker publish endpoint
 - `/healthz` — health check
 
 ## Core Data Model
@@ -111,7 +113,9 @@ Notable modeling decisions:
 1. Worker fetches provider schedule/state for enabled competitions
 2. Worker maps provider team IDs to the API-seeded catalog, discovers non-FBS opponents on FBS schedules, and upserts games into Postgres
 3. Worker snapshots odds for eligible pregame windows when enabled
-4. Web reads the DB-backed game state through `/games`
+4. After a changed transaction commits, the worker sends a best-effort notification to the API
+5. The API broadcasts an in-memory SSE event; visible Games screens coalesce events and refetch `/games` no more than once every two minutes
+6. A ten-minute live fallback handles missed or unavailable SSE connections without adding database connections
 
 ### Alert Evaluation
 
@@ -137,6 +141,7 @@ Admin test alerts use transient sample objects to exercise the real Email and Pu
 
 - The worker is separate so ingest and delivery do not block request/response traffic
 - Scheduler state is process-local; worker logs are the source of truth for job timing and failures
+- SSE fanout is process-local and assumes one API instance; horizontal API scaling would require a shared broadcaster
 - Odds are persisted and read from the DB instead of fetched from the browser path
 - RBAC is DB-backed through `users.role`
 - Settings are strict enough that missing required env values fail early

@@ -35,6 +35,8 @@ setup:
 			'JWT_SECRET_KEY=replace-with-long-random-string' \
 			'WEB_BASE_URL=http://localhost:5173' \
 			'CORS_ALLOW_ORIGINS=http://localhost:5173' \
+			'LIVE_UPDATE_SECRET=replace-with-live-update-secret' \
+			'LIVE_UPDATE_API_URL=http://api:8000' \
 			'ODDS_API_KEY=' \
 			'RESEND_API_KEY=replace-with-resend-api-key' \
 			'DELIVERY_MODE=log' \

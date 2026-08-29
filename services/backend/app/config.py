@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     neon_project_id: str = ""
     neon_org_id: str = ""
     neon_dashboard_url: str = ""
+    live_update_secret: str = ""
 
 
 settings = Settings()

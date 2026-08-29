@@ -10,7 +10,11 @@ const apiMocks = vi.hoisted(() => ({
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
   listCompetitions: vi.fn(async () => []),
+  subscribeToGameUpdates: vi.fn(),
 }));
+
+let gameUpdateHandler: (() => void) | null = null;
+const closeGameUpdates = vi.fn();
 
 vi.mock("../../../shared/api", () => apiMocks);
 
@@ -22,10 +26,17 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe("useGamesData", () => {
   beforeEach(() => {
     Object.values(apiMocks).forEach((mock) => mock.mockClear());
+    gameUpdateHandler = null;
+    closeGameUpdates.mockClear();
+    apiMocks.subscribeToGameUpdates.mockImplementation((handler: () => void) => {
+      gameUpdateHandler = handler;
+      return closeGameUpdates;
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("loads public data without requesting follows for a guest", async () => {
@@ -47,7 +58,7 @@ describe("useGamesData", () => {
     expect(apiMocks.listFollows).toHaveBeenCalledWith("token");
   });
 
-  it("refetches only games on the live interval", async () => {
+  it("uses a ten-minute fallback and refetches only games", async () => {
     vi.useFakeTimers();
     apiMocks.listGames.mockResolvedValueOnce([
       {
@@ -78,12 +89,81 @@ describe("useGamesData", () => {
     expect(result.current.isSuccess).toBe(true);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1_000 - 1);
+    });
+
+    expect(apiMocks.listGames).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
     });
 
     expect(apiMocks.listGames).toHaveBeenCalledTimes(2);
     expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
     expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces SSE events behind the hard two-minute request limit", async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useGamesData(null), { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.isSuccess).toBe(true);
+    expect(gameUpdateHandler).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      gameUpdateHandler?.();
+      gameUpdateHandler?.();
+      await vi.advanceTimersByTimeAsync(89_999);
+    });
+    expect(apiMocks.listGames).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(apiMocks.listGames).toHaveBeenCalledTimes(2);
+    expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listFollows).not.toHaveBeenCalled();
+  });
+
+  it("defers hidden-tab events and refreshes once on return", async () => {
+    vi.useFakeTimers();
+    let visibility: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+
+    const { result } = renderHook(() => useGamesData(null), { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.isSuccess).toBe(true);
+
+    visibility = "hidden";
+    await act(async () => {
+      gameUpdateHandler?.();
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1_000);
+    });
+    expect(apiMocks.listGames).toHaveBeenCalledTimes(1);
+
+    visibility = "visible";
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(apiMocks.listGames).toHaveBeenCalledTimes(2);
+  });
+
+  it("closes the SSE subscription when the Games screen unmounts", async () => {
+    const { result, unmount } = renderHook(() => useGamesData(null), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    unmount();
+
+    expect(closeGameUpdates).toHaveBeenCalledTimes(1);
   });
 });

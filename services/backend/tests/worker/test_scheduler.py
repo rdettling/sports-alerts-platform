@@ -250,6 +250,40 @@ def test_run_live_sync_job_preserves_alerts_created(monkeypatch):
     assert result.alerts_created == 2
 
 
+def test_live_sync_notifies_only_after_changed_result_returns(monkeypatch):
+    calls = []
+
+    def run_sync(provider, competition):
+        calls.append("sync-returned")
+        return _live_result(competition, games_updated=1)
+
+    monkeypatch.setattr(scheduler, "run_live_sync", run_sync)
+    monkeypatch.setattr(
+        scheduler.updates,
+        "notify_games_changed",
+        lambda competition: calls.append(("notify", competition)),
+    )
+
+    scheduler._run_live_sync_job("MLB")
+
+    assert calls == ["sync-returned", ("notify", "MLB")]
+
+
+def test_unchanged_live_sync_does_not_notify(monkeypatch):
+    monkeypatch.setattr(
+        scheduler,
+        "run_live_sync",
+        lambda provider, competition: _live_result(competition),
+    )
+    monkeypatch.setattr(
+        scheduler.updates,
+        "notify_games_changed",
+        lambda competition: (_ for _ in ()).throw(AssertionError("must not notify")),
+    )
+
+    scheduler._run_live_sync_job("MLB")
+
+
 def test_run_catalog_sync_job_uses_fixed_cadence_and_pulls_live_forward(monkeypatch):
     target = datetime.now(timezone.utc) + timedelta(minutes=20)
     monkeypatch.setattr(
@@ -270,6 +304,45 @@ def test_run_catalog_sync_job_uses_fixed_cadence_and_pulls_live_forward(monkeypa
     assert next_seconds == scheduler.settings.catalog_sync_interval_seconds
     assert called == [(jobs, "MLB", target)]
     assert result.competition == "MLB"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"games_updated": 1},
+        {"odds_snapshots_created": 1},
+        {"games_removed": 1},
+    ],
+)
+def test_catalog_sync_notifies_for_visible_game_changes(monkeypatch, changes):
+    monkeypatch.setattr(
+        scheduler,
+        "run_catalog_sync",
+        lambda provider, competition: _catalog_result(competition, **changes),
+    )
+    notified = []
+    monkeypatch.setattr(scheduler.updates, "notify_games_changed", notified.append)
+
+    scheduler._run_catalog_sync_job({}, "MLB")
+
+    assert notified == ["MLB"]
+
+
+def test_notification_failure_does_not_fail_completed_sync(monkeypatch):
+    monkeypatch.setattr(
+        scheduler,
+        "run_live_sync",
+        lambda provider, competition: _live_result(competition, games_updated=1),
+    )
+    monkeypatch.setattr(
+        scheduler.updates,
+        "notify_games_changed",
+        lambda competition: (_ for _ in ()).throw(RuntimeError("notification failed")),
+    )
+
+    _, result = scheduler._run_live_sync_job("MLB")
+
+    assert result.games_updated == 1
 
 
 @pytest.mark.parametrize(

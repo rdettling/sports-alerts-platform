@@ -16,6 +16,8 @@ DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts
 JWT_SECRET_KEY=replace-with-long-random-string
 WEB_BASE_URL=http://localhost:5173
 CORS_ALLOW_ORIGINS=http://localhost:5173
+LIVE_UPDATE_SECRET=replace-with-live-update-secret
+LIVE_UPDATE_API_URL=http://api:8000
 
 ODDS_API_KEY=
 CATALOG_SYNC_INTERVAL_SECONDS=43200
@@ -58,6 +60,7 @@ Common values:
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
 - `BOOTSTRAP_ADMIN_EMAIL`
+- `LIVE_UPDATE_SECRET`
 
 Notes:
 
@@ -66,6 +69,7 @@ Notes:
 - The API needs both VAPID keys so it can report whether Push is available and return the public key to authenticated browsers.
 - The VAPID private key remains server-only. `VAPID_SUBJECT` must be an HTTPS URL or `mailto:` contact.
 - Email sign-in expiry and request limits are configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
+- `LIVE_UPDATE_SECRET` authenticates worker-to-API game update notifications. A blank value disables the internal publish endpoint.
 
 ## Worker Config
 
@@ -79,6 +83,8 @@ Common values:
 - `DELIVERY_MODE`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
+- `LIVE_UPDATE_API_URL`
+- `LIVE_UPDATE_SECRET`
 
 Notes:
 
@@ -86,6 +92,7 @@ Notes:
 - Competition-specific live cadences and odds provider sport keys are stable values in the competition registry, not environment settings.
 - The provider, moneyline market, region, format, request timeout, cache duration, and pregame window are fixed implementation details.
 - Disabling odds does not disable schedule ingest or alert evaluation.
+- Live update delivery is best-effort and disabled unless both live update values are nonblank. Locally, use `http://api:8000`; on Render, use the API's HTTPS origin.
 
 ## Frontend Config
 

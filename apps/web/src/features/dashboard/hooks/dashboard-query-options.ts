@@ -9,7 +9,8 @@ import {
   type Game,
 } from "../../../shared/api";
 
-export const LIVE_GAME_REFETCH_INTERVAL_MS = 120_000;
+export const MIN_GAME_REFRESH_INTERVAL_MS = 120_000;
+export const LIVE_GAME_FALLBACK_INTERVAL_MS = 10 * 60 * 1_000;
 export const GAME_MAINTENANCE_REFETCH_INTERVAL_MS = 12 * 60 * 60 * 1_000;
 const SCHEDULED_GAME_OVERDUE_WINDOW_MS = 2 * 60 * 60 * 1_000;
 const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
@@ -21,13 +22,13 @@ export const dashboardQueryKeys = {
   follows: (token: string | null) => ["follows", token ?? "anonymous"] as const,
 };
 
-export function gamesRefetchInterval(games: Game[] | undefined, nowMs = Date.now()): number {
+export function gamesFallbackInterval(games: Game[] | undefined, nowMs = Date.now()): number {
   if (
     games?.some(
       (game) => !game.is_final && (game.status === "in_progress" || game.status === "live"),
     )
   ) {
-    return LIVE_GAME_REFETCH_INTERVAL_MS;
+    return LIVE_GAME_FALLBACK_INTERVAL_MS;
   }
 
   const scheduledStarts = (games ?? [])
@@ -40,7 +41,7 @@ export function gamesRefetchInterval(games: Game[] | undefined, nowMs = Date.now
       (startMs) => startMs <= nowMs && startMs >= nowMs - SCHEDULED_GAME_OVERDUE_WINDOW_MS,
     )
   ) {
-    return LIVE_GAME_REFETCH_INTERVAL_MS;
+    return LIVE_GAME_FALLBACK_INTERVAL_MS;
   }
 
   const nextStartMs = scheduledStarts
@@ -52,7 +53,7 @@ export function gamesRefetchInterval(games: Game[] | undefined, nowMs = Date.now
 
   if (nextStartMs === null) return GAME_MAINTENANCE_REFETCH_INTERVAL_MS;
   return Math.min(
-    Math.max(nextStartMs - nowMs, LIVE_GAME_REFETCH_INTERVAL_MS),
+    Math.max(nextStartMs - nowMs, MIN_GAME_REFRESH_INTERVAL_MS),
     GAME_MAINTENANCE_REFETCH_INTERVAL_MS,
   );
 }
@@ -61,10 +62,8 @@ export function gamesQueryOptions() {
   return queryOptions({
     queryKey: dashboardQueryKeys.games,
     queryFn: () => listGames({ includeFinals: true, limit: 500 }),
-    staleTime: LIVE_GAME_REFETCH_INTERVAL_MS,
-    refetchInterval: (query) => gamesRefetchInterval(query.state.data),
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    staleTime: MIN_GAME_REFRESH_INTERVAL_MS,
+    refetchOnWindowFocus: false,
   });
 }
 

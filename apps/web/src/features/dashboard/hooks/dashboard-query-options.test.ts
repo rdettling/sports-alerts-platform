@@ -5,9 +5,10 @@ import {
   competitionsQueryOptions,
   followsQueryOptions,
   GAME_MAINTENANCE_REFETCH_INTERVAL_MS,
+  gamesFallbackInterval,
   gamesQueryOptions,
-  gamesRefetchInterval,
-  LIVE_GAME_REFETCH_INTERVAL_MS,
+  LIVE_GAME_FALLBACK_INTERVAL_MS,
+  MIN_GAME_REFRESH_INTERVAL_MS,
   teamsQueryOptions,
 } from "./dashboard-query-options";
 
@@ -36,34 +37,34 @@ function game(overrides: Partial<Game> = {}): Game {
   };
 }
 
-describe("gamesRefetchInterval", () => {
-  it("uses the existing two-minute cadence for live games", () => {
-    expect(gamesRefetchInterval([game({ status: "live" })], NOW)).toBe(
-      LIVE_GAME_REFETCH_INTERVAL_MS,
+describe("gamesFallbackInterval", () => {
+  it("uses the ten-minute fallback for live games", () => {
+    expect(gamesFallbackInterval([game({ status: "live" })], NOW)).toBe(
+      LIVE_GAME_FALLBACK_INTERVAL_MS,
     );
-    expect(gamesRefetchInterval([game({ status: "in_progress" })], NOW)).toBe(
-      LIVE_GAME_REFETCH_INTERVAL_MS,
+    expect(gamesFallbackInterval([game({ status: "in_progress" })], NOW)).toBe(
+      LIVE_GAME_FALLBACK_INTERVAL_MS,
     );
   });
 
   it("keeps recently started scheduled games hot for two hours", () => {
     expect(
-      gamesRefetchInterval(
+      gamesFallbackInterval(
         [game({ scheduled_start_time: new Date(NOW - 90 * 60 * 1_000).toISOString() })],
         NOW,
       ),
-    ).toBe(LIVE_GAME_REFETCH_INTERVAL_MS);
+    ).toBe(LIVE_GAME_FALLBACK_INTERVAL_MS);
   });
 
   it("waits for the next scheduled start without creating a sub-two-minute refresh", () => {
     expect(
-      gamesRefetchInterval(
+      gamesFallbackInterval(
         [game({ scheduled_start_time: new Date(NOW + 30_000).toISOString() })],
         NOW,
       ),
-    ).toBe(LIVE_GAME_REFETCH_INTERVAL_MS);
+    ).toBe(MIN_GAME_REFRESH_INTERVAL_MS);
     expect(
-      gamesRefetchInterval(
+      gamesFallbackInterval(
         [game({ scheduled_start_time: new Date(NOW + 30 * 60 * 1_000).toISOString() })],
         NOW,
       ),
@@ -72,7 +73,7 @@ describe("gamesRefetchInterval", () => {
 
   it("caps long waits at the maintenance interval", () => {
     expect(
-      gamesRefetchInterval(
+      gamesFallbackInterval(
         [game({ scheduled_start_time: new Date(NOW + 24 * 60 * 60 * 1_000).toISOString() })],
         NOW,
       ),
@@ -81,22 +82,21 @@ describe("gamesRefetchInterval", () => {
 
   it("uses maintenance cadence for overdue, final, and empty collections", () => {
     expect(
-      gamesRefetchInterval(
+      gamesFallbackInterval(
         [game({ scheduled_start_time: new Date(NOW - 3 * 60 * 60 * 1_000).toISOString() })],
         NOW,
       ),
     ).toBe(GAME_MAINTENANCE_REFETCH_INTERVAL_MS);
-    expect(gamesRefetchInterval([game({ status: "final", is_final: true })], NOW)).toBe(
+    expect(gamesFallbackInterval([game({ status: "final", is_final: true })], NOW)).toBe(
       GAME_MAINTENANCE_REFETCH_INTERVAL_MS,
     );
-    expect(gamesRefetchInterval([], NOW)).toBe(GAME_MAINTENANCE_REFETCH_INTERVAL_MS);
+    expect(gamesFallbackInterval([], NOW)).toBe(GAME_MAINTENANCE_REFETCH_INTERVAL_MS);
   });
 
-  it("polls only games and keeps background polling disabled", () => {
-    expect(gamesQueryOptions().refetchInterval).toBeTypeOf("function");
-    expect(gamesQueryOptions().staleTime).toBe(LIVE_GAME_REFETCH_INTERVAL_MS);
-    expect(gamesQueryOptions().refetchIntervalInBackground).toBe(false);
-    expect(gamesQueryOptions().refetchOnWindowFocus).toBe(true);
+  it("leaves all refresh timing to the game refresh coordinator", () => {
+    expect(gamesQueryOptions().refetchInterval).toBeUndefined();
+    expect(gamesQueryOptions().staleTime).toBe(MIN_GAME_REFRESH_INTERVAL_MS);
+    expect(gamesQueryOptions().refetchOnWindowFocus).toBe(false);
     expect(teamsQueryOptions().refetchInterval).toBeUndefined();
     expect(competitionsQueryOptions().refetchInterval).toBeUndefined();
     expect(followsQueryOptions("token").refetchInterval).toBeUndefined();

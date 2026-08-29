@@ -17,6 +17,7 @@ from app.routers.health import router as health_router
 from app.routers.competitions import router as competitions_router
 from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
+from app.routers.updates import router as updates_router
 from app.routers.ops import router as ops_router
 from app.routers.notifications import router as notifications_router
 from app.logging_filters import SuppressLowSignalAccessLogsFilter
@@ -65,6 +66,7 @@ app.include_router(preferences_router)
 app.include_router(notifications_router)
 app.include_router(alerts_router)
 app.include_router(ops_router)
+app.include_router(updates_router)
 
 
 @app.exception_handler(RequestValidationError)

@@ -27,6 +27,7 @@ Requirements:
 - Run `alembic upgrade head` before serving traffic
 - Expose the app on the configured host/port
 - Provide all required API env vars from [configuration.md](configuration.md)
+- Set `LIVE_UPDATE_SECRET` to the same generated secret used by the worker
 
 Health checks:
 
@@ -48,6 +49,7 @@ Requirements:
 - Point at the same database as the API
 - Provide worker env vars from [configuration.md](configuration.md)
 - Keep it running continuously; this is not a scheduled job container
+- Set `LIVE_UPDATE_API_URL` to the API origin and `LIVE_UPDATE_SECRET` to the API's value
 
 Behavior notes:
 
@@ -70,6 +72,16 @@ Required env:
 - `VITE_API_BASE_URL=https://<api-origin>`
 
 If you host the frontend as a single-page app, configure route fallback so browser refreshes on nested routes keep working.
+
+## Live Update Rollout
+
+Live updates require no database migration or additional service. Configure the shared secret before deploying the feature, then deploy in this order:
+
+1. API, so both live update endpoints exist
+2. Worker, so changed commits begin publishing
+3. Frontend, so browsers begin opening SSE connections
+
+Notification failure never fails or retries a completed sync. The frontend keeps a ten-minute live fallback and a hard two-minute minimum between `/games` reads.
 
 ## Database
 
@@ -114,3 +126,4 @@ After a deploy:
 6. Verify email-only, push-only, combined, and no-delivery test states for the admin account
 7. Confirm a push notification opens the Games page and history shows channel-specific delivery chips
 8. If Neon integration is configured, confirm the admin DB stats view can load usage data
+9. Confirm `/updates/games` remains connected and changed worker jobs prompt no more than one `/games` read every two minutes per visible client
