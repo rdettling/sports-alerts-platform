@@ -10,6 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
   listTeams: vi.fn(async () => []),
   listCompetitions: vi.fn(async () => []),
+  getCompetitionVisibility: vi.fn(async () => ({ hidden_competitions: [] })),
   subscribeToGameUpdates: vi.fn(),
 }));
 
@@ -47,7 +48,9 @@ describe("useGamesData", () => {
     expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
     expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
+    expect(apiMocks.getCompetitionVisibility).not.toHaveBeenCalled();
     expect(result.current.data?.follows).toEqual({ teams: [], games: [] });
+    expect(result.current.data?.competitionVisibility).toEqual({ hidden_competitions: [] });
   });
 
   it("loads follows when authenticated", async () => {
@@ -56,6 +59,7 @@ describe("useGamesData", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(apiMocks.listFollows).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).toHaveBeenCalledWith("token");
+    expect(apiMocks.getCompetitionVisibility).toHaveBeenCalledWith("token");
   });
 
   it("uses a ten-minute fallback and refetches only games", async () => {

@@ -63,7 +63,15 @@ def follow_team(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    team = db.get(Team, team_id)
+    active_competitions = get_active_competitions(db)
+    team = db.scalar(
+        select(Team)
+        .join(CompetitionTeam, CompetitionTeam.team_id == Team.id)
+        .where(
+            Team.id == team_id,
+            CompetitionTeam.competition.in_(active_competitions),
+        )
+    )
     if not team:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
 
@@ -101,7 +109,7 @@ def follow_game(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     game = db.get(Game, game_id)
-    if not game:
+    if not game or game.competition not in set(get_active_competitions(db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
 
     existing = db.scalar(

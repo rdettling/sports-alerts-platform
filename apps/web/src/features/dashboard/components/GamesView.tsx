@@ -8,6 +8,7 @@ import { dashboardQueryKeys } from "../hooks/dashboard-query-options";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameScoreRow } from "./GameScoreRow";
+import { CompetitionVisibilityControl } from "./CompetitionVisibilityControl";
 import { fbsConferenceOptions } from "./fbs-conferences";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import {
@@ -28,7 +29,7 @@ export function GamesView({
   onSignInRequired: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useGamesData(token);
+  const { data, isLoading, error: dataError } = useGamesData(token);
 
   const [dayFilter, setDayFilter] = useState<"all" | string>("all");
   const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
@@ -66,6 +67,19 @@ export function GamesView({
   const follows = data?.follows;
   const teams = data?.teams ?? [];
   const activeCompetitions = data?.competitions ?? [];
+  const competitionVisibility = data?.competitionVisibility ?? { hidden_competitions: [] };
+  const hiddenCompetitions = useMemo(
+    () => new Set<Competition>(competitionVisibility.hidden_competitions),
+    [competitionVisibility.hidden_competitions],
+  );
+  const visibleCompetitions = useMemo(
+    () => activeCompetitions.filter(({ competition }) => !hiddenCompetitions.has(competition)),
+    [activeCompetitions, hiddenCompetitions],
+  );
+  const activeCompetitionIds = useMemo(
+    () => new Set(activeCompetitions.map(({ competition }) => competition)),
+    [activeCompetitions],
+  );
   const competitionProfiles = useMemo(
     () => new Map(activeCompetitions.map((profile) => [profile.competition, profile] as const)),
     [activeCompetitions],
@@ -78,7 +92,22 @@ export function GamesView({
     [follows?.games],
   );
 
-  const sortedGames = useMemo(() => sortGamesByStart(games), [games]);
+  const visibilityFilteredGames = useMemo(
+    () =>
+      games.filter(
+        (game) =>
+          activeCompetitionIds.has(game.competition) && !hiddenCompetitions.has(game.competition),
+      ),
+    [activeCompetitionIds, games, hiddenCompetitions],
+  );
+  const visibleFollowedGameCount = useMemo(
+    () => visibilityFilteredGames.filter((game) => followedGameIds.has(game.id)).length,
+    [followedGameIds, visibilityFilteredGames],
+  );
+  const sortedGames = useMemo(
+    () => sortGamesByStart(visibilityFilteredGames),
+    [visibilityFilteredGames],
+  );
   const scopeFilteredGames = useMemo(
     () =>
       gameScope === "following"
@@ -116,11 +145,11 @@ export function GamesView({
   useEffect(() => {
     if (
       competitionFilter !== "all" &&
-      !activeCompetitions.some((item) => item.competition === competitionFilter)
+      !visibleCompetitions.some((item) => item.competition === competitionFilter)
     ) {
       setCompetitionFilter("all");
     }
-  }, [activeCompetitions, competitionFilter]);
+  }, [competitionFilter, visibleCompetitions]);
 
   useEffect(() => {
     if (
@@ -151,9 +180,9 @@ export function GamesView({
 
   return (
     <section className="view-stack games-page" aria-label="Games">
-      {error ? (
+      {error || dataError ? (
         <p className="error view-feedback" role="alert">
-          {error}
+          {error ?? messageFromUnknown(dataError)}
         </p>
       ) : null}
       {isLoading ? (
@@ -165,7 +194,7 @@ export function GamesView({
       {!isLoading ? (
         <div className="games-layout">
           <GamesFilterToolbar
-            activeCompetitions={activeCompetitions}
+            activeCompetitions={visibleCompetitions}
             competitionFilter={competitionFilter}
             onCompetitionFilterChange={setCompetitionFilter}
             dayFilter={dayFilter}
@@ -175,10 +204,19 @@ export function GamesView({
             showScopeFilter={Boolean(token)}
             gameScope={gameScope}
             onGameScopeChange={setGameScope}
-            followedGameCount={followedGameIds.size}
+            followedGameCount={visibleFollowedGameCount}
             conferenceOptions={conferenceOptions}
             conferenceFilter={conferenceFilter}
             onConferenceFilterChange={setConferenceFilter}
+            competitionVisibilityControl={
+              token ? (
+                <CompetitionVisibilityControl
+                  token={token}
+                  competitions={activeCompetitions}
+                  visibility={competitionVisibility}
+                />
+              ) : null
+            }
           />
 
           <section className="games-feed-scroll" aria-label="Games feed">
@@ -250,11 +288,24 @@ export function GamesView({
                 })}
               </div>
             ) : (
-              <p className="muted view-feedback">
-                {gameScope === "following"
-                  ? "No followed games match this filter."
-                  : "No games in this filter."}
-              </p>
+              <div className="muted view-feedback empty-visibility-state">
+                <p>
+                  {visibleCompetitions.length === 0
+                    ? "No leagues are currently shown."
+                    : gameScope === "following"
+                      ? "No followed games match this filter."
+                      : "No games in this filter."}
+                </p>
+                {token && visibleCompetitions.length === 0 ? (
+                  <CompetitionVisibilityControl
+                    token={token}
+                    competitions={activeCompetitions}
+                    visibility={competitionVisibility}
+                    buttonLabel="Choose leagues"
+                    buttonClassName="btn"
+                  />
+                ) : null}
+              </div>
             )}
           </section>
         </div>

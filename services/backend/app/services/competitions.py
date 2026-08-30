@@ -190,16 +190,28 @@ def competition_supports_odds(competition: str) -> bool:
 def ensure_competition_settings(db: Session) -> None:
     existing = {
         row.competition
-        for row in db.scalars(select(CompetitionSetting).where(CompetitionSetting.competition.in_(COMPETITION_ORDER))).all()
+        for row in db.scalars(
+            select(CompetitionSetting).where(
+                CompetitionSetting.competition.in_(COMPETITION_ORDER)
+            )
+        ).all()
     }
     if len(existing) == len(COMPETITION_ORDER):
         return
 
+    fresh_database = not existing
     now = datetime.now(timezone.utc)
     for competition in COMPETITION_ORDER:
         if competition in existing:
             continue
-        db.add(CompetitionSetting(competition=competition, is_enabled=True, created_at=now, updated_at=now))
+        db.add(
+            CompetitionSetting(
+                competition=competition,
+                is_enabled=fresh_database,
+                created_at=now,
+                updated_at=now,
+            )
+        )
     db.commit()
 
 

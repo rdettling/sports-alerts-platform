@@ -42,7 +42,9 @@ describe("AdminCompetitionSettingsPanel", () => {
 
   it("updates a competition and invalidates the affected views", async () => {
     const { invalidate } = renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Disable WNBA" }));
+    expect(screen.getByText("Competition Availability")).toBeInTheDocument();
+    expect(screen.getByText(/Active ·/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate WNBA" }));
 
     await waitFor(() =>
       expect(updateOpsCompetitionSettingMock).toHaveBeenCalledWith("token", "WNBA", false),
@@ -64,7 +66,7 @@ describe("AdminCompetitionSettingsPanel", () => {
     );
     renderPanel();
 
-    const action = screen.getByRole("button", { name: "Disable WNBA" });
+    const action = screen.getByRole("button", { name: "Deactivate WNBA" });
     fireEvent.click(action);
     await waitFor(() => expect(action).toBeDisabled());
     expect(action).toHaveTextContent("Saving...");

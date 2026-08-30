@@ -98,6 +98,42 @@ def test_team_follow_flow(client):
     assert unfollow_response.json()["status"] == "unfollowed"
 
 
+def test_inactive_competition_hides_preserved_follows_and_rejects_new_ones(client):
+    headers = _auth_headers(client, email="inactive-follows@example.com")
+    game_id = _create_game("MLB")
+    with SessionLocal() as db:
+        team_id = db.scalar(
+            select(Team.id)
+            .join(CompetitionTeam, CompetitionTeam.team_id == Team.id)
+            .where(CompetitionTeam.competition == "MLB")
+            .order_by(Team.id.asc())
+        )
+    assert team_id is not None
+
+    assert client.post(f"/follows/teams/{team_id}", headers=headers).status_code == 201
+    assert client.post(f"/follows/games/{game_id}", headers=headers).status_code == 201
+
+    with SessionLocal() as db:
+        setting = db.get(CompetitionSetting, "MLB")
+        assert setting is not None
+        setting.is_enabled = False
+        db.commit()
+
+    assert client.get("/follows", headers=headers).json() == {"teams": [], "games": []}
+    assert client.post(f"/follows/teams/{team_id}", headers=headers).status_code == 404
+    assert client.post(f"/follows/games/{game_id}", headers=headers).status_code == 404
+
+    with SessionLocal() as db:
+        setting = db.get(CompetitionSetting, "MLB")
+        assert setting is not None
+        setting.is_enabled = True
+        db.commit()
+
+    restored = client.get("/follows", headers=headers).json()
+    assert {team["id"] for team in restored["teams"]} == {team_id}
+    assert game_id in {game["id"] for game in restored["games"]}
+
+
 def test_fbs_teams_expose_conference_metadata_in_directory_and_follows(client):
     headers = _auth_headers(client, email="fbs-conference@example.com")
     with SessionLocal() as db:

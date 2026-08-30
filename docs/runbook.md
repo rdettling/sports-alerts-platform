@@ -54,7 +54,7 @@ Expected behavior:
 Checks:
 
 1. Confirm the worker is running and logging sync activity
-2. Confirm a relevant competition is enabled in `competition_settings`
+2. Confirm a relevant competition is active in Admin (`competition_settings.is_enabled = true`)
 3. Confirm users follow teams or games that should produce alert candidates
 4. Confirm the resolved competition or per-game settings have the alert type enabled; per-game fields inherit competition values until explicitly changed
 5. For real delivery, confirm `DELIVERY_MODE=live`
@@ -74,6 +74,12 @@ Checks:
 6. Check the push delivery row; expired endpoints (`404` or `410`) are removed automatically
 
 Push has no email fallback. Email alerts and per-device Push enrollment are independent.
+
+## Competition Availability
+
+Admin is the source of truth for which supported competitions are active. Inactive competitions remain listed in Admin but disappear from Games, Teams, follows, alert configuration, and each user's league picker. Their stored sports data and user choices are preserved for reactivation.
+
+New competition profiles added to an existing environment start inactive. Review their provider configuration and team catalog, then activate them from Admin when they are ready to consume sync resources and appear throughout the app. Seasonal activation is manual; the app does not infer availability from calendar dates or temporary gaps in scheduled games.
 
 ## Bad Local State
 

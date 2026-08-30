@@ -67,6 +67,10 @@ export type CompetitionSetting = {
   is_enabled: boolean;
 };
 
+export type CompetitionVisibility = {
+  hidden_competitions: Competition[];
+};
+
 export type CurrentFollows = { teams: Team[]; games: Game[] };
 
 export type AlertSettings = {

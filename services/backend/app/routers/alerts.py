@@ -192,7 +192,7 @@ def create_admin_test_alert(
     if not allowed_alert_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid competition")
     if competition not in set(get_active_competitions(db)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is disabled")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is inactive")
     if payload.alert_type not in allowed_alert_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

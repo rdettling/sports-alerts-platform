@@ -64,7 +64,7 @@ For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 - The API owns auth, user-facing reads/writes, admin endpoints, and startup seeding.
 - The worker owns schedule sync, odds snapshots, alert evaluation, and delivery execution.
 - Postgres stores users, teams, games, follows, alert settings, sent alerts, odds snapshots, and lightweight ops data.
-- Competition runtime is DB-backed through `competition_settings`, so a competition can be disabled without redeploying.
+- Competition availability is DB-backed through `competition_settings`: supported leagues remain manageable in Admin, active leagues consume worker resources and appear throughout the app, and signed-in users can hide active leagues for themselves.
 
 ## Canonical Docs
 

@@ -110,3 +110,10 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     assert competition_update.status_code == 200
     assert competition_update.json()["competition"] == "MLB"
     assert competition_update.json()["is_enabled"] is False
+    refreshed_summary = client.get("/ops/admin/summary?window=24h", headers=headers).json()
+    refreshed_mlb = next(
+        item
+        for item in refreshed_summary["competition_settings"]
+        if item["competition"] == "MLB"
+    )
+    assert refreshed_mlb["is_enabled"] is False

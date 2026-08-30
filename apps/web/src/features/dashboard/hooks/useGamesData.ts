@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  competitionVisibilityQueryOptions,
   competitionsQueryOptions,
   followsQueryOptions,
   gamesQueryOptions,
@@ -13,6 +14,7 @@ export function useGamesData(token: string | null) {
   const follows = useQuery(followsQueryOptions(token));
   const teams = useQuery(teamsQueryOptions());
   const competitions = useQuery(competitionsQueryOptions());
+  const competitionVisibility = useQuery(competitionVisibilityQueryOptions(token));
 
   useGameRefresh({
     games: games.data,
@@ -26,9 +28,25 @@ export function useGamesData(token: string | null) {
       follows: follows.data ?? { teams: [], games: [] },
       teams: teams.data ?? [],
       competitions: competitions.data ?? [],
+      competitionVisibility: competitionVisibility.data ?? { hidden_competitions: [] },
     },
-    isLoading: games.isLoading || follows.isLoading || teams.isLoading || competitions.isLoading,
-    isSuccess: games.isSuccess && follows.isSuccess && teams.isSuccess && competitions.isSuccess,
-    error: games.error ?? follows.error ?? teams.error ?? competitions.error,
+    isLoading:
+      games.isLoading ||
+      follows.isLoading ||
+      teams.isLoading ||
+      competitions.isLoading ||
+      competitionVisibility.isLoading,
+    isSuccess:
+      games.isSuccess &&
+      follows.isSuccess &&
+      teams.isSuccess &&
+      competitions.isSuccess &&
+      competitionVisibility.isSuccess,
+    error:
+      games.error ??
+      follows.error ??
+      teams.error ??
+      competitions.error ??
+      competitionVisibility.error,
   };
 }

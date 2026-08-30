@@ -10,6 +10,8 @@ const apiMocks = vi.hoisted(() => ({
   listFollows: vi.fn(),
   listCompetitions: vi.fn(),
   listTeams: vi.fn(),
+  getCompetitionVisibility: vi.fn(),
+  updateCompetitionVisibility: vi.fn(),
 }));
 
 vi.mock("../../../shared/api", () => apiMocks);
@@ -172,6 +174,10 @@ describe("TeamsView", () => {
     apiMocks.listTeams.mockResolvedValue(teams);
     apiMocks.listCompetitions.mockResolvedValue(competitions);
     apiMocks.listFollows.mockResolvedValue({ teams: [], games: [] });
+    apiMocks.getCompetitionVisibility.mockResolvedValue({ hidden_competitions: [] });
+    apiMocks.updateCompetitionVisibility.mockImplementation(
+      async (_token: string, hidden_competitions: string[]) => ({ hidden_competitions }),
+    );
     apiMocks.followTeam.mockResolvedValue({ status: "ok" });
     apiMocks.unfollowTeam.mockResolvedValue({ status: "ok" });
   });
@@ -222,6 +228,44 @@ describe("TeamsView", () => {
     expect(screen.getByText("Atlanta Hawks")).toBeInTheDocument();
     expect(screen.queryByText("Boston Celtics")).toBeNull();
     expect(screen.getByRole("region", { name: "All teams" })).toHaveTextContent("1 team");
+  });
+
+  it("hides league-only teams while retaining visible memberships and badges", async () => {
+    apiMocks.getCompetitionVisibility.mockResolvedValue({ hidden_competitions: ["LA_LIGA"] });
+    apiMocks.listFollows.mockResolvedValue({ teams: [teams[4]], games: [] });
+    renderTeamsView("token");
+
+    expect(await screen.findByText("Arsenal")).toBeInTheDocument();
+    expect(screen.queryByText("Real Madrid")).toBeNull();
+    expect(screen.queryByRole("button", { name: "La Liga" })).toBeNull();
+    expect(screen.getByText("EPL")).toBeInTheDocument();
+    expect(screen.queryByText("LALIGA")).toBeNull();
+    expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
+  });
+
+  it("filters cached teams through the current active competition catalog", async () => {
+    apiMocks.listCompetitions.mockResolvedValue(
+      competitions.filter(({ competition }) => competition !== "LA_LIGA"),
+    );
+    apiMocks.listFollows.mockResolvedValue({ teams: [teams[4]], games: [] });
+    renderTeamsView("token");
+
+    expect(await screen.findByText("Arsenal")).toBeInTheDocument();
+    expect(screen.queryByText("Real Madrid")).toBeNull();
+    expect(screen.queryByRole("button", { name: "La Liga" })).toBeNull();
+    expect(screen.queryByText("LALIGA")).toBeNull();
+    expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
+  });
+
+  it("keeps league management available when every league is hidden", async () => {
+    apiMocks.getCompetitionVisibility.mockResolvedValue({
+      hidden_competitions: competitions.map(({ competition }) => competition),
+    });
+    renderTeamsView("token");
+
+    expect(await screen.findByText("No leagues are currently shown.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose leagues" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
   });
 
   it("groups FBS teams into collapsible conferences and filters them", async () => {

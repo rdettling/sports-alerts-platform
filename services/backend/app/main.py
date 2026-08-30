@@ -15,6 +15,7 @@ from app.routers.follows import router as follows_router
 from app.routers.games import router as games_router
 from app.routers.health import router as health_router
 from app.routers.competitions import router as competitions_router
+from app.routers.competition_visibility import router as competition_visibility_router
 from app.routers.preferences import router as preferences_router
 from app.routers.teams import router as teams_router
 from app.routers.updates import router as updates_router
@@ -59,6 +60,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(competitions_router)
+app.include_router(competition_visibility_router)
 app.include_router(teams_router)
 app.include_router(games_router)
 app.include_router(follows_router)

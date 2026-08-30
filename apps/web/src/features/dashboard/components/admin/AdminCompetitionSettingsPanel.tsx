@@ -47,8 +47,8 @@ export function AdminCompetitionSettingsPanel({
     <section className="admin-panel surface" aria-labelledby="admin-competition-runtime-title">
       <div className="admin-panel-header surface-header">
         <div>
-          <h2 id="admin-competition-runtime-title">Competition Runtime</h2>
-          <p>Control which competitions consume sync resources and appear in the app.</p>
+          <h2 id="admin-competition-runtime-title">Competition Availability</h2>
+          <p>Active competitions consume sync resources and appear throughout the app.</p>
         </div>
       </div>
       {error ? (
@@ -66,7 +66,7 @@ export function AdminCompetitionSettingsPanel({
               key={item.competition}
               className="admin-competition-setting-btn"
               type="button"
-              aria-label={`${item.is_enabled ? "Disable" : "Enable"} ${item.label}`}
+              aria-label={`${item.is_enabled ? "Deactivate" : "Activate"} ${item.label}`}
               disabled={busy}
               onClick={() =>
                 toggleMutation.mutate({
@@ -92,13 +92,13 @@ export function AdminCompetitionSettingsPanel({
                 <span className="admin-competition-setting-copy">
                   <strong>{item.label}</strong>
                   <span>
-                    {item.is_enabled ? "Enabled" : "Disabled"} ·{" "}
+                    {item.is_enabled ? "Active" : "Inactive"} ·{" "}
                     {formatSyncCadence(item.live_sync_interval_seconds)}
                   </span>
                 </span>
               </span>
               <span className="admin-competition-setting-action">
-                {busy ? "Saving..." : item.is_enabled ? "Disable" : "Enable"}
+                {busy ? "Saving..." : item.is_enabled ? "Deactivate" : "Activate"}
               </span>
             </button>
           );

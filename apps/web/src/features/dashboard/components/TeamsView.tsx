@@ -5,6 +5,7 @@ import { followTeam, type Competition, unfollowTeam } from "../../../shared/api"
 import { TeamLogo } from "../../../shared/components/TeamLogo";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import {
+  competitionVisibilityQueryOptions,
   competitionsQueryOptions,
   dashboardQueryKeys,
   followsQueryOptions,
@@ -12,6 +13,7 @@ import {
 } from "../hooks/dashboard-query-options";
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "./DashboardFilters";
 import { fbsConferenceOptions } from "./fbs-conferences";
+import { CompetitionVisibilityControl } from "./CompetitionVisibilityControl";
 
 export function TeamsView({
   token,
@@ -31,18 +33,54 @@ export function TeamsView({
 
   const teamsQuery = useQuery(teamsQueryOptions());
   const competitionsQuery = useQuery(competitionsQueryOptions());
+  const competitionVisibilityQuery = useQuery(competitionVisibilityQueryOptions(token));
   const followsQuery = useQuery(followsQueryOptions(token));
   const teams = teamsQuery.data ?? [];
   const competitions = competitionsQuery.data ?? [];
+  const competitionVisibility = competitionVisibilityQuery.data ?? { hidden_competitions: [] };
   const followedTeams = followsQuery.data?.teams ?? [];
-  const isLoading = teamsQuery.isLoading || competitionsQuery.isLoading || followsQuery.isLoading;
-  const queryError = teamsQuery.error ?? competitionsQuery.error ?? followsQuery.error;
+  const isLoading =
+    teamsQuery.isLoading ||
+    competitionsQuery.isLoading ||
+    competitionVisibilityQuery.isLoading ||
+    followsQuery.isLoading;
+  const queryError =
+    teamsQuery.error ??
+    competitionsQuery.error ??
+    competitionVisibilityQuery.error ??
+    followsQuery.error;
 
   const followedTeamIds = useMemo(
     () => new Set(followedTeams.map((team) => team.id)),
     [followedTeams],
   );
-  const conferenceOptions = useMemo(() => fbsConferenceOptions(teams), [teams]);
+  const hiddenCompetitions = useMemo(
+    () => new Set<Competition>(competitionVisibility.hidden_competitions),
+    [competitionVisibility.hidden_competitions],
+  );
+  const visibleCompetitions = useMemo(
+    () => competitions.filter(({ competition }) => !hiddenCompetitions.has(competition)),
+    [competitions, hiddenCompetitions],
+  );
+  const visibleCompetitionIds = useMemo(
+    () => new Set(visibleCompetitions.map(({ competition }) => competition)),
+    [visibleCompetitions],
+  );
+  const visibilityFilteredTeams = useMemo(
+    () =>
+      teams.filter((team) =>
+        team.competitions.some((competition) => visibleCompetitionIds.has(competition)),
+      ),
+    [teams, visibleCompetitionIds],
+  );
+  const visibleFollowedTeamCount = useMemo(
+    () => visibilityFilteredTeams.filter((team) => followedTeamIds.has(team.id)).length,
+    [followedTeamIds, visibilityFilteredTeams],
+  );
+  const conferenceOptions = useMemo(
+    () => fbsConferenceOptions(visibilityFilteredTeams),
+    [visibilityFilteredTeams],
+  );
 
   useEffect(() => {
     if (!token && teamScope !== "all") setTeamScope("all");
@@ -51,11 +89,11 @@ export function TeamsView({
   useEffect(() => {
     if (
       competitionFilter !== "all" &&
-      !competitions.some((item) => item.competition === competitionFilter)
+      !visibleCompetitions.some((item) => item.competition === competitionFilter)
     ) {
       setCompetitionFilter("all");
     }
-  }, [competitionFilter, competitions]);
+  }, [competitionFilter, visibleCompetitions]);
 
   useEffect(() => {
     if (
@@ -68,7 +106,7 @@ export function TeamsView({
 
   const visibleTeams = useMemo(() => {
     const search = teamSearch.trim().toLowerCase();
-    return [...teams]
+    return [...visibilityFilteredTeams]
       .filter(
         (team) => competitionFilter === "all" || team.competitions.includes(competitionFilter),
       )
@@ -87,11 +125,20 @@ export function TeamsView({
           Number(followedTeamIds.has(b.id)) - Number(followedTeamIds.has(a.id));
         return followedDifference || a.name.localeCompare(b.name);
       });
-  }, [teams, followedTeamIds, competitionFilter, conferenceFilter, teamScope, teamSearch]);
+  }, [
+    visibilityFilteredTeams,
+    followedTeamIds,
+    competitionFilter,
+    conferenceFilter,
+    teamScope,
+    teamSearch,
+  ]);
 
   const teamGroups = useMemo(() => {
     if (visibleTeams.length === 0) return [];
-    const selectedCompetition = competitions.find((item) => item.competition === competitionFilter);
+    const selectedCompetition = visibleCompetitions.find(
+      (item) => item.competition === competitionFilter,
+    );
     if (competitionFilter === "FBS") {
       const followedTeams = visibleTeams.filter((team) => followedTeamIds.has(team.id));
       const grouped = new Map<string, typeof visibleTeams>();
@@ -131,10 +178,10 @@ export function TeamsView({
         collapsible: false,
       },
     ];
-  }, [competitionFilter, competitions, conferenceOptions, followedTeamIds, visibleTeams]);
+  }, [competitionFilter, visibleCompetitions, conferenceOptions, followedTeamIds, visibleTeams]);
   const competitionLabels = useMemo(
-    () => new Map(competitions.map((item) => [item.competition, item.badge_label] as const)),
-    [competitions],
+    () => new Map(visibleCompetitions.map((item) => [item.competition, item.badge_label] as const)),
+    [visibleCompetitions],
   );
 
   const toggleMutation = useMutation({
@@ -173,23 +220,32 @@ export function TeamsView({
                 ariaLabel="Team scope"
                 allLabel="All teams"
                 value={teamScope}
-                followingCount={followedTeamIds.size}
+                followingCount={visibleFollowedTeamCount}
                 onChange={setTeamScope}
               />
             ) : null}
 
-            <CompetitionTabs
-              ariaLabel="Competition filter"
-              options={[
-                { value: "all", label: "All" },
-                ...competitions.map((competition) => ({
-                  value: competition.competition,
-                  label: competition.label,
-                })),
-              ]}
-              value={competitionFilter}
-              onChange={setCompetitionFilter}
-            />
+            <div className="competition-filter-row">
+              <CompetitionTabs
+                ariaLabel="Competition filter"
+                options={[
+                  { value: "all", label: "All" },
+                  ...visibleCompetitions.map((competition) => ({
+                    value: competition.competition,
+                    label: competition.label,
+                  })),
+                ]}
+                value={competitionFilter}
+                onChange={setCompetitionFilter}
+              />
+              {token ? (
+                <CompetitionVisibilityControl
+                  token={token}
+                  competitions={competitions}
+                  visibility={competitionVisibility}
+                />
+              ) : null}
+            </div>
 
             {competitionFilter === "FBS" ? (
               <ConferenceSelect
@@ -267,11 +323,18 @@ export function TeamsView({
                                     <strong title={team.name}>{team.name}</strong>
                                     <span className="team-directory-meta">
                                       <span>{team.abbreviation}</span>
-                                      {team.competitions.map((competition) => (
-                                        <span className="team-competition-badge" key={competition}>
-                                          {competitionLabels.get(competition) ?? competition}
-                                        </span>
-                                      ))}
+                                      {team.competitions
+                                        .filter((competition) =>
+                                          visibleCompetitionIds.has(competition),
+                                        )
+                                        .map((competition) => (
+                                          <span
+                                            className="team-competition-badge"
+                                            key={competition}
+                                          >
+                                            {competitionLabels.get(competition) ?? competition}
+                                          </span>
+                                        ))}
                                     </span>
                                   </span>
                                 </span>
@@ -312,11 +375,24 @@ export function TeamsView({
                 })}
               </div>
             ) : (
-              <p className="muted view-feedback">
-                {teamScope === "following"
-                  ? "No followed teams match this filter."
-                  : "No teams match this filter."}
-              </p>
+              <div className="muted view-feedback empty-visibility-state">
+                <p>
+                  {visibleCompetitions.length === 0
+                    ? "No leagues are currently shown."
+                    : teamScope === "following"
+                      ? "No followed teams match this filter."
+                      : "No teams match this filter."}
+                </p>
+                {token && visibleCompetitions.length === 0 ? (
+                  <CompetitionVisibilityControl
+                    token={token}
+                    competitions={competitions}
+                    visibility={competitionVisibility}
+                    buttonLabel="Choose leagues"
+                    buttonClassName="btn"
+                  />
+                ) : null}
+              </div>
             )}
           </section>
         </div>

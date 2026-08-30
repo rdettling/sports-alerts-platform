@@ -1,24 +1,30 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import {
+  getCompetitionVisibility,
   listCompetitions,
   listFollows,
   listGames,
   listTeams,
+  type CompetitionVisibility,
   type CurrentFollows,
   type Game,
 } from "../../../shared/api";
 
 export const MIN_GAME_REFRESH_INTERVAL_MS = 120_000;
+export const CATALOG_STALE_TIME_MS = 5 * 60 * 1_000;
 export const LIVE_GAME_FALLBACK_INTERVAL_MS = 10 * 60 * 1_000;
 export const GAME_MAINTENANCE_REFETCH_INTERVAL_MS = 12 * 60 * 60 * 1_000;
 const SCHEDULED_GAME_OVERDUE_WINDOW_MS = 2 * 60 * 60 * 1_000;
 const EMPTY_FOLLOWS: CurrentFollows = { teams: [], games: [] };
+const EMPTY_COMPETITION_VISIBILITY: CompetitionVisibility = { hidden_competitions: [] };
 
 export const dashboardQueryKeys = {
   games: ["games"] as const,
   teams: ["teams"] as const,
   competitions: ["competitions"] as const,
+  competitionVisibility: (token: string | null) =>
+    ["competition-visibility", token ?? "anonymous"] as const,
   follows: (token: string | null) => ["follows", token ?? "anonymous"] as const,
 };
 
@@ -71,7 +77,8 @@ export function teamsQueryOptions() {
   return queryOptions({
     queryKey: dashboardQueryKeys.teams,
     queryFn: listTeams,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: CATALOG_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -79,6 +86,16 @@ export function competitionsQueryOptions() {
   return queryOptions({
     queryKey: dashboardQueryKeys.competitions,
     queryFn: listCompetitions,
+    staleTime: CATALOG_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function competitionVisibilityQueryOptions(token: string | null) {
+  return queryOptions({
+    queryKey: dashboardQueryKeys.competitionVisibility(token),
+    queryFn: () =>
+      token ? getCompetitionVisibility(token) : Promise.resolve(EMPTY_COMPETITION_VISIBILITY),
     staleTime: Number.POSITIVE_INFINITY,
   });
 }

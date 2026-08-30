@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Game } from "../../../shared/api";
 import {
+  CATALOG_STALE_TIME_MS,
   competitionsQueryOptions,
   followsQueryOptions,
   GAME_MAINTENANCE_REFETCH_INTERVAL_MS,
@@ -99,7 +100,11 @@ describe("gamesFallbackInterval", () => {
     expect(gamesQueryOptions().staleTime).toBe(MIN_GAME_REFRESH_INTERVAL_MS);
     expect(gamesQueryOptions().refetchOnWindowFocus).toBe(false);
     expect(teamsQueryOptions().refetchInterval).toBeUndefined();
+    expect(teamsQueryOptions().staleTime).toBe(CATALOG_STALE_TIME_MS);
+    expect(teamsQueryOptions().refetchOnWindowFocus).toBe(true);
     expect(competitionsQueryOptions().refetchInterval).toBeUndefined();
+    expect(competitionsQueryOptions().staleTime).toBe(CATALOG_STALE_TIME_MS);
+    expect(competitionsQueryOptions().refetchOnWindowFocus).toBe(true);
     expect(followsQueryOptions("token").refetchInterval).toBeUndefined();
   });
 });

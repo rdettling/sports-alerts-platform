@@ -297,7 +297,7 @@ def test_admin_test_alert_rejects_disabled_competition(client):
         json={"competition": "MLB", "alert_type": "game_start"},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Competition is disabled"
+    assert response.json()["detail"] == "Competition is inactive"
 
 
 def test_admin_test_alert_requires_two_seeded_teams(client):

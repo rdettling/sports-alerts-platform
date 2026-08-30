@@ -7,6 +7,9 @@ import { GamesView } from "./GamesView";
 const apiMocks = vi.hoisted(() => ({
   followGame: vi.fn(async () => ({ status: "ok" })),
   unfollowGame: vi.fn(async () => ({ status: "ok" })),
+  updateCompetitionVisibility: vi.fn(async (_token: string, hidden_competitions: string[]) => ({
+    hidden_competitions,
+  })),
 }));
 
 vi.mock("../../../shared/api", () => apiMocks);
@@ -261,7 +264,13 @@ vi.mock("../hooks/useGamesData", () => ({
           live_sync_interval_seconds: 120,
           is_enabled: true,
         },
-      ],
+      ].filter(({ competition }) => token !== "inactive-wnba-token" || competition !== "WNBA"),
+      competitionVisibility:
+        token === "hidden-wnba-token"
+          ? { hidden_competitions: ["WNBA"] }
+          : token === "all-hidden-token"
+            ? { hidden_competitions: ["NBA", "WNBA", "FBS"] }
+            : { hidden_competitions: [] },
     },
   })),
 }));
@@ -394,6 +403,35 @@ describe("GamesView", () => {
     expect(screen.queryByText("20-16")).toBeNull();
   });
 
+  it("removes hidden competitions from tabs, games, and date counts", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
+    render(<GamesView token="hidden-wnba-token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    await screen.findByRole("button", { name: "Leagues" });
+    expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
+    expect(screen.queryByText("Las Vegas Aces")).toBeNull();
+    expect(screen.getByRole("option", { name: "All dates (4)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Following 1" })).toBeInTheDocument();
+  });
+
+  it("removes cached games when their competition becomes inactive", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
+    render(<GamesView token="inactive-wnba-token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    await screen.findByRole("button", { name: "Leagues" });
+    expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
+    expect(screen.queryByText("Las Vegas Aces")).toBeNull();
+    expect(screen.getByRole("option", { name: "All dates (4)" })).toBeInTheDocument();
+  });
+
+  it("keeps league management available when every league is hidden", async () => {
+    render(<GamesView token="all-hidden-token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    expect(await screen.findByText("No leagues are currently shown.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose leagues" })).toBeInTheDocument();
+  });
+
   it("requests sign-in instead of following for a guest", async () => {
     const onSignInRequired = vi.fn();
     render(<GamesView token={null} onSignInRequired={onSignInRequired} />, { wrapper });
@@ -403,6 +441,7 @@ describe("GamesView", () => {
     expect(onSignInRequired).toHaveBeenCalledTimes(1);
     expect(apiMocks.followGame).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Following/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Leagues" })).toBeNull();
   });
 
   it("refreshes only follows after changing a game follow", async () => {

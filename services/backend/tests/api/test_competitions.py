@@ -1,6 +1,46 @@
+from app.db.models import CompetitionSetting
 from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query
-from app.services.competitions import get_alert_types, get_competition_profile, list_supported_competitions
+from app.services.competitions import (
+    ensure_competition_settings,
+    get_alert_types,
+    get_competition_profile,
+    list_supported_competitions,
+)
+
+
+def test_fresh_database_activates_the_supported_catalog():
+    with SessionLocal() as db:
+        ensure_competition_settings(db)
+        settings = db.query(CompetitionSetting).all()
+
+    assert len(settings) == len(list_supported_competitions())
+    assert all(setting.is_enabled for setting in settings)
+
+
+def test_new_profiles_start_inactive_without_changing_existing_values():
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                CompetitionSetting(competition="NBA", is_enabled=True),
+                CompetitionSetting(competition="WNBA", is_enabled=False),
+            ]
+        )
+        db.commit()
+
+        ensure_competition_settings(db)
+        settings = {
+            setting.competition: setting.is_enabled
+            for setting in db.query(CompetitionSetting).all()
+        }
+
+    assert settings["NBA"] is True
+    assert settings["WNBA"] is False
+    assert all(
+        settings[competition] is False
+        for competition in list_supported_competitions()
+        if competition not in {"NBA", "WNBA"}
+    )
 
 
 def test_competition_profiles_are_the_single_source_of_sport_and_provider_configuration():
@@ -134,6 +174,18 @@ def test_public_competitions_include_sport_and_live_cadence(client):
         ("PREMIER_LEAGUE", "soccer", 180),
         ("WORLD_CUP", "soccer", 180),
     ]
+
+
+def test_public_competitions_exclude_inactive_entries(client):
+    with SessionLocal() as db:
+        setting = db.get(CompetitionSetting, "MLB")
+        assert setting is not None
+        setting.is_enabled = False
+        db.commit()
+
+    competitions = client.get("/competitions").json()
+
+    assert "MLB" not in {item["competition"] for item in competitions}
 
 
 def test_mls_team_catalog_contains_all_current_clubs(client):

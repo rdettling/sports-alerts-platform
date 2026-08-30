@@ -17,6 +17,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     role: Mapped[str] = mapped_column(Enum("user", "admin", name="user_role"), default="user", index=True)
     email_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    hidden_competitions: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

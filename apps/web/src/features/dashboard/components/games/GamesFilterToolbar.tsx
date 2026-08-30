@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { type Competition, type CompetitionSetting } from "../../../../shared/api";
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "../DashboardFilters";
@@ -19,6 +19,7 @@ export function GamesFilterToolbar({
   conferenceOptions,
   conferenceFilter,
   onConferenceFilterChange,
+  competitionVisibilityControl,
 }: {
   activeCompetitions: CompetitionSetting[];
   competitionFilter: "all" | Competition;
@@ -34,6 +35,7 @@ export function GamesFilterToolbar({
   conferenceOptions: string[];
   conferenceFilter: "all" | string;
   onConferenceFilterChange: (value: "all" | string) => void;
+  competitionVisibilityControl?: ReactNode;
 }) {
   const selectedDayIndex = dayOptions.findIndex((day) => day.key === dayFilter);
   const [todayKey] = useState(() => localDateKey(new Date(Date.now()).toISOString()));
@@ -57,15 +59,18 @@ export function GamesFilterToolbar({
           onChange={onGameScopeChange}
         />
       ) : null}
-      <CompetitionTabs
-        ariaLabel="Competition"
-        options={[
-          { value: "all", label: "All", ariaLabel: "All competitions" },
-          ...activeCompetitions.map(({ competition, label }) => ({ value: competition, label })),
-        ]}
-        value={competitionFilter}
-        onChange={onCompetitionFilterChange}
-      />
+      <div className="competition-filter-row">
+        <CompetitionTabs
+          ariaLabel="Competition"
+          options={[
+            { value: "all", label: "All", ariaLabel: "All competitions" },
+            ...activeCompetitions.map(({ competition, label }) => ({ value: competition, label })),
+          ]}
+          value={competitionFilter}
+          onChange={onCompetitionFilterChange}
+        />
+        {competitionVisibilityControl}
+      </div>
       {competitionFilter === "FBS" ? (
         <ConferenceSelect
           options={conferenceOptions}
