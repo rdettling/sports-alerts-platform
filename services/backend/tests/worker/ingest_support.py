@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.worker.odds import OddsOutcome, OddsSnapshot
-from app.worker.scoreboard import ScoreboardGame
+from app.worker.scoreboard import ScoreboardGame, TeamStrength
 
 
 def make_snapshot(
@@ -46,8 +46,8 @@ def make_game(
     clock: str | None = None,
     is_final: bool = False,
     context_label: str | None = None,
-    home_team_record: str | None = None,
-    away_team_record: str | None = None,
+    home_team_strength: TeamStrength | None = None,
+    away_team_strength: TeamStrength | None = None,
     broadcast_names: list[str] | None = None,
     season_slug: str | None = None,
     season_week: int | None = None,
@@ -65,8 +65,8 @@ def make_game(
         season_slug=season_slug,
         season_week=season_week,
         context_label=context_label,
-        home_team_record=home_team_record,
-        away_team_record=away_team_record,
+        home_team_strength=home_team_strength or TeamStrength(),
+        away_team_strength=away_team_strength or TeamStrength(),
         broadcast_names=list(broadcast_names or []),
         home_score=home_score,
         away_score=away_score,

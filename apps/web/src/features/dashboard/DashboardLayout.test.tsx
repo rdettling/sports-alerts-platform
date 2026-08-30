@@ -100,6 +100,14 @@ describe("DashboardLayout", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("Sign-in modal");
   });
 
+  it("shows reconnection state while a stored session is being restored", () => {
+    authState = { token: "token", user: null };
+    renderLayout();
+
+    expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+  });
+
   it("opens sign-in when a guest attempts to follow", () => {
     authState = { token: null, user: null };
     renderLayout();

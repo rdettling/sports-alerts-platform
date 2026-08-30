@@ -13,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class TeamStrength:
+    wins: int | None = None
+    losses: int | None = None
+    ties: int | None = None
+    rank: int | None = None
+    rank_observed: bool = False
+
+    @property
+    def has_record(self) -> bool:
+        return self.wins is not None and self.losses is not None and self.ties is not None
+
+
+@dataclass
 class ScoreboardGame:
     external_game_id: str
     home_external_team_id: str
@@ -26,8 +39,8 @@ class ScoreboardGame:
     season_slug: str | None = None
     season_week: int | None = None
     context_label: str | None = None
-    home_team_record: str | None = None
-    away_team_record: str | None = None
+    home_team_strength: TeamStrength = field(default_factory=TeamStrength)
+    away_team_strength: TeamStrength = field(default_factory=TeamStrength)
     home_score: int | None = None
     away_score: int | None = None
     period: int | None = None
@@ -43,15 +56,43 @@ def _clean_text(value: object) -> str | None:
     return text or None
 
 
-def _total_record(competitor: dict[str, Any]) -> str | None:
+def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> TeamStrength:
     records = competitor.get("records")
-    if not isinstance(records, list):
-        return None
-    total = next(
-        (record for record in records if isinstance(record, dict) and record.get("type") == "total"),
-        None,
+    total = (
+        next(
+            (record for record in records if isinstance(record, dict) and record.get("type") == "total"),
+            None,
+        )
+        if isinstance(records, list)
+        else None
     )
-    return _clean_text(total.get("summary")) if total else None
+    summary = _clean_text(total.get("summary")) if total else None
+    wins: int | None = None
+    losses: int | None = None
+    ties: int | None = None
+    if summary:
+        parts = summary.split("-")
+        if len(parts) in {2, 3} and all(part.isdigit() for part in parts):
+            values = [int(part) for part in parts]
+            if len(values) == 2:
+                wins, losses = values
+                ties = 0
+            elif sport == "soccer":
+                wins, ties, losses = values
+            else:
+                wins, losses, ties = values
+
+    curated_rank = competitor.get("curatedRank")
+    raw_rank = curated_rank.get("current") if isinstance(curated_rank, dict) else None
+    rank_observed = competition == "FBS" and isinstance(raw_rank, int)
+    rank = raw_rank if rank_observed and 1 <= raw_rank <= 25 else None
+    return TeamStrength(
+        wins=wins,
+        losses=losses,
+        ties=ties,
+        rank=rank,
+        rank_observed=rank_observed,
+    )
 
 
 def _broadcast_names(competition: dict[str, Any]) -> list[str]:
@@ -199,8 +240,8 @@ class EspnScoreboardClient:
             season_slug=season_slug,
             season_week=season_week,
             context_label=context_label,
-            home_team_record=_total_record(home),
-            away_team_record=_total_record(away),
+            home_team_strength=_team_strength(home, sport, normalized_competition),
+            away_team_strength=_team_strength(away, sport, normalized_competition),
             status=status,
             home_score=int(home.get("score")) if home.get("score") else None,
             away_score=int(away.get("score")) if away.get("score") else None,

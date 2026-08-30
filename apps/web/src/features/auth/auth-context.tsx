@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import {
   deletePushSubscription,
+  isUnauthorizedError,
   me,
   startMagicLink,
   verifyMagicCode as verifyMagicCodeRequest,
@@ -25,14 +26,17 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_TOKEN_KEY = "sports_alerts_token";
+const SESSION_RETRY_MAX_DELAY_MS = 30_000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(localStorage.getItem(AUTH_TOKEN_KEY));
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [sessionRetryAttempt, setSessionRetryAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: number | undefined;
 
     const run = async () => {
       if (!token) {
@@ -43,10 +47,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const profile = await me(token);
         if (!cancelled) setUser(profile);
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        if (cancelled) return;
+        if (isUnauthorizedError(error)) {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           setToken(null);
+          setUser(null);
+          setSessionRetryAttempt(0);
+        } else {
+          const retryDelay = Math.min(1_000 * 2 ** sessionRetryAttempt, SESSION_RETRY_MAX_DELAY_MS);
+          retryTimer = window.setTimeout(
+            () => setSessionRetryAttempt((attempt) => attempt + 1),
+            retryDelay,
+          );
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -55,8 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     run();
     return () => {
       cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [token]);
+  }, [sessionRetryAttempt, token]);
 
   useEffect(() => {
     const syncToken = (event: StorageEvent) => {
@@ -64,9 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setToken(event.newValue);
-      if (!event.newValue) {
-        setUser(null);
-      }
+      setUser(null);
+      setSessionRetryAttempt(0);
     };
 
     window.addEventListener("storage", syncToken);
@@ -78,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyMagicLinkToken = useCallback(async (tokenValue: string) => {
     const response = await verifyMagicLink(tokenValue);
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+    setSessionRetryAttempt(0);
     setToken(response.access_token);
     setUser(response.user);
   }, []);
@@ -85,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyMagicCode = useCallback(async (email: string, code: string) => {
     const response = await verifyMagicCodeRequest(email, code);
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token);
+    setSessionRetryAttempt(0);
     setToken(response.access_token);
     setUser(response.user);
   }, []);
@@ -99,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    setSessionRetryAttempt(0);
     setToken(null);
     setUser(null);
   };

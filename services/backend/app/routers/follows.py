@@ -8,9 +8,9 @@ from app.db.models import CompetitionTeam, Game, Team, User, UserGameFollow, Use
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.schemas.follow import CurrentFollowsOut
-from app.schemas.game import GameOut
 from app.schemas.team import TeamOut, build_team_out
 from app.services.competitions import get_active_competitions
+from app.services.game_views import build_game_outs
 
 router = APIRouter(prefix="/follows", tags=["follows"])
 
@@ -53,7 +53,7 @@ def list_current_follows(
     ).all()
     return CurrentFollowsOut(
         teams=list(teams.values()),
-        games=[GameOut.model_validate(game) for game in games],
+        games=build_game_outs(db, games),
     )
 
 

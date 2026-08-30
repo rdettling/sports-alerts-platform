@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { type Game } from "../../../../shared/api";
-import { formatGameTime, formatMoneyline } from "./game-display";
+import {
+  formatGameStatusLabel,
+  formatGameTime,
+  formatMoneyline,
+  formatTeamRecord,
+} from "./game-display";
 
 function game(overrides: Partial<Game>): Game {
   return {
@@ -12,8 +17,8 @@ function game(overrides: Partial<Game>): Game {
     away_team_id: 2,
     scheduled_start_time: "2026-06-12T20:40:00Z",
     context_label: null,
-    home_team_record: null,
-    away_team_record: null,
+    home_team_strength: { wins: null, losses: null, ties: null, rank: null },
+    away_team_strength: { wins: null, losses: null, ties: null, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -32,6 +37,17 @@ describe("game display utilities", () => {
     expect(formatMoneyline(120)).toBe("+120");
     expect(formatMoneyline(-105)).toBe("-105");
     expect(formatMoneyline(null)).toBe("—");
+  });
+
+  it("formats structured records by sport", () => {
+    expect(formatTeamRecord({ wins: 8, losses: 2, ties: 1, rank: 4 }, "football")).toBe("8-2-1");
+    expect(formatTeamRecord({ wins: 12, losses: 5, ties: 3, rank: null }, "soccer")).toBe("12-3-5");
+    expect(formatTeamRecord({ wins: 48, losses: 31, ties: 0, rank: null }, "basketball")).toBe(
+      "48-31",
+    );
+    expect(
+      formatTeamRecord({ wins: null, losses: null, ties: null, rank: null }, "baseball"),
+    ).toBeNull();
   });
 
   it("formats live game clocks by sport", () => {
@@ -80,5 +96,24 @@ describe("game display utilities", () => {
     const label = formatGameTime(game({ competition: "MLB" }), "baseball");
     expect(label).toMatch(/:\d{2}/);
     expect(label).not.toMatch(/\d+\/\d+/);
+  });
+
+  it("formats live status labels", () => {
+    expect(
+      formatGameStatusLabel(
+        game({ competition: "MLB", status: "in_progress", period: 5, clock: "Top 5th" }),
+        "baseball",
+      ),
+    ).toBe("Top 5th");
+  });
+
+  it("formats final status labels", () => {
+    expect(formatGameStatusLabel(game({ status: "final", is_final: true }), "basketball")).toBe(
+      "Final",
+    );
+  });
+
+  it("formats postponed status labels", () => {
+    expect(formatGameStatusLabel(game({ status: "postponed" }), "basketball")).toBe("Postponed");
   });
 });

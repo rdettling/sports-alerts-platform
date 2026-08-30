@@ -27,8 +27,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 11,
           scheduled_start_time: "2026-06-12T20:00:00Z",
           context_label: null,
-          home_team_record: "48-31",
-          away_team_record: "39-40",
+          home_team_strength: { wins: 48, losses: 31, ties: 0, rank: null },
+          away_team_strength: { wins: 39, losses: 40, ties: 0, rank: null },
           broadcast_names: [],
           status: "scheduled",
           home_score: null,
@@ -47,8 +47,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 13,
           scheduled_start_time: "2026-06-13T20:00:00Z",
           context_label: null,
-          home_team_record: "55-24",
-          away_team_record: "51-28",
+          home_team_strength: { wins: 55, losses: 24, ties: 0, rank: null },
+          away_team_strength: { wins: 51, losses: 28, ties: 0, rank: null },
           broadcast_names: [],
           status: "scheduled",
           home_score: null,
@@ -67,8 +67,8 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 15,
           scheduled_start_time: "2026-06-13T22:00:00Z",
           context_label: null,
-          home_team_record: "24-13",
-          away_team_record: "20-16",
+          home_team_strength: { wins: 24, losses: 13, ties: 0, rank: null },
+          away_team_strength: { wins: 20, losses: 16, ties: 0, rank: null },
           broadcast_names: [],
           status: "scheduled",
           home_score: null,
@@ -86,15 +86,15 @@ vi.mock("../hooks/useGamesData", () => ({
           home_team_id: 16,
           away_team_id: 17,
           scheduled_start_time: "2026-06-13T23:00:00Z",
-          context_label: "Week 1",
-          home_team_record: "0-0",
-          away_team_record: "0-0",
+          context_label: "Close late",
+          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          away_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
           broadcast_names: [],
-          status: "scheduled",
-          home_score: null,
-          away_score: null,
-          period: null,
-          clock: null,
+          status: "in_progress",
+          home_score: 24,
+          away_score: 21,
+          period: 4,
+          clock: "02:00",
           is_final: false,
           last_ingested_at: "2026-06-12T18:00:00Z",
           odds: null,
@@ -106,15 +106,135 @@ vi.mock("../hooks/useGamesData", () => ({
           home_team_id: 18,
           away_team_id: 19,
           scheduled_start_time: "2026-06-13T23:30:00Z",
-          context_label: "Week 1",
-          home_team_record: "0-0",
-          away_team_record: "0-0",
+          context_label: "Tied early",
+          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          away_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "in_progress",
+          home_score: 0,
+          away_score: 0,
+          period: 1,
+          clock: "15:00",
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 6,
+          external_game_id: "fbs-late-blowout",
+          competition: "FBS",
+          home_team_id: 16,
+          away_team_id: 18,
+          scheduled_start_time: "2026-06-13T22:30:00Z",
+          context_label: "Late blowout",
+          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          away_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "in_progress",
+          home_score: 35,
+          away_score: 7,
+          period: 4,
+          clock: "01:00",
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 7,
+          external_game_id: "fbs-upcoming",
+          competition: "FBS",
+          home_team_id: 18,
+          away_team_id: 19,
+          scheduled_start_time: "2026-06-13T23:40:00Z",
+          context_label: "Upcoming",
+          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          away_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
           broadcast_names: [],
           status: "scheduled",
           home_score: null,
           away_score: null,
           period: null,
           clock: null,
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 8,
+          external_game_id: "fbs-final",
+          competition: "FBS",
+          home_team_id: 16,
+          away_team_id: 18,
+          scheduled_start_time: "2026-06-13T22:00:00Z",
+          context_label: "Final game",
+          home_team_strength: { wins: 1, losses: 0, ties: 0, rank: null },
+          away_team_strength: { wins: 0, losses: 1, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "final",
+          home_score: 28,
+          away_score: 14,
+          period: 4,
+          clock: "00:00",
+          is_final: true,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 9,
+          external_game_id: "mlb-close-late",
+          competition: "MLB",
+          home_team_id: 20,
+          away_team_id: 21,
+          scheduled_start_time: "2026-06-13T20:00:00Z",
+          context_label: "Baseball close late",
+          home_team_strength: { wins: 40, losses: 30, ties: 0, rank: null },
+          away_team_strength: { wins: 38, losses: 32, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "in_progress",
+          home_score: 4,
+          away_score: 3,
+          period: 8,
+          clock: "Bottom 8th",
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 10,
+          external_game_id: "mlb-tied-early",
+          competition: "MLB",
+          home_team_id: 20,
+          away_team_id: 21,
+          scheduled_start_time: "2026-06-13T20:30:00Z",
+          context_label: "Baseball tied early",
+          home_team_strength: { wins: 40, losses: 30, ties: 0, rank: null },
+          away_team_strength: { wins: 38, losses: 32, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "in_progress",
+          home_score: 1,
+          away_score: 1,
+          period: 3,
+          clock: "Top 3rd",
+          is_final: false,
+          last_ingested_at: "2026-06-12T18:00:00Z",
+          odds: null,
+        },
+        {
+          id: 11,
+          external_game_id: "mlb-late-blowout",
+          competition: "MLB",
+          home_team_id: 20,
+          away_team_id: 21,
+          scheduled_start_time: "2026-06-13T19:30:00Z",
+          context_label: "Baseball late blowout",
+          home_team_strength: { wins: 40, losses: 30, ties: 0, rank: null },
+          away_team_strength: { wins: 38, losses: 32, ties: 0, rank: null },
+          broadcast_names: [],
+          status: "in_progress",
+          home_score: 8,
+          away_score: 2,
+          period: 9,
+          clock: "Bottom 9th",
           is_final: false,
           last_ingested_at: "2026-06-12T18:00:00Z",
           odds: null,
@@ -135,8 +255,8 @@ vi.mock("../hooks/useGamesData", () => ({
                     away_team_id: 11,
                     scheduled_start_time: "2026-06-12T20:00:00Z",
                     context_label: null,
-                    home_team_record: "48-31",
-                    away_team_record: "39-40",
+                    home_team_strength: { wins: 48, losses: 31, ties: 0, rank: null },
+                    away_team_strength: { wins: 39, losses: 40, ties: 0, rank: null },
                     broadcast_names: [],
                     status: "scheduled",
                     home_score: null,
@@ -235,6 +355,24 @@ vi.mock("../hooks/useGamesData", () => ({
           name: "Georgia Bulldogs",
           abbreviation: "UGA",
         },
+        {
+          id: 20,
+          external_team_id: "147",
+          sport: "baseball",
+          competitions: ["MLB"],
+          conference: null,
+          name: "New York Yankees",
+          abbreviation: "NYY",
+        },
+        {
+          id: 21,
+          external_team_id: "111",
+          sport: "baseball",
+          competitions: ["MLB"],
+          conference: null,
+          name: "Boston Red Sox",
+          abbreviation: "BOS",
+        },
       ],
       competitions: [
         {
@@ -264,12 +402,21 @@ vi.mock("../hooks/useGamesData", () => ({
           live_sync_interval_seconds: 120,
           is_enabled: true,
         },
+        {
+          competition: "MLB",
+          sport: "baseball",
+          label: "MLB",
+          badge_label: "MLB",
+          alert_types: ["game_start", "inning_start", "extra_innings_start", "final_result"],
+          live_sync_interval_seconds: 300,
+          is_enabled: true,
+        },
       ].filter(({ competition }) => token !== "inactive-wnba-token" || competition !== "WNBA"),
       competitionVisibility:
         token === "hidden-wnba-token"
           ? { hidden_competitions: ["WNBA"] }
           : token === "all-hidden-token"
-            ? { hidden_competitions: ["NBA", "WNBA", "FBS"] }
+            ? { hidden_competitions: ["NBA", "WNBA", "FBS", "MLB"] }
             : { hidden_competitions: [] },
     },
   })),
@@ -313,7 +460,7 @@ describe("GamesView", () => {
     expect(screen.queryByText(/Live scores and customizable/)).toBeNull();
   });
 
-  it("selects today initially and supports selecting all dates", async () => {
+  it("selects today initially without offering an all-dates option", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
 
     render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
@@ -322,15 +469,7 @@ describe("GamesView", () => {
     expect(screen.queryByText("55-24")).toBeNull();
     expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12");
     expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "All dates (5)" })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
-      target: { value: "all" },
-    });
-
-    await waitFor(() => expect(screen.getByText("55-24")).toBeInTheDocument());
-    expect(screen.getByText("48-31")).toBeInTheDocument();
-    expect(screen.getByText("20-16")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /All dates/ })).toBeNull();
   });
 
   it("moves between dates and disables navigation at boundaries", async () => {
@@ -351,12 +490,8 @@ describe("GamesView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Previous date" }));
     expect(screen.getByText("48-31")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
-      target: { value: "all" },
-    });
     expect(screen.getByRole("button", { name: "Previous date" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next date" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next date" })).toBeEnabled();
   });
 
   it("filters by competition without showing sync telemetry", async () => {
@@ -378,15 +513,109 @@ describe("GamesView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
     const conference = screen.getByRole("combobox", { name: "Conference" });
     expect(conference).toHaveValue("all");
-    expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
-    expect(screen.getByText("Auburn Tigers")).toBeInTheDocument();
+    expect(screen.getAllByText("Alabama Crimson Tide").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Auburn Tigers").length).toBeGreaterThan(0);
 
     fireEvent.change(conference, { target: { value: "Big Ten" } });
 
     expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
     expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
     expect(screen.queryByText("Auburn Tigers")).toBeNull();
-    expect(screen.getByRole("option", { name: "All dates (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
+  });
+
+  it("retains unified sorting between leagues and resets it for All competitions", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    expect(screen.queryByRole("combobox", { name: "Game sort" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
+
+    const sort = screen.getByRole("combobox", { name: "Game sort" });
+    const cardOrder = () =>
+      screen
+        .getAllByRole("listitem")
+        .map((item) => item.querySelector(".game-score-context")?.textContent);
+
+    expect(sort).toHaveValue("start_time");
+    expect(cardOrder()).toEqual([
+      "Final game",
+      "Late blowout",
+      "Close late",
+      "Tied early",
+      "Upcoming",
+    ]);
+
+    fireEvent.change(sort, { target: { value: "watchability" } });
+    expect(cardOrder()).toEqual([
+      "Close late",
+      "Tied early",
+      "Late blowout",
+      "Upcoming",
+      "Final game",
+    ]);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Conference" }), {
+      target: { value: "SEC" },
+    });
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("watchability");
+    fireEvent.change(screen.getByRole("combobox", { name: "Conference" }), {
+      target: { value: "all" },
+    });
+
+    fireEvent.change(sort, { target: { value: "ending_soon" } });
+    expect(cardOrder()).toEqual([
+      "Late blowout",
+      "Close late",
+      "Tied early",
+      "Upcoming",
+      "Final game",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "WNBA" }));
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("ending_soon");
+
+    fireEvent.click(screen.getByRole("button", { name: "NBA" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous date" }));
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("ending_soon");
+
+    fireEvent.click(screen.getByRole("button", { name: "All competitions" }));
+    expect(screen.queryByRole("combobox", { name: "Game sort" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "College Football" }));
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("start_time");
+  });
+
+  it("offers MLB sorting by inning progress and baseball watchability", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
+    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "MLB" }));
+    const sort = screen.getByRole("combobox", { name: "Game sort" });
+    const cardOrder = () =>
+      screen
+        .getAllByRole("listitem")
+        .map((item) => item.querySelector(".game-score-context")?.textContent);
+
+    expect(sort).toHaveValue("start_time");
+    expect(cardOrder()).toEqual([
+      "Baseball late blowout",
+      "Baseball close late",
+      "Baseball tied early",
+    ]);
+
+    fireEvent.change(sort, { target: { value: "watchability" } });
+    expect(cardOrder()).toEqual([
+      "Baseball close late",
+      "Baseball tied early",
+      "Baseball late blowout",
+    ]);
+
+    fireEvent.change(sort, { target: { value: "ending_soon" } });
+    expect(cardOrder()).toEqual([
+      "Baseball late blowout",
+      "Baseball close late",
+      "Baseball tied early",
+    ]);
   });
 
   it("filters to effective followed games for an authenticated user", async () => {
@@ -395,10 +624,6 @@ describe("GamesView", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Following 1/ }));
     expect(screen.getByText("48-31")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", { name: "Game date" }), {
-      target: { value: "all" },
-    });
     expect(screen.queryByText("55-24")).toBeNull();
     expect(screen.queryByText("20-16")).toBeNull();
   });
@@ -410,7 +635,7 @@ describe("GamesView", () => {
     await screen.findByRole("button", { name: "Leagues" });
     expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
     expect(screen.queryByText("Las Vegas Aces")).toBeNull();
-    expect(screen.getByRole("option", { name: "All dates (4)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Today (9)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Following 1" })).toBeInTheDocument();
   });
 
@@ -421,7 +646,7 @@ describe("GamesView", () => {
     await screen.findByRole("button", { name: "Leagues" });
     expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
     expect(screen.queryByText("Las Vegas Aces")).toBeNull();
-    expect(screen.getByRole("option", { name: "All dates (4)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Today (9)" })).toBeInTheDocument();
   });
 
   it("keeps league management available when every league is hidden", async () => {
@@ -445,6 +670,7 @@ describe("GamesView", () => {
   });
 
   it("refreshes only follows after changing a game follow", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidate = vi.spyOn(client, "invalidateQueries");
     render(
@@ -468,6 +694,8 @@ describe("GamesView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Following 0" }));
 
     expect(screen.getByText("No followed games match this filter.")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("all");
+    expect(screen.getByRole("combobox", { name: "Game date" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("");
+    expect(screen.getByRole("option", { name: "No dates" })).toBeInTheDocument();
   });
 });

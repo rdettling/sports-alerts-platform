@@ -1,3 +1,4 @@
+export { isUnauthorizedError } from "./client";
 export * from "./types";
 export * from "./domains/auth";
 export * from "./domains/competitions";

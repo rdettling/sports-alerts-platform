@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { followGame, type Competition, type Team, unfollowGame } from "../../../shared/api";
@@ -11,14 +11,16 @@ import { GameScoreRow } from "./GameScoreRow";
 import { CompetitionVisibilityControl } from "./CompetitionVisibilityControl";
 import { fbsConferenceOptions } from "./fbs-conferences";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
+import { formatGameStatusLabel } from "./games/game-display";
 import {
   buildDayOptions,
   filterGamesByDay,
   filterGamesByCompetition,
-  gameStatusLabel,
-  groupGamesByDay,
+  type GameSortMode,
   localDateKey,
-  sortGamesByStart,
+  resolveSelectedDay,
+  sortGames,
+  supportsGameSorting,
 } from "./games/games-view-utils";
 
 export function GamesView({
@@ -31,13 +33,13 @@ export function GamesView({
   const queryClient = useQueryClient();
   const { data, isLoading, error: dataError } = useGamesData(token);
 
-  const [dayFilter, setDayFilter] = useState<"all" | string>("all");
+  const [dayFilter, setDayFilter] = useState<string | null>(null);
   const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
   const [conferenceFilter, setConferenceFilter] = useState<"all" | string>("all");
   const [gameScope, setGameScope] = useState<"all" | "following">("all");
+  const [sortMode, setSortMode] = useState<GameSortMode>("start_time");
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
-  const hasAutoSelectedInitialDay = useRef(false);
   const {
     alertGame,
     gameAlertState,
@@ -104,16 +106,12 @@ export function GamesView({
     () => visibilityFilteredGames.filter((game) => followedGameIds.has(game.id)).length,
     [followedGameIds, visibilityFilteredGames],
   );
-  const sortedGames = useMemo(
-    () => sortGamesByStart(visibilityFilteredGames),
-    [visibilityFilteredGames],
-  );
   const scopeFilteredGames = useMemo(
     () =>
       gameScope === "following"
-        ? sortedGames.filter((game) => followedGameIds.has(game.id))
-        : sortedGames,
-    [followedGameIds, gameScope, sortedGames],
+        ? visibilityFilteredGames.filter((game) => followedGameIds.has(game.id))
+        : visibilityFilteredGames,
+    [followedGameIds, gameScope, visibilityFilteredGames],
   );
   const competitionFilteredGames = useMemo(
     () => filterGamesByCompetition(scopeFilteredGames, competitionFilter),
@@ -137,7 +135,19 @@ export function GamesView({
     () => filterGamesByDay(conferenceFilteredGames, dayFilter),
     [conferenceFilteredGames, dayFilter],
   );
-  const groupedVisibleGames = useMemo(() => groupGamesByDay(visibleGames), [visibleGames]);
+  const sortedVisibleGames = useMemo(
+    () => sortGames(visibleGames, sortMode, competitionFilter),
+    [competitionFilter, sortMode, visibleGames],
+  );
+  const selectedDayLabel = useMemo(() => {
+    const firstGame = sortedVisibleGames[0];
+    if (!firstGame) return "Games";
+    return new Date(firstGame.scheduled_start_time).toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+  }, [sortedVisibleGames]);
   useEffect(() => {
     if (!token && gameScope !== "all") setGameScope("all");
   }, [gameScope, token]);
@@ -161,22 +171,14 @@ export function GamesView({
   }, [competitionFilter, conferenceFilter, conferenceOptions]);
 
   useEffect(() => {
-    if (dayFilter !== "all" && !dayOptions.some((day) => day.key === dayFilter)) {
-      setDayFilter("all");
-    }
+    const todayKey = localDateKey(new Date(Date.now()).toISOString());
+    const nextDay = resolveSelectedDay(dayOptions, dayFilter, todayKey);
+    if (nextDay !== dayFilter) setDayFilter(nextDay);
   }, [dayFilter, dayOptions]);
 
   useEffect(() => {
-    if (hasAutoSelectedInitialDay.current) return;
-    if (dayFilter !== "all") return;
-    if (dayOptions.length === 0) return;
-    const todayKey = localDateKey(new Date(Date.now()).toISOString());
-    const todayOption = dayOptions.find((day) => day.key === todayKey);
-    if (todayOption) {
-      hasAutoSelectedInitialDay.current = true;
-      setDayFilter(todayOption.key);
-    }
-  }, [dayFilter, dayOptions]);
+    if (!supportsGameSorting(competitionFilter)) setSortMode("start_time");
+  }, [competitionFilter]);
 
   return (
     <section className="view-stack games-page" aria-label="Games">
@@ -199,8 +201,9 @@ export function GamesView({
             onCompetitionFilterChange={setCompetitionFilter}
             dayFilter={dayFilter}
             onDayFilterChange={setDayFilter}
-            totalCompetitionGames={conferenceFilteredGames.length}
             dayOptions={dayOptions}
+            sortMode={sortMode}
+            onSortModeChange={setSortMode}
             showScopeFilter={Boolean(token)}
             gameScope={gameScope}
             onGameScopeChange={setGameScope}
@@ -220,72 +223,64 @@ export function GamesView({
           />
 
           <section className="games-feed-scroll" aria-label="Games feed">
-            {groupedVisibleGames.length > 0 ? (
+            {sortedVisibleGames.length > 0 ? (
               <div className="games-day-list">
-                {groupedVisibleGames.map((group, groupIndex) => {
-                  const headingId = `games-day-${groupIndex}`;
-                  return (
-                    <section
-                      key={group.label}
-                      className="games-day-board surface"
-                      aria-labelledby={headingId}
-                    >
-                      <div className="games-day-header surface-header">
-                        <h2 id={headingId}>{group.label}</h2>
-                        <span>
-                          {group.items.length} {group.items.length === 1 ? "game" : "games"}
-                        </span>
-                      </div>
-                      <div
-                        className={`games-day-grid last-row-${group.items.length % 3 || 3}`}
-                        role="list"
-                        aria-label={`${group.label} games`}
-                      >
-                        {group.items.map((game) => {
-                          const home = teamMap.get(game.home_team_id);
-                          const away = teamMap.get(game.away_team_id);
-                          const competitionProfile = competitionProfiles.get(game.competition);
-                          if (!home || !away || !competitionProfile) return null;
-                          const isFollowed = followedGameIds.has(game.id);
+                <section className="games-day-board surface" aria-labelledby="games-day-heading">
+                  <div className="games-day-header surface-header">
+                    <h2 id="games-day-heading">{selectedDayLabel}</h2>
+                    <span>
+                      {sortedVisibleGames.length}{" "}
+                      {sortedVisibleGames.length === 1 ? "game" : "games"}
+                    </span>
+                  </div>
+                  <div
+                    className={`games-day-grid last-row-${sortedVisibleGames.length % 3 || 3}`}
+                    role="list"
+                    aria-label={`${selectedDayLabel} games`}
+                  >
+                    {sortedVisibleGames.map((game) => {
+                      const home = teamMap.get(game.home_team_id);
+                      const away = teamMap.get(game.away_team_id);
+                      const competitionProfile = competitionProfiles.get(game.competition);
+                      if (!home || !away || !competitionProfile) return null;
+                      const isFollowed = followedGameIds.has(game.id);
 
-                          return (
-                            <GameScoreRow
-                              key={game.id}
-                              game={game}
-                              sport={competitionProfile.sport}
-                              home={home}
-                              away={away}
-                              isFollowed={isFollowed}
-                              statusLabel={gameStatusLabel(game, competitionProfile.sport)}
-                              actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
-                              onFollow={() => {
-                                if (!token) {
-                                  onSignInRequired();
-                                  return;
-                                }
-                                toggleMutation.mutate({ gameId: game.id, isFollowed: false });
-                              }}
-                              onUnfollow={async () => {
-                                setBusyGameId(game.id);
-                                try {
-                                  await toggleMutation.mutateAsync({
-                                    gameId: game.id,
-                                    isFollowed: true,
-                                  });
-                                } finally {
-                                  setBusyGameId(null);
-                                }
-                              }}
-                              onOpenAlertSettings={() => {
-                                openGameAlerts(game).catch(() => undefined);
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })}
+                      return (
+                        <GameScoreRow
+                          key={game.id}
+                          game={game}
+                          sport={competitionProfile.sport}
+                          home={home}
+                          away={away}
+                          isFollowed={isFollowed}
+                          statusLabel={formatGameStatusLabel(game, competitionProfile.sport)}
+                          actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
+                          onFollow={() => {
+                            if (!token) {
+                              onSignInRequired();
+                              return;
+                            }
+                            toggleMutation.mutate({ gameId: game.id, isFollowed: false });
+                          }}
+                          onUnfollow={async () => {
+                            setBusyGameId(game.id);
+                            try {
+                              await toggleMutation.mutateAsync({
+                                gameId: game.id,
+                                isFollowed: true,
+                              });
+                            } finally {
+                              setBusyGameId(null);
+                            }
+                          }}
+                          onOpenAlertSettings={() => {
+                            openGameAlerts(game).catch(() => undefined);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
               </div>
             ) : (
               <div className="muted view-feedback empty-visibility-state">

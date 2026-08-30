@@ -1,4 +1,4 @@
-import { type Game, type Sport } from "../../../../shared/api";
+import { type Game, type Sport, type TeamStrength } from "../../../../shared/api";
 
 function formatTipoff(dateIso: string): string {
   return new Date(dateIso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -51,20 +51,27 @@ export function formatGameTime(game: Game, sport: Sport): string {
   return formatTipoff(game.scheduled_start_time);
 }
 
-export function formatGameStatusLabel(
-  status: string,
-  isFinal: boolean,
-  fallbackTime: string,
-): string {
-  if (status === "in_progress" || status === "live") return fallbackTime || "Live";
-  if (status === "postponed") return "Postponed";
-  if (status === "final" || isFinal) return "Final";
+export function formatGameStatusLabel(game: Game, sport: Sport): string {
+  const fallbackTime = formatGameTime(game, sport);
+  if (game.status === "in_progress" || game.status === "live") return fallbackTime || "Live";
+  if (game.status === "postponed") return "Postponed";
+  if (game.status === "final" || game.is_final) return "Final";
   return fallbackTime;
 }
 
 export function formatMoneyline(value: number | null): string {
   if (value === null) return "—";
   return value > 0 ? `+${value}` : `${value}`;
+}
+
+export function formatTeamRecord(strength: TeamStrength, sport: Sport): string | null {
+  if (strength.wins === null || strength.losses === null) return null;
+  if (sport === "soccer") {
+    return `${strength.wins}-${strength.ties ?? 0}-${strength.losses}`;
+  }
+  return strength.ties
+    ? `${strength.wins}-${strength.losses}-${strength.ties}`
+    : `${strength.wins}-${strength.losses}`;
 }
 
 export function oddsOutcomeByTeamSide(game: Game, teamSide: "away" | "home"): number | null {

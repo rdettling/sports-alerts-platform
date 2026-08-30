@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent, CompetitionSetting, Team
+from app.db.models import CompetitionSetting, CompetitionTeam, Game, GameOddsCurrent, GameOddsOutcomeCurrent, Team
 from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query
 
@@ -10,15 +10,23 @@ from app.services.competitions import competition_teams_query
 def _create_game(*, broadcast_names: list[str] | None = None) -> Game:
     db = SessionLocal()
     try:
-        teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(competition_teams_query("NBA").order_by(Team.id.asc()).limit(2)).all()
+        home_membership = db.get(CompetitionTeam, ("NBA", teams[0].id))
+        away_membership = db.get(CompetitionTeam, ("NBA", teams[1].id))
+        assert home_membership is not None
+        assert away_membership is not None
+        home_membership.wins = 48
+        home_membership.losses = 31
+        home_membership.ties = 0
+        away_membership.wins = 57
+        away_membership.losses = 22
+        away_membership.ties = 0
         game = Game(
             external_game_id="test-odds-game",
             competition="NBA",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
-            home_team_record="48-31",
-            away_team_record="57-22",
             broadcast_names=list(broadcast_names or []),
             status="scheduled",
             is_final=False,
@@ -75,8 +83,8 @@ def test_games_include_odds_when_available(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["context_label"] is None
-    assert payload[0]["home_team_record"] == "48-31"
-    assert payload[0]["away_team_record"] == "57-22"
+    assert payload[0]["home_team_strength"] == {"wins": 48, "losses": 31, "ties": 0, "rank": None}
+    assert payload[0]["away_team_strength"] == {"wins": 57, "losses": 22, "ties": 0, "rank": None}
     assert payload[0]["broadcast_names"] == []
     assert payload[0]["odds"]["outcomes"][0]["price_american"] == 125
     assert payload[0]["odds"]["outcomes"][0]["team_side"] == "away"

@@ -27,6 +27,13 @@ export type Team = {
   conference: string | null;
 };
 
+export type TeamStrength = {
+  wins: number | null;
+  losses: number | null;
+  ties: number | null;
+  rank: number | null;
+};
+
 export type Game = {
   id: number;
   external_game_id: string;
@@ -35,8 +42,8 @@ export type Game = {
   away_team_id: number;
   scheduled_start_time: string;
   context_label: string | null;
-  home_team_record: string | null;
-  away_team_record: string | null;
+  home_team_strength: TeamStrength;
+  away_team_strength: TeamStrength;
   broadcast_names: string[];
   status: string;
   home_score: number | null;

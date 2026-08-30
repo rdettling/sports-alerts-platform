@@ -25,8 +25,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     away_team_id: 2,
     scheduled_start_time: "2026-05-28T01:00:00Z",
     context_label: null,
-    home_team_record: "48-31",
-    away_team_record: "39-40",
+    home_team_strength: { wins: 48, losses: 31, ties: 0, rank: null },
+    away_team_strength: { wins: 39, losses: 40, ties: 0, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -77,7 +77,10 @@ describe("GameScoreRow", () => {
   it("omits the secondary team line when records are unavailable", () => {
     render(
       <GameScoreRow
-        game={makeGame({ home_team_record: null, away_team_record: null })}
+        game={makeGame({
+          home_team_strength: { wins: null, losses: null, ties: null, rank: null },
+          away_team_strength: { wins: null, losses: null, ties: null, rank: null },
+        })}
         sport="basketball"
         home={home}
         away={away}

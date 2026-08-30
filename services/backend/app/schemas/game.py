@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class TeamStrengthOut(BaseModel):
+    wins: int | None = None
+    losses: int | None = None
+    ties: int | None = None
+    rank: int | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class GameOddsOutcomeOut(BaseModel):
@@ -24,8 +33,8 @@ class GameOut(BaseModel):
     away_team_id: int
     scheduled_start_time: datetime
     context_label: str | None
-    home_team_record: str | None
-    away_team_record: str | None
+    home_team_strength: TeamStrengthOut = Field(default_factory=TeamStrengthOut)
+    away_team_strength: TeamStrengthOut = Field(default_factory=TeamStrengthOut)
     broadcast_names: list[str]
     status: str
     home_score: int | None

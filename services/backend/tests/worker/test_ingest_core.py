@@ -3,9 +3,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Game, CompetitionSetting, Team
+from app.db.models import CompetitionSetting, CompetitionTeam, Game, Team
 from app.services.competitions import competition_teams_query, ensure_competition_settings
 from app.worker.ingest import run_catalog_sync, run_live_sync
+from app.worker.scoreboard import TeamStrength
 
 from ingest_support import (
     ContextLabelProvider,
@@ -267,36 +268,43 @@ def test_ingest_persists_refreshes_and_clears_broadcast_names(db_session):
     assert game.broadcast_names == []
 
 
-def test_ingest_persists_refreshes_and_retains_team_records(db_session, monkeypatch, caplog):
+def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeypatch, caplog):
     monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     initial = make_game(
         external_game_id="mls-records",
         home_external_team_id="187",
         away_external_team_id="18966",
         status="scheduled",
-        home_team_record="6-7-8",
-        away_team_record="10-4-7",
+        home_team_strength=TeamStrength(wins=6, losses=8, ties=7),
+        away_team_strength=TeamStrength(wins=10, losses=7, ties=4),
     )
     run_catalog_sync(StaticProvider([initial]), competition="MLS")
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "mls-records"))
     assert game is not None
-    assert (game.home_team_record, game.away_team_record) == ("6-7-8", "10-4-7")
+    memberships = {row.team_id: row for row in db_session.scalars(select(CompetitionTeam).where(CompetitionTeam.competition == "MLS")).all()}
+    home_strength = memberships[game.home_team_id]
+    away_strength = memberships[game.away_team_id]
+    assert (home_strength.wins, home_strength.losses, home_strength.ties) == (6, 8, 7)
+    assert (away_strength.wins, away_strength.losses, away_strength.ties) == (10, 7, 4)
+    assert home_strength.strength_updated_at is not None
 
     refreshed = make_game(
         external_game_id="mls-records",
         home_external_team_id="187",
         away_external_team_id="18966",
         status="scheduled",
-        home_team_record="7-7-8",
-        away_team_record="10-5-7",
+        home_team_strength=TeamStrength(wins=7, losses=8, ties=7),
+        away_team_strength=TeamStrength(wins=10, losses=7, ties=5),
     )
     with caplog.at_level("INFO", logger="app.worker.soccer"):
         result = run_catalog_sync(StaticProvider([refreshed]), competition="MLS")
 
-    db_session.refresh(game)
+    db_session.refresh(home_strength)
+    db_session.refresh(away_strength)
     assert result.games_updated == 1
-    assert (game.home_team_record, game.away_team_record) == ("7-7-8", "10-5-7")
+    assert (home_strength.wins, home_strength.losses, home_strength.ties) == (7, 8, 7)
+    assert (away_strength.wins, away_strength.losses, away_strength.ties) == (10, 7, 5)
     assert "Soccer state transition" not in caplog.text
 
     missing = make_game(
@@ -307,9 +315,52 @@ def test_ingest_persists_refreshes_and_retains_team_records(db_session, monkeypa
     )
     result = run_catalog_sync(StaticProvider([missing]), competition="MLS")
 
-    db_session.refresh(game)
+    db_session.refresh(home_strength)
+    db_session.refresh(away_strength)
     assert result.games_updated == 0
-    assert (game.home_team_record, game.away_team_record) == ("7-7-8", "10-5-7")
+    assert (home_strength.wins, home_strength.losses, home_strength.ties) == (7, 8, 7)
+    assert (away_strength.wins, away_strength.losses, away_strength.ties) == (10, 7, 5)
+
+
+def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, monkeypatch):
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    ranked = make_game(
+        external_game_id="fbs-rank",
+        home_external_team_id="333",
+        away_external_team_id="145",
+        home_team_name="Alabama Crimson Tide",
+        home_team_abbreviation="ALA",
+        away_team_name="Ole Miss Rebels",
+        away_team_abbreviation="MISS",
+        status="scheduled",
+        home_team_strength=TeamStrength(rank=3, rank_observed=True),
+        away_team_strength=TeamStrength(rank=None, rank_observed=True),
+    )
+    run_catalog_sync(StaticProvider([ranked]), competition="FBS")
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "fbs-rank"))
+    assert game is not None
+    home_membership = db_session.get(CompetitionTeam, ("FBS", game.home_team_id))
+    assert home_membership is not None
+    assert home_membership.rank == 3
+
+    unranked = make_game(
+        external_game_id="fbs-rank",
+        home_external_team_id="333",
+        away_external_team_id="145",
+        home_team_name="Alabama Crimson Tide",
+        home_team_abbreviation="ALA",
+        away_team_name="Ole Miss Rebels",
+        away_team_abbreviation="MISS",
+        status="scheduled",
+        home_team_strength=TeamStrength(rank=None, rank_observed=True),
+        away_team_strength=TeamStrength(rank=None, rank_observed=True),
+    )
+    result = run_catalog_sync(StaticProvider([unranked]), competition="FBS")
+
+    db_session.refresh(home_membership)
+    assert result.games_updated == 1
+    assert home_membership.rank is None
 
 
 def test_catalog_cleanup_runs_in_ingest_transaction(db_session):

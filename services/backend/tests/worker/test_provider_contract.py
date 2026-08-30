@@ -1,4 +1,4 @@
-from app.worker.scoreboard import EspnScoreboardClient
+from app.worker.scoreboard import EspnScoreboardClient, TeamStrength
 
 
 def test_provider_failure_logs_compact_request_context(caplog):
@@ -86,8 +86,8 @@ def test_provider_parses_espn_payload_shape():
     assert game.status == "in_progress"
     assert game.home_score == 102
     assert game.away_score == 98
-    assert game.home_team_record == "48-31"
-    assert game.away_team_record == "57-22"
+    assert game.home_team_strength == TeamStrength(wins=48, losses=31, ties=0)
+    assert game.away_team_strength == TeamStrength(wins=57, losses=22, ties=0)
     assert game.broadcast_names == ["ESPN", "ABC"]
     assert game.context_label is None
 
@@ -127,9 +127,48 @@ def test_provider_parses_soccer_record_and_allows_missing_record():
         "PREMIER_LEAGUE", ["20260916"]
     )[0]
 
-    assert game.home_team_record == "4-2-1"
-    assert game.away_team_record is None
+    assert game.home_team_strength == TeamStrength(wins=4, losses=1, ties=2)
+    assert game.away_team_strength == TeamStrength()
     assert game.broadcast_names == []
+
+
+def test_fbs_provider_normalizes_top_25_and_unranked_teams():
+    payload = {
+        "events": [
+            {
+                "id": "401752000",
+                "date": "2026-08-29T19:30Z",
+                "competitions": [
+                    {
+                        "status": {
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False}
+                        },
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "score": "0",
+                                "team": {"id": "333", "abbreviation": "ALA"},
+                                "curatedRank": {"current": 3},
+                                "records": [{"type": "total", "summary": "1-0"}],
+                            },
+                            {
+                                "homeAway": "away",
+                                "score": "0",
+                                "team": {"id": "145", "abbreviation": "MISS"},
+                                "curatedRank": {"current": 99},
+                                "records": [{"type": "total", "summary": "0-1"}],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("FBS", ["20260829"])[0]
+
+    assert game.home_team_strength == TeamStrength(wins=1, losses=0, ties=0, rank=3, rank_observed=True)
+    assert game.away_team_strength == TeamStrength(wins=0, losses=1, ties=0, rank=None, rank_observed=True)
 
 
 def test_soccer_competition_feeds_preserve_shared_club_ids():

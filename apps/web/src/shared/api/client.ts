@@ -5,6 +5,20 @@ if (!API_BASE_URL) {
   throw new Error("Missing required env var: VITE_API_BASE_URL");
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
@@ -60,7 +74,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(normalizeErrorDetail((body as { detail?: unknown }).detail));
+      throw new ApiError(
+        normalizeErrorDetail((body as { detail?: unknown }).detail),
+        response.status,
+      );
     }
 
     if (response.status === 204) {

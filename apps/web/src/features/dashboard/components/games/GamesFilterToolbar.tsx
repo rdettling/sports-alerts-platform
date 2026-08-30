@@ -2,7 +2,12 @@ import { type ReactNode, useState } from "react";
 
 import { type Competition, type CompetitionSetting } from "../../../../shared/api";
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "../DashboardFilters";
-import { type DayOption, localDateKey } from "./games-view-utils";
+import {
+  type DayOption,
+  type GameSortMode,
+  localDateKey,
+  supportsGameSorting,
+} from "./games-view-utils";
 
 export function GamesFilterToolbar({
   activeCompetitions,
@@ -10,8 +15,9 @@ export function GamesFilterToolbar({
   onCompetitionFilterChange,
   dayFilter,
   onDayFilterChange,
-  totalCompetitionGames,
   dayOptions,
+  sortMode,
+  onSortModeChange,
   showScopeFilter,
   gameScope,
   onGameScopeChange,
@@ -24,10 +30,11 @@ export function GamesFilterToolbar({
   activeCompetitions: CompetitionSetting[];
   competitionFilter: "all" | Competition;
   onCompetitionFilterChange: (value: "all" | Competition) => void;
-  dayFilter: "all" | string;
-  onDayFilterChange: (value: "all" | string) => void;
-  totalCompetitionGames: number;
+  dayFilter: string | null;
+  onDayFilterChange: (value: string) => void;
   dayOptions: DayOption[];
+  sortMode: GameSortMode;
+  onSortModeChange: (value: GameSortMode) => void;
   showScopeFilter: boolean;
   gameScope: "all" | "following";
   onGameScopeChange: (value: "all" | "following") => void;
@@ -44,10 +51,11 @@ export function GamesFilterToolbar({
     selectedDayIndex >= 0 && selectedDayIndex < dayOptions.length - 1
       ? dayOptions[selectedDayIndex + 1]
       : null;
+  const showSort = supportsGameSorting(competitionFilter);
 
   return (
     <section
-      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""}`.trim()}
+      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""} ${showSort ? "with-sort" : ""}`.trim()}
       aria-label="Game filters"
     >
       {showScopeFilter ? (
@@ -78,38 +86,53 @@ export function GamesFilterToolbar({
           onChange={onConferenceFilterChange}
         />
       ) : null}
-      <div className="games-date-filter" role="group" aria-label="Game date">
-        <button
-          className="games-date-step"
-          type="button"
-          aria-label="Previous date"
-          onClick={() => previousDay && onDayFilterChange(previousDay.key)}
-          disabled={!previousDay}
-        >
-          ‹
-        </button>
-        <select
-          className="games-date-select"
-          aria-label="Game date"
-          value={dayFilter}
-          onChange={(event) => onDayFilterChange(event.target.value)}
-        >
-          <option value="all">All dates ({totalCompetitionGames})</option>
-          {dayOptions.map((day) => (
-            <option key={day.key} value={day.key}>
-              {day.key === todayKey ? "Today" : day.label} ({day.count})
-            </option>
-          ))}
-        </select>
-        <button
-          className="games-date-step"
-          type="button"
-          aria-label="Next date"
-          onClick={() => nextDay && onDayFilterChange(nextDay.key)}
-          disabled={!nextDay}
-        >
-          ›
-        </button>
+      <div className={`games-order-controls ${showSort ? "with-sort" : ""}`.trim()}>
+        <div className="games-date-filter" role="group" aria-label="Game date">
+          <button
+            className="games-date-step"
+            type="button"
+            aria-label="Previous date"
+            onClick={() => previousDay && onDayFilterChange(previousDay.key)}
+            disabled={!previousDay}
+          >
+            ‹
+          </button>
+          <select
+            className="games-date-select"
+            aria-label="Game date"
+            value={dayFilter ?? ""}
+            onChange={(event) => onDayFilterChange(event.target.value)}
+            disabled={dayOptions.length === 0}
+          >
+            {dayOptions.length === 0 ? <option value="">No dates</option> : null}
+            {dayOptions.map((day) => (
+              <option key={day.key} value={day.key}>
+                {day.key === todayKey ? "Today" : day.label} ({day.count})
+              </option>
+            ))}
+          </select>
+          <button
+            className="games-date-step"
+            type="button"
+            aria-label="Next date"
+            onClick={() => nextDay && onDayFilterChange(nextDay.key)}
+            disabled={!nextDay}
+          >
+            ›
+          </button>
+        </div>
+        {showSort ? (
+          <select
+            className="games-sort-select"
+            aria-label="Game sort"
+            value={sortMode}
+            onChange={(event) => onSortModeChange(event.target.value as GameSortMode)}
+          >
+            <option value="start_time">Start time</option>
+            <option value="ending_soon">Ending soon</option>
+            <option value="watchability">Watchability</option>
+          </select>
+        ) : null}
       </div>
     </section>
   );

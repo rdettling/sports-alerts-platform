@@ -4,6 +4,7 @@ import { competitionBadgeLabel, competitionLogoUrl } from "../../../shared/lib/d
 import {
   drawOdds,
   formatMoneyline,
+  formatTeamRecord,
   isThreeWayOdds,
   oddsOutcomeByTeamSide,
 } from "./games/game-display";
@@ -58,6 +59,8 @@ export function GameScoreRow({
   const primaryBroadcast = game.broadcast_names[0];
   const additionalBroadcastCount = game.broadcast_names.length - 1;
   const showBroadcast = Boolean(primaryBroadcast) && (game.status === "scheduled" || isLive);
+  const awayRecord = formatTeamRecord(game.away_team_strength, sport);
+  const homeRecord = formatTeamRecord(game.home_team_strength, sport);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
   const statusTone: GameStateTone = isLive
     ? "live"
@@ -163,7 +166,7 @@ export function GameScoreRow({
           <TeamLogo team={away} size={28} />
           <span className="game-score-team-copy">
             <strong title={away.name}>{away.name}</strong>
-            {game.away_team_record ? <span>{game.away_team_record}</span> : null}
+            {awayRecord ? <span>{awayRecord}</span> : null}
           </span>
           <span className="game-score-value">{awayValueText}</span>
         </div>
@@ -171,7 +174,7 @@ export function GameScoreRow({
           <TeamLogo team={home} size={28} />
           <span className="game-score-team-copy">
             <strong title={home.name}>{home.name}</strong>
-            {game.home_team_record ? <span>{game.home_team_record}</span> : null}
+            {homeRecord ? <span>{homeRecord}</span> : null}
           </span>
           <span className="game-score-value">{homeValueText}</span>
         </div>

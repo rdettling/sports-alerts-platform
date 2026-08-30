@@ -98,6 +98,8 @@ export function DashboardLayout() {
                   Logout
                 </button>
               </>
+            ) : token ? (
+              <span className="user-email">Reconnecting…</span>
             ) : (
               <button
                 className="btn btn-secondary"

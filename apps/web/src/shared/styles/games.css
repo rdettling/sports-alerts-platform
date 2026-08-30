@@ -26,6 +26,16 @@
   min-width: 0;
 }
 
+.games-order-controls {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.games-order-controls.with-sort {
+  grid-template-columns: minmax(0, 1fr) minmax(105px, 120px);
+}
+
 .games-date-step {
   flex: 0 0 2.125rem;
   width: 2.125rem;
@@ -45,6 +55,16 @@
 
 .games-date-select {
   flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 2.125rem;
+  border-color: var(--border);
+  color: #344054;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.games-sort-select {
   width: 100%;
   min-width: 0;
   height: 2.125rem;
@@ -487,12 +507,28 @@
     grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
   }
 
+  .games-filter-toolbar.with-sort {
+    grid-template-columns: auto minmax(0, 1fr) minmax(340px, 410px);
+  }
+
+  .games-filter-toolbar.without-scope.with-sort {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 410px);
+  }
+
   .games-filter-toolbar.with-conference {
     grid-template-columns: auto minmax(0, 1fr) minmax(150px, 190px) minmax(210px, 250px);
   }
 
   .games-filter-toolbar.without-scope.with-conference {
     grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(210px, 250px);
+  }
+
+  .games-filter-toolbar.with-conference.with-sort {
+    grid-template-columns: auto minmax(0, 1fr) minmax(150px, 190px) minmax(340px, 410px);
+  }
+
+  .games-filter-toolbar.without-scope.with-conference.with-sort {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 190px) minmax(340px, 410px);
   }
 
   .games-feed-scroll {
@@ -518,6 +554,10 @@
 }
 
 @media (max-width: 640px) {
+  .games-order-controls.with-sort {
+    grid-template-columns: 1fr;
+  }
+
   .game-score-header {
     align-items: flex-start;
   }

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthProvider, useAuth } from "./auth-context";
 
@@ -10,6 +10,8 @@ const verifyMagicCodeMock = vi.fn();
 
 vi.mock("../../shared/api", () => ({
   deletePushSubscription: (...args: unknown[]) => deletePushSubscriptionMock(...args),
+  isUnauthorizedError: (error: unknown) =>
+    error instanceof Error && error.message === "Unauthorized",
   me: (token: string) => meMock(token),
   startMagicLink: vi.fn(),
   verifyMagicCode: (...args: unknown[]) => verifyMagicCodeMock(...args),
@@ -39,7 +41,7 @@ function AuthState() {
   );
 }
 
-describe("AuthProvider cross-tab sync", () => {
+describe("AuthProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     meMock.mockReset();
@@ -53,6 +55,10 @@ describe("AuthProvider cross-tab sync", () => {
       role: "user",
       created_at: "2026-01-01T00:00:00Z",
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("stores authentication returned by code verification", async () => {
@@ -78,6 +84,68 @@ describe("AuthProvider cross-tab sync", () => {
     expect(await screen.findByText(/code-token\|user@example.com/)).toBeInTheDocument();
     expect(verifyMagicCodeMock).toHaveBeenCalledWith("user@example.com", "123456");
     expect(localStorage.getItem("sports_alerts_token")).toBe("code-token");
+  });
+
+  it("retains the session after a temporary profile request failure", async () => {
+    localStorage.setItem("sports_alerts_token", "existing-token");
+    meMock.mockRejectedValueOnce(new Error("API unavailable"));
+
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(meMock).toHaveBeenCalledWith("existing-token"));
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(localStorage.getItem("sports_alerts_token")).toBe("existing-token");
+    expect(screen.getByText("existing-token|no-user")).toBeInTheDocument();
+  });
+
+  it("restores the session automatically when the API becomes available", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("sports_alerts_token", "existing-token");
+    meMock.mockRejectedValueOnce(new Error("API unavailable")).mockResolvedValueOnce({
+      id: 1,
+      email: "user@example.com",
+      role: "user",
+      created_at: "2026-01-01T00:00:00Z",
+    });
+
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(meMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(meMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("existing-token|user@example.com")).toBeInTheDocument();
+  });
+
+  it("clears the session when the API rejects the token", async () => {
+    localStorage.setItem("sports_alerts_token", "expired-token");
+    meMock.mockRejectedValueOnce(new Error("Unauthorized"));
+
+    render(
+      <AuthProvider>
+        <AuthState />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("no-token|no-user")).toBeInTheDocument();
+    expect(localStorage.getItem("sports_alerts_token")).toBeNull();
   });
 
   it("loads a token written by another tab", async () => {

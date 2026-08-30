@@ -16,7 +16,7 @@ from app.worker.alerts import evaluate_and_record_alerts
 from app.worker.cleanup import cleanup_games_outside_window
 from app.worker.config import settings
 from app.worker.planner import build_catalog_dates, build_live_requests
-from app.worker.scoreboard import ScoreboardGame
+from app.worker.scoreboard import ScoreboardGame, TeamStrength
 
 logger = logging.getLogger(__name__)
 LIVE_STATUS_RECHECK_GRACE = timedelta(hours=2)
@@ -131,7 +131,28 @@ def _register_fbs_opponents(
     db.flush()
 
 
-def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_map: dict[str, int]) -> GameUpdateResult:
+def _update_team_strength(membership: CompetitionTeam, strength: TeamStrength) -> bool:
+    before = (membership.wins, membership.losses, membership.ties, membership.rank)
+    if strength.has_record:
+        membership.wins = strength.wins
+        membership.losses = strength.losses
+        membership.ties = strength.ties
+    if strength.rank_observed:
+        membership.rank = strength.rank
+    after = (membership.wins, membership.losses, membership.ties, membership.rank)
+    if before == after:
+        return False
+    membership.strength_updated_at = datetime.now(timezone.utc)
+    return True
+
+
+def _upsert_game(
+    db: Session,
+    competition: str,
+    payload: ScoreboardGame,
+    team_map: dict[str, int],
+    memberships: dict[int, CompetitionTeam],
+) -> GameUpdateResult:
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
     if not home_id or not away_id:
@@ -144,7 +165,15 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         )
         return GameUpdateResult(did_update=False, game_id=None)
 
-    existing = db.scalar(select(Game).where(Game.external_game_id == payload.external_game_id, Game.competition == competition))
+    home_strength_changed = _update_team_strength(memberships[home_id], payload.home_team_strength)
+    away_strength_changed = _update_team_strength(memberships[away_id], payload.away_team_strength)
+    strength_changed = home_strength_changed or away_strength_changed
+    existing = db.scalar(
+        select(Game).where(
+            Game.external_game_id == payload.external_game_id,
+            Game.competition == competition,
+        )
+    )
     if existing:
         is_soccer = get_competition_profile(competition).sport == "soccer"
         previous_snapshot = soccer.snapshot_state(existing) if is_soccer else None
@@ -159,13 +188,8 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
             existing.clock,
             existing.is_final,
         )
-        record_before = (existing.home_team_record, existing.away_team_record)
         existing.context_label = payload.context_label
         existing.broadcast_names = list(payload.broadcast_names)
-        if payload.home_team_record is not None:
-            existing.home_team_record = payload.home_team_record
-        if payload.away_team_record is not None:
-            existing.away_team_record = payload.away_team_record
         existing.status = payload.status
         existing.home_score = payload.home_score
         existing.away_score = payload.away_score
@@ -183,13 +207,11 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
             existing.clock,
             existing.is_final,
         )
-        record_after = (existing.home_team_record, existing.away_team_record)
         state_changed = state_before != state_after
-        records_changed = record_before != record_after
         if previous_snapshot is not None and state_changed:
             soccer.log_transition(previous_snapshot, payload, soccer_events)
         return GameUpdateResult(
-            did_update=state_changed or records_changed,
+            did_update=state_changed or strength_changed,
             game_id=existing.id,
             soccer_events=soccer_events,
         )
@@ -201,8 +223,6 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         away_team_id=away_id,
         scheduled_start_time=payload.scheduled_start_time,
         context_label=payload.context_label,
-        home_team_record=payload.home_team_record,
-        away_team_record=payload.away_team_record,
         broadcast_names=list(payload.broadcast_names),
         status=payload.status,
         home_score=payload.home_score,
@@ -228,6 +248,10 @@ def _upsert_games_and_collect(
 ) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, soccer.SoccerDerivedEvents]]:
     if competition == "FBS":
         _register_fbs_opponents(db, scoreboard_games, team_map, team_names)
+    memberships = {
+        membership.team_id: membership
+        for membership in db.scalars(select(CompetitionTeam).where(CompetitionTeam.competition == competition)).all()
+    }
     updated = 0
     touched_game_ids: list[int] = []
     game_key_by_id: dict[int, tuple[str, str]] = {}
@@ -235,7 +259,7 @@ def _upsert_games_and_collect(
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
-        result = _upsert_game(db, competition, scoreboard_game, team_map)
+        result = _upsert_game(db, competition, scoreboard_game, team_map, memberships)
         if result.did_update:
             updated += 1
         if result.game_id:
