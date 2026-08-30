@@ -6,16 +6,26 @@ from app.services.competitions import (
     ensure_competition_settings,
     get_competition_profile,
 )
-from app.services.team_catalog import COMPETITION_TEAM_IDS, TEAM_CATALOG
+from app.services.team_catalog import TEAM_SEEDS_BY_COMPETITION
 
 
 def ensure_seeded_teams(db: Session) -> None:
     ensure_competition_settings(db)
+    team_catalog = {
+        (profile.provider_team_scope, external_team_id): (
+            profile.sport,
+            name,
+            abbreviation,
+        )
+        for competition, teams in TEAM_SEEDS_BY_COMPETITION.items()
+        for profile in (get_competition_profile(competition),)
+        for external_team_id, name, abbreviation in teams
+    }
     existing_teams = {
         (team.provider_scope, team.external_team_id): team
         for team in db.scalars(
             select(Team).where(
-                Team.provider_scope.in_({scope for scope, _ in TEAM_CATALOG})
+                Team.provider_scope.in_({scope for scope, _ in team_catalog})
             )
         ).all()
     }
@@ -23,7 +33,7 @@ def ensure_seeded_teams(db: Session) -> None:
         sport,
         name,
         abbreviation,
-    ) in TEAM_CATALOG.items():
+    ) in team_catalog.items():
         team = existing_teams.get((provider_scope, external_team_id))
         if team is None:
             team = Team(
@@ -46,13 +56,13 @@ def ensure_seeded_teams(db: Session) -> None:
             competition,
             existing_teams[(profile.provider_team_scope, external_team_id)].id,
         )
-        for competition, external_team_ids in COMPETITION_TEAM_IDS.items()
+        for competition, teams in TEAM_SEEDS_BY_COMPETITION.items()
         for profile in (get_competition_profile(competition),)
-        for external_team_id in external_team_ids
+        for external_team_id, _, _ in teams
     }
     existing_memberships = db.scalars(
         select(CompetitionTeam).where(
-            CompetitionTeam.competition.in_(COMPETITION_TEAM_IDS)
+            CompetitionTeam.competition.in_(TEAM_SEEDS_BY_COMPETITION)
         )
     ).all()
     existing_membership_keys = {

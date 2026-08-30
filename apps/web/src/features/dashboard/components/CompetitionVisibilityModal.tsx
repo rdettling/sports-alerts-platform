@@ -1,49 +1,55 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  type Competition,
-  type CompetitionSetting,
-  type CompetitionVisibility,
-  updateCompetitionVisibility,
-} from "../../../shared/api";
+import { type Competition, updateCompetitionVisibility } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
-import { dashboardQueryKeys } from "../hooks/dashboard-query-options";
+import {
+  competitionVisibilityQueryOptions,
+  competitionsQueryOptions,
+  dashboardQueryKeys,
+} from "../hooks/dashboard-query-options";
 
-const SPORT_LABELS: Record<CompetitionSetting["sport"], string> = {
+const SPORT_LABELS = {
   basketball: "Basketball",
   football: "Football",
   baseball: "Baseball",
   soccer: "Soccer",
-};
+} as const;
 
 function setsMatch(left: Set<Competition>, right: Set<Competition>) {
   return left.size === right.size && [...left].every((competition) => right.has(competition));
 }
 
-export function CompetitionVisibilityControl({
+export function CompetitionVisibilityModal({
+  isOpen,
   token,
-  competitions,
-  visibility,
-  buttonLabel = "Leagues",
-  buttonClassName = "league-visibility-button",
+  onClose,
 }: {
+  isOpen: boolean;
   token: string;
-  competitions: CompetitionSetting[];
-  visibility: CompetitionVisibility;
-  buttonLabel?: string;
-  buttonClassName?: string;
+  onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
+  const competitionsQuery = useQuery({
+    ...competitionsQueryOptions(),
+    enabled: isOpen,
+  });
+  const visibilityQuery = useQuery({
+    ...competitionVisibilityQueryOptions(token),
+    enabled: isOpen,
+  });
   const [draftHidden, setDraftHidden] = useState<Set<Competition>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const competitions = competitionsQuery.data ?? [];
+  const visibility = visibilityQuery.data;
+  const isReady = competitionsQuery.data !== undefined && visibility !== undefined;
+  const queryError = competitionsQuery.error ?? visibilityQuery.error;
   const savedHidden = useMemo(
-    () => new Set<Competition>(visibility.hidden_competitions),
-    [visibility.hidden_competitions],
+    () => new Set<Competition>(visibility?.hidden_competitions ?? []),
+    [visibility?.hidden_competitions],
   );
   const competitionGroups = useMemo(() => {
-    const groups = new Map<CompetitionSetting["sport"], CompetitionSetting[]>();
+    const groups = new Map<(typeof competitions)[number]["sport"], typeof competitions>();
     competitions.forEach((competition) => {
       groups.set(competition.sport, [...(groups.get(competition.sport) ?? []), competition]);
     });
@@ -55,25 +61,28 @@ export function CompetitionVisibilityControl({
       updateCompetitionVisibility(token, hiddenCompetitions),
     onSuccess: (updatedVisibility) => {
       queryClient.setQueryData(dashboardQueryKeys.competitionVisibility(token), updatedVisibility);
-      setIsOpen(false);
+      onClose();
     },
     onError: (mutationError) => setError(messageFromUnknown(mutationError)),
   });
 
   useEffect(() => {
+    if (!isOpen || !isReady) return;
+    setDraftHidden(new Set(savedHidden));
+    setError(null);
+  }, [isOpen, isReady, savedHidden]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !mutation.isPending) setIsOpen(false);
+      if (event.key === "Escape" && !mutation.isPending) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isOpen, mutation.isPending]);
+  }, [isOpen, mutation.isPending, onClose]);
 
-  const open = () => {
-    setDraftHidden(new Set(savedHidden));
-    setError(null);
-    setIsOpen(true);
-  };
+  if (!isOpen) return null;
+
   const toggleCompetition = (competition: Competition) => {
     setDraftHidden((current) => {
       const next = new Set(current);
@@ -89,40 +98,60 @@ export function CompetitionVisibilityControl({
       return next;
     });
   };
-  const isDirty = !setsMatch(draftHidden, savedHidden);
+  const isDirty = isReady && !setsMatch(draftHidden, savedHidden);
 
   return (
-    <>
-      <button className={buttonClassName} type="button" onClick={open}>
-        {buttonLabel}
-      </button>
-      {isOpen ? (
-        <div
-          className="overlay-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="league-visibility-title"
-          aria-describedby="league-visibility-description"
-        >
-          <section className="overlay-card league-visibility-modal">
-            <header className="overlay-card-header">
-              <div>
-                <h4 id="league-visibility-title">Leagues shown</h4>
-                <p id="league-visibility-description" className="muted">
-                  Choose which leagues appear in Games and Teams. Hiding a league does not change
-                  your follows or alerts.
-                </p>
-              </div>
-              <button
-                className="btn btn-secondary"
-                type="button"
-                disabled={mutation.isPending}
-                onClick={() => setIsOpen(false)}
-              >
-                Close
-              </button>
-            </header>
+    <div
+      className="overlay-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="league-visibility-title"
+      aria-describedby="league-visibility-description"
+    >
+      <section className="overlay-card league-visibility-modal">
+        <header className="overlay-card-header">
+          <div>
+            <h4 id="league-visibility-title">Leagues shown</h4>
+            <p id="league-visibility-description" className="muted">
+              Choose which leagues appear in Games and Teams. Hiding a league does not change your
+              follows or alerts.
+            </p>
+          </div>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            disabled={mutation.isPending}
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </header>
 
+        {!isReady && !queryError ? (
+          <p className="muted view-feedback" role="status">
+            Loading leagues...
+          </p>
+        ) : null}
+
+        {!isReady && queryError ? (
+          <div className="view-feedback league-visibility-load-error">
+            <p className="error" role="alert">
+              {messageFromUnknown(queryError)}
+            </p>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={() => {
+                void Promise.all([competitionsQuery.refetch(), visibilityQuery.refetch()]);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {isReady ? (
+          <>
             <div className="league-visibility-groups">
               {competitionGroups.map(([sport, items]) => (
                 <fieldset className="league-visibility-group" key={sport}>
@@ -161,7 +190,7 @@ export function CompetitionVisibilityControl({
                   className="btn btn-secondary"
                   type="button"
                   disabled={mutation.isPending}
-                  onClick={() => setIsOpen(false)}
+                  onClick={onClose}
                 >
                   Cancel
                 </button>
@@ -175,9 +204,9 @@ export function CompetitionVisibilityControl({
                 </button>
               </div>
             </footer>
-          </section>
-        </div>
-      ) : null}
-    </>
+          </>
+        ) : null}
+      </section>
+    </div>
   );
 }

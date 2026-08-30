@@ -104,15 +104,83 @@
   min-width: 0;
 }
 
-.user-email {
+.account-disclosure {
+  position: relative;
+}
+
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 46vw;
+  padding: 0.4rem 0.65rem;
+  border-color: var(--border-strong);
+  color: #344054;
+  background: #fff;
+  font-size: 0.825rem;
+}
+
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.account-trigger svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.account-trigger-email {
+  display: none;
   min-width: 0;
-  max-width: 42vw;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  width: max-content;
+  min-width: 11rem;
+  overflow: hidden;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.14);
+}
+
+.account-menu-item {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.65rem;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 0.825rem;
+  text-align: left;
+}
+
+.account-menu-item:hover,
+.account-menu-item:focus-visible {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.account-status {
   color: var(--text-muted);
   font-size: 0.825rem;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .app-account .btn {
@@ -142,6 +210,14 @@
 
   .app-brand h1 {
     font-size: 1.125rem;
+  }
+
+  .account-trigger-mobile {
+    display: none;
+  }
+
+  .account-trigger-email {
+    display: block;
   }
 
   .app-content {
@@ -203,8 +279,8 @@
     content: "";
   }
 
-  .user-email {
-    max-width: none;
+  .account-trigger {
+    max-width: 24rem;
   }
 
   .app-main,
@@ -224,11 +300,5 @@
   .view-stack {
     height: 100%;
     min-height: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .user-email {
-    display: none;
   }
 }

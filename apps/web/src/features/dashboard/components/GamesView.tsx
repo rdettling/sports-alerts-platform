@@ -8,7 +8,6 @@ import { dashboardQueryKeys } from "../hooks/dashboard-query-options";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameScoreRow } from "./GameScoreRow";
-import { CompetitionVisibilityControl } from "./CompetitionVisibilityControl";
 import { fbsConferenceOptions } from "./fbs-conferences";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import { formatGameStatusLabel } from "./games/game-display";
@@ -26,9 +25,11 @@ import {
 export function GamesView({
   token,
   onSignInRequired,
+  onManageLeagues,
 }: {
   token: string | null;
   onSignInRequired: () => void;
+  onManageLeagues: () => void;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading, error: dataError } = useGamesData(token);
@@ -211,15 +212,6 @@ export function GamesView({
             conferenceOptions={conferenceOptions}
             conferenceFilter={conferenceFilter}
             onConferenceFilterChange={setConferenceFilter}
-            competitionVisibilityControl={
-              token ? (
-                <CompetitionVisibilityControl
-                  token={token}
-                  competitions={activeCompetitions}
-                  visibility={competitionVisibility}
-                />
-              ) : null
-            }
           />
 
           <section className="games-feed-scroll" aria-label="Games feed">
@@ -292,13 +284,9 @@ export function GamesView({
                       : "No games in this filter."}
                 </p>
                 {token && visibleCompetitions.length === 0 ? (
-                  <CompetitionVisibilityControl
-                    token={token}
-                    competitions={activeCompetitions}
-                    visibility={competitionVisibility}
-                    buttonLabel="Choose leagues"
-                    buttonClassName="btn"
-                  />
+                  <button className="btn" type="button" onClick={onManageLeagues}>
+                    Choose leagues
+                  </button>
                 ) : null}
               </div>
             )}

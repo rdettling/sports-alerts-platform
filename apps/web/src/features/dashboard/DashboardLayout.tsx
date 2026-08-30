@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router";
 
 import { useAuth } from "../auth/auth-context";
 import { SignInModal } from "../auth/SignInModal";
 import { AdminView } from "./components/AdminView";
 import { AlertsView } from "./components/AlertsView";
+import { CompetitionVisibilityModal } from "./components/CompetitionVisibilityModal";
 import { GamesView } from "./components/GamesView";
 import { TeamsView } from "./components/TeamsView";
 
@@ -54,6 +55,10 @@ const ROUTE_ICON_BY_KEY: Record<DashboardRouteKey, React.ReactNode> = {
 export function DashboardLayout() {
   const { token, user, logout } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [leagueVisibilityOpen, setLeagueVisibilityOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
 
   const isAuthenticated = Boolean(token && user);
   const isAdmin = isAuthenticated && user?.role === "admin";
@@ -67,6 +72,35 @@ export function DashboardLayout() {
     [isAdmin, isAuthenticated],
   );
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
+  const openLeagueVisibility = useCallback(() => {
+    setAccountOpen(false);
+    setLeagueVisibilityOpen(true);
+  }, []);
+  const closeLeagueVisibility = useCallback(() => setLeagueVisibilityOpen(false), []);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAccountOpen(false);
+      accountTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountOpen]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+    setAccountOpen(false);
+    setLeagueVisibilityOpen(false);
+  }, [isAuthenticated]);
 
   return (
     <div className="app-shell">
@@ -92,14 +126,54 @@ export function DashboardLayout() {
           </nav>
           <div className="app-account">
             {token && user ? (
-              <>
-                <span className="user-email">{user.email}</span>
-                <button className="btn btn-secondary" type="button" onClick={() => void logout()}>
-                  Logout
+              <div className="account-disclosure" ref={accountRef}>
+                <button
+                  ref={accountTriggerRef}
+                  className="account-trigger"
+                  type="button"
+                  aria-label={`Account for ${user.email}`}
+                  aria-expanded={accountOpen}
+                  aria-controls="account-menu-panel"
+                  onClick={() => setAccountOpen((open) => !open)}
+                >
+                  <span className="account-trigger-email" aria-hidden>
+                    {user.email}
+                  </span>
+                  <span className="account-trigger-mobile" aria-hidden>
+                    Account
+                  </span>
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="m4 6 4 4 4-4" />
+                  </svg>
                 </button>
-              </>
+                {accountOpen ? (
+                  <div
+                    id="account-menu-panel"
+                    className="account-menu-panel"
+                    aria-label="Account options"
+                  >
+                    <button
+                      className="account-menu-item"
+                      type="button"
+                      onClick={openLeagueVisibility}
+                    >
+                      Leagues
+                    </button>
+                    <button
+                      className="account-menu-item"
+                      type="button"
+                      onClick={() => {
+                        setAccountOpen(false);
+                        void logout();
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             ) : token ? (
-              <span className="user-email">Reconnecting…</span>
+              <span className="account-status">Reconnecting…</span>
             ) : (
               <button
                 className="btn btn-secondary"
@@ -118,11 +192,23 @@ export function DashboardLayout() {
           <Routes>
             <Route
               path="/"
-              element={<GamesView token={token} onSignInRequired={() => setSignInOpen(true)} />}
+              element={
+                <GamesView
+                  token={token}
+                  onSignInRequired={() => setSignInOpen(true)}
+                  onManageLeagues={openLeagueVisibility}
+                />
+              }
             />
             <Route
               path="teams"
-              element={<TeamsView token={token} onSignInRequired={() => setSignInOpen(true)} />}
+              element={
+                <TeamsView
+                  token={token}
+                  onSignInRequired={() => setSignInOpen(true)}
+                  onManageLeagues={openLeagueVisibility}
+                />
+              }
             />
             <Route
               path="alerts"
@@ -137,6 +223,13 @@ export function DashboardLayout() {
         </div>
       </main>
       <SignInModal isOpen={signInOpen} onClose={closeSignIn} />
+      {token && user ? (
+        <CompetitionVisibilityModal
+          isOpen={leagueVisibilityOpen}
+          token={token}
+          onClose={closeLeagueVisibility}
+        />
+      ) : null}
     </div>
   );
 }

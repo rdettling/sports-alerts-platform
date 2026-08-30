@@ -41,6 +41,11 @@ vi.mock("./components/AlertsView", () => ({
   AlertsView: () => <div>Alerts view</div>,
 }));
 
+vi.mock("./components/CompetitionVisibilityModal", () => ({
+  CompetitionVisibilityModal: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div role="dialog">League visibility modal</div> : null,
+}));
+
 vi.mock("./components/AdminView", () => ({
   AdminView: () => <div>Admin view</div>,
 }));
@@ -64,7 +69,7 @@ describe("DashboardLayout", () => {
     };
   });
 
-  it("renders authenticated navigation and logout", () => {
+  it("renders authenticated navigation and account actions", () => {
     renderLayout();
 
     expect(screen.getByRole("link", { name: /games/i })).toHaveClass("active");
@@ -73,8 +78,34 @@ describe("DashboardLayout", () => {
     expect(screen.getByRole("link", { name: /admin/i })).toBeInTheDocument();
     expect(screen.getByText("user@example.com")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Logout" }));
+    fireEvent.click(screen.getByRole("button", { name: "Account for user@example.com" }));
+    expect(screen.getByLabelText("Account options")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens league visibility from the account menu", () => {
+    renderLayout();
+
+    fireEvent.click(screen.getByRole("button", { name: "Account for user@example.com" }));
+    fireEvent.click(screen.getByRole("button", { name: "Leagues" }));
+
+    expect(screen.queryByLabelText("Account options")).toBeNull();
+    expect(screen.getByRole("dialog")).toHaveTextContent("League visibility modal");
+  });
+
+  it("dismisses the account menu on Escape or an outside pointer", () => {
+    renderLayout();
+    const trigger = screen.getByRole("button", { name: "Account for user@example.com" });
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByLabelText("Account options")).toBeNull();
+    expect(trigger).toHaveFocus();
+
+    fireEvent.click(trigger);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByLabelText("Account options")).toBeNull();
   });
 
   it("navigates from Games to Teams", async () => {
@@ -94,6 +125,7 @@ describe("DashboardLayout", () => {
     expect(screen.getByRole("link", { name: /games/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /teams/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /alerts/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Account for/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));

@@ -454,7 +454,9 @@ describe("GamesView", () => {
   });
 
   it("renders an accessible games feed without the removed marketing intro", () => {
-    render(<GamesView token={null} onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token={null} onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     expect(screen.getByRole("region", { name: "Games feed" })).toBeInTheDocument();
     expect(screen.queryByText(/Live scores and customizable/)).toBeNull();
@@ -463,7 +465,9 @@ describe("GamesView", () => {
   it("selects today initially without offering an all-dates option", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
 
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     await waitFor(() => expect(screen.getByText("48-31")).toBeInTheDocument());
     expect(screen.queryByText("55-24")).toBeNull();
@@ -474,7 +478,9 @@ describe("GamesView", () => {
 
   it("moves between dates and disables navigation at boundaries", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     await waitFor(() =>
       expect(screen.getByRole("combobox", { name: "Game date" })).toHaveValue("2026-06-12"),
@@ -496,7 +502,9 @@ describe("GamesView", () => {
 
   it("filters by competition without showing sync telemetry", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T18:20:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     fireEvent.click(await screen.findByRole("button", { name: "WNBA" }));
 
@@ -508,7 +516,9 @@ describe("GamesView", () => {
 
   it("filters FBS games when either team belongs to a conference", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
     const conference = screen.getByRole("combobox", { name: "Conference" });
@@ -526,7 +536,9 @@ describe("GamesView", () => {
 
   it("retains unified sorting between leagues and resets it for All competitions", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     expect(screen.queryByRole("combobox", { name: "Game sort" })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
@@ -587,7 +599,9 @@ describe("GamesView", () => {
 
   it("offers MLB sorting by inning progress and baseball watchability", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     fireEvent.click(await screen.findByRole("button", { name: "MLB" }));
     const sort = screen.getByRole("combobox", { name: "Game sort" });
@@ -620,7 +634,9 @@ describe("GamesView", () => {
 
   it("filters to effective followed games for an authenticated user", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-12T12:00:00Z").getTime());
-    render(<GamesView token="token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     fireEvent.click(await screen.findByRole("button", { name: /Following 1/ }));
     expect(screen.getByText("48-31")).toBeInTheDocument();
@@ -630,9 +646,13 @@ describe("GamesView", () => {
 
   it("removes hidden competitions from tabs, games, and date counts", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
-    render(<GamesView token="hidden-wnba-token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(
+      <GamesView token="hidden-wnba-token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />,
+      { wrapper },
+    );
 
-    await screen.findByRole("button", { name: "Leagues" });
+    await screen.findByRole("button", { name: "All competitions" });
+    expect(screen.queryByRole("button", { name: "Leagues" })).toBeNull();
     expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
     expect(screen.queryByText("Las Vegas Aces")).toBeNull();
     expect(screen.getByRole("option", { name: "Today (9)" })).toBeInTheDocument();
@@ -641,25 +661,45 @@ describe("GamesView", () => {
 
   it("removes cached games when their competition becomes inactive", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
-    render(<GamesView token="inactive-wnba-token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(
+      <GamesView
+        token="inactive-wnba-token"
+        onSignInRequired={vi.fn()}
+        onManageLeagues={vi.fn()}
+      />,
+      { wrapper },
+    );
 
-    await screen.findByRole("button", { name: "Leagues" });
+    await screen.findByRole("button", { name: "All competitions" });
+    expect(screen.queryByRole("button", { name: "Leagues" })).toBeNull();
     expect(screen.queryByRole("button", { name: "WNBA" })).toBeNull();
     expect(screen.queryByText("Las Vegas Aces")).toBeNull();
     expect(screen.getByRole("option", { name: "Today (9)" })).toBeInTheDocument();
   });
 
   it("keeps league management available when every league is hidden", async () => {
-    render(<GamesView token="all-hidden-token" onSignInRequired={vi.fn()} />, { wrapper });
+    const onManageLeagues = vi.fn();
+    render(
+      <GamesView
+        token="all-hidden-token"
+        onSignInRequired={vi.fn()}
+        onManageLeagues={onManageLeagues}
+      />,
+      { wrapper },
+    );
 
     expect(await screen.findByText("No leagues are currently shown.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose leagues" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Choose leagues" }));
+    expect(onManageLeagues).toHaveBeenCalledTimes(1);
   });
 
   it("requests sign-in instead of following for a guest", async () => {
     const onSignInRequired = vi.fn();
-    render(<GamesView token={null} onSignInRequired={onSignInRequired} />, { wrapper });
+    render(
+      <GamesView token={null} onSignInRequired={onSignInRequired} onManageLeagues={vi.fn()} />,
+      { wrapper },
+    );
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Follow" }))[0]);
 
@@ -675,7 +715,7 @@ describe("GamesView", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     render(
       <QueryClientProvider client={client}>
-        <GamesView token="token" onSignInRequired={vi.fn()} />
+        <GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />
       </QueryClientProvider>,
     );
 
@@ -689,7 +729,9 @@ describe("GamesView", () => {
   });
 
   it("shows the followed-games empty state", async () => {
-    render(<GamesView token="empty-token" onSignInRequired={vi.fn()} />, { wrapper });
+    render(<GamesView token="empty-token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
+      wrapper,
+    });
 
     fireEvent.click(await screen.findByRole("button", { name: "Following 0" }));
 

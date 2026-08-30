@@ -13,14 +13,15 @@ import {
 } from "../hooks/dashboard-query-options";
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "./DashboardFilters";
 import { fbsConferenceOptions } from "./fbs-conferences";
-import { CompetitionVisibilityControl } from "./CompetitionVisibilityControl";
 
 export function TeamsView({
   token,
   onSignInRequired,
+  onManageLeagues,
 }: {
   token: string | null;
   onSignInRequired: () => void;
+  onManageLeagues: () => void;
 }) {
   const queryClient = useQueryClient();
   const [teamScope, setTeamScope] = useState<"all" | "following">("all");
@@ -225,27 +226,18 @@ export function TeamsView({
               />
             ) : null}
 
-            <div className="competition-filter-row">
-              <CompetitionTabs
-                ariaLabel="Competition filter"
-                options={[
-                  { value: "all", label: "All" },
-                  ...visibleCompetitions.map((competition) => ({
-                    value: competition.competition,
-                    label: competition.label,
-                  })),
-                ]}
-                value={competitionFilter}
-                onChange={setCompetitionFilter}
-              />
-              {token ? (
-                <CompetitionVisibilityControl
-                  token={token}
-                  competitions={competitions}
-                  visibility={competitionVisibility}
-                />
-              ) : null}
-            </div>
+            <CompetitionTabs
+              ariaLabel="Competition filter"
+              options={[
+                { value: "all", label: "All" },
+                ...visibleCompetitions.map((competition) => ({
+                  value: competition.competition,
+                  label: competition.label,
+                })),
+              ]}
+              value={competitionFilter}
+              onChange={setCompetitionFilter}
+            />
 
             {competitionFilter === "FBS" ? (
               <ConferenceSelect
@@ -384,13 +376,9 @@ export function TeamsView({
                       : "No teams match this filter."}
                 </p>
                 {token && visibleCompetitions.length === 0 ? (
-                  <CompetitionVisibilityControl
-                    token={token}
-                    competitions={competitions}
-                    visibility={competitionVisibility}
-                    buttonLabel="Choose leagues"
-                    buttonClassName="btn"
-                  />
+                  <button className="btn" type="button" onClick={onManageLeagues}>
+                    Choose leagues
+                  </button>
                 ) : null}
               </div>
             )}

@@ -155,16 +155,25 @@ const fbsCompetition = {
   is_enabled: true,
 };
 
-function renderTeamsView(token: string | null, onSignInRequired = vi.fn()) {
+function renderTeamsView(
+  token: string | null,
+  onSignInRequired = vi.fn(),
+  onManageLeagues = vi.fn(),
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     ...render(
       <QueryClientProvider client={client}>
-        <TeamsView token={token} onSignInRequired={onSignInRequired} />
+        <TeamsView
+          token={token}
+          onSignInRequired={onSignInRequired}
+          onManageLeagues={onManageLeagues}
+        />
       </QueryClientProvider>,
     ),
     client,
     onSignInRequired,
+    onManageLeagues,
   };
 }
 
@@ -261,10 +270,12 @@ describe("TeamsView", () => {
     apiMocks.getCompetitionVisibility.mockResolvedValue({
       hidden_competitions: competitions.map(({ competition }) => competition),
     });
-    renderTeamsView("token");
+    const view = renderTeamsView("token");
 
     expect(await screen.findByText("No leagues are currently shown.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose leagues" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Leagues" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Choose leagues" }));
+    expect(view.onManageLeagues).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
   });
 
@@ -323,7 +334,11 @@ describe("TeamsView", () => {
 
     view.rerender(
       <QueryClientProvider client={view.client}>
-        <TeamsView token={null} onSignInRequired={view.onSignInRequired} />
+        <TeamsView
+          token={null}
+          onSignInRequired={view.onSignInRequired}
+          onManageLeagues={vi.fn()}
+        />
       </QueryClientProvider>,
     );
 

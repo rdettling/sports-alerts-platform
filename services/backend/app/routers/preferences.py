@@ -34,7 +34,9 @@ router = APIRouter(prefix="/alert-preferences", tags=["alert-preferences"])
 def _validate_sport(sport: str) -> str:
     normalized = sport.lower()
     if normalized not in SUPPORTED_SPORTS:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found"
+        )
     return normalized
 
 
@@ -51,6 +53,22 @@ def _load_preference(
             UserAlertPreference.alert_type == alert_type,
         )
     )
+
+
+def _load_active_game(db: Session, game_id: int) -> Game:
+    game = db.get(Game, game_id)
+    if not game or game.competition not in set(get_active_competitions(db)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
+        )
+    return game
+
+
+def _validate_game_alert_type(game: Game, alert_type: str) -> None:
+    if alert_type not in get_alert_types(game.competition):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found"
+        )
 
 
 def _preference_out(
@@ -170,9 +188,7 @@ def list_alert_preferences(
         AlertPreferenceGroupOut(
             sport=sport,
             preferences=[
-                _preference_out(
-                    sport, alert_type, preferences.get((sport, alert_type))
-                )
+                _preference_out(sport, alert_type, preferences.get((sport, alert_type)))
                 for alert_type in get_sport_alert_types(sport)
             ],
         )
@@ -194,7 +210,9 @@ def update_alert_preference(
         for competition in get_active_competitions(db)
     }
     if normalized_sport not in active_sports:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found"
+        )
     if alert_type not in get_sport_alert_types(normalized_sport):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found"
@@ -230,11 +248,7 @@ def get_game_alert_preferences(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GameAlertPreferencesOut:
-    game = db.get(Game, game_id)
-    if not game or game.competition not in set(get_active_competitions(db)):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
-        )
+    game = _load_active_game(db, game_id)
     sport = get_competition_profile(game.competition).sport
     return GameAlertPreferencesOut(
         game_id=game.id,
@@ -252,15 +266,8 @@ def update_game_alert_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GameAlertPreferenceItemOut:
-    game = db.get(Game, game_id)
-    if not game or game.competition not in set(get_active_competitions(db)):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
-        )
-    if alert_type not in get_alert_types(game.competition):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found"
-        )
+    game = _load_active_game(db, game_id)
+    _validate_game_alert_type(game, alert_type)
 
     sport = get_competition_profile(game.competition).sport
     preference = _load_preference(db, current_user.id, sport, alert_type)
@@ -306,15 +313,8 @@ def reset_game_alert_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> GameAlertPreferenceItemOut:
-    game = db.get(Game, game_id)
-    if not game or game.competition not in set(get_active_competitions(db)):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
-        )
-    if alert_type not in get_alert_types(game.competition):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found"
-        )
+    game = _load_active_game(db, game_id)
+    _validate_game_alert_type(game, alert_type)
 
     row = db.scalar(
         select(UserGameAlertOverride).where(
