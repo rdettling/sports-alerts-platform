@@ -27,18 +27,20 @@ Good changes should make the repo easier to read, reason about, test, and modify
 - Avoid patterns that only pay off for larger teams, multiple tenants, plugin ecosystems, or uncertain future scale.
 - Prefer boring, explicit implementation choices that are easy to inspect in one pass.
 
-## Data And Schema Freedom
+## Data And Schema Evolution
 
-Production sports data is disposable. Games, odds, follows tied to games, alert history, and similar derived sports-domain state can be reset or regenerated when that keeps the system simpler.
+Optimize for the clean current schema, not compatibility with historical schema shapes. The application supports only the latest Alembic revision; do not add runtime compatibility layers, dual reads or writes, deprecated columns, or old and new API shapes.
 
-Schema changes are allowed when they improve clarity or reduce debt. Do not preserve awkward schema shapes purely to avoid migrations.
+Production sports-domain data is disposable. Games, odds, game-related follows, alert history, and similar derived state may be reset or regenerated when that produces a simpler design.
 
-When changing data shape:
+Choose the simplest path to the clean target schema:
 
-- Prefer the clean target model over compatibility layers.
-- Use migrations when appropriate, but keep them straightforward.
-- It is acceptable to document a reset/reseed path instead of building complex backwards-compatible data preservation.
-- Be more careful with user identity/auth data than with regenerated sports data.
+- Use a straightforward forward migration when it reaches the target model directly, especially when it preserves user identity, authentication, preferences, or other difficult-to-recreate data.
+- Prefer reset and reseed when preserving disposable sports data would require complicated backfills, transitional code, compatibility columns, or a compromised target model.
+- Never retain an awkward schema merely to avoid a destructive migration.
+- Do not destructively reset user or authentication data unless the user has explicitly approved that tradeoff.
+- Keep the migration chain linear and compact. It may be deliberately squashed into a new baseline when migration history becomes a maintenance burden and the corresponding reset or cutover has been planned.
+- Do not rewrite an already-applied migration casually; use a new direct migration or an explicitly planned baseline reset.
 
 ## Avoid Creating Cleanup Debt
 

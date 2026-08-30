@@ -7,7 +7,7 @@ from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query
 
 
-def _create_game() -> Game:
+def _create_game(*, broadcast_names: list[str] | None = None) -> Game:
     db = SessionLocal()
     try:
         teams = db.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
@@ -19,6 +19,7 @@ def _create_game() -> Game:
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
             home_team_record="48-31",
             away_team_record="57-22",
+            broadcast_names=list(broadcast_names or []),
             status="scheduled",
             is_final=False,
         )
@@ -76,11 +77,21 @@ def test_games_include_odds_when_available(client):
     assert payload[0]["context_label"] is None
     assert payload[0]["home_team_record"] == "48-31"
     assert payload[0]["away_team_record"] == "57-22"
+    assert payload[0]["broadcast_names"] == []
     assert payload[0]["odds"]["outcomes"][0]["price_american"] == 125
     assert payload[0]["odds"]["outcomes"][0]["team_side"] == "away"
     assert payload[0]["odds"]["outcomes"][1]["price_american"] == -145
     assert payload[0]["odds"]["outcomes"][1]["team_side"] == "home"
     assert payload[0]["odds"]["bookmaker"] == "DraftKings"
+
+
+def test_games_include_broadcast_names(client):
+    _create_game(broadcast_names=["ESPN", "Peacock"])
+
+    response = client.get("/games")
+
+    assert response.status_code == 200
+    assert response.json()[0]["broadcast_names"] == ["ESPN", "Peacock"]
 
 
 def test_games_include_world_cup_draw_odds(client):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable
 
@@ -33,6 +33,7 @@ class ScoreboardGame:
     period: int | None = None
     clock: str | None = None
     is_final: bool = False
+    broadcast_names: list[str] = field(default_factory=list)
 
 
 def _clean_text(value: object) -> str | None:
@@ -51,6 +52,39 @@ def _total_record(competitor: dict[str, Any]) -> str | None:
         None,
     )
     return _clean_text(total.get("summary")) if total else None
+
+
+def _broadcast_names(competition: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: object) -> None:
+        name = _clean_text(value)
+        if not name or name.casefold() in seen:
+            return
+        seen.add(name.casefold())
+        names.append(name)
+
+    broadcasts = competition.get("broadcasts")
+    if isinstance(broadcasts, list):
+        for broadcast in broadcasts:
+            if not isinstance(broadcast, dict):
+                continue
+            values = broadcast.get("names")
+            if isinstance(values, list):
+                for value in values:
+                    add(value)
+
+    geo_broadcasts = competition.get("geoBroadcasts")
+    if isinstance(geo_broadcasts, list):
+        for broadcast in geo_broadcasts:
+            if not isinstance(broadcast, dict):
+                continue
+            media = broadcast.get("media")
+            if isinstance(media, dict):
+                add(media.get("shortName"))
+
+    return names
 
 
 def _format_world_cup_stage(slug: str | None) -> str | None:
@@ -173,6 +207,7 @@ class EspnScoreboardClient:
             period=int(period) if period else None,
             clock=clock if clock else None,
             is_final=status == "final" and completed,
+            broadcast_names=_broadcast_names(event_competition),
         )
 
     def _fetch_events_for_dates(self, competition: str, dates: list[str]) -> list[dict[str, Any]]:

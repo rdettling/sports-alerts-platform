@@ -151,6 +151,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         soccer_events = soccer.classify_events(existing, payload) if is_soccer else None
         state_before = (
             existing.context_label,
+            tuple(existing.broadcast_names),
             existing.status,
             existing.home_score,
             existing.away_score,
@@ -160,6 +161,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         )
         record_before = (existing.home_team_record, existing.away_team_record)
         existing.context_label = payload.context_label
+        existing.broadcast_names = list(payload.broadcast_names)
         if payload.home_team_record is not None:
             existing.home_team_record = payload.home_team_record
         if payload.away_team_record is not None:
@@ -173,6 +175,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         existing.last_ingested_at = datetime.now(timezone.utc)
         state_after = (
             existing.context_label,
+            tuple(existing.broadcast_names),
             existing.status,
             existing.home_score,
             existing.away_score,
@@ -200,6 +203,7 @@ def _upsert_game(db: Session, competition: str, payload: ScoreboardGame, team_ma
         context_label=payload.context_label,
         home_team_record=payload.home_team_record,
         away_team_record=payload.away_team_record,
+        broadcast_names=list(payload.broadcast_names),
         status=payload.status,
         home_score=payload.home_score,
         away_score=payload.away_score,

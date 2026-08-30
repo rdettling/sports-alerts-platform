@@ -37,6 +37,7 @@ export type Game = {
   context_label: string | null;
   home_team_record: string | null;
   away_team_record: string | null;
+  broadcast_names: string[];
   status: string;
   home_score: number | null;
   away_score: number | null;

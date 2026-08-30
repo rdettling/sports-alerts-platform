@@ -88,7 +88,7 @@ Escalation path:
 
 ## Complete Database Reset And Reseed
 
-Use this only when you intend to delete users, login state, push subscriptions, follows, preferences, alerts, and sports data. The script rebuilds the single Alembic baseline and restores the code-owned competition and team catalogs.
+Use this only when you intend to delete users, login state, push subscriptions, follows, preferences, alerts, and sports data. The script rebuilds the database through the latest Alembic revision and restores the code-owned competition and team catalogs.
 
 For a production baseline cutover, follow the ordered procedure in [deployment.md](deployment.md#clean-baseline-cutover). The reset must run from the new code before the new API starts.
 

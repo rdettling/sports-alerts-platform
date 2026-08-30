@@ -71,6 +71,7 @@ describe("useGamesData", () => {
         context_label: null,
         home_team_record: null,
         away_team_record: null,
+        broadcast_names: [],
         status: "live",
         home_score: 10,
         away_score: 9,

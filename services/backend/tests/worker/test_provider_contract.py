@@ -33,6 +33,17 @@ def test_provider_parses_espn_payload_shape():
                 "date": "2026-04-06T02:00Z",
                 "competitions": [
                     {
+                        "broadcasts": [
+                            {"market": "national", "names": [" ESPN ", "espn", None, 12]},
+                            {"market": "home", "names": "not-a-list"},
+                            "not-an-object",
+                        ],
+                        "geoBroadcasts": [
+                            {"media": {"shortName": "ABC"}},
+                            {"media": {"shortName": " ESPN "}},
+                            {"media": None},
+                            "not-an-object",
+                        ],
                         "status": {
                             "period": 4,
                             "displayClock": "02:13",
@@ -77,6 +88,7 @@ def test_provider_parses_espn_payload_shape():
     assert game.away_score == 98
     assert game.home_team_record == "48-31"
     assert game.away_team_record == "57-22"
+    assert game.broadcast_names == ["ESPN", "ABC"]
     assert game.context_label is None
 
 
@@ -117,6 +129,7 @@ def test_provider_parses_soccer_record_and_allows_missing_record():
 
     assert game.home_team_record == "4-2-1"
     assert game.away_team_record is None
+    assert game.broadcast_names == []
 
 
 def test_soccer_competition_feeds_preserve_shared_club_ids():

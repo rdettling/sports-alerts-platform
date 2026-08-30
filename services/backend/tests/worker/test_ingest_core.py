@@ -226,6 +226,47 @@ def test_ingest_persists_and_refreshes_context_label(db_session):
     assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"
 
 
+def test_ingest_persists_refreshes_and_clears_broadcast_names(db_session):
+    initial = make_game(
+        external_game_id="nba-broadcasts",
+        home_external_team_id="1",
+        away_external_team_id="2",
+        status="scheduled",
+        broadcast_names=["ESPN", "ABC"],
+    )
+    first_result = run_catalog_sync(StaticProvider([initial]), competition="NBA")
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "nba-broadcasts"))
+    assert game is not None
+    assert first_result.games_updated == 1
+    assert game.broadcast_names == ["ESPN", "ABC"]
+
+    refreshed = make_game(
+        external_game_id="nba-broadcasts",
+        home_external_team_id="1",
+        away_external_team_id="2",
+        status="scheduled",
+        broadcast_names=["Peacock"],
+    )
+    refresh_result = run_catalog_sync(StaticProvider([refreshed]), competition="NBA")
+
+    db_session.refresh(game)
+    assert refresh_result.games_updated == 1
+    assert game.broadcast_names == ["Peacock"]
+
+    cleared = make_game(
+        external_game_id="nba-broadcasts",
+        home_external_team_id="1",
+        away_external_team_id="2",
+        status="scheduled",
+    )
+    clear_result = run_catalog_sync(StaticProvider([cleared]), competition="NBA")
+
+    db_session.refresh(game)
+    assert clear_result.games_updated == 1
+    assert game.broadcast_names == []
+
+
 def test_ingest_persists_refreshes_and_retains_team_records(db_session, monkeypatch, caplog):
     monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     initial = make_game(

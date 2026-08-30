@@ -14,6 +14,7 @@ function makeGame(overrides: Partial<Game>): Game {
     context_label: null,
     home_team_record: null,
     away_team_record: null,
+    broadcast_names: [],
     status: "scheduled",
     home_score: null,
     away_score: null,

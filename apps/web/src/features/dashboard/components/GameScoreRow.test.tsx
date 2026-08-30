@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { type Game, type Team } from "../../../shared/api";
@@ -27,6 +27,7 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     context_label: null,
     home_team_record: "48-31",
     away_team_record: "39-40",
+    broadcast_names: [],
     status: "scheduled",
     home_score: null,
     away_score: null,
@@ -161,7 +162,7 @@ describe("GameScoreRow", () => {
     );
 
     expect(screen.getByRole("listitem")).toHaveClass("live");
-    expect(screen.getByText("Q4 2:14")).toHaveClass("live");
+    expect(screen.getByText("Q4 2:14")).toHaveClass("game-state-pill", "live");
     expect(screen.getByText("82")).toBeInTheDocument();
     expect(screen.getByText("79")).toBeInTheDocument();
   });
@@ -179,7 +180,7 @@ describe("GameScoreRow", () => {
     );
 
     expect(screen.getByRole("listitem")).toHaveClass("postponed");
-    expect(screen.getByText("Postponed")).toHaveClass("postponed");
+    expect(screen.getByText("Postponed")).toHaveClass("game-state-pill", "postponed");
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
@@ -197,6 +198,113 @@ describe("GameScoreRow", () => {
     );
 
     expect(screen.getByText(context)).toHaveAttribute("title", context);
+  });
+
+  it.each(["scheduled", "in_progress"])(
+    "shows broadcasts to the right of the status for %s games",
+    (status) => {
+      render(
+        <GameScoreRow
+          game={makeGame({
+            status,
+            broadcast_names: ["ESPN", "Peacock"],
+          })}
+          sport="basketball"
+          home={home}
+          away={away}
+          isFollowed={false}
+          statusLabel={status === "scheduled" ? "7:00 PM" : "Q2 4:12"}
+        />,
+      );
+
+      const disclosure = screen.getByLabelText("Broadcasts: ESPN, Peacock");
+      const group = disclosure.closest(".game-status-broadcast-group");
+      expect(group).not.toBeNull();
+      expect(group?.children[0]).toHaveClass("game-state-pill");
+      expect(group?.children[0]).toHaveTextContent(status === "scheduled" ? "7:00 PM" : "Q2 4:12");
+      expect(group?.children[1]).toHaveTextContent("·");
+      expect(group?.children[2]).toBe(disclosure.closest("details"));
+      expect(disclosure).toHaveAttribute("title", "ESPN, Peacock");
+      expect(within(disclosure).getByText("ESPN")).toBeInTheDocument();
+      expect(within(disclosure).getByText("+1")).toBeInTheDocument();
+      expect(screen.getByText("Where to watch")).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["final", true, "Final"],
+    ["postponed", false, "Postponed"],
+  ])("hides broadcasts for %s games", (status, isFinal, statusLabel) => {
+    render(
+      <GameScoreRow
+        game={makeGame({
+          status,
+          is_final: isFinal,
+          broadcast_names: ["ESPN", "Peacock"],
+        })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel={statusLabel}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Broadcasts: ESPN, Peacock")).not.toBeInTheDocument();
+    expect(screen.queryByText("ESPN")).not.toBeInTheDocument();
+  });
+
+  it("hides broadcast information when ESPN provides no names", () => {
+    render(
+      <GameScoreRow
+        game={makeGame()}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.queryByText("ESPN, Peacock")).not.toBeInTheDocument();
+  });
+
+  it("keeps context separate from the primary broadcast disclosure", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({
+          context_label: "NBA Finals - Game 5",
+          broadcast_names: ["ESPN", "ABC"],
+        })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    const context = screen.getByText("NBA Finals - Game 5");
+    expect(context.closest(".game-score-meta")).not.toBeNull();
+    expect(
+      screen.getByLabelText("Broadcasts: ESPN, ABC").closest(".game-score-header-end"),
+    ).not.toBeNull();
+  });
+
+  it("shows a single provider without a disclosure", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ broadcast_names: ["Peacock"] })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    expect(screen.getByText("Peacock")).toHaveClass("game-broadcast-single");
+    expect(screen.queryByText("Where to watch")).not.toBeInTheDocument();
   });
 
   it("shows three-way soccer odds", () => {

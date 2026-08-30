@@ -54,6 +54,10 @@ export function GameScoreRow({
       : "—";
   const competition = competitionBadgeLabel(game.competition);
   const logoUrl = competitionLogoUrl(game.competition);
+  const broadcastText = game.broadcast_names.join(", ");
+  const primaryBroadcast = game.broadcast_names[0];
+  const additionalBroadcastCount = game.broadcast_names.length - 1;
+  const showBroadcast = Boolean(primaryBroadcast) && (game.status === "scheduled" || isLive);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
   const statusTone: GameStateTone = isLive
     ? "live"
@@ -90,7 +94,36 @@ export function GameScoreRow({
         </div>
 
         <div className="game-score-header-end">
-          <span className={`game-state-pill ${statusTone}`}>{statusLabel}</span>
+          <div className="game-status-broadcast-group">
+            <span className={`game-state-pill ${statusTone}`}>{statusLabel}</span>
+            {showBroadcast ? (
+              <>
+                <span className="game-broadcast-divider" aria-hidden>
+                  ·
+                </span>
+                {additionalBroadcastCount > 0 ? (
+                  <details className="game-broadcast-disclosure">
+                    <summary title={broadcastText} aria-label={`Broadcasts: ${broadcastText}`}>
+                      <span className="game-broadcast-primary">{primaryBroadcast}</span>
+                      <span className="game-broadcast-count">+{additionalBroadcastCount}</span>
+                    </summary>
+                    <div className="game-broadcast-popover">
+                      <strong>Where to watch</strong>
+                      <ul>
+                        {game.broadcast_names.map((name) => (
+                          <li key={name}>{name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </details>
+                ) : (
+                  <span className="game-broadcast-single" title={primaryBroadcast}>
+                    {primaryBroadcast}
+                  </span>
+                )}
+              </>
+            ) : null}
+          </div>
           <div className="game-score-actions">
             {isFollowed && !isFinal ? (
               <>

@@ -93,11 +93,13 @@ Requirements:
 - Network access from both services
 - A connection string compatible with SQLAlchemy / psycopg
 
-The repo stores both user data and disposable sports-domain state in Postgres. The current baseline is intentionally self-contained and has no compatibility path from earlier schemas, including databases created from an older copy of `0001_baseline`. Deploy a baseline change only after a complete database reset during a maintenance window; the reset deletes user and auth data as well as sports data.
+The repo stores both user data and disposable sports-domain state in Postgres. The current migration chain starts from the self-contained `0001_baseline`; databases already on that baseline upgrade normally through later revisions. Databases created from an older copy of `0001_baseline` still have no compatibility path and require the reset procedure below.
+
+Runtime code supports only the latest Alembic revision. Apply `alembic upgrade head` before serving the new release rather than adding application code that handles both old and new schema shapes.
 
 ### Clean-Baseline Cutover
 
-The release contains only `0001_baseline`; there are no compatibility migrations. Alembic will not rerun a changed baseline against a database already marked at `0001_baseline`, and older revision histories are also incompatible. Reset the database with the new code before starting the new API.
+Use this procedure only when replacing an incompatible pre-baseline or older-baseline database. Normal upgrades from the current `0001_baseline` must use `alembic upgrade head` and preserve existing data.
 
 1. Put the application into a maintenance window and pause the worker.
 2. Build the new release or check out the new commit without starting its API or worker.
@@ -108,7 +110,7 @@ The release contains only `0001_baseline`; there are no compatibility migrations
    uv run python scripts/reset_database.py --yes
    ```
 
-5. Start the new API. Its automatic Alembic command should be a no-op against `0001_baseline`.
+5. Start the new API. Its automatic Alembic command upgrades the reset database to the latest revision.
 6. Deploy the worker and frontend. Deploy the frontend with the API because the old `/leagues` contract no longer exists.
 7. Sign in with the bootstrap admin email, resubscribe notification devices, and complete the checks below.
 

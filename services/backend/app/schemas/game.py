@@ -26,6 +26,7 @@ class GameOut(BaseModel):
     context_label: str | None
     home_team_record: str | None
     away_team_record: str | None
+    broadcast_names: list[str]
     status: str
     home_score: int | None
     away_score: int | None

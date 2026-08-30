@@ -91,6 +91,7 @@ class Game(Base):
     context_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     home_team_record: Mapped[str | None] = mapped_column(String(32), nullable=True)
     away_team_record: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    broadcast_names: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     status: Mapped[str] = mapped_column(String(32), default="scheduled")
     home_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     away_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
