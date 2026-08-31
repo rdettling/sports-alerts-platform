@@ -3,7 +3,8 @@ import {
   liveGameRemainingShare,
   liveGameStagePriority,
   liveWatchabilityScore,
-  pregameMatchupPriority,
+  pregameMarketCompetitiveness,
+  pregameWatchabilityScore,
 } from "./game-watchability";
 
 export type DayOption = { key: string; label: string; count: number };
@@ -108,8 +109,14 @@ export function sortGames(games: Game[], mode: GameSortMode): Game[] {
     }
 
     if (mode === "watchability" && a.status === "scheduled" && b.status === "scheduled") {
-      const matchupDifference = pregameMatchupPriority(b) - pregameMatchupPriority(a);
-      if (matchupDifference !== 0) return matchupDifference;
+      const watchabilityDifference = pregameWatchabilityScore(b) - pregameWatchabilityScore(a);
+      if (watchabilityDifference !== 0) return watchabilityDifference;
+      const aMarket = pregameMarketCompetitiveness(a);
+      const bMarket = pregameMarketCompetitiveness(b);
+      if (aMarket !== null && bMarket !== null) {
+        const marketDifference = bMarket - aMarket;
+        if (marketDifference !== 0) return marketDifference;
+      }
       return compareKickoffAscending(a, b);
     }
 

@@ -22,6 +22,8 @@ import {
   sortGames,
 } from "./games/games-view-utils";
 
+const TOP_25_FILTER = "Top 25";
+
 export function GamesView({
   token,
   onSignInRequired,
@@ -90,6 +92,10 @@ export function GamesView({
 
   const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
   const conferenceOptions = useMemo(() => fbsConferenceOptions(teams), [teams]);
+  const gameConferenceOptions = useMemo(
+    () => [TOP_25_FILTER, ...conferenceOptions],
+    [conferenceOptions],
+  );
   const followedGameIds = useMemo(
     () => new Set((follows?.games ?? []).map((game) => game.id)),
     [follows?.games],
@@ -123,6 +129,11 @@ export function GamesView({
       return competitionFilteredGames;
     }
     return competitionFilteredGames.filter((game) => {
+      if (conferenceFilter === TOP_25_FILTER) {
+        return [game.home_team_strength.rank, game.away_team_strength.rank].some(
+          (rank) => rank !== null && rank >= 1 && rank <= 25,
+        );
+      }
       const homeConference = teamMap.get(game.home_team_id)?.conference;
       const awayConference = teamMap.get(game.away_team_id)?.conference;
       return homeConference === conferenceFilter || awayConference === conferenceFilter;
@@ -165,11 +176,11 @@ export function GamesView({
   useEffect(() => {
     if (
       competitionFilter !== "FBS" ||
-      (conferenceFilter !== "all" && !conferenceOptions.includes(conferenceFilter))
+      (conferenceFilter !== "all" && !gameConferenceOptions.includes(conferenceFilter))
     ) {
       setConferenceFilter("all");
     }
-  }, [competitionFilter, conferenceFilter, conferenceOptions]);
+  }, [competitionFilter, conferenceFilter, gameConferenceOptions]);
 
   useEffect(() => {
     const todayKey = localDateKey(new Date(Date.now()).toISOString());
@@ -205,7 +216,7 @@ export function GamesView({
             gameScope={gameScope}
             onGameScopeChange={setGameScope}
             followedGameCount={visibleFollowedGameCount}
-            conferenceOptions={conferenceOptions}
+            conferenceOptions={gameConferenceOptions}
             conferenceFilter={conferenceFilter}
             onConferenceFilterChange={setConferenceFilter}
           />

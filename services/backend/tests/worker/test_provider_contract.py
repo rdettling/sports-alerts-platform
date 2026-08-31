@@ -20,9 +20,7 @@ def test_fbs_provider_requests_the_complete_fbs_group():
 
     EspnScoreboardClient(fetch_json=record_fetch).fetch_games("FBS", ["20260829"])
 
-    assert requests == [
-        ("FBS", {"groups": "80", "limit": "1000", "dates": "20260829"})
-    ]
+    assert requests == [("FBS", {"groups": "80", "dates": "20260829"})]
 
 
 def test_provider_parses_espn_payload_shape():

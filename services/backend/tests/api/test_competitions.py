@@ -89,7 +89,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
         "americanfootball_ncaaf",
     )
     assert fbs.scoreboard_url.endswith("/sports/football/college-football/scoreboard")
-    assert dict(fbs.scoreboard_params) == {"groups": "80", "limit": "1000"}
+    assert dict(fbs.scoreboard_params) == {"groups": "80"}
     assert get_alert_types("FBS") == get_alert_types("NFL")
 
     mlb = get_competition_profile("MLB")

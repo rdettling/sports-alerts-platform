@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GamesView } from "./GamesView";
@@ -87,7 +87,7 @@ vi.mock("../hooks/useGamesData", () => ({
           away_team_id: 17,
           scheduled_start_time: "2026-06-13T23:00:00Z",
           context_label: "Close late",
-          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
+          home_team_strength: { wins: 0, losses: 0, ties: 0, rank: 5 },
           away_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
           broadcast_names: [],
           status: "in_progress",
@@ -523,8 +523,19 @@ describe("GamesView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
     const conference = screen.getByRole("combobox", { name: "Conference" });
     expect(conference).toHaveValue("all");
+    expect(
+      within(conference)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["All conferences", "Top 25", "Big Ten", "SEC"]);
     expect(screen.getAllByText("Alabama Crimson Tide").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Auburn Tigers").length).toBeGreaterThan(0);
+
+    fireEvent.change(conference, { target: { value: "Top 25" } });
+
+    expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
+    expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
+    expect(screen.queryByText("Auburn Tigers")).toBeNull();
 
     fireEvent.change(conference, { target: { value: "Big Ten" } });
 

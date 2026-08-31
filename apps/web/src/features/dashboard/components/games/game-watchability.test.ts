@@ -2,16 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import type { Game } from "../../../../shared/api";
 import {
+  americanOddsImpliedProbability,
   baseballHalfInningsRemaining,
   baseballWatchabilityScore,
   basketballGameSecondsRemaining,
   basketballRegulationSecondsRemaining,
   basketballWatchabilityScore,
+  combinedTeamStrengthFactor,
   footballRegulationSecondsRemaining,
   footballWatchabilityScore,
   liveWatchabilityScore,
+  marketCompetitivenessFactor,
   matchupQualityFactor,
-  pregameMatchupPriority,
+  normalizeProbabilities,
+  pregameFavoriteNonWinProbability,
+  pregameMarketCompetitiveness,
+  pregameWatchabilityScore,
   soccerRegulationMinutesRemaining,
   soccerWatchabilityScore,
   teamStrengthFactor,
@@ -39,6 +45,24 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     last_ingested_at: null,
     odds: null,
     ...overrides,
+  };
+}
+
+function withOdds(
+  game: Game,
+  prices: readonly (number | null)[],
+  lastUpdate = new Date(Date.parse(game.scheduled_start_time) - 60 * 60 * 1000).toISOString(),
+): Game {
+  const outcomeKeys = prices.length === 3 ? ["away", "draw", "home"] : ["away", "home"];
+  const outcomes: NonNullable<Game["odds"]>["outcomes"] = prices.map((price, index) => ({
+    outcome_key: outcomeKeys[index],
+    outcome_label: outcomeKeys[index],
+    price_american: price,
+    team_side: outcomeKeys[index] === "draw" ? null : (outcomeKeys[index] as "away" | "home"),
+  }));
+  return {
+    ...game,
+    odds: { bookmaker: "Synthetic", last_update: lastUpdate, outcomes },
   };
 }
 
@@ -269,21 +293,237 @@ describe("team quality", () => {
     expect(teamStrengthFactor({ wins: 10, losses: 0, ties: 0, rank: null }, "FBS")).toBe(0.7);
   });
 
-  it("combines average matchup strength with the weaker team", () => {
+  it("keeps live matchup quality distinct from combined pregame team strength", () => {
     const game = makeGame({
       competition: "NBA",
       home_team_strength: { wins: 8, losses: 2, ties: null, rank: null },
       away_team_strength: { wins: 6, losses: 4, ties: null, rank: null },
     });
     expect(matchupQualityFactor(game)).toBeCloseTo(0.685);
-    expect(pregameMatchupPriority(game)).toBeCloseTo(68.5);
+    expect(combinedTeamStrengthFactor(game)).toBeCloseTo(0.7);
+    expect(pregameWatchabilityScore(game)).toBeCloseTo(76);
 
     const rankedFbsMatchup = makeGame({
       competition: "FBS",
       home_team_strength: { wins: 1, losses: 8, ties: 0, rank: 1 },
       away_team_strength: { wins: 10, losses: 0, ties: 0, rank: null },
     });
-    expect(pregameMatchupPriority(rankedFbsMatchup)).toBeCloseTo(82.75);
+    expect(combinedTeamStrengthFactor(rankedFbsMatchup)).toBeCloseTo(0.85);
+    expect(pregameWatchabilityScore(rankedFbsMatchup)).toBeCloseTo(88);
+  });
+});
+
+describe("pregame market competitiveness", () => {
+  it("converts positive and negative American odds to implied probabilities", () => {
+    expect(americanOddsImpliedProbability(150)).toBeCloseTo(0.4);
+    expect(americanOddsImpliedProbability(-200)).toBeCloseTo(2 / 3);
+  });
+
+  it("removes vig by normalizing implied probabilities", () => {
+    const implied = [-110, -110].map((price) => americanOddsImpliedProbability(price));
+    expect(implied.every((probability) => probability !== null)).toBe(true);
+
+    const normalized = normalizeProbabilities(implied as number[]);
+    expect(normalized).not.toBeNull();
+    expect(normalized?.reduce((sum, probability) => sum + probability, 0)).toBeCloseTo(1);
+    expect(normalized).toEqual([0.5, 0.5]);
+  });
+
+  it("scores balanced and heavily favored two-way markets", () => {
+    expect(marketCompetitivenessFactor([-110, -110])).toBe(1);
+    expect(marketCompetitivenessFactor([-1000, 650])).toBeCloseTo(0.255814);
+  });
+
+  it("scores balanced and skewed three-way soccer markets", () => {
+    expect(marketCompetitivenessFactor([200, 200, 200])).toBe(1);
+    expect(marketCompetitivenessFactor([-300, 450, 800])).toBeCloseTo(0.421488);
+  });
+
+  it("uses the chance the favorite does not win across two- and three-way markets", () => {
+    const twoWay = withOdds(makeGame({ competition: "NBA" }), [-400, 400]);
+    expect(pregameFavoriteNonWinProbability(twoWay)).toBeCloseTo(0.2);
+
+    const threeWay = withOdds(makeGame({ competition: "PREMIER_LEAGUE" }), [-400, 500, 900]);
+    expect(pregameFavoriteNonWinProbability(threeWay)).toBeCloseTo(0.25);
+  });
+
+  it("rejects missing, stale, malformed, incomplete, and null-priced odds", () => {
+    const game = makeGame({ competition: "NBA" });
+    expect(pregameMarketCompetitiveness(game)).toBeNull();
+    expect(pregameFavoriteNonWinProbability(game)).toBeNull();
+    expect(pregameWatchabilityScore(game)).toBe(60);
+
+    const nullPrice = withOdds(game, [null, -110]);
+    expect(pregameMarketCompetitiveness(nullPrice)).toBeNull();
+    expect(pregameWatchabilityScore(nullPrice)).toBe(60);
+
+    const incomplete = withOdds(game, [110, -130]);
+    incomplete.odds?.outcomes.pop();
+    expect(pregameMarketCompetitiveness(incomplete)).toBeNull();
+    expect(pregameWatchabilityScore(incomplete)).toBe(60);
+
+    const staleUpdate = new Date(
+      Date.parse(game.scheduled_start_time) - 25 * 60 * 60 * 1000,
+    ).toISOString();
+    const stale = withOdds(game, [110, -130], staleUpdate);
+    const malformed = withOdds(game, [110, -130], "not-a-date");
+    expect(pregameMarketCompetitiveness(stale)).toBeNull();
+    expect(pregameWatchabilityScore(stale)).toBe(60);
+    expect(pregameMarketCompetitiveness(malformed)).toBeNull();
+    expect(pregameWatchabilityScore(malformed)).toBe(60);
+
+    const incompleteSoccer = withOdds(makeGame({ competition: "PREMIER_LEAGUE" }), [110, -130]);
+    expect(pregameMarketCompetitiveness(incompleteSoccer)).toBeNull();
+  });
+
+  it("rejects invalid American odds", () => {
+    expect(americanOddsImpliedProbability(0)).toBeNull();
+    expect(americanOddsImpliedProbability(99)).toBeNull();
+    expect(americanOddsImpliedProbability(-99)).toBeNull();
+    expect(americanOddsImpliedProbability(Number.NaN)).toBeNull();
+    expect(marketCompetitivenessFactor([0, -110])).toBeNull();
+    expect(pregameWatchabilityScore(withOdds(makeGame({ competition: "NBA" }), [0, -110]))).toBe(
+      60,
+    );
+  });
+});
+
+describe("thresholded scheduled watchability", () => {
+  function scheduledGame(id: number, strength: number): Game {
+    return makeGame({
+      id,
+      competition: "NBA",
+      home_team_strength: recordStrength(strength),
+      away_team_strength: recordStrength(strength),
+    });
+  }
+
+  it("does not reward or penalize qualifying odds compared with missing odds", () => {
+    const withoutOdds = scheduledGame(401, 0.7);
+    const balancedOdds = withOdds(scheduledGame(402, 0.7), [-110, -110]);
+    expect(pregameWatchabilityScore(withoutOdds)).toBe(76);
+    expect(pregameWatchabilityScore(balancedOdds)).toBe(76);
+    expect(sortGames([balancedOdds, withoutOdds], "watchability")[0].id).toBe(401);
+  });
+
+  it("puts markets below the 20 percent threshold in the low score band", () => {
+    const atThreshold = withOdds(scheduledGame(403, 0.7), [-400, 400]);
+    const belowThreshold = withOdds(scheduledGame(404, 1), [-425, 400]);
+    expect(pregameFavoriteNonWinProbability(atThreshold)).toBeCloseTo(0.2);
+    expect(pregameWatchabilityScore(atThreshold)).toBe(76);
+    expect(pregameFavoriteNonWinProbability(belowThreshold)).toBeLessThan(0.2);
+    expect(pregameWatchabilityScore(belowThreshold)).toBeLessThan(20);
+    expect(sortGames([belowThreshold, atThreshold], "watchability")[0].id).toBe(403);
+  });
+
+  it("moves an elite mismatch below an acceptable matchup", () => {
+    const eliteMismatch = withOdds(
+      makeGame({
+        id: 405,
+        competition: "NBA",
+        home_team_strength: recordStrength(1),
+        away_team_strength: recordStrength(0.2),
+      }),
+      [-1200, 750],
+    );
+    const strongBalanced = withOdds(scheduledGame(406, 0.6), [-110, -110]);
+    expect(pregameWatchabilityScore(eliteMismatch)).toBeLessThan(20);
+    expect(sortGames([eliteMismatch, strongBalanced], "watchability")[0].id).toBe(406);
+  });
+
+  it("uses combined team strength after the market clears the threshold", () => {
+    const elitePair = withOdds(
+      makeGame({
+        id: 407,
+        competition: "NBA",
+        home_team_strength: recordStrength(1),
+        away_team_strength: recordStrength(0.7),
+      }),
+      [-350, 285],
+    );
+    const balancedPair = withOdds(scheduledGame(408, 0.7), [-110, -110]);
+    expect(pregameFavoriteNonWinProbability(elitePair)).toBeGreaterThan(0.2);
+    expect(pregameWatchabilityScore(elitePair)).toBe(88);
+    expect(sortGames([balancedPair, elitePair], "watchability")[0].id).toBe(407);
+  });
+
+  it("uses market competitiveness only to break equal qualifying scores", () => {
+    const skewed = withOdds(scheduledGame(409, 0.8), [-250, 205]);
+    const balanced = withOdds(scheduledGame(410, 0.8), [-110, -110]);
+    expect(pregameWatchabilityScore(skewed)).toBe(84);
+    expect(pregameWatchabilityScore(balanced)).toBe(84);
+    expect(sortGames([skewed, balanced], "watchability")[0].id).toBe(410);
+  });
+
+  it("includes draws in the soccer threshold and still rejects true mismatches", () => {
+    const drawSupportedMatch = withOdds(
+      makeGame({
+        id: 411,
+        competition: "PREMIER_LEAGUE",
+        home_team_strength: recordStrength(1),
+        away_team_strength: recordStrength(0.8),
+      }),
+      [-400, 500, 900],
+    );
+    const averageMatch = withOdds(
+      makeGame({
+        id: 412,
+        competition: "PREMIER_LEAGUE",
+        home_team_strength: recordStrength(0.5),
+        away_team_strength: recordStrength(0.5),
+      }),
+      [200, 200, 200],
+    );
+    const trueMismatch = withOdds(
+      makeGame({
+        id: 413,
+        competition: "PREMIER_LEAGUE",
+        home_team_strength: recordStrength(1),
+        away_team_strength: recordStrength(0.8),
+      }),
+      [-1000, 700, 1600],
+    );
+    expect(pregameFavoriteNonWinProbability(drawSupportedMatch)).toBeCloseTo(0.25);
+    expect(sortGames([drawSupportedMatch, averageMatch], "watchability")[0].id).toBe(411);
+    expect(pregameFavoriteNonWinProbability(trueMismatch)).toBeLessThan(0.2);
+    expect(pregameWatchabilityScore(trueMismatch)).toBeLessThan(20);
+    expect(sortGames([trueMismatch, averageMatch], "watchability")[0].id).toBe(412);
+  });
+
+  it("preserves relative ordering when every scheduled game lacks odds", () => {
+    const weak = scheduledGame(414, 0.3);
+    const average = scheduledGame(415, 0.5);
+    const strong = scheduledGame(416, 0.8);
+    expect(sortGames([average, weak, strong], "watchability").map(({ id }) => id)).toEqual([
+      416, 415, 414,
+    ]);
+  });
+
+  it("does not use pregame odds for live scoring or ordering", () => {
+    const closeLate = makeGame({
+      id: 417,
+      competition: "NBA",
+      status: "in_progress",
+      period: 4,
+      clock: "1:00",
+      home_score: 100,
+      away_score: 98,
+    });
+    const tiedEarly = makeGame({
+      id: 418,
+      competition: "NBA",
+      status: "in_progress",
+      period: 1,
+      clock: "12:00",
+      home_score: 0,
+      away_score: 0,
+    });
+    const pricedCloseLate = withOdds(closeLate, [-1000, 650]);
+    const pricedTiedEarly = withOdds(tiedEarly, [-110, -110]);
+    expect(liveWatchabilityScore(pricedCloseLate)).toBe(liveWatchabilityScore(closeLate));
+    expect(
+      sortGames([pricedTiedEarly, pricedCloseLate], "watchability").map(({ id }) => id),
+    ).toEqual([417, 418]);
   });
 });
 

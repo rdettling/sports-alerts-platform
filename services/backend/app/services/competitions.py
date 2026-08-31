@@ -81,7 +81,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="College Football",
         badge_label="FBS",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
-        scoreboard_params=(("groups", "80"), ("limit", "1000")),
+        scoreboard_params=(("groups", "80"),),
         live_sync_interval_seconds=120,
         odds_sport_key="americanfootball_ncaaf",
     ),

@@ -17,6 +17,10 @@ const SOCCER_URGENCY_BASELINE = 0.55;
 const MATCHUP_AVERAGE_WEIGHT = 0.85;
 const MATCHUP_WEAKER_TEAM_WEIGHT = 0.15;
 const LIVE_TEAM_QUALITY_BONUS = 15;
+const PREGAME_FAVORITE_NON_WIN_THRESHOLD = 0.2;
+const PREGAME_QUALIFIED_SCORE_FLOOR = 20;
+const PREGAME_QUALIFIED_SCORE_RANGE = 80;
+const ODDS_PREGAME_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const FOOTBALL_MARGIN_BANDS: readonly MarginBand[] = [
   [0, 1],
@@ -124,8 +128,66 @@ export function matchupQualityFactor(game: Game): number {
   );
 }
 
-export function pregameMatchupPriority(game: Game): number {
-  return 100 * matchupQualityFactor(game);
+export function combinedTeamStrengthFactor(game: Game): number {
+  const home = teamStrengthFactor(game.home_team_strength, game.competition);
+  const away = teamStrengthFactor(game.away_team_strength, game.competition);
+  return (home + away) / 2;
+}
+
+export function americanOddsImpliedProbability(odds: number): number | null {
+  if (!Number.isInteger(odds) || Math.abs(odds) < 100) return null;
+  return odds > 0 ? 100 / (odds + 100) : Math.abs(odds) / (Math.abs(odds) + 100);
+}
+
+export function normalizeProbabilities(probabilities: readonly number[]): number[] | null {
+  if (
+    probabilities.length < 2 ||
+    probabilities.some((probability) => !Number.isFinite(probability) || probability <= 0)
+  ) {
+    return null;
+  }
+
+  const total = probabilities.reduce((sum, probability) => sum + probability, 0);
+  return probabilities.map((probability) => probability / total);
+}
+
+export function marketCompetitivenessFactor(
+  americanOdds: readonly (number | null)[],
+): number | null {
+  const normalized = normalizedAmericanOddsProbabilities(americanOdds);
+  if (!normalized) return null;
+
+  return competitivenessFromNormalizedProbabilities(normalized);
+}
+
+export function pregameMarketCompetitiveness(game: Game): number | null {
+  const normalized = normalizedPregameProbabilities(game);
+  return normalized ? competitivenessFromNormalizedProbabilities(normalized) : null;
+}
+
+export function pregameFavoriteNonWinProbability(game: Game): number | null {
+  const normalized = normalizedPregameProbabilities(game);
+  const outcomes = game.odds?.outcomes;
+  if (!normalized || !outcomes) return null;
+
+  const teamProbabilities = normalized.filter(
+    (_, index) => outcomes[index].team_side === "home" || outcomes[index].team_side === "away",
+  );
+  return teamProbabilities.length === 2 ? 1 - Math.max(...teamProbabilities) : null;
+}
+
+export function pregameWatchabilityScore(game: Game): number {
+  const favoriteNonWinProbability = pregameFavoriteNonWinProbability(game);
+  if (
+    favoriteNonWinProbability !== null &&
+    favoriteNonWinProbability < PREGAME_FAVORITE_NON_WIN_THRESHOLD - Number.EPSILON
+  ) {
+    return 100 * favoriteNonWinProbability;
+  }
+
+  return (
+    PREGAME_QUALIFIED_SCORE_FLOOR + PREGAME_QUALIFIED_SCORE_RANGE * combinedTeamStrengthFactor(game)
+  );
 }
 
 export function basketballRegulationSecondsRemaining(game: Game): number | null {
@@ -281,6 +343,62 @@ function recordStrengthFactor(strength: TeamStrength): number {
   const ties = strength.ties ?? 0;
   const total = strength.wins + strength.losses + ties;
   return total > 0 ? (strength.wins + 0.5 * ties) / total : 0.5;
+}
+
+function normalizedAmericanOddsProbabilities(
+  americanOdds: readonly (number | null)[],
+): number[] | null {
+  if (americanOdds.length !== 2 && americanOdds.length !== 3) return null;
+
+  const implied: number[] = [];
+  for (const price of americanOdds) {
+    if (price === null) return null;
+    const probability = americanOddsImpliedProbability(price);
+    if (probability === null) return null;
+    implied.push(probability);
+  }
+  return normalizeProbabilities(implied);
+}
+
+function competitivenessFromNormalizedProbabilities(probabilities: readonly number[]): number {
+  const largestProbability = Math.max(...probabilities);
+  const evenMarketRemainder = 1 - 1 / probabilities.length;
+  return Math.max(0, Math.min(1, (1 - largestProbability) / evenMarketRemainder));
+}
+
+function normalizedPregameProbabilities(game: Game): number[] | null {
+  const odds = game.odds;
+  if (!odds?.last_update || !hasCompleteMoneyline(game)) return null;
+
+  const kickoff = Date.parse(game.scheduled_start_time);
+  const updated = Date.parse(odds.last_update);
+  if (
+    !Number.isFinite(kickoff) ||
+    !Number.isFinite(updated) ||
+    updated > kickoff ||
+    kickoff - updated > ODDS_PREGAME_WINDOW_MS
+  ) {
+    return null;
+  }
+
+  return normalizedAmericanOddsProbabilities(
+    odds.outcomes.map((outcome) => outcome.price_american),
+  );
+}
+
+function hasCompleteMoneyline(game: Game): boolean {
+  const outcomes = game.odds?.outcomes;
+  const expectedOutcomeCount = SOCCER_COMPETITIONS.has(game.competition) ? 3 : 2;
+  if (!outcomes || outcomes.length !== expectedOutcomeCount) return false;
+  if (new Set(outcomes.map((outcome) => outcome.outcome_key)).size !== outcomes.length)
+    return false;
+
+  const homeCount = outcomes.filter((outcome) => outcome.team_side === "home").length;
+  const awayCount = outcomes.filter((outcome) => outcome.team_side === "away").length;
+  const drawCount = outcomes.filter(
+    (outcome) => outcome.team_side === null && outcome.outcome_key === "draw",
+  ).length;
+  return homeCount === 1 && awayCount === 1 && drawCount === expectedOutcomeCount - 2;
 }
 
 function isLiveGame(game: Game): boolean {
