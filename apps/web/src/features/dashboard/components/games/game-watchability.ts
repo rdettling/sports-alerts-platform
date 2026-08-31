@@ -199,15 +199,23 @@ export function soccerWatchabilityScore(game: Game): number | null {
   return urgencyScore(competitiveness, progress, SOCCER_URGENCY_BASELINE);
 }
 
-export function liveGameRemaining(game: Game): number | null {
-  if (game.competition === "MLB") return baseballHalfInningsRemaining(game);
+export function liveGameRemainingShare(game: Game): number | null {
+  if (game.competition === "MLB") {
+    const remaining = baseballHalfInningsRemaining(game);
+    return remaining === null ? null : remaining / BASEBALL_REGULATION_HALF_INNINGS;
+  }
   if (FOOTBALL_COMPETITIONS.has(game.competition)) {
-    return footballRegulationSecondsRemaining(game);
+    const remaining = footballRegulationSecondsRemaining(game);
+    return remaining === null ? null : remaining / FOOTBALL_REGULATION_SECONDS;
   }
   if (game.competition === "NBA" || game.competition === "WNBA") {
-    return basketballGameSecondsRemaining(game);
+    const remaining = basketballGameSecondsRemaining(game);
+    const regulationSeconds = (game.competition === "NBA" ? 12 : 10) * 60 * 4;
+    return remaining === null ? null : remaining / regulationSeconds;
   }
-  return soccerRegulationMinutesRemaining(game);
+  const remaining = soccerRegulationMinutesRemaining(game);
+  const regulationMinutes = game.period !== null && game.period >= 3 ? 120 : 90;
+  return remaining === null ? null : remaining / regulationMinutes;
 }
 
 export function liveGameStagePriority(game: Game): number {

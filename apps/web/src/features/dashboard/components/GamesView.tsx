@@ -13,13 +13,13 @@ import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import { formatGameStatusLabel } from "./games/game-display";
 import {
   buildDayOptions,
+  DEFAULT_GAME_SORT_MODE,
   filterGamesByDay,
   filterGamesByCompetition,
   type GameSortMode,
   localDateKey,
   resolveSelectedDay,
   sortGames,
-  supportsGameSorting,
 } from "./games/games-view-utils";
 
 export function GamesView({
@@ -38,7 +38,7 @@ export function GamesView({
   const [competitionFilter, setCompetitionFilter] = useState<"all" | Competition>("all");
   const [conferenceFilter, setConferenceFilter] = useState<"all" | string>("all");
   const [gameScope, setGameScope] = useState<"all" | "following">("all");
-  const [sortMode, setSortMode] = useState<GameSortMode>("start_time");
+  const [sortMode, setSortMode] = useState<GameSortMode>(DEFAULT_GAME_SORT_MODE);
   const [error, setError] = useState<string | null>(null);
   const [busyGameId, setBusyGameId] = useState<number | null>(null);
   const {
@@ -137,8 +137,8 @@ export function GamesView({
     [conferenceFilteredGames, dayFilter],
   );
   const sortedVisibleGames = useMemo(
-    () => sortGames(visibleGames, sortMode, competitionFilter),
-    [competitionFilter, sortMode, visibleGames],
+    () => sortGames(visibleGames, sortMode),
+    [sortMode, visibleGames],
   );
   const selectedDayLabel = useMemo(() => {
     const firstGame = sortedVisibleGames[0];
@@ -176,10 +176,6 @@ export function GamesView({
     const nextDay = resolveSelectedDay(dayOptions, dayFilter, todayKey);
     if (nextDay !== dayFilter) setDayFilter(nextDay);
   }, [dayFilter, dayOptions]);
-
-  useEffect(() => {
-    if (!supportsGameSorting(competitionFilter)) setSortMode("start_time");
-  }, [competitionFilter]);
 
   return (
     <section className="view-stack games-page" aria-label="Games">

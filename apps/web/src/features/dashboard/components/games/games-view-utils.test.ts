@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Competition, Game } from "../../../../shared/api";
-import {
-  filterGamesByDay,
-  resolveSelectedDay,
-  sortGames,
-  supportsGameSorting,
-} from "./games-view-utils";
+import type { Game } from "../../../../shared/api";
+import { filterGamesByDay, resolveSelectedDay, sortGames } from "./games-view-utils";
 
 function makeGame(overrides: Partial<Game> = {}): Game {
   return {
@@ -89,10 +84,14 @@ describe("sortGames", () => {
 
   it("sorts live games by watchability before non-live status groups", () => {
     expect(
+      sortGames([postponed, final, scheduled, lateBlowout, tiedEarly, closeLate], "live_first").map(
+        ({ id }) => id,
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(
       sortGames(
         [postponed, final, scheduled, lateBlowout, tiedEarly, closeLate],
         "watchability",
-        "NFL",
       ).map(({ id }) => id),
     ).toEqual([1, 2, 3, 4, 5, 6]);
   });
@@ -102,7 +101,6 @@ describe("sortGames", () => {
       sortGames(
         [postponed, final, scheduled, closeLate, tiedEarly, lateBlowout],
         "ending_soon",
-        "NFL",
       ).map(({ id }) => id),
     ).toEqual([3, 1, 2, 4, 5, 6]);
   });
@@ -121,9 +119,7 @@ describe("sortGames", () => {
       scheduled_start_time: "2026-09-06T20:00:00Z",
     });
     expect(
-      sortGames([final, invalidLive, laterFinal, closeLate], "watchability", "NFL").map(
-        ({ id }) => id,
-      ),
+      sortGames([final, invalidLive, laterFinal, closeLate], "watchability").map(({ id }) => id),
     ).toEqual([1, 7, 8, 5]);
   });
 
@@ -144,7 +140,7 @@ describe("sortGames", () => {
       away_score: 24,
       scheduled_start_time: "2026-09-06T17:00:00Z",
     });
-    expect(sortGames([sameA, sameB], "watchability", "NFL").map(({ id }) => id)).toEqual([9, 10]);
+    expect(sortGames([sameA, sameB], "watchability").map(({ id }) => id)).toEqual([9, 10]);
   });
 
   it("returns no games when no date is selected", () => {
@@ -176,10 +172,10 @@ describe("sortGames", () => {
       home_score: 8,
       away_score: 2,
     });
-    expect(sortGames([blowout, early, close], "watchability", "MLB").map(({ id }) => id)).toEqual([
+    expect(sortGames([blowout, early, close], "watchability").map(({ id }) => id)).toEqual([
       20, 21, 22,
     ]);
-    expect(sortGames([close, early, blowout], "ending_soon", "MLB").map(({ id }) => id)).toEqual([
+    expect(sortGames([close, early, blowout], "ending_soon").map(({ id }) => id)).toEqual([
       22, 20, 21,
     ]);
   });
@@ -212,10 +208,10 @@ describe("sortGames", () => {
       home_score: 120,
       away_score: 90,
     });
-    expect(sortGames([blowout, early, close], "watchability", "NBA").map(({ id }) => id)).toEqual([
+    expect(sortGames([blowout, early, close], "watchability").map(({ id }) => id)).toEqual([
       30, 31, 32,
     ]);
-    expect(sortGames([close, early, blowout], "ending_soon", "NBA").map(({ id }) => id)).toEqual([
+    expect(sortGames([close, early, blowout], "ending_soon").map(({ id }) => id)).toEqual([
       32, 30, 31,
     ]);
   });
@@ -248,10 +244,10 @@ describe("sortGames", () => {
       home_score: 4,
       away_score: 0,
     });
-    expect(sortGames([blowout, early, close], "watchability", "MLS").map(({ id }) => id)).toEqual([
+    expect(sortGames([blowout, early, close], "watchability").map(({ id }) => id)).toEqual([
       40, 41, 42,
     ]);
-    expect(sortGames([close, early, blowout], "ending_soon", "MLS").map(({ id }) => id)).toEqual([
+    expect(sortGames([close, early, blowout], "ending_soon").map(({ id }) => id)).toEqual([
       42, 40, 41,
     ]);
   });
@@ -281,18 +277,17 @@ describe("sortGames", () => {
       away_team_strength: { wins: 8, losses: 2, ties: null, rank: null },
     });
     expect(
-      sortGames([weakerEarlier, strongerLater, liveBlowout], "watchability", "WNBA").map(
-        ({ id }) => id,
-      ),
+      sortGames([weakerEarlier, strongerLater, liveBlowout], "watchability").map(({ id }) => id),
     ).toEqual([50, 52, 51]);
     expect(
-      sortGames([strongerLater, liveBlowout, weakerEarlier], "ending_soon", "WNBA").map(
-        ({ id }) => id,
-      ),
+      sortGames([strongerLater, liveBlowout, weakerEarlier], "live_first").map(({ id }) => id),
+    ).toEqual([50, 51, 52]);
+    expect(
+      sortGames([strongerLater, liveBlowout, weakerEarlier], "ending_soon").map(({ id }) => id),
     ).toEqual([50, 51, 52]);
   });
 
-  it("forces chronological order for mixed competitions under All leagues", () => {
+  it("uses status-aware watchability for mixed competitions", () => {
     const laterLiveFootball = footballGame(60, {
       scheduled_start_time: "2026-09-06T20:00:00Z",
       status: "in_progress",
@@ -306,27 +301,29 @@ describe("sortGames", () => {
       scheduled_start_time: "2026-09-06T17:00:00Z",
     });
     expect(
-      sortGames([laterLiveFootball, earlierScheduledBaseball], "watchability", "all").map(
-        ({ id }) => id,
-      ),
+      sortGames([laterLiveFootball, earlierScheduledBaseball], "watchability").map(({ id }) => id),
+    ).toEqual([60, 61]);
+    expect(
+      sortGames([laterLiveFootball, earlierScheduledBaseball], "start_time").map(({ id }) => id),
     ).toEqual([61, 60]);
   });
-});
 
-describe("sort availability", () => {
-  it("supports every individual league and not All leagues", () => {
-    const competitions: Competition[] = [
-      "NBA",
-      "WNBA",
-      "NFL",
-      "FBS",
-      "MLB",
-      "MLS",
-      "LA_LIGA",
-      "PREMIER_LEAGUE",
-      "WORLD_CUP",
-    ];
-    expect(competitions.every(supportsGameSorting)).toBe(true);
-    expect(supportsGameSorting("all")).toBe(false);
+  it("compares normalized remaining game shares across sports", () => {
+    const lateFootball = footballGame(62, {
+      status: "in_progress",
+      period: 4,
+      clock: "02:00",
+    });
+    const lateBaseball = makeGame({
+      id: 63,
+      status: "in_progress",
+      period: 8,
+      clock: "Bottom 8th",
+      home_score: 4,
+      away_score: 3,
+    });
+    expect(sortGames([lateBaseball, lateFootball], "ending_soon").map(({ id }) => id)).toEqual([
+      62, 63,
+    ]);
   });
 });

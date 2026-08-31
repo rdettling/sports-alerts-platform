@@ -1,0 +1,100 @@
+.competition-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.competition-mark-image {
+  display: block;
+  object-fit: contain;
+}
+
+.game-score-competition-mark {
+  flex: 0 0 2.5rem;
+  justify-content: flex-start;
+  width: 2.5rem;
+  height: 1.125rem;
+}
+
+.game-score-competition-mark .competition-mark-image {
+  width: auto;
+  max-width: 2.5rem;
+  max-height: 1.125rem;
+}
+
+.game-score-competition-mark .competition-nba {
+  max-width: 0.875rem;
+}
+
+.game-score-competition-mark .competition-wnba,
+.game-score-competition-mark .competition-mls,
+.game-score-competition-mark .competition-la_liga,
+.game-score-competition-mark .competition-premier_league,
+.game-score-competition-mark .competition-world_cup {
+  max-width: 1.125rem;
+}
+
+.game-score-competition-mark .competition-mark-fallback {
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.league-visibility-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.league-visibility-mark .competition-mark-image {
+  width: 32px;
+  height: 32px;
+}
+
+.league-visibility-mark .competition-nba {
+  width: 26px;
+}
+
+.league-visibility-mark .competition-mlb {
+  width: 36px;
+}
+
+.league-visibility-mark .competition-mls,
+.league-visibility-mark .competition-la_liga,
+.league-visibility-mark .competition-premier_league,
+.league-visibility-mark .competition-world_cup {
+  width: 28px;
+  height: 28px;
+}
+
+.league-visibility-mark .competition-mark-fallback,
+.admin-competition-setting-mark .competition-mark-fallback {
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.admin-competition-setting-mark {
+  flex: 0 0 auto;
+  width: 1.875rem;
+  height: 1.875rem;
+}
+
+.admin-competition-setting-mark .competition-mark-image {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.admin-competition-setting-mark .competition-mlb {
+  width: 1.55rem;
+}
+
+.admin-competition-setting-mark .competition-mls,
+.admin-competition-setting-mark .competition-la_liga,
+.admin-competition-setting-mark .competition-premier_league,
+.admin-competition-setting-mark .competition-world_cup {
+  width: 1.2rem;
+  height: 1.2rem;
+}

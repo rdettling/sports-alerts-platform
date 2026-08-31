@@ -89,8 +89,40 @@ describe("GameScoreRow", () => {
       />,
     );
 
-    expect(screen.getByText("Atlanta Hawks").parentElement?.querySelector("span")).toBeNull();
-    expect(screen.getByText("Boston Celtics").parentElement?.querySelector("span")).toBeNull();
+    expect(
+      screen
+        .getByText("Atlanta Hawks")
+        .closest(".game-score-team-copy")
+        ?.querySelector(":scope > span"),
+    ).toBeNull();
+    expect(
+      screen
+        .getByText("Boston Celtics")
+        .closest(".game-score-team-copy")
+        ?.querySelector(":scope > span"),
+    ).toBeNull();
+  });
+
+  it("shows an FBS poll rank immediately before the team name", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({
+          competition: "FBS",
+          home_team_strength: { wins: 8, losses: 1, ties: 0, rank: 3 },
+          away_team_strength: { wins: 6, losses: 3, ties: 0, rank: null },
+        })}
+        sport="football"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="7:00 PM"
+      />,
+    );
+
+    const homeName = screen.getByText("Boston Celtics");
+    expect(homeName.parentElement).toHaveTextContent("#3Boston Celtics");
+    expect(screen.getByText("#3")).toHaveClass("game-score-team-rank");
+    expect(screen.queryByText("#6")).toBeNull();
   });
 
   it("shows follow action for unfollowed non-final games", () => {
@@ -519,7 +551,7 @@ describe("GameScoreRow", () => {
     expect(screen.queryByText("Draw")).not.toBeInTheDocument();
   });
 
-  it("shows FBS team logos from the NCAA catalog", () => {
+  it("shows the FBS competition mark and team logos from the NCAA catalog", () => {
     render(
       <GameScoreRow
         game={makeGame({ competition: "FBS" })}
@@ -545,7 +577,10 @@ describe("GameScoreRow", () => {
       />,
     );
 
-    expect(screen.getByText("FBS")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "FBS logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
+    );
     expect(screen.getByRole("img", { name: "Alabama Crimson Tide logo" })).toHaveAttribute(
       "src",
       "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png",

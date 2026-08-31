@@ -72,11 +72,28 @@ describe("CompetitionVisibilityModal", () => {
     const client = renderModal();
 
     expect(screen.getByRole("status")).toHaveTextContent("Loading leagues...");
-    expect(await screen.findByRole("dialog", { name: "Leagues shown" })).toHaveTextContent(
-      "does not change your follows or alerts",
+    const dialog = await screen.findByRole("dialog", { name: "Choose leagues" });
+    expect(dialog).toHaveTextContent("Your follows and alerts won’t change");
+    const nbaCheckbox = await screen.findByRole("checkbox", { name: "NBA" });
+    const nbaTile = nbaCheckbox.closest("label");
+    expect(nbaTile).toHaveClass("selected");
+    expect(nbaTile).toHaveTextContent("Basketball");
+    expect(nbaTile?.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg",
     );
-    fireEvent.click(await screen.findByRole("checkbox", { name: "NBA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const fbsTile = screen.getByRole("checkbox", { name: "College Football" }).closest("label");
+    expect(fbsTile).toHaveTextContent("Football");
+    expect(fbsTile?.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
+    );
+
+    fireEvent.click(nbaTile!);
+    expect(nbaCheckbox).not.toBeChecked();
+    expect(nbaTile).not.toHaveClass("selected");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(apiMocks.updateCompetitionVisibility).toHaveBeenCalledWith("token", ["WNBA", "NBA"]),
@@ -87,17 +104,17 @@ describe("CompetitionVisibilityModal", () => {
     });
   });
 
-  it("supports show all, cancel, Escape, and mutation errors", async () => {
+  it("supports select all, cancel, Escape, and mutation errors", async () => {
     apiMocks.updateCompetitionVisibility.mockRejectedValueOnce(new Error("Could not save"));
     renderModal();
     fireEvent.click(await screen.findByRole("checkbox", { name: "NBA" }));
-    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
 
     expect(screen.getByRole("checkbox", { name: "NBA" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "College Football" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not save");
 
     fireEvent.keyDown(window, { key: "Escape" });
@@ -105,8 +122,36 @@ describe("CompetitionVisibilityModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open leagues" }));
     await screen.findByRole("checkbox", { name: "NBA" });
+    fireEvent.click(screen.getByRole("button", { name: "Close league selector" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open leagues" }));
+    await screen.findByRole("checkbox", { name: "NBA" });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("disables every modal action while saving", async () => {
+    let resolveUpdate: (() => void) | undefined;
+    apiMocks.updateCompetitionVisibility.mockImplementation(
+      (_token: string, hidden_competitions: string[]) =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve;
+        }).then(() => ({ hidden_competitions })),
+    );
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "NBA" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close league selector" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Select all" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "NBA" })).toBeDisabled();
+
+    resolveUpdate?.();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("shows query failures and retries both preference dependencies", async () => {

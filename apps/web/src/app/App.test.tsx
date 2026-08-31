@@ -36,16 +36,12 @@ describe("App page metadata", () => {
   it("uses the games metadata for the root page", async () => {
     renderPath("/");
 
-    await waitFor(() =>
-      expect(document.title).toBe("Live Game Alerts | Live Sports Scores & Email and Push Alerts"),
-    );
+    await waitFor(() => expect(document.title).toBe("Live Game Alerts"));
     expect(metaContent('meta[name="description"]')).toBe(
       "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup games.",
     );
     expect(metaContent('meta[name="robots"]')).toBe("index, follow");
-    expect(metaContent('meta[property="og:title"]')).toBe(
-      "Live Game Alerts | Live Sports Scores & Email and Push Alerts",
-    );
+    expect(metaContent('meta[property="og:title"]')).toBe("Live Game Alerts");
     expect(metaContent('meta[property="og:url"]')).toBe("https://livegamealerts.com/");
     expect(document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')?.href).toBe(
       "https://livegamealerts.com/",
@@ -55,7 +51,7 @@ describe("App page metadata", () => {
   it("uses distinct metadata for the public teams page", async () => {
     renderPath("/teams");
 
-    await waitFor(() => expect(document.title).toBe("Sports Teams | Live Game Alerts"));
+    await waitFor(() => expect(document.title).toBe("Teams | Live Game Alerts"));
     expect(metaContent('meta[name="description"]')).toContain(
       "Browse NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League",
     );
@@ -66,13 +62,17 @@ describe("App page metadata", () => {
     );
   });
 
-  it.each(["/auth", "/alerts", "/admin", "/missing"])(
-    "prevents indexing of %s",
-    async (pathname) => {
-      renderPath(pathname);
+  it.each([
+    ["/auth", "Sign in | Live Game Alerts"],
+    ["/alerts", "Alerts | Live Game Alerts"],
+    ["/admin", "Admin | Live Game Alerts"],
+    ["/missing", "Live Game Alerts"],
+  ])("uses a concise title and prevents indexing of %s", async (pathname, title) => {
+    renderPath(pathname);
 
-      await waitFor(() => expect(metaContent('meta[name="robots"]')).toBe("noindex, nofollow"));
-      expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
-    },
-  );
+    await waitFor(() => expect(document.title).toBe(title));
+    await waitFor(() => expect(metaContent('meta[name="robots"]')).toBe("noindex, nofollow"));
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+    expect(metaContent('meta[property="og:url"]')).toBeUndefined();
+  });
 });

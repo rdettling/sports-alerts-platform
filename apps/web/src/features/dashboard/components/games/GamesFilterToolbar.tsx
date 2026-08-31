@@ -4,9 +4,9 @@ import { type Competition, type CompetitionSetting } from "../../../../shared/ap
 import { CompetitionTabs, ConferenceSelect, ScopeToggle } from "../DashboardFilters";
 import {
   type DayOption,
+  GAME_SORT_OPTIONS,
   type GameSortMode,
   localDateKey,
-  supportsGameSorting,
 } from "./games-view-utils";
 
 export function GamesFilterToolbar({
@@ -49,11 +49,9 @@ export function GamesFilterToolbar({
     selectedDayIndex >= 0 && selectedDayIndex < dayOptions.length - 1
       ? dayOptions[selectedDayIndex + 1]
       : null;
-  const showSort = supportsGameSorting(competitionFilter);
-
   return (
     <section
-      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""} ${showSort ? "with-sort" : ""}`.trim()}
+      className={`filter-toolbar games-filter-toolbar ${showScopeFilter ? "" : "without-scope"} ${competitionFilter === "FBS" ? "with-conference" : ""} with-sort`.trim()}
       aria-label="Game filters"
     >
       {showScopeFilter ? (
@@ -81,7 +79,7 @@ export function GamesFilterToolbar({
           onChange={onConferenceFilterChange}
         />
       ) : null}
-      <div className={`games-order-controls ${showSort ? "with-sort" : ""}`.trim()}>
+      <div className="games-order-controls with-sort">
         <div className="games-date-filter" role="group" aria-label="Game date">
           <button
             className="games-date-step"
@@ -116,18 +114,18 @@ export function GamesFilterToolbar({
             ›
           </button>
         </div>
-        {showSort ? (
-          <select
-            className="games-sort-select"
-            aria-label="Game sort"
-            value={sortMode}
-            onChange={(event) => onSortModeChange(event.target.value as GameSortMode)}
-          >
-            <option value="start_time">Start time</option>
-            <option value="ending_soon">Ending soon</option>
-            <option value="watchability">Watchability</option>
-          </select>
-        ) : null}
+        <select
+          className="games-sort-select"
+          aria-label="Game sort"
+          value={sortMode}
+          onChange={(event) => onSortModeChange(event.target.value as GameSortMode)}
+        >
+          {GAME_SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
     </section>
   );

@@ -2,19 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { type Competition, updateCompetitionVisibility } from "../../../shared/api";
-import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import { CompetitionMark } from "../../../shared/components/CompetitionMark";
+import { SPORT_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import {
   competitionVisibilityQueryOptions,
   competitionsQueryOptions,
   dashboardQueryKeys,
 } from "../hooks/dashboard-query-options";
-
-const SPORT_LABELS = {
-  basketball: "Basketball",
-  football: "Football",
-  baseball: "Baseball",
-  soccer: "Soccer",
-} as const;
 
 function setsMatch(left: Set<Competition>, right: Set<Competition>) {
   return left.size === right.size && [...left].every((competition) => right.has(competition));
@@ -48,14 +42,6 @@ export function CompetitionVisibilityModal({
     () => new Set<Competition>(visibility?.hidden_competitions ?? []),
     [visibility?.hidden_competitions],
   );
-  const competitionGroups = useMemo(() => {
-    const groups = new Map<(typeof competitions)[number]["sport"], typeof competitions>();
-    competitions.forEach((competition) => {
-      groups.set(competition.sport, [...(groups.get(competition.sport) ?? []), competition]);
-    });
-    return [...groups.entries()];
-  }, [competitions]);
-
   const mutation = useMutation({
     mutationFn: (hiddenCompetitions: Competition[]) =>
       updateCompetitionVisibility(token, hiddenCompetitions),
@@ -111,100 +97,116 @@ export function CompetitionVisibilityModal({
       <section className="overlay-card league-visibility-modal">
         <header className="overlay-card-header">
           <div>
-            <h4 id="league-visibility-title">Leagues shown</h4>
+            <h4 id="league-visibility-title">Choose leagues</h4>
             <p id="league-visibility-description" className="muted">
-              Choose which leagues appear in Games and Teams. Hiding a league does not change your
-              follows or alerts.
+              Select the leagues you want to see in Games and Teams. Your follows and alerts won’t
+              change.
             </p>
           </div>
           <button
-            className="btn btn-secondary"
+            className="league-visibility-close"
             type="button"
+            aria-label="Close league selector"
             disabled={mutation.isPending}
             onClick={onClose}
           >
-            Close
+            <span aria-hidden>×</span>
           </button>
         </header>
 
-        {!isReady && !queryError ? (
-          <p className="muted view-feedback" role="status">
-            Loading leagues...
-          </p>
-        ) : null}
-
-        {!isReady && queryError ? (
-          <div className="view-feedback league-visibility-load-error">
-            <p className="error" role="alert">
-              {messageFromUnknown(queryError)}
+        <div className="league-visibility-body">
+          {!isReady && !queryError ? (
+            <p className="muted view-feedback league-visibility-loading" role="status">
+              Loading leagues...
             </p>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                void Promise.all([competitionsQuery.refetch(), visibilityQuery.refetch()]);
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        ) : null}
+          ) : null}
 
-        {isReady ? (
-          <>
-            <div className="league-visibility-groups">
-              {competitionGroups.map(([sport, items]) => (
-                <fieldset className="league-visibility-group" key={sport}>
-                  <legend>{SPORT_LABELS[sport]}</legend>
-                  {items.map(({ competition, label }) => (
-                    <label className="league-visibility-option" key={competition}>
+          {!isReady && queryError ? (
+            <div className="view-feedback league-visibility-load-error">
+              <p className="error" role="alert">
+                {messageFromUnknown(queryError)}
+              </p>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => {
+                  void Promise.all([competitionsQuery.refetch(), visibilityQuery.refetch()]);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+
+          {isReady ? (
+            <>
+              <div className="league-visibility-grid">
+                {competitions.map(({ competition, label, sport }) => {
+                  const isVisible = !draftHidden.has(competition);
+                  return (
+                    <label
+                      className={`league-visibility-option ${isVisible ? "selected" : ""}`.trim()}
+                      key={competition}
+                    >
+                      <CompetitionMark
+                        competition={competition}
+                        className="league-visibility-mark"
+                        decorative
+                      />
+                      <span className="league-visibility-copy">
+                        <strong>{label}</strong>
+                        <span>{SPORT_LABELS[sport]}</span>
+                      </span>
                       <input
                         type="checkbox"
-                        checked={!draftHidden.has(competition)}
+                        aria-label={label}
+                        checked={isVisible}
                         disabled={mutation.isPending}
                         onChange={() => toggleCompetition(competition)}
                       />
-                      <span>{label}</span>
                     </label>
-                  ))}
-                </fieldset>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
 
-            {error ? (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <footer className="league-visibility-actions">
+              {error ? (
+                <p className="error league-visibility-save-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        {isReady ? (
+          <footer className="league-visibility-actions">
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={mutation.isPending}
+              onClick={showAllActive}
+            >
+              Select all
+            </button>
+            <div>
               <button
                 className="btn btn-secondary"
                 type="button"
                 disabled={mutation.isPending}
-                onClick={showAllActive}
+                onClick={onClose}
               >
-                Show all
+                Cancel
               </button>
-              <div>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={mutation.isPending}
-                  onClick={onClose}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={!isDirty || mutation.isPending}
-                  onClick={() => mutation.mutate([...draftHidden])}
-                >
-                  {mutation.isPending ? "Saving..." : "Save"}
-                </button>
-              </div>
-            </footer>
-          </>
+              <button
+                className="btn"
+                type="button"
+                disabled={!isDirty || mutation.isPending}
+                onClick={() => mutation.mutate([...draftHidden])}
+              >
+                {mutation.isPending ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </footer>
         ) : null}
       </section>
     </div>

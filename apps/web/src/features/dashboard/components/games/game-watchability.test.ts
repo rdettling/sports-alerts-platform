@@ -175,24 +175,24 @@ describe("football watchability calibration", () => {
       [liveGame(107, 1, "12:00", 0), liveGame(108, 4, "05:00", 17, true), 107],
     ];
     choices.forEach(([a, b, expectedId]) => {
-      expect(sortGames([a, b], "watchability", "NFL")[0].id).toBe(expectedId);
+      expect(sortGames([a, b], "watchability")[0].id).toBe(expectedId);
     });
   });
 
   it("prefers two strong scheduled teams and ignores kickoff proximity", () => {
     const firstVsTwentyFifth = rankedGame(109, 1, 25, "2026-09-06T17:00:00Z");
     const tenthVsEleventh = rankedGame(110, 10, 11, "2026-09-06T17:00:00Z");
-    expect(sortGames([firstVsTwentyFifth, tenthVsEleventh], "watchability", "FBS")[0].id).toBe(110);
+    expect(sortGames([firstVsTwentyFifth, tenthVsEleventh], "watchability")[0].id).toBe(110);
 
     const strongerLater = rankedGame(113, 2, 4, "2026-09-06T21:00:00Z");
     const weakerSooner = rankedGame(114, 15, 18, "2026-09-06T17:10:00Z");
-    expect(sortGames([weakerSooner, strongerLater], "watchability", "FBS")[0].id).toBe(113);
+    expect(sortGames([weakerSooner, strongerLater], "watchability")[0].id).toBe(113);
 
     const identicalLater = rankedGame(115, 8, 9, "2026-09-06T21:00:00Z");
     const identicalSooner = rankedGame(116, 8, 9, "2026-09-06T17:10:00Z");
     expect(
-      sortGames([identicalSooner, identicalLater], "watchability", "FBS").map(({ id }) => id),
-    ).toEqual([115, 116]);
+      sortGames([identicalSooner, identicalLater], "watchability").map(({ id }) => id),
+    ).toEqual([116, 115]);
   });
 
   it("prefers two 9-1 teams over an undefeated mismatch", () => {
@@ -208,9 +208,7 @@ describe("football watchability calibration", () => {
       home_team_strength: { wins: 10, losses: 0, ties: 0, rank: null },
       away_team_strength: { wins: 4, losses: 6, ties: 0, rank: null },
     });
-    expect(sortGames([undefeatedMismatch, twoNineAndOneTeams], "watchability", "NFL")[0].id).toBe(
-      111,
-    );
+    expect(sortGames([undefeatedMismatch, twoNineAndOneTeams], "watchability")[0].id).toBe(111);
   });
 });
 
@@ -406,20 +404,18 @@ describe("basketball watchability calibration", () => {
       [liveGame(209, 4, "0:30", 3), liveGame(210, 5, "5:00", 0), 209],
     ];
     choices.forEach(([a, b, expectedId]) => {
-      expect(sortGames([a, b], "watchability", "NBA")[0].id).toBe(expectedId);
+      expect(sortGames([a, b], "watchability")[0].id).toBe(expectedId);
     });
   });
 
   it("prefers balanced strength for scheduled games", () => {
     const twoStrongTeams = scheduledGame(211, 0.8, 0.8);
     const superstarMismatch = scheduledGame(212, 0.95, 0.6);
-    expect(sortGames([superstarMismatch, twoStrongTeams], "watchability", "NBA")[0].id).toBe(211);
+    expect(sortGames([superstarMismatch, twoStrongTeams], "watchability")[0].id).toBe(211);
 
     const twoBalancedTeams = scheduledGame(213, 0.65, 0.65);
     const sameAverageMismatch = scheduledGame(214, 0.8, 0.5);
-    expect(sortGames([sameAverageMismatch, twoBalancedTeams], "watchability", "NBA")[0].id).toBe(
-      213,
-    );
+    expect(sortGames([sameAverageMismatch, twoBalancedTeams], "watchability")[0].id).toBe(213);
   });
 });
 
@@ -518,22 +514,18 @@ describe("soccer watchability calibration", () => {
       [liveGame(309, 2, "88'", 1, strongStrength), liveGame(310, 5, null, 0), 310],
     ];
     choices.forEach(([a, b, expectedId]) => {
-      expect(sortGames([a, b], "watchability", "PREMIER_LEAGUE")[0].id).toBe(expectedId);
+      expect(sortGames([a, b], "watchability")[0].id).toBe(expectedId);
     });
   });
 
   it("uses the shared balanced-strength rule for scheduled games", () => {
     const twoEliteTeams = scheduledGame(311, 0.8, 0.8);
     const eliteMismatch = scheduledGame(312, 0.95, 0.65);
-    expect(sortGames([eliteMismatch, twoEliteTeams], "watchability", "PREMIER_LEAGUE")[0].id).toBe(
-      311,
-    );
+    expect(sortGames([eliteMismatch, twoEliteTeams], "watchability")[0].id).toBe(311);
 
     const twoBalancedTeams = scheduledGame(313, 0.65, 0.65);
     const averageMismatch = scheduledGame(314, 0.8, 0.5);
-    expect(
-      sortGames([averageMismatch, twoBalancedTeams], "watchability", "PREMIER_LEAGUE")[0].id,
-    ).toBe(313);
+    expect(sortGames([averageMismatch, twoBalancedTeams], "watchability")[0].id).toBe(313);
   });
 });
 

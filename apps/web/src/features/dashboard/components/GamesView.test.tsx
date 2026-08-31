@@ -534,43 +534,43 @@ describe("GamesView", () => {
     expect(screen.getByRole("option", { name: "Today (1)" })).toBeInTheDocument();
   });
 
-  it("retains unified sorting between leagues and resets it for All competitions", async () => {
+  it("defaults to live first and retains sorting across competition filters", async () => {
     vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
     render(<GamesView token="token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />, {
       wrapper,
     });
 
-    expect(screen.queryByRole("combobox", { name: "Game sort" })).toBeNull();
+    const sort = await screen.findByRole("combobox", { name: "Game sort" });
+    expect(sort).toHaveValue("live_first");
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
 
-    const sort = screen.getByRole("combobox", { name: "Game sort" });
     const cardOrder = () =>
       screen
         .getAllByRole("listitem")
         .map((item) => item.querySelector(".game-score-context")?.textContent);
 
-    expect(sort).toHaveValue("start_time");
+    expect(sort).toHaveValue("live_first");
     expect(cardOrder()).toEqual([
-      "Final game",
-      "Late blowout",
       "Close late",
       "Tied early",
+      "Late blowout",
       "Upcoming",
+      "Final game",
     ]);
 
-    fireEvent.change(sort, { target: { value: "watchability" } });
+    fireEvent.change(sort, { target: { value: "start_time" } });
     expect(cardOrder()).toEqual([
+      "Final game",
+      "Late blowout",
       "Close late",
       "Tied early",
-      "Late blowout",
       "Upcoming",
-      "Final game",
     ]);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Conference" }), {
       target: { value: "SEC" },
     });
-    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("watchability");
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("start_time");
     fireEvent.change(screen.getByRole("combobox", { name: "Conference" }), {
       target: { value: "all" },
     });
@@ -592,9 +592,9 @@ describe("GamesView", () => {
     expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("ending_soon");
 
     fireEvent.click(screen.getByRole("button", { name: "All competitions" }));
-    expect(screen.queryByRole("combobox", { name: "Game sort" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("ending_soon");
     fireEvent.click(screen.getByRole("button", { name: "College Football" }));
-    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("start_time");
+    expect(screen.getByRole("combobox", { name: "Game sort" })).toHaveValue("ending_soon");
   });
 
   it("offers MLB sorting by inning progress and baseball watchability", async () => {
@@ -610,18 +610,18 @@ describe("GamesView", () => {
         .getAllByRole("listitem")
         .map((item) => item.querySelector(".game-score-context")?.textContent);
 
-    expect(sort).toHaveValue("start_time");
+    expect(sort).toHaveValue("live_first");
     expect(cardOrder()).toEqual([
-      "Baseball late blowout",
       "Baseball close late",
       "Baseball tied early",
+      "Baseball late blowout",
     ]);
 
-    fireEvent.change(sort, { target: { value: "watchability" } });
+    fireEvent.change(sort, { target: { value: "start_time" } });
     expect(cardOrder()).toEqual([
+      "Baseball late blowout",
       "Baseball close late",
       "Baseball tied early",
-      "Baseball late blowout",
     ]);
 
     fireEvent.change(sort, { target: { value: "ending_soon" } });

@@ -157,43 +157,6 @@
   gap: 0.125rem;
 }
 
-.game-score-competition-mark {
-  flex: 0 0 2.5rem;
-  width: 2.5rem;
-  height: 1.125rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.game-score-competition-logo {
-  display: block;
-  width: auto;
-  max-width: 2.5rem;
-  max-height: 1.125rem;
-  object-fit: contain;
-}
-
-.game-score-competition-logo.competition-nba {
-  max-width: 0.875rem;
-}
-
-.game-score-competition-logo.competition-wnba,
-.game-score-competition-logo.competition-mls,
-.game-score-competition-logo.competition-la_liga,
-.game-score-competition-logo.competition-premier_competition,
-.game-score-competition-logo.competition-world_cup {
-  max-width: 1.125rem;
-}
-
-.game-score-competition-fallback {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-  font-size: 0.65rem;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-}
-
 .game-score-context {
   min-width: 0;
   overflow: hidden;
@@ -357,12 +320,28 @@
 }
 
 .game-score-team-copy strong {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
   min-width: 0;
   overflow: hidden;
   font-size: 0.875rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.game-score-team-rank {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-score-team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .game-score-team-copy > span {

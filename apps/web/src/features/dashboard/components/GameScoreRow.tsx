@@ -1,6 +1,6 @@
 import { type Game, type Sport, type Team } from "../../../shared/api";
+import { CompetitionMark } from "../../../shared/components/CompetitionMark";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
-import { competitionBadgeLabel, competitionLogoUrl } from "../../../shared/lib/dashboard-ui";
 import {
   drawOdds,
   formatMoneyline,
@@ -53,8 +53,6 @@ export function GameScoreRow({
     : game.odds
       ? formatMoneyline(oddsOutcomeByTeamSide(game, "home"))
       : "—";
-  const competition = competitionBadgeLabel(game.competition);
-  const logoUrl = competitionLogoUrl(game.competition);
   const broadcastText = game.broadcast_names.join(", ");
   const primaryBroadcast = game.broadcast_names[0];
   const additionalBroadcastCount = game.broadcast_names.length - 1;
@@ -78,17 +76,7 @@ export function GameScoreRow({
     >
       <div className="game-score-header">
         <div className="game-score-meta">
-          {logoUrl ? (
-            <span className="game-score-competition-mark" aria-label={`${competition} competition`}>
-              <img
-                src={logoUrl}
-                alt={`${competition} logo`}
-                className={`game-score-competition-logo competition-${game.competition.toLowerCase()}`}
-              />
-            </span>
-          ) : (
-            <span className="game-score-competition-fallback">{competition}</span>
-          )}
+          <CompetitionMark competition={game.competition} className="game-score-competition-mark" />
           {game.context_label ? (
             <span className="game-score-context" title={game.context_label}>
               {game.context_label}
@@ -165,7 +153,12 @@ export function GameScoreRow({
         <div className={`game-score-team ${awayWon ? "winner" : homeWon ? "loser" : ""}`.trim()}>
           <TeamLogo team={away} size={28} />
           <span className="game-score-team-copy">
-            <strong title={away.name}>{away.name}</strong>
+            <strong title={away.name}>
+              {game.away_team_strength.rank !== null ? (
+                <span className="game-score-team-rank">#{game.away_team_strength.rank}</span>
+              ) : null}
+              <span className="game-score-team-name">{away.name}</span>
+            </strong>
             {awayRecord ? <span>{awayRecord}</span> : null}
           </span>
           <span className="game-score-value">{awayValueText}</span>
@@ -173,7 +166,12 @@ export function GameScoreRow({
         <div className={`game-score-team ${homeWon ? "winner" : awayWon ? "loser" : ""}`.trim()}>
           <TeamLogo team={home} size={28} />
           <span className="game-score-team-copy">
-            <strong title={home.name}>{home.name}</strong>
+            <strong title={home.name}>
+              {game.home_team_strength.rank !== null ? (
+                <span className="game-score-team-rank">#{game.home_team_strength.rank}</span>
+              ) : null}
+              <span className="game-score-team-name">{home.name}</span>
+            </strong>
             {homeRecord ? <span>{homeRecord}</span> : null}
           </span>
           <span className="game-score-value">{homeValueText}</span>

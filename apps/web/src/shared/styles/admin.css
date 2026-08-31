@@ -268,39 +268,6 @@
   min-width: 0;
 }
 
-.admin-competition-setting-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 1.875rem;
-  height: 1.875rem;
-}
-
-.admin-competition-setting-logo {
-  width: 1.35rem;
-  height: 1.35rem;
-  object-fit: contain;
-}
-
-.admin-competition-setting-logo.competition-mlb {
-  width: 1.55rem;
-}
-
-.admin-competition-setting-logo.competition-mls,
-.admin-competition-setting-logo.competition-la_liga,
-.admin-competition-setting-logo.competition-premier_competition,
-.admin-competition-setting-logo.competition-world_cup {
-  width: 1.2rem;
-  height: 1.2rem;
-}
-
-.admin-competition-setting-fallback {
-  color: var(--accent);
-  font-size: 0.7rem;
-  font-weight: 750;
-}
-
 .admin-competition-setting-copy {
   display: grid;
   gap: 0.05rem;

@@ -2,11 +2,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { type CompetitionSetting, updateOpsCompetitionSetting } from "../../../../shared/api";
-import {
-  competitionBadgeLabel,
-  competitionLogoUrl,
-  messageFromUnknown,
-} from "../../../../shared/lib/dashboard-ui";
+import { CompetitionMark } from "../../../../shared/components/CompetitionMark";
+import { messageFromUnknown } from "../../../../shared/lib/dashboard-ui";
 import { dashboardQueryKeys } from "../../hooks/dashboard-query-options";
 
 function formatSyncCadence(seconds: number): string {
@@ -60,7 +57,6 @@ export function AdminCompetitionSettingsPanel({
         {items.map((item) => {
           const busy =
             toggleMutation.isPending && toggleMutation.variables?.competition === item.competition;
-          const logoUrl = competitionLogoUrl(item.competition);
           return (
             <button
               key={item.competition}
@@ -76,19 +72,11 @@ export function AdminCompetitionSettingsPanel({
               }
             >
               <span className="admin-competition-setting-main">
-                <span className="admin-competition-setting-mark" aria-hidden>
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt=""
-                      className={`admin-competition-setting-logo competition-${item.competition.toLowerCase()}`.trim()}
-                    />
-                  ) : (
-                    <span className="admin-competition-setting-fallback">
-                      {competitionBadgeLabel(item.competition)}
-                    </span>
-                  )}
-                </span>
+                <CompetitionMark
+                  competition={item.competition}
+                  className="admin-competition-setting-mark"
+                  decorative
+                />
                 <span className="admin-competition-setting-copy">
                   <strong>{item.label}</strong>
                   <span>

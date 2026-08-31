@@ -1,17 +1,20 @@
 import { type Competition, type Game } from "../../../../shared/api";
 import {
-  liveGameRemaining,
+  liveGameRemainingShare,
   liveGameStagePriority,
   liveWatchabilityScore,
   pregameMatchupPriority,
 } from "./game-watchability";
 
 export type DayOption = { key: string; label: string; count: number };
-export type GameSortMode = "start_time" | "ending_soon" | "watchability";
-
-export function supportsGameSorting(competition: "all" | Competition): competition is Competition {
-  return competition !== "all";
-}
+export const GAME_SORT_OPTIONS = [
+  { value: "live_first", label: "Live first" },
+  { value: "start_time", label: "Start time" },
+  { value: "ending_soon", label: "Ending soon" },
+  { value: "watchability", label: "Watchability" },
+] as const;
+export type GameSortMode = (typeof GAME_SORT_OPTIONS)[number]["value"];
+export const DEFAULT_GAME_SORT_MODE: GameSortMode = GAME_SORT_OPTIONS[0].value;
 
 export function localDateKey(dateIso: string): string {
   const value = new Date(dateIso);
@@ -76,24 +79,20 @@ export function resolveSelectedDay(
   return dayOptions.find((day) => day.key > todayKey)?.key ?? dayOptions[dayOptions.length - 1].key;
 }
 
-export function sortGames(
-  games: Game[],
-  mode: GameSortMode,
-  competitionFilter: "all" | Competition,
-): Game[] {
-  if (mode === "start_time" || competitionFilter === "all") return sortGamesByStart(games);
+export function sortGames(games: Game[], mode: GameSortMode): Game[] {
+  if (mode === "start_time") return sortGamesByStart(games);
 
   return [...games].sort((a, b) => {
     const statusDifference = gameSortStatusRank(a) - gameSortStatusRank(b);
     if (statusDifference !== 0) return statusDifference;
 
     if (isLiveGame(a) && isLiveGame(b)) {
-      const aRemaining = liveGameRemaining(a);
-      const bRemaining = liveGameRemaining(b);
+      const aRemaining = liveGameRemainingShare(a);
+      const bRemaining = liveGameRemainingShare(b);
       const aWatchability = liveWatchabilityScore(a);
       const bWatchability = liveWatchabilityScore(b);
 
-      if (mode === "watchability") {
+      if (mode === "live_first" || mode === "watchability") {
         const watchabilityDifference = compareNullableDescending(aWatchability, bWatchability);
         if (watchabilityDifference !== 0) return watchabilityDifference;
         const stageDifference = liveGameStagePriority(b) - liveGameStagePriority(a);
@@ -110,7 +109,8 @@ export function sortGames(
 
     if (mode === "watchability" && a.status === "scheduled" && b.status === "scheduled") {
       const matchupDifference = pregameMatchupPriority(b) - pregameMatchupPriority(a);
-      return matchupDifference || a.id - b.id;
+      if (matchupDifference !== 0) return matchupDifference;
+      return compareKickoffAscending(a, b);
     }
 
     return isFinalGame(a) && isFinalGame(b)

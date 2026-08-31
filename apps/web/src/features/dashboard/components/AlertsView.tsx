@@ -9,7 +9,11 @@ import {
   type AlertPreferenceGroup,
   type Sport,
 } from "../../../shared/api";
-import { PREFERENCE_LABELS, messageFromUnknown } from "../../../shared/lib/dashboard-ui";
+import {
+  PREFERENCE_LABELS,
+  SPORT_LABELS,
+  messageFromUnknown,
+} from "../../../shared/lib/dashboard-ui";
 import { CompetitionTabs } from "./DashboardFilters";
 import { AlertDeliverySettings } from "./alerts/AlertDeliverySettings";
 import { AlertRuleCard } from "./alerts/AlertRuleCard";
@@ -18,13 +22,6 @@ import {
   getRuleFieldValue,
   ruleFieldsFor,
 } from "./alerts/alert-rule-config";
-
-const SPORT_LABELS: Record<Sport, string> = {
-  basketball: "Basketball",
-  football: "Football",
-  baseball: "Baseball",
-  soccer: "Soccer",
-};
 
 function localDayKey(dateIso: string): string {
   const date = new Date(dateIso);
