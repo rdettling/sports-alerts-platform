@@ -1,4 +1,4 @@
-import { type Game, type Sport, type Team } from "../../../shared/api";
+import { type Game, type GameTeam, type Sport, type Team } from "../../../shared/api";
 import { CompetitionMark } from "../../../shared/components/CompetitionMark";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
 import {
@@ -14,8 +14,8 @@ type GameStateTone = "scheduled" | "live" | "final" | "postponed";
 type GameScoreRowProps = {
   game: Game;
   sport: Sport;
-  home: Team;
-  away: Team;
+  home: GameTeam | Team;
+  away: GameTeam | Team;
   isFollowed: boolean;
   statusLabel: string;
   actionsDisabled?: boolean;
@@ -151,7 +151,7 @@ export function GameScoreRow({
 
       <div className="game-score-matchup">
         <div className={`game-score-team ${awayWon ? "winner" : homeWon ? "loser" : ""}`.trim()}>
-          <TeamLogo team={away} size={28} />
+          <TeamLogo team={away} competition={game.competition} size={28} />
           <span className="game-score-team-copy">
             <strong title={away.name}>
               {game.away_team_strength.rank !== null ? (
@@ -164,7 +164,7 @@ export function GameScoreRow({
           <span className="game-score-value">{awayValueText}</span>
         </div>
         <div className={`game-score-team ${homeWon ? "winner" : awayWon ? "loser" : ""}`.trim()}>
-          <TeamLogo team={home} size={28} />
+          <TeamLogo team={home} competition={game.competition} size={28} />
           <span className="game-score-team-copy">
             <strong title={home.name}>
               {game.home_team_strength.rank !== null ? (

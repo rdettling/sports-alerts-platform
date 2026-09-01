@@ -125,7 +125,6 @@ def _register_fbs_opponents(
                 )
                 db.add(team)
                 db.flush()
-            db.add(CompetitionTeam(competition="FBS", team_id=team.id))
             team_map[external_team_id] = team.id
             team_names[team.id] = team.name
     db.flush()
@@ -165,8 +164,14 @@ def _upsert_game(
         )
         return GameUpdateResult(did_update=False, game_id=None)
 
-    home_strength_changed = _update_team_strength(memberships[home_id], payload.home_team_strength)
-    away_strength_changed = _update_team_strength(memberships[away_id], payload.away_team_strength)
+    home_membership = memberships.get(home_id)
+    away_membership = memberships.get(away_id)
+    home_strength_changed = bool(
+        home_membership and _update_team_strength(home_membership, payload.home_team_strength)
+    )
+    away_strength_changed = bool(
+        away_membership and _update_team_strength(away_membership, payload.away_team_strength)
+    )
     strength_changed = home_strength_changed or away_strength_changed
     existing = db.scalar(
         select(Game).where(

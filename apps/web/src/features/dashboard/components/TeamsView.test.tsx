@@ -191,7 +191,7 @@ describe("TeamsView", () => {
     apiMocks.unfollowTeam.mockResolvedValue({ status: "ok" });
   });
 
-  it("defaults to one canonical all-teams directory with membership badges", async () => {
+  it("shows abbreviation and memberships as quiet inline metadata", async () => {
     renderTeamsView(null);
 
     expect(await screen.findByText("Boston Celtics")).toBeInTheDocument();
@@ -201,8 +201,8 @@ describe("TeamsView", () => {
     const directory = screen.getByRole("region", { name: "All teams" });
     expect(within(directory).getByText("6 teams")).toBeInTheDocument();
     expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Arsenal");
-    expect(within(directory).getByText("EPL")).toBeInTheDocument();
-    expect(within(directory).getAllByText("LALIGA")).toHaveLength(2);
+    expect(within(directory).getByText("ARS · EPL · LALIGA")).toBeInTheDocument();
+    expect(within(directory).getByText("RMA · LALIGA")).toBeInTheDocument();
   });
 
   it("filters by competition and keeps search text when filters change", async () => {
@@ -222,6 +222,15 @@ describe("TeamsView", () => {
     expect(screen.getByText("Boston Celtics")).toBeInTheDocument();
   });
 
+  it("omits the selected competition from team metadata", async () => {
+    renderTeamsView(null);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Premier League" }));
+
+    expect(screen.getByText("ARS · LALIGA")).toBeInTheDocument();
+    expect(screen.queryByText(/EPL/)).toBeNull();
+  });
+
   it("shows an authenticated Following scope with its count", async () => {
     apiMocks.listFollows.mockResolvedValue({ teams: [teams[1]], games: [] });
     renderTeamsView("token");
@@ -239,7 +248,7 @@ describe("TeamsView", () => {
     expect(screen.getByRole("region", { name: "All teams" })).toHaveTextContent("1 team");
   });
 
-  it("hides league-only teams while retaining visible memberships and badges", async () => {
+  it("hides league-only teams while retaining visible memberships", async () => {
     apiMocks.getCompetitionVisibility.mockResolvedValue({ hidden_competitions: ["LA_LIGA"] });
     apiMocks.listFollows.mockResolvedValue({ teams: [teams[4]], games: [] });
     renderTeamsView("token");
@@ -247,8 +256,8 @@ describe("TeamsView", () => {
     expect(await screen.findByText("Arsenal")).toBeInTheDocument();
     expect(screen.queryByText("Real Madrid")).toBeNull();
     expect(screen.queryByRole("button", { name: "La Liga" })).toBeNull();
-    expect(screen.getByText("EPL")).toBeInTheDocument();
-    expect(screen.queryByText("LALIGA")).toBeNull();
+    expect(screen.getByText("ARS · EPL")).toBeInTheDocument();
+    expect(screen.queryByText(/LALIGA/)).toBeNull();
     expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
   });
 
@@ -262,7 +271,7 @@ describe("TeamsView", () => {
     expect(await screen.findByText("Arsenal")).toBeInTheDocument();
     expect(screen.queryByText("Real Madrid")).toBeNull();
     expect(screen.queryByRole("button", { name: "La Liga" })).toBeNull();
-    expect(screen.queryByText("LALIGA")).toBeNull();
+    expect(screen.queryByText(/LALIGA/)).toBeNull();
     expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
   });
 
@@ -279,7 +288,7 @@ describe("TeamsView", () => {
     expect(screen.getByRole("button", { name: "Following 0" })).toBeInTheDocument();
   });
 
-  it("groups FBS teams into collapsible conferences and filters them", async () => {
+  it("shows FBS teams in one directory and filters them by conference", async () => {
     apiMocks.listTeams.mockResolvedValue([...teams, ...fbsTeams]);
     apiMocks.listCompetitions.mockResolvedValue([...competitions, fbsCompetition]);
     renderTeamsView(null);
@@ -294,24 +303,22 @@ describe("TeamsView", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["All conferences", "Big Ten", "SEC"]);
-    expect(screen.getByRole("button", { name: "Big Ten" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-    expect(screen.getByRole("button", { name: "SEC" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Alabama Crimson Tide")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "SEC" }));
+    const directory = screen.getByRole("region", { name: "College Football" });
+    expect(directory).toHaveTextContent("3 teams");
     expect(screen.getByText("Alabama Crimson Tide")).toBeInTheDocument();
     expect(screen.getByText("Auburn Tigers")).toBeInTheDocument();
-    expect(screen.queryByText("Michigan Wolverines")).toBeNull();
+    expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
+    expect(screen.getByText("ALA")).toBeInTheDocument();
+    expect(screen.getByText("AUB")).toBeInTheDocument();
+    expect(screen.queryByText(/FBS/)).toBeNull();
 
     fireEvent.change(conference, { target: { value: "Big Ten" } });
+    expect(screen.getByRole("region", { name: "College Football" })).toHaveTextContent("1 team");
     expect(screen.getByText("Michigan Wolverines")).toBeInTheDocument();
     expect(screen.queryByText("Alabama Crimson Tide")).toBeNull();
   });
 
-  it("surfaces followed FBS teams above collapsed conferences", async () => {
+  it("sorts followed FBS teams first in the flat directory", async () => {
     apiMocks.listTeams.mockResolvedValue([...teams, ...fbsTeams]);
     apiMocks.listCompetitions.mockResolvedValue([...competitions, fbsCompetition]);
     apiMocks.listFollows.mockResolvedValue({ teams: [fbsTeams[0]], games: [] });
@@ -319,10 +326,9 @@ describe("TeamsView", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "College Football" }));
 
-    expect(screen.getByRole("region", { name: "Following" })).toHaveTextContent(
-      "Alabama Crimson Tide",
-    );
-    expect(screen.getByRole("button", { name: "SEC" })).toHaveAttribute("aria-expanded", "false");
+    const directory = screen.getByRole("region", { name: "College Football" });
+    expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Alabama Crimson Tide");
+    expect(screen.queryByRole("region", { name: "Following" })).toBeNull();
   });
 
   it("returns to all teams if authentication disappears", async () => {
@@ -359,7 +365,9 @@ describe("TeamsView", () => {
     const directory = await screen.findByRole("region", { name: "All teams" });
     expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Boston Celtics");
 
-    fireEvent.click(screen.getByRole("button", { name: "Unfollow" }));
+    const followingAction = screen.getByRole("button", { name: /^Following$/ });
+    expect(followingAction).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(followingAction);
     await waitFor(() => expect(apiMocks.unfollowTeam).toHaveBeenCalledWith("token", 2));
     await waitFor(() => expect(screen.getByRole("button", { name: "Following 0" })).toBeVisible());
     expect(within(directory).getAllByRole("listitem")[0]).toHaveTextContent("Arsenal");
@@ -385,7 +393,7 @@ describe("TeamsView", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "Follow" }))[0]);
 
     await waitFor(() => expect(apiMocks.followTeam).toHaveBeenCalledWith("token", 6));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Unfollow" })).toBeVisible());
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Following$/ })).toBeVisible());
     expect(screen.getByRole("button", { name: "Following 1" })).toBeVisible();
     expect(apiMocks.listFollows).toHaveBeenCalledTimes(2);
     expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);

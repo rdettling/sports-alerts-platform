@@ -8,7 +8,6 @@ import { useGamesData } from "./useGamesData";
 const apiMocks = vi.hoisted(() => ({
   listGames: vi.fn(async (): Promise<Game[]> => []),
   listFollows: vi.fn(async () => ({ teams: [], games: [] })),
-  listTeams: vi.fn(async () => []),
   listCompetitions: vi.fn(async () => []),
   getCompetitionVisibility: vi.fn(async () => ({ hidden_competitions: [] })),
   subscribeToGameUpdates: vi.fn(),
@@ -45,7 +44,6 @@ describe("useGamesData", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(apiMocks.listGames).toHaveBeenCalledTimes(1);
-    expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
     expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
     expect(apiMocks.getCompetitionVisibility).not.toHaveBeenCalled();
@@ -71,6 +69,22 @@ describe("useGamesData", () => {
         competition: "NBA",
         home_team_id: 1,
         away_team_id: 2,
+        home_team: {
+          id: 1,
+          external_team_id: "1",
+          sport: "basketball",
+          conference: null,
+          name: "Home Team",
+          abbreviation: "HOME",
+        },
+        away_team: {
+          id: 2,
+          external_team_id: "2",
+          sport: "basketball",
+          conference: null,
+          name: "Away Team",
+          abbreviation: "AWAY",
+        },
         scheduled_start_time: "2026-08-29T18:00:00Z",
         context_label: null,
         home_team_strength: { wins: null, losses: null, ties: null, rank: null },
@@ -104,7 +118,6 @@ describe("useGamesData", () => {
     });
 
     expect(apiMocks.listGames).toHaveBeenCalledTimes(2);
-    expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
     expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).toHaveBeenCalledTimes(1);
   });
@@ -131,7 +144,6 @@ describe("useGamesData", () => {
     });
 
     expect(apiMocks.listGames).toHaveBeenCalledTimes(2);
-    expect(apiMocks.listTeams).toHaveBeenCalledTimes(1);
     expect(apiMocks.listCompetitions).toHaveBeenCalledTimes(1);
     expect(apiMocks.listFollows).not.toHaveBeenCalled();
   });

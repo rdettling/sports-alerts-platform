@@ -27,6 +27,8 @@ export type Team = {
   conference: string | null;
 };
 
+export type GameTeam = Omit<Team, "competitions">;
+
 export type TeamStrength = {
   wins: number | null;
   losses: number | null;
@@ -40,6 +42,8 @@ export type Game = {
   competition: Competition;
   home_team_id: number;
   away_team_id: number;
+  home_team: GameTeam;
+  away_team: GameTeam;
   scheduled_start_time: string;
   context_label: string | null;
   home_team_strength: TeamStrength;

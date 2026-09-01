@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 
-from app.db.models import CompetitionTeam, Team
+from app.db.models import CompetitionTeam, Team, User, UserTeamFollow
 from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query
 from app.services.seed import ensure_seeded_teams
@@ -70,7 +70,7 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
         )
 
 
-def test_ensure_seeded_teams_preserves_discovered_fbs_opponents():
+def test_ensure_seeded_teams_removes_discovered_fbs_memberships_and_follows():
     with SessionLocal() as db:
         ensure_seeded_teams(db)
         opponent = Team(
@@ -83,16 +83,20 @@ def test_ensure_seeded_teams_preserves_discovered_fbs_opponents():
         db.add(opponent)
         db.flush()
         db.add(CompetitionTeam(competition="FBS", team_id=opponent.id))
+        user = User(email="fcs-follow@example.com", role="user")
+        db.add(user)
+        db.flush()
+        follow = UserTeamFollow(user_id=user.id, team_id=opponent.id)
+        db.add(follow)
         db.commit()
+        opponent_id = opponent.id
+        follow_id = follow.id
 
         ensure_seeded_teams(db)
 
-        assert (
-            db.scalar(
-                competition_teams_query("FBS").where(Team.external_team_id == "999999")
-            )
-            is not None
-        )
+        assert db.get(Team, opponent_id) is not None
+        assert db.get(CompetitionTeam, ("FBS", opponent_id)) is None
+        assert db.get(UserTeamFollow, follow_id) is None
 
 
 def test_ensure_seeded_teams_assigns_every_fbs_program_to_a_conference():

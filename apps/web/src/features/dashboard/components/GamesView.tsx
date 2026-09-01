@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { followGame, type Competition, type Team, unfollowGame } from "../../../shared/api";
+import { followGame, type Competition, unfollowGame } from "../../../shared/api";
 import { messageFromUnknown } from "../../../shared/lib/dashboard-ui";
 import { useGamesData } from "../hooks/useGamesData";
 import { dashboardQueryKeys } from "../hooks/dashboard-query-options";
 import { useGameAlertSettings } from "../hooks/useGameAlertSettings";
 import { GameAlertSettingsModal } from "./GameAlertSettingsModal";
 import { GameScoreRow } from "./GameScoreRow";
-import { fbsConferenceOptions } from "./fbs-conferences";
 import { GamesFilterToolbar } from "./games/GamesFilterToolbar";
 import { formatGameStatusLabel } from "./games/game-display";
 import {
@@ -70,7 +69,6 @@ export function GamesView({
 
   const games = data?.games ?? [];
   const follows = data?.follows;
-  const teams = data?.teams ?? [];
   const activeCompetitions = data?.competitions ?? [];
   const competitionVisibility = data?.competitionVisibility ?? { hidden_competitions: [] };
   const hiddenCompetitions = useMemo(
@@ -90,8 +88,17 @@ export function GamesView({
     [activeCompetitions],
   );
 
-  const teamMap = useMemo(() => new Map(teams.map((team: Team) => [team.id, team])), [teams]);
-  const conferenceOptions = useMemo(() => fbsConferenceOptions(teams), [teams]);
+  const conferenceOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          games
+            .flatMap((game) => [game.home_team.conference, game.away_team.conference])
+            .filter((conference): conference is string => conference !== null),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [games],
+  );
   const gameConferenceOptions = useMemo(
     () => [TOP_25_FILTER, ...conferenceOptions],
     [conferenceOptions],
@@ -134,11 +141,12 @@ export function GamesView({
           (rank) => rank !== null && rank >= 1 && rank <= 25,
         );
       }
-      const homeConference = teamMap.get(game.home_team_id)?.conference;
-      const awayConference = teamMap.get(game.away_team_id)?.conference;
-      return homeConference === conferenceFilter || awayConference === conferenceFilter;
+      return (
+        game.home_team.conference === conferenceFilter ||
+        game.away_team.conference === conferenceFilter
+      );
     });
-  }, [competitionFilter, competitionFilteredGames, conferenceFilter, teamMap]);
+  }, [competitionFilter, competitionFilteredGames, conferenceFilter]);
   const dayOptions = useMemo(
     () => buildDayOptions(conferenceFilteredGames),
     [conferenceFilteredGames],
@@ -238,10 +246,8 @@ export function GamesView({
                     aria-label={`${selectedDayLabel} games`}
                   >
                     {sortedVisibleGames.map((game) => {
-                      const home = teamMap.get(game.home_team_id);
-                      const away = teamMap.get(game.away_team_id);
                       const competitionProfile = competitionProfiles.get(game.competition);
-                      if (!home || !away || !competitionProfile) return null;
+                      if (!competitionProfile) return null;
                       const isFollowed = followedGameIds.has(game.id);
 
                       return (
@@ -249,8 +255,8 @@ export function GamesView({
                           key={game.id}
                           game={game}
                           sport={competitionProfile.sport}
-                          home={home}
-                          away={away}
+                          home={game.home_team}
+                          away={game.away_team}
                           isFollowed={isFollowed}
                           statusLabel={formatGameStatusLabel(game, competitionProfile.sport)}
                           actionsDisabled={toggleMutation.isPending || busyGameId === game.id}
@@ -303,7 +309,7 @@ export function GamesView({
 
       <GameAlertSettingsModal
         isOpen={Boolean(alertGame)}
-        matchupLabel={`${teamMap.get(alertGame?.away_team_id ?? -1)?.abbreviation ?? "AWAY"} @ ${teamMap.get(alertGame?.home_team_id ?? -1)?.abbreviation ?? "HOME"}`}
+        matchupLabel={`${alertGame?.away_team.abbreviation ?? "AWAY"} @ ${alertGame?.home_team.abbreviation ?? "HOME"}`}
         alertsBusy={alertsBusy}
         gameAlertState={gameAlertState}
         onClose={closeGameAlerts}

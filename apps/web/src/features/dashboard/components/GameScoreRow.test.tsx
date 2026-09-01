@@ -23,6 +23,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     competition: "NBA",
     home_team_id: 1,
     away_team_id: 2,
+    home_team: makeTeam(1, "BOS", "Boston Celtics"),
+    away_team: makeTeam(2, "ATL", "Atlanta Hawks"),
     scheduled_start_time: "2026-05-28T01:00:00Z",
     context_label: null,
     home_team_strength: { wins: 48, losses: 31, ties: 0, rank: null },
@@ -577,7 +579,9 @@ describe("GameScoreRow", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "FBS logo" })).toHaveAttribute(
+    const competitionMark = screen.getByRole("img", { name: "FBS logo" });
+    expect(competitionMark).not.toHaveTextContent("FBS");
+    expect(competitionMark).toHaveAttribute(
       "src",
       "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
     );

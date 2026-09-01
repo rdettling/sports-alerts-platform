@@ -85,6 +85,7 @@ describe("CompetitionVisibilityModal", () => {
 
     const fbsTile = screen.getByRole("checkbox", { name: "College Football" }).closest("label");
     expect(fbsTile).toHaveTextContent("Football");
+    expect(fbsTile).not.toHaveTextContent("FBS");
     expect(fbsTile?.querySelector("img")).toHaveAttribute(
       "src",
       "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",

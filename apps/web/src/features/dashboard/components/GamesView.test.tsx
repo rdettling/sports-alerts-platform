@@ -15,9 +15,8 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock("../../../shared/api", () => apiMocks);
 
 vi.mock("../hooks/useGamesData", () => ({
-  useGamesData: vi.fn((token: string | null) => ({
-    isLoading: false,
-    data: {
+  useGamesData: vi.fn((token: string | null) => {
+    const data = {
       games: [
         {
           id: 1,
@@ -104,7 +103,7 @@ vi.mock("../hooks/useGamesData", () => ({
           external_game_id: "fbs-sec-game",
           competition: "FBS",
           home_team_id: 18,
-          away_team_id: 19,
+          away_team_id: 22,
           scheduled_start_time: "2026-06-13T23:30:00Z",
           context_label: "Tied early",
           home_team_strength: { wins: 0, losses: 0, ties: 0, rank: null },
@@ -373,6 +372,15 @@ vi.mock("../hooks/useGamesData", () => ({
           name: "Boston Red Sox",
           abbreviation: "BOS",
         },
+        {
+          id: 22,
+          external_team_id: "999999",
+          sport: "football",
+          competitions: [],
+          conference: null,
+          name: "Example State Bears",
+          abbreviation: "EXST",
+        },
       ],
       competitions: [
         {
@@ -418,8 +426,35 @@ vi.mock("../hooks/useGamesData", () => ({
           : token === "all-hidden-token"
             ? { hidden_competitions: ["NBA", "WNBA", "FBS", "MLB"] }
             : { hidden_competitions: [] },
-    },
-  })),
+    };
+    const teamsById = new Map(data.teams.map((team) => [team.id, team]));
+    const participant = (teamId: number) => {
+      const team = teamsById.get(teamId)!;
+      return {
+        id: team.id,
+        external_team_id: team.external_team_id,
+        sport: team.sport,
+        conference: team.conference ?? null,
+        name: team.name,
+        abbreviation: team.abbreviation,
+      };
+    };
+    const withParticipants = <T extends { home_team_id: number; away_team_id: number }>(
+      game: T,
+    ) => ({
+      ...game,
+      home_team: participant(game.home_team_id),
+      away_team: participant(game.away_team_id),
+    });
+    return {
+      isLoading: false,
+      data: {
+        ...data,
+        games: data.games.map(withParticipants),
+        follows: { ...data.follows, games: data.follows.games.map(withParticipants) },
+      },
+    };
+  }),
 }));
 
 vi.mock("../hooks/useGameAlertSettings", () => ({
@@ -530,6 +565,7 @@ describe("GamesView", () => {
     ).toEqual(["All conferences", "Top 25", "Big Ten", "SEC"]);
     expect(screen.getAllByText("Alabama Crimson Tide").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Auburn Tigers").length).toBeGreaterThan(0);
+    expect(screen.getByText("Example State Bears")).toBeInTheDocument();
 
     fireEvent.change(conference, { target: { value: "Top 25" } });
 

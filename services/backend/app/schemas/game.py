@@ -3,6 +3,15 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class GameTeamOut(BaseModel):
+    id: int
+    sport: str
+    external_team_id: str
+    name: str
+    abbreviation: str
+    conference: str | None
+
+
 class TeamStrengthOut(BaseModel):
     wins: int | None = None
     losses: int | None = None
@@ -31,6 +40,8 @@ class GameOut(BaseModel):
     competition: str
     home_team_id: int
     away_team_id: int
+    home_team: GameTeamOut
+    away_team: GameTeamOut
     scheduled_start_time: datetime
     context_label: str | None
     home_team_strength: TeamStrengthOut = Field(default_factory=TeamStrengthOut)

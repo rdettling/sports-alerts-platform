@@ -134,7 +134,7 @@ def test_inactive_competition_hides_preserved_follows_and_rejects_new_ones(clien
     assert game_id in {game["id"] for game in restored["games"]}
 
 
-def test_fbs_teams_expose_conference_metadata_in_directory_and_follows(client):
+def test_fbs_directory_and_follows_exclude_incidental_opponents(client):
     headers = _auth_headers(client, email="fbs-conference@example.com")
     with SessionLocal() as db:
         opponent = Team(
@@ -145,8 +145,6 @@ def test_fbs_teams_expose_conference_metadata_in_directory_and_follows(client):
             abbreviation="UNCA",
         )
         db.add(opponent)
-        db.flush()
-        db.add(CompetitionTeam(competition="FBS", team_id=opponent.id))
         db.commit()
         opponent_id = opponent.id
 
@@ -154,15 +152,13 @@ def test_fbs_teams_expose_conference_metadata_in_directory_and_follows(client):
         team for team in client.get("/teams").json() if "FBS" in team["competitions"]
     ]
     alabama = next(team for team in fbs_teams if team["external_team_id"] == "333")
-    uncataloged = next(team for team in fbs_teams if team["id"] == opponent_id)
 
     assert alabama["conference"] == "SEC"
-    assert uncataloged["conference"] is None
+    assert all(team["id"] != opponent_id for team in fbs_teams)
     assert client.post(f"/follows/teams/{alabama['id']}", headers=headers).status_code == 201
-    assert client.post(f"/follows/teams/{opponent_id}", headers=headers).status_code == 201
+    assert client.post(f"/follows/teams/{opponent_id}", headers=headers).status_code == 404
     followed = client.get("/follows", headers=headers).json()["teams"]
     assert next(team for team in followed if team["id"] == alabama["id"])["conference"] == "SEC"
-    assert next(team for team in followed if team["id"] == opponent_id)["conference"] is None
 
 def test_game_follow_flow(client):
     headers = _auth_headers(client, email="m2-games@example.com")

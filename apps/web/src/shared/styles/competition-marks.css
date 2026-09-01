@@ -27,6 +27,7 @@
 }
 
 .game-score-competition-mark .competition-wnba,
+.game-score-competition-mark .competition-fbs,
 .game-score-competition-mark .competition-mls,
 .game-score-competition-mark .competition-la_liga,
 .game-score-competition-mark .competition-premier_league,
@@ -62,6 +63,7 @@
 }
 
 .league-visibility-mark .competition-mls,
+.league-visibility-mark .competition-fbs,
 .league-visibility-mark .competition-la_liga,
 .league-visibility-mark .competition-premier_league,
 .league-visibility-mark .competition-world_cup {
@@ -92,6 +94,7 @@
 }
 
 .admin-competition-setting-mark .competition-mls,
+.admin-competition-setting-mark .competition-fbs,
 .admin-competition-setting-mark .competition-la_liga,
 .admin-competition-setting-mark .competition-premier_league,
 .admin-competition-setting-mark .competition-world_cup {

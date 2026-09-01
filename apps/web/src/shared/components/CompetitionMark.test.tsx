@@ -8,11 +8,6 @@ describe("CompetitionMark", () => {
     ["NBA", "NBA", "https://cdn.nba.com/logos/leagues/logo-nba-logoman.svg"],
     ["WNBA", "WNBA", "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png"],
     ["NFL", "NFL", "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png"],
-    [
-      "FBS",
-      "FBS",
-      "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
-    ],
     ["MLB", "MLB", "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg"],
     [
       "MLS",
@@ -25,6 +20,17 @@ describe("CompetitionMark", () => {
     render(<CompetitionMark competition={competition} />);
 
     expect(screen.getByRole("img", { name: `${badge} logo` })).toHaveAttribute("src", logoUrl);
+  });
+
+  it("renders the ESPN college football artwork without text", () => {
+    render(<CompetitionMark competition="FBS" />);
+
+    const mark = screen.getByRole("img", { name: "FBS logo" });
+    expect(mark).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
+    );
+    expect(mark).not.toHaveTextContent("FBS");
   });
 
   it("renders the bundled World Cup artwork", () => {

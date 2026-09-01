@@ -1,10 +1,11 @@
 import { useState } from "react";
 
-import { type Team } from "../api";
+import { type Competition, type GameTeam, type Team } from "../api";
 
-function teamLogoUrl(team: Team): string {
+function teamLogoUrl(team: Team | GameTeam, competition?: Competition): string {
   const abbreviation = team.abbreviation.toLowerCase();
-  if (team.competitions.includes("WORLD_CUP")) {
+  const competitions = "competitions" in team ? team.competitions : [];
+  if (competition === "WORLD_CUP" || competitions.includes("WORLD_CUP")) {
     return `https://a.espncdn.com/i/teamlogos/countries/500/${abbreviation}.png`;
   }
   if (team.sport === "soccer") {
@@ -13,13 +14,13 @@ function teamLogoUrl(team: Team): string {
   if (team.sport === "baseball") {
     return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbreviation}.png`;
   }
-  if (team.competitions.includes("NBA")) {
+  if (competition === "NBA" || competitions.includes("NBA")) {
     return `https://a.espncdn.com/i/teamlogos/nba/500/${abbreviation}.png`;
   }
-  if (team.competitions.includes("WNBA")) {
+  if (competition === "WNBA" || competitions.includes("WNBA")) {
     return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbreviation}.png`;
   }
-  if (team.competitions.includes("FBS")) {
+  if (competition === "FBS" || competitions.includes("FBS")) {
     return `https://a.espncdn.com/i/teamlogos/ncaa/500/${team.external_team_id}.png`;
   }
   if (team.sport === "football") {
@@ -28,7 +29,15 @@ function teamLogoUrl(team: Team): string {
   return "";
 }
 
-export function TeamLogo({ team, size = 26 }: { team: Team; size?: number }) {
+export function TeamLogo({
+  team,
+  competition,
+  size = 26,
+}: {
+  team: Team | GameTeam;
+  competition?: Competition;
+  size?: number;
+}) {
   const [failed, setFailed] = useState(false);
 
   if (failed) {
@@ -42,7 +51,7 @@ export function TeamLogo({ team, size = 26 }: { team: Team; size?: number }) {
   return (
     <img
       className="team-logo"
-      src={teamLogoUrl(team)}
+      src={teamLogoUrl(team, competition)}
       width={size}
       height={size}
       alt={`${team.name} logo`}

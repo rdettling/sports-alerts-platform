@@ -62,7 +62,7 @@ Each supported competition has one code-owned profile containing its sport, prov
 The API is split into a small set of route groups:
 
 - `/auth` — email sign-in start, link/code verification, auth warmup, current user
-- `/games` — game feed with competition, status, and finals filters plus current moneyline odds
+- `/games` — self-contained game feed with embedded participants, competition, status, finals filters, and current moneyline odds
 - `/teams` — active team catalog
 - `/follows` — team follows and effective game follows
 - `/alert-preferences` — sport defaults and game-level overrides
@@ -97,7 +97,7 @@ Main persisted tables:
 
 Notable modeling decisions:
 
-- Teams are canonical provider entities and use `competition_teams` for current many-to-many competition membership
+- Teams are canonical provider entities, including incidental opponents needed to render games; `competition_teams` contains only browseable and followable competition members
 - FBS conference names come from the code-owned team catalog and are exposed as a secondary UI facet, not stored as standalone competitions or database state
 - Games retain their competition and can carry live/final state, scores, context labels, and odds associations
 - A team follow applies to that team's games in every active competition, with explicit game unfollows stored separately
@@ -117,7 +117,7 @@ Notable modeling decisions:
 ### Game Sync
 
 1. Worker fetches provider schedule/state for enabled competitions
-2. Worker maps provider team IDs to the API-seeded catalog, discovers non-FBS opponents on FBS schedules, and upserts games into Postgres
+2. Worker maps provider team IDs to the API-seeded catalog, stores non-FBS opponents from FBS schedules without granting FBS membership, and upserts games into Postgres
 3. Worker snapshots odds for eligible pregame windows when enabled
 4. After a changed transaction commits, the worker sends a best-effort notification to the API
 5. The API broadcasts an in-memory SSE event; visible Games screens coalesce events and refetch `/games` no more than once every two minutes

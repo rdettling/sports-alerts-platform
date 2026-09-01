@@ -159,7 +159,9 @@ def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monke
     result = run_catalog_sync(provider, competition="FBS")
 
     opponent = db_session.scalar(
-        competition_teams_query("FBS").where(Team.external_team_id == "999999")
+        select(Team).where(
+            Team.provider_scope == "cfb", Team.external_team_id == "999999"
+        )
     )
     game = db_session.scalar(
         select(Game).where(Game.competition == "FBS", Game.external_game_id == "fbs-vs-fcs")
@@ -167,6 +169,7 @@ def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monke
     assert result.games_updated == 1
     assert opponent is not None
     assert (opponent.name, opponent.abbreviation) == ("Example State Bears", "EXST")
+    assert db_session.get(CompetitionTeam, ("FBS", opponent.id)) is None
     assert game is not None
     assert game.away_team_id == opponent.id
 

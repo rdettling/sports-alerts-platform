@@ -85,6 +85,10 @@ def test_games_include_odds_when_available(client):
     assert payload[0]["context_label"] is None
     assert payload[0]["home_team_strength"] == {"wins": 48, "losses": 31, "ties": 0, "rank": None}
     assert payload[0]["away_team_strength"] == {"wins": 57, "losses": 22, "ties": 0, "rank": None}
+    assert payload[0]["home_team"]["id"] == payload[0]["home_team_id"]
+    assert payload[0]["away_team"]["id"] == payload[0]["away_team_id"]
+    assert payload[0]["home_team"]["name"]
+    assert payload[0]["away_team"]["name"]
     assert payload[0]["broadcast_names"] == []
     assert payload[0]["odds"]["outcomes"][0]["price_american"] == 125
     assert payload[0]["odds"]["outcomes"][0]["team_side"] == "away"
@@ -100,6 +104,54 @@ def test_games_include_broadcast_names(client):
 
     assert response.status_code == 200
     assert response.json()[0]["broadcast_names"] == ["ESPN", "Peacock"]
+
+
+def test_games_embed_incidental_fbs_opponents_without_catalog_membership(client):
+    with SessionLocal() as db:
+        home = db.scalar(
+            competition_teams_query("FBS").where(Team.external_team_id == "333")
+        )
+        assert home is not None
+        opponent = Team(
+            sport="football",
+            provider_scope="cfb",
+            external_team_id="999999",
+            name="Example State Bears",
+            abbreviation="EXST",
+        )
+        db.add(opponent)
+        db.flush()
+        db.add(
+            Game(
+                external_game_id="fbs-vs-fcs-api",
+                competition="FBS",
+                home_team_id=home.id,
+                away_team_id=opponent.id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
+                status="scheduled",
+                is_final=False,
+            )
+        )
+        db.commit()
+
+    payload = client.get("/games?competition=FBS").json()
+
+    assert len(payload) == 1
+    assert payload[0]["away_team"] == {
+        "id": payload[0]["away_team_id"],
+        "sport": "football",
+        "external_team_id": "999999",
+        "name": "Example State Bears",
+        "abbreviation": "EXST",
+        "conference": None,
+    }
+    assert payload[0]["away_team_strength"] == {
+        "wins": None,
+        "losses": None,
+        "ties": None,
+        "rank": None,
+    }
+    assert all(team["id"] != payload[0]["away_team_id"] for team in client.get("/teams").json())
 
 
 def test_games_include_world_cup_draw_odds(client):
