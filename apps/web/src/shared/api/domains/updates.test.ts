@@ -31,12 +31,16 @@ describe("subscribeToGameUpdates", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const onUpdate = vi.fn();
 
-    const close = subscribeToGameUpdates(onUpdate);
+    const onOpen = vi.fn();
+    const close = subscribeToGameUpdates(onUpdate, onOpen);
     const source = FakeEventSource.instances[0];
     source.listeners.get("games")?.(new Event("games"));
 
     expect(source.url).toBe("http://localhost:8000/updates/games");
     expect(onUpdate).toHaveBeenCalledTimes(1);
+    source.listeners.get("open")?.(new Event("open"));
+    source.listeners.get("open")?.(new Event("open"));
+    expect(onOpen).toHaveBeenCalledTimes(2);
 
     close();
     expect(source.closed).toBe(true);
@@ -44,6 +48,6 @@ describe("subscribeToGameUpdates", () => {
 
   it("falls back silently when EventSource is unavailable", () => {
     vi.stubGlobal("EventSource", undefined);
-    expect(() => subscribeToGameUpdates(vi.fn())()).not.toThrow();
+    expect(() => subscribeToGameUpdates(vi.fn(), vi.fn())()).not.toThrow();
   });
 });

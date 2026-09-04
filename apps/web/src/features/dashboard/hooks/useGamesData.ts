@@ -14,11 +14,7 @@ export function useGamesData(token: string | null) {
   const competitions = useQuery(competitionsQueryOptions());
   const competitionVisibility = useQuery(competitionVisibilityQueryOptions(token));
 
-  useGameRefresh({
-    games: games.data,
-    dataUpdatedAt: games.dataUpdatedAt,
-    isFetching: games.isFetching,
-  });
+  useGameRefresh();
 
   return {
     data: {

@@ -8,6 +8,7 @@ from time import monotonic
 from typing import Literal
 
 from app.db.session import SessionLocal
+from app.db.usage import database_source
 from app.services.competitions import get_active_competitions, get_competition_profile
 from app.worker import updates
 from app.worker.config import settings
@@ -200,7 +201,8 @@ def run(stop_event: threading.Event) -> None:
 
     while not stop_event.is_set():
         now = _utcnow()
-        _sync_jobs(jobs, _load_active_competitions(), now)
+        with database_source("worker:competition_scan"):
+            _sync_jobs(jobs, _load_active_competitions(), now)
         due_job = _next_due_job(jobs, now)
         if due_job is None:
             stop_event.wait(_next_due_seconds(jobs, now))
@@ -208,10 +210,11 @@ def run(stop_event: threading.Event) -> None:
 
         try:
             started_at = monotonic()
-            if due_job.job_type == CATALOG_SYNC_JOB:
-                next_run, result = _run_catalog_sync_job(jobs, due_job.competition)
-            else:
-                next_run, result = _run_live_sync_job(due_job.competition)
+            with database_source(f"worker:{due_job.job_type}:{due_job.competition}"):
+                if due_job.job_type == CATALOG_SYNC_JOB:
+                    next_run, result = _run_catalog_sync_job(jobs, due_job.competition)
+                else:
+                    next_run, result = _run_live_sync_job(due_job.competition)
             duration_ms = int((monotonic() - started_at) * 1000)
             _log_job_success(
                 result=result,

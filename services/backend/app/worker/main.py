@@ -2,6 +2,7 @@ import logging
 import signal
 import threading
 
+from app.db.usage import database_usage_logging
 from app.services.competitions import get_competition_profile, list_supported_competitions
 
 from app.worker import scheduler
@@ -32,7 +33,8 @@ def main() -> None:
         settings.catalog_sync_interval_seconds,
         live_intervals,
     )
-    scheduler.run(_stop_event)
+    with database_usage_logging():
+        scheduler.run(_stop_event)
     logger.info("Worker stopped")
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from time import sleep
 
 import httpx
 
@@ -19,19 +20,34 @@ def notify_games_changed(competition: str) -> bool:
     if not api_url or not secret:
         return False
 
-    try:
-        response = httpx.post(
-            f"{api_url}/internal/updates/games",
-            headers={"X-Live-Update-Secret": secret},
-            json={"competition": competition},
-            timeout=NOTIFICATION_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-    except Exception as exc:
-        if not _delivery_failing:
-            logger.warning("Live update delivery failed; later failures will be suppressed: %s", exc)
-        _delivery_failing = True
-        return False
+    for attempt in range(2):
+        try:
+            response = httpx.post(
+                f"{api_url}/internal/updates/games",
+                headers={"X-Live-Update-Secret": secret},
+                json={"competition": competition},
+                timeout=NOTIFICATION_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            break
+        except Exception as exc:
+            transient = isinstance(
+                exc,
+                (httpx.NetworkError, httpx.TimeoutException, httpx.RemoteProtocolError),
+            ) or (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code >= 500
+            )
+            if attempt == 0 and transient:
+                sleep(0.25)
+                continue
+            if not _delivery_failing:
+                logger.warning(
+                    "Live update delivery failed; later failures will be suppressed: %s",
+                    exc,
+                )
+            _delivery_failing = True
+            return False
 
     if _delivery_failing:
         logger.info("Live update delivery recovered")

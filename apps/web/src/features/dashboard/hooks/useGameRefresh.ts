@@ -1,108 +1,133 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { subscribeToGameUpdates, type Game } from "../../../shared/api";
-import {
-  dashboardQueryKeys,
-  gamesFallbackInterval,
-  LIVE_GAME_FALLBACK_INTERVAL_MS,
-  MIN_GAME_REFRESH_INTERVAL_MS,
-} from "./dashboard-query-options";
+import { dashboardQueryKeys, gamesFallbackInterval } from "./dashboard-query-options";
 
-type UseGameRefreshOptions = {
-  games: Game[] | undefined;
-  dataUpdatedAt: number;
-  isFetching: boolean;
-};
+const EVENT_BATCH_MS = 1_000;
+const EVENT_REFRESH_SPACING_MS = 2_000;
 
-export function useGameRefresh({ games, dataUpdatedAt, isFetching }: UseGameRefreshOptions) {
+export function useGameRefresh() {
   const queryClient = useQueryClient();
-  const pendingRef = useRef(false);
-  const isFetchingRef = useRef(isFetching);
-  const lastRefreshAtRef = useRef(dataUpdatedAt);
-  const refreshTimerRef = useRef<number | null>(null);
-  const refreshDueAtRef = useRef<number | null>(null);
-
-  const clearRefreshTimer = useCallback(() => {
-    if (refreshTimerRef.current !== null) {
-      window.clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-      refreshDueAtRef.current = null;
-    }
-  }, []);
-
-  const schedulePendingRefresh = useCallback(() => {
-    pendingRef.current = true;
-    if (document.visibilityState === "hidden" || isFetchingRef.current) return;
-
-    const now = Date.now();
-    const dueAt = Math.max(now, lastRefreshAtRef.current + MIN_GAME_REFRESH_INTERVAL_MS);
-    if (refreshDueAtRef.current !== null && refreshDueAtRef.current <= dueAt) return;
-
-    clearRefreshTimer();
-    if (dueAt === now) {
-      pendingRef.current = false;
-      lastRefreshAtRef.current = now;
-      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.games, exact: true });
-      return;
-    }
-
-    refreshDueAtRef.current = dueAt;
-    refreshTimerRef.current = window.setTimeout(
-      () => {
-        refreshTimerRef.current = null;
-        refreshDueAtRef.current = null;
-        if (document.visibilityState === "hidden" || isFetchingRef.current) return;
-
-        pendingRef.current = false;
-        lastRefreshAtRef.current = Date.now();
-        void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.games, exact: true });
-      },
-      Math.max(0, dueAt - now),
-    );
-  }, [clearRefreshTimer, queryClient]);
 
   useEffect(() => {
-    isFetchingRef.current = isFetching;
-    if (dataUpdatedAt > 0) {
-      lastRefreshAtRef.current = Math.max(lastRefreshAtRef.current, dataUpdatedAt);
-    } else if (isFetching && lastRefreshAtRef.current === 0) {
-      lastRefreshAtRef.current = Date.now();
-    }
-    if (!isFetching && pendingRef.current) schedulePendingRefresh();
-  }, [dataUpdatedAt, isFetching, schedulePendingRefresh]);
+    const queryKey = dashboardQueryKeys.games;
+    let disposed = false;
+    let pageHidden = false;
+    let closeStream: (() => void) | null = null;
+    let refreshTimer: number | undefined;
+    let fallbackTimer: number | undefined;
+    let pendingDueAt: number | null = null;
+    let fetching = (queryClient.getQueryState(queryKey)?.fetchStatus ?? "idle") !== "idle";
+    let lastRequestAt = fetching ? Date.now() : -Infinity;
+    let lastReturnAt = -Infinity;
 
-  useEffect(() => subscribeToGameUpdates(schedulePendingRefresh), [schedulePendingRefresh]);
+    const isActive = () =>
+      !disposed && !pageHidden && document.visibilityState !== "hidden" && navigator.onLine;
 
-  useEffect(() => {
-    const fallbackInterval = dataUpdatedAt
-      ? gamesFallbackInterval(games)
-      : LIVE_GAME_FALLBACK_INTERVAL_MS;
-    const fallbackTimer = window.setTimeout(schedulePendingRefresh, fallbackInterval);
-    return () => window.clearTimeout(fallbackTimer);
-  }, [dataUpdatedAt, games, schedulePendingRefresh]);
+    const armRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      if (!isActive() || fetching || pendingDueAt === null) return;
+      refreshTimer = window.setTimeout(
+        () => {
+          if (!isActive() || fetching) return;
+          pendingDueAt = null;
+          void queryClient.invalidateQueries({ queryKey, exact: true }, { cancelRefetch: false });
+        },
+        Math.max(0, pendingDueAt - Date.now()),
+      );
+    };
 
-  useEffect(() => {
-    const refreshOnReturn = () => {
-      if (document.visibilityState === "hidden") {
-        clearRefreshTimer();
+    const requestRefresh = (immediate: boolean) => {
+      if (!isActive()) return;
+      const now = Date.now();
+      const dueAt = immediate
+        ? now
+        : Math.max(now + EVENT_BATCH_MS, lastRequestAt + EVENT_REFRESH_SPACING_MS);
+      pendingDueAt = pendingDueAt === null ? dueAt : Math.min(pendingDueAt, dueAt);
+      armRefresh();
+    };
+
+    const armFallback = () => {
+      window.clearTimeout(fallbackTimer);
+      if (isActive() && !fetching) {
+        fallbackTimer = window.setTimeout(
+          () => requestRefresh(true),
+          gamesFallbackInterval(queryClient.getQueryData<Game[]>(queryKey)),
+        );
+      }
+    };
+
+    const unsubscribe = queryClient.getQueryCache().subscribe(({ query }) => {
+      if (query.queryKey.length !== 1 || query.queryKey[0] !== queryKey[0]) return;
+      const wasFetching = fetching;
+      fetching = query.state.fetchStatus !== "idle";
+      if (fetching && !wasFetching) {
+        lastRequestAt = Date.now();
+        window.clearTimeout(refreshTimer);
+        window.clearTimeout(fallbackTimer);
+      }
+      if (!fetching && wasFetching) {
+        // Failed reads recover on the fallback, not an immediate pending-event loop.
+        if (query.state.status === "error") pendingDueAt = null;
+        armFallback();
+        armRefresh();
+      }
+    });
+
+    const syncConnection = () => {
+      if (!isActive()) {
+        closeStream?.();
+        closeStream = null;
+        lastReturnAt = -Infinity;
+        window.clearTimeout(refreshTimer);
+        window.clearTimeout(fallbackTimer);
+        pendingDueAt = null;
         return;
       }
-      if (
-        pendingRef.current ||
-        Date.now() - lastRefreshAtRef.current >= MIN_GAME_REFRESH_INTERVAL_MS
-      ) {
-        schedulePendingRefresh();
+      if (!closeStream) {
+        closeStream = subscribeToGameUpdates(
+          () => requestRefresh(false),
+          () => requestRefresh(true),
+        );
       }
     };
 
+    const refreshOnReturn = () => {
+      syncConnection();
+      if (!isActive()) return;
+      const now = Date.now();
+      if (now - lastReturnAt < EVENT_BATCH_MS) return;
+      lastReturnAt = now;
+      requestRefresh(true);
+    };
+    const onPageHide = () => {
+      pageHidden = true;
+      syncConnection();
+    };
+    const onPageShow = () => {
+      pageHidden = false;
+      refreshOnReturn();
+    };
+
+    syncConnection();
+    armFallback();
     document.addEventListener("visibilitychange", refreshOnReturn);
     window.addEventListener("focus", refreshOnReturn);
+    window.addEventListener("online", refreshOnReturn);
+    window.addEventListener("offline", syncConnection);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     return () => {
+      disposed = true;
+      syncConnection();
+      unsubscribe();
       document.removeEventListener("visibilitychange", refreshOnReturn);
       window.removeEventListener("focus", refreshOnReturn);
+      window.removeEventListener("online", refreshOnReturn);
+      window.removeEventListener("offline", syncConnection);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
     };
-  }, [clearRefreshTimer, schedulePendingRefresh]);
-
-  useEffect(() => clearRefreshTimer, [clearRefreshTimer]);
+  }, [queryClient]);
 }

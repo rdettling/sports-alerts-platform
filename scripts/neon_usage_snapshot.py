@@ -28,10 +28,14 @@ def hours_between(start_iso: str, end_iso: str) -> float:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Capture and compare Neon compute usage snapshots")
+    parser = argparse.ArgumentParser(
+        description="Capture and compare Neon compute usage snapshots"
+    )
     parser.add_argument("--project-id", required=True, help="Neon project id")
     parser.add_argument("--org-id", help="Neon org id (optional if context is set)")
-    parser.add_argument("--out-dir", default=".cache/neon-usage", help="Snapshot directory")
+    parser.add_argument(
+        "--out-dir", default=".cache/neon-usage", help="Snapshot directory"
+    )
     args = parser.parse_args()
 
     cmd = ["neon", "projects", "get", args.project_id, "-o", "json"]
@@ -49,8 +53,8 @@ def main():
         "org_id": data.get("org_id"),
         "consumption_period_start": data.get("consumption_period_start"),
         "consumption_period_end": data.get("consumption_period_end"),
-        "cpu_used_sec": data.get("cpu_used_sec", 0),
-        "active_time_sec": data.get("active_time_seconds", 0),
+        "cpu_used_sec": data.get("cpu_used_sec"),
+        "active_time_sec": data.get("active_time_seconds"),
     }
 
     out_dir = Path(args.out_dir)
@@ -58,23 +62,45 @@ def main():
     fname = out_dir / f"neon-usage-{ts.strftime('%Y%m%dT%H%M%SZ')}.json"
     fname.write_text(json.dumps(snapshot, indent=2) + "\n")
 
-    all_snaps = sorted(out_dir.glob("neon-usage-*.json"))
+    previous = [
+        json.loads(path.read_text())
+        for path in sorted(out_dir.glob("neon-usage-*.json"))
+        if path != fname
+    ]
+    previous = [
+        item
+        for item in previous
+        if item.get("project_id") == snapshot["project_id"]
+        and item.get("consumption_period_start") == snapshot["consumption_period_start"]
+    ]
 
     print(f"Saved snapshot: {fname}")
     print(f"Project: {snapshot['project_name']} ({snapshot['project_id']})")
-    print(f"Cycle: {snapshot['consumption_period_start']} -> {snapshot['consumption_period_end']}")
-    print(f"Totals now: cpu_used_sec={snapshot['cpu_used_sec']}, active_time_sec={snapshot['active_time_sec']}")
+    print(
+        f"Cycle: {snapshot['consumption_period_start']} -> {snapshot['consumption_period_end']}"
+    )
+    print(
+        f"Totals now: cpu_used_sec={snapshot['cpu_used_sec']}, active_time_sec={snapshot['active_time_sec']}"
+    )
 
-    if len(all_snaps) < 2:
+    if not previous:
         print("\nNeed one more snapshot to compute interval burn rate.")
         return
 
-    prev = json.loads(all_snaps[-2].read_text())
+    prev = previous[-1]
     cur = snapshot
 
     t0 = parse_ts(prev["captured_at"])
     t1 = parse_ts(cur["captured_at"])
     delta_hours = (t1 - t0).total_seconds() / 3600
+
+    if any(
+        not isinstance(item.get(key), (int, float))
+        for item in (prev, cur)
+        for key in ("cpu_used_sec", "active_time_sec")
+    ):
+        print("\nCannot compute delta: Neon usage counters are unavailable (not zero).")
+        return
 
     d_cpu_sec = cur["cpu_used_sec"] - prev["cpu_used_sec"]
     d_active_sec = cur["active_time_sec"] - prev["active_time_sec"]
@@ -97,7 +123,9 @@ def main():
     print(f"Active ratio: {active_pct:.1f}% of wall time")
     print(f"Avg CU while active: {cu_while_active:.3f} CU")
     projected_interval_month = cu_per_wall_hour * 24 * 31
-    print(f"Projected 31-day usage at this interval rate: {projected_interval_month:.1f} CU-hours")
+    print(
+        f"Projected 31-day usage at this interval rate: {projected_interval_month:.1f} CU-hours"
+    )
 
     # Also show cycle-to-date pace to avoid overreacting to short bursty intervals.
     cycle_start = cur.get("consumption_period_start")
@@ -111,10 +139,14 @@ def main():
             print(f"Elapsed in cycle: {elapsed_cycle_hours:.1f}h")
             print(f"CPU used in cycle: {cycle_cpu_hours:.3f} CU-hours")
             print(f"Avg CU across wall time (cycle): {cycle_cu_per_hour:.3f} CU/hour")
-            print(f"Projected 31-day usage from cycle pace: {projected_cycle_month:.1f} CU-hours")
+            print(
+                f"Projected 31-day usage from cycle pace: {projected_cycle_month:.1f} CU-hours"
+            )
 
     if delta_hours < 6:
-        print("\nWarning: interval < 6h. Projection may be noisy due to bursty traffic.")
+        print(
+            "\nWarning: interval < 6h. Projection may be noisy due to bursty traffic."
+        )
 
 
 if __name__ == "__main__":

@@ -120,8 +120,15 @@ Notable modeling decisions:
 2. Worker maps provider team IDs to the API-seeded catalog, stores non-FBS opponents from FBS schedules without granting FBS membership, and upserts games into Postgres
 3. Worker snapshots odds for eligible pregame windows when enabled
 4. After a changed transaction commits, the worker sends a best-effort notification to the API
-5. The API broadcasts an in-memory SSE event; visible Games screens coalesce events and refetch `/games` no more than once every two minutes
-6. A ten-minute live fallback handles missed or unavailable SSE connections without adding database connections
+5. The API invalidates its dashboard feed cache before broadcasting an in-memory SSE event. Visible Games screens batch events for one second and space event-driven reads at least two seconds apart, retaining one pending refresh if a request is already running
+6. Opening/reconnecting the stream and returning to a visible, online Games screen trigger a catch-up read. Hidden/offline screens close SSE and pause refresh timers
+7. After each completed request, live feeds use a 60-second fallback. Quiet feeds (empty, final-only, or scheduled-only) wait 30 minutes or until the earliest future scheduled start, whichever is sooner. A past scheduled start does not keep a quiet feed polling every minute. Before any successful load, failures recover on a 60-second fallback; later failures use the last known feed. No failure creates an immediate retry loop.
+
+The quiet fallback allows gaps longer than Neon’s default five-minute inactivity timeout. SSE and its keep-alives do not query Postgres. Worker activity, other viewers, and reconnects can still keep the database awake. Missing an event during a quiet period can delay recovery until the next scheduled check (up to 30 minutes); normal SSE updates and foreground/reconnect catch-up remain prompt.
+
+The API caches only the public dashboard request (`include_finals=true`, `limit=500`, no status/competition filters) for 30 seconds. Concurrent misses share one fill; cached response models retain no ORM entities, database sessions, or connections. Cache hits do not extend expiry. An invalidation during a fill discards that result and reloads using a new session. Competition enable/disable commits also invalidate the cache. Other game queries read the database directly, and all game responses use `Cache-Control: no-store` to prevent browser/CDN caching.
+
+Worker notifications retry once after 250 milliseconds for network failures, timeouts, or HTTP 5xx responses, using a two-second HTTP timeout per attempt. HTTP 4xx responses are not retried. Notification failure never retries or fails the committed ingest transaction; repeated failure logs remain suppressed until recovery.
 
 ### Alert Evaluation
 
@@ -143,11 +150,15 @@ Admin-only routes expose:
 
 Admin test alerts use transient sample objects to exercise the real Email and Push delivery paths. They return channel outcomes to the Tools view without entering game, alert history, or activity tables.
 
+## Database Activity Observability
+
+Both runtime processes aggregate existing SQLAlchemy connection, statement, transaction, and error events in memory. Every five minutes, nonempty `Database usage` summaries identify API route templates, worker scans/jobs, cache use, UTC activity minutes, and the deployed revision. A pure ASGI context middleware attributes API calls without buffering SSE. The logger never queries Postgres or retains a DB session. See the [runbook](runbook.md#reviewing-database-awake-time-and-waste) for the Neon snapshot and Render summary commands; observed activity is not a substitute for Neon’s actual awake-time counters.
+
 ## Design Constraints
 
 - The worker is separate so ingest and delivery do not block request/response traffic
 - Scheduler state is process-local; worker logs are the source of truth for job timing and failures
-- SSE fanout is process-local and assumes one API instance; horizontal API scaling would require a shared broadcaster
+- SSE fanout and the dashboard feed cache are process-local and assume one API process on one instance; multiple processes or instances require shared broadcasting and cache invalidation
 - Odds are persisted and read from the DB instead of fetched from the browser path
 - RBAC is DB-backed through `users.role`
 - Settings are strict enough that missing required env values fail early

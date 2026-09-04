@@ -14,6 +14,49 @@ Checks:
 3. Confirm `CORS_ALLOW_ORIGINS` includes the frontend origin
 4. Check `make logs SERVICE=api` for startup or config failures
 
+## Reviewing Database Awake Time And Waste
+
+Neon usage snapshots measure actual project compute consumption; Render application logs explain which app activity contributed to keeping the database busy. Render's own API/worker CPU charts describe those containers, not the Neon database.
+
+At deployment and again after at least a day, run from the repo root:
+
+```sh
+python3 scripts/neon_usage_snapshot.py --project-id solitary-resonance-98873129
+python3 scripts/database_usage_report.py --resources srv-d79kbthr0fns73eietr0,srv-d79kfgqdbo4c73adcthg --hours 24
+```
+
+Snapshots are saved under `.cache/neon-usage/`; compare only the same project and billing period. Missing usage counters are unavailable, never zero. Neon counters may lag, so avoid conclusions from short intervals. A snapshot captured before deployment is only a baseline for the old deployment; capture another at cutover for a clean comparison.
+
+The API and worker emit `Database usage {…}` JSON summaries every five minutes when activity exists, plus a partial summary on graceful shutdown. Each includes the deployed revision and bounded source groups:
+
+- `api:GET /games` and other API route templates: connections, statement executions, commits, rollbacks, and errors
+- `worker:competition_scan`: scheduler reads outside ingest jobs
+- `worker:live_sync:FBS`, `worker:catalog_sync:MLB`, etc.: database work attributed to each job; correlate with existing `Job completed` logs for games checked/changed and next-run timing
+- `api:startup`: startup seed work
+- Game cache hits, fills, and discarded fills: cache hits should require no connection; repeated fills without changed worker data can expose excessive refreshes
+
+`db_minutes` identifies UTC minutes containing observed database activity, including failed calls. The report unions these across services, ranks sources by connection count, and shows activity by UTC hour to help locate quiet-period polling. These minutes are **not** actual awake hours: Neon can remain awake after the last query, and external clients can cause activity absent from these logs. SQL statement counts represent execution calls, not rows, database CPU time, or all internal driver traffic. Read-only session cleanup also produces rollbacks; a rollback count alone does not mean failed work.
+
+To judge waste, compare awake hours and CU-hours from snapshots, identify activity during periods without live games, then check whether it came from game-feed fills, admin polling, startup, or worker scans. Look for repeated unchanged worker syncs and many discarded cache fills. Keep the old and new deployment revisions separate. Fast reconnects or many staggered viewers may still keep Neon awake even with the quiet fallback.
+
+Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
+
+The report requests up to 1,000 summary records and warns if that limit is reached; use smaller windows in that case. Current partial windows and abruptly terminated processes can be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for a next-day review. Capture the report before retention expires.
+
+## Games Screen Is Stale
+
+1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball/football use two minutes, soccer three, and MLB five
+2. Confirm `LIVE_UPDATE_API_URL` points to the API and both services have matching `LIVE_UPDATE_SECRET` values
+3. On a visible, online Games screen, inspect `/updates/games`: expect `text/event-stream`, periodic keep-alives, and `games` events after changed syncs
+4. An event should prompt a games read after about one second (at least two seconds between event-driven reads). The API invalidates its shared cache before sending the event
+5. Without events, expect a fallback read after 60 seconds for a live feed, or after 30 minutes for a quiet feed. An earlier future scheduled start brings the quiet check forward. Initial load failures use 60 seconds; subsequent failures use the last known feed. Cache entries expire after 30 seconds even if a worker notification was lost
+6. Look for `Live update delivery failed` and `Live update delivery recovered` in worker logs. Transient failures get one retry; repeated failures are log-suppressed
+7. Verify the API still uses one process on one instance. Process-local notifications and invalidation do not span replicas
+
+Hidden/offline screens intentionally stop SSE and refresh timers. On an iPhone, reopen the Home Screen app and verify a catch-up request and a new stream connection. Render deployments also interrupt existing streams; reconnection must fetch the latest state. Existing displayed games remain visible during background refreshes. Failed reads use the existing error display and retry/fallback behavior.
+
+The five-second normal update target assumes healthy services/networking and a visible app. Two-minute missed-notification recovery applies when the feed already shows live games; quiet feeds trade recovery time (up to 30 minutes) for opportunities to suspend Neon. A delayed or overdue scheduled game does not by itself trigger minute-by-minute reads. Other viewers, worker jobs, and reconnects can still prevent suspension. These changes do not make upstream sports data arrive faster or keep iOS running in the background.
+
 ## Frontend Route 404 On Hard Refresh
 
 Symptoms:

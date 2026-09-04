@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.schemas.update import GameUpdateEvent
+from app.services.game_feed import game_feed_cache
 from app.services.live_updates import game_updates
 
 router = APIRouter(tags=["updates"])
@@ -43,5 +44,6 @@ async def publish_game_update(
             detail="Invalid live update secret",
         )
 
+    game_feed_cache.invalidate()
     game_updates.publish(event)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

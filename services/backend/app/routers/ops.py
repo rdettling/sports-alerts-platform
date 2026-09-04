@@ -20,6 +20,7 @@ from app.schemas.ops import (
     NeonUsageOut,
 )
 from app.services.competitions import get_alert_types, get_competition_profile, list_competition_settings, normalize_competition
+from app.services.game_feed import game_feed_cache
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -65,6 +66,7 @@ def update_competition_setting(
         raise HTTPException(status_code=404, detail="Competition not found")
     row.is_enabled = payload.is_enabled
     db.commit()
+    game_feed_cache.invalidate()
     db.refresh(row)
     return _competition_setting_out(row)
 

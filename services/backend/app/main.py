@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db.session import SessionLocal
+from app.db.usage import DatabaseUsageMiddleware, database_source, database_usage_logging
 from app.routers.auth import router as auth_router
 from app.routers.alerts import router as alerts_router
 from app.routers.follows import router as follows_router
@@ -35,20 +36,19 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    started_at = monotonic()
-    logger.info("Startup seed begin")
-    db = SessionLocal()
-    try:
-        ensure_seeded_teams(db)
-        ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
+    with database_usage_logging():
+        started_at = monotonic()
+        logger.info("Startup seed begin")
+        with database_source("api:startup"), SessionLocal() as db:
+            ensure_seeded_teams(db)
+            ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
         elapsed_ms = int((monotonic() - started_at) * 1000)
         logger.info("Startup seed complete elapsed_ms=%s", elapsed_ms)
-    finally:
-        db.close()
-    yield
+        yield
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.add_middleware(DatabaseUsageMiddleware)
 allowed_origins = [origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,

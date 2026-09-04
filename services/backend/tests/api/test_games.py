@@ -343,3 +343,73 @@ def test_games_filter_by_wnba(client):
 def test_games_accepts_raised_dashboard_limit(client):
     assert client.get("/games?limit=500").status_code == 200
     assert client.get("/games?limit=501").status_code == 422
+
+
+DASHBOARD_GAMES_URL = "/games?include_finals=true&limit=500"
+
+
+def test_dashboard_cache_invalidates_before_worker_broadcast(client, monkeypatch):
+    from app.config import settings
+    from app.services.live_updates import game_updates
+
+    game = _create_game()
+    first = client.get(DASHBOARD_GAMES_URL)
+    assert first.headers["cache-control"] == "no-store"
+    assert first.json()[0]["home_score"] is None
+    with SessionLocal() as db:
+        db.get(Game, game.id).home_score = 12
+        db.commit()
+    assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] is None
+    assert client.get("/games?competition=NBA").json()[0]["home_score"] == 12
+
+    monkeypatch.setattr(settings, "live_update_secret", "test-secret")
+    seen = []
+
+    def publish(event):
+        from app.services.game_feed import game_feed_cache
+        seen.append(game_feed_cache.get()[0].home_score)
+
+    monkeypatch.setattr(game_updates, "publish", publish)
+    assert client.post(
+        "/internal/updates/games",
+        headers={"X-Live-Update-Secret": "wrong"},
+        json={"competition": "NBA"},
+    ).status_code == 401
+    assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] is None
+    assert client.post(
+        "/internal/updates/games",
+        headers={"X-Live-Update-Secret": "test-secret"},
+        json={"competition": "NBA"},
+    ).status_code == 204
+    assert seen == [12]
+    assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] == 12
+
+
+def test_competition_toggle_invalidates_dashboard_cache(client):
+    from app.deps import require_admin_user
+    from app.main import app
+
+    _create_game()
+    assert len(client.get(DASHBOARD_GAMES_URL).json()) == 1
+    app.dependency_overrides[require_admin_user] = lambda: None
+    try:
+        for enabled, count in [(False, 0), (True, 1)]:
+            assert client.put("/ops/competitions/NBA", json={"is_enabled": enabled}).status_code == 200
+            assert len(client.get(DASHBOARD_GAMES_URL).json()) == count
+    finally:
+        app.dependency_overrides.pop(require_admin_user)
+
+
+def test_dashboard_cache_is_not_used_for_other_query_shapes(client):
+    game = _create_game()
+    assert client.get(DASHBOARD_GAMES_URL).json()[0]["status"] == "scheduled"
+    with SessionLocal() as db:
+        row = db.get(Game, game.id)
+        row.status = "final"
+        row.is_final = True
+        db.commit()
+    assert client.get("/games").json() == []
+    for query in ["include_finals=true", "status=final&include_finals=true&limit=500", "competition=NBA&include_finals=true&limit=500"]:
+        response = client.get(f"/games?{query}")
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json()[0]["status"] == "final"

@@ -81,7 +81,9 @@ Live updates require no database migration or additional service. Configure the 
 2. Worker, so changed commits begin publishing
 3. Frontend, so browsers begin opening SSE connections
 
-Notification failure never fails or retries a completed sync. The frontend keeps a ten-minute live fallback and a hard two-minute minimum between `/games` reads.
+Worker notification delivery retries transient failures once; a completed sync is never retried because its notification failed. The API invalidates its 30-second shared dashboard cache before publishing an event. The frontend batches events for one second, spaces event-driven requests at least two seconds apart, and uses a visible/online fallback of 60 seconds during live games. Quiet feeds wait 30 minutes or until the next scheduled game start, whichever is sooner, allowing the database to sleep between reads when other activity permits. Initial load failures retry via the 60-second fallback.
+
+Keep one Uvicorn process on one API instance. Deploys and maintenance can disconnect SSE clients; the browser must reconnect and fetch current state. No new service, environment variable, or database migration is required for these changes.
 
 ## Database
 
@@ -118,6 +120,8 @@ Do not deploy the new API first and plan to reset afterward: its startup migrati
 
 ## Post-Deploy Checks
 
+After a deploy, capture a Neon usage snapshot as described in the [database usage runbook](runbook.md#reviewing-database-awake-time-and-waste). Confirm both API and worker log `Database usage logging started`, then check for nonempty summaries after five minutes of activity. The new summaries only exist after deploying the instrumented backend; collect at least a day before evaluating the change.
+
 After a deploy:
 
 1. Open the frontend
@@ -128,4 +132,7 @@ After a deploy:
 6. Verify email-only, push-only, combined, and no-delivery test states for the admin account
 7. Confirm a push notification opens the Games page and history shows channel-specific delivery chips
 8. If Neon integration is configured, confirm the admin DB stats view can load usage data
-9. Confirm `/updates/games` remains connected and changed worker jobs prompt no more than one `/games` read every two minutes per visible client
+9. Observe a natural worker change and confirm `/updates/games` delivers it and the visible Games screen updates within five seconds under healthy networking
+10. On an actual iPhone Home Screen installation, check lock/unlock, app switching, and offline/online recovery. The stream should close while hidden/offline and reopen with a catch-up read on return
+11. Confirm a desktop client reconnects and refreshes after a normal API deployment; opening the stream must also fetch state to cover updates missed during connection establishment
+12. In local testing, suppress a notification on a feed already showing a live game and confirm the visible fallback recovers within two minutes; confirm concurrent dashboard readers share one cache fill. Also verify a quiet screen does not read games every minute and checks at an upcoming scheduled start. Quiet-period missed events can take up to 30 minutes to recover. Do not change production scores or disable production publishing for this check
