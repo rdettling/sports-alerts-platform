@@ -1,31 +1,50 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { getOpsNeonUsage, type OpsAdminOverviewWindow } from "../../../shared/api";
-import { useAdminData } from "../hooks/useAdminData";
-import { AdminCompetitionSettingsPanel } from "./admin/AdminCompetitionSettingsPanel";
-import { AdminOverviewSection } from "./admin/AdminOverviewSection";
+import {
+  getOpsAdminSummary,
+  getOpsNeonUsage,
+  type OpsAdminOverviewWindow,
+} from "../../../shared/api";
+import { AdminLeaguesPanel } from "./admin/AdminLeaguesPanel";
+import { AdminActivitySection } from "./admin/AdminActivitySection";
 import { AdminTabsHeader } from "./admin/AdminTabsHeader";
-import { formatElapsedTime } from "./admin/admin-format";
-import { type AdminTab } from "./admin/admin-tabs";
-import { AdminTestAlertsPanel } from "./AdminTestAlertsPanel";
+import { ADMIN_TABS, type AdminTab } from "./admin/admin-tabs";
 
 export function AdminView({ token }: { token: string }) {
-  const [tab, setTab] = useState<AdminTab>("overview");
+  const [tab, setTab] = useState<AdminTab>("leagues");
   const [windowValue, setWindowValue] = useState<OpsAdminOverviewWindow>("24h");
-  const { data, isLoading, isFetching, error } = useAdminData(token, windowValue);
+  const {
+    data: summary,
+    isLoading,
+    isFetching,
+    error,
+    refetch: refetchSummary,
+  } = useQuery({
+    queryKey: ["admin-page", token, windowValue],
+    queryFn: () => getOpsAdminSummary(token, windowValue),
+    placeholderData: (previousData) => previousData,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   const {
     data: neonUsage,
     isLoading: neonLoading,
     error: neonQueryError,
+    isFetching: neonFetching,
+    refetch: refetchNeon,
   } = useQuery({
     queryKey: ["admin-neon", token],
     queryFn: () => getOpsNeonUsage(token),
-    enabled: tab === "overview",
-    refetchInterval: 60_000,
+    enabled: tab === "activity-tools",
+    staleTime: Infinity,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  const summary = data?.summary ?? null;
   const errorMessage =
     error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
   const neonError =
@@ -34,42 +53,21 @@ export function AdminView({ token }: { token: string }) {
       : neonQueryError
         ? "Failed to load Neon usage"
         : null;
-  const updatedAtLabel = summary ? formatElapsedTime(summary.overview.last_updated_at) : null;
+  const isRefreshing = isFetching || (tab === "activity-tools" && neonFetching);
 
-  function renderTabContent() {
-    if (!summary) {
-      return null;
-    }
-    switch (tab) {
-      case "overview":
-        return (
-          <AdminOverviewSection
-            summary={summary}
-            neonUsage={neonUsage}
-            neonLoading={neonLoading}
-            neonError={neonError}
-          />
-        );
-      case "tools":
-        return (
-          <div className="admin-tools-layout">
-            <AdminCompetitionSettingsPanel token={token} items={summary.competition_settings} />
-            <AdminTestAlertsPanel token={token} items={summary.competition_settings} />
-          </div>
-        );
-    }
+  function refresh() {
+    void refetchSummary({ cancelRefetch: false });
+    if (tab === "activity-tools") void refetchNeon({ cancelRefetch: false });
   }
 
   return (
-    <div className="admin-page">
+    <div className={`admin-page${tab === "leagues" ? " admin-page-leagues" : ""}`}>
       <AdminTabsHeader
         tab={tab}
         onTabChange={setTab}
-        windowValue={windowValue}
-        onWindowChange={setWindowValue}
-        updatedAtLabel={updatedAtLabel}
-        isRefreshing={isFetching && Boolean(summary)}
-        refreshFailed={Boolean(errorMessage && summary)}
+        isRefreshing={isRefreshing}
+        refreshFailed={Boolean(errorMessage || (tab === "activity-tools" && neonError))}
+        onRefresh={refresh}
       />
 
       <div className="admin-content-scroll">
@@ -88,17 +86,38 @@ export function AdminView({ token }: { token: string }) {
             {errorMessage}
           </p>
         ) : null}
-        {summary ? (
-          <section
-            id={`admin-panel-${tab}`}
-            className="admin-tab-panel"
-            role="tabpanel"
-            aria-labelledby={`admin-tab-${tab}`}
-            tabIndex={0}
-          >
-            {renderTabContent()}
-          </section>
-        ) : null}
+        {summary
+          ? ADMIN_TABS.map((item) => (
+              <section
+                key={item.key}
+                id={`admin-panel-${item.key}`}
+                className="admin-tab-panel"
+                role="tabpanel"
+                aria-labelledby={`admin-tab-${item.key}`}
+                hidden={tab !== item.key}
+                tabIndex={0}
+              >
+                {item.key === "leagues" ? (
+                  <AdminLeaguesPanel
+                    token={token}
+                    items={summary.competition_settings}
+                    schedule={summary.schedule}
+                    active={tab === "leagues"}
+                  />
+                ) : (
+                  <AdminActivitySection
+                    token={token}
+                    summary={summary}
+                    windowValue={windowValue}
+                    onWindowChange={setWindowValue}
+                    neonUsage={neonUsage}
+                    neonLoading={neonLoading}
+                    neonError={neonError}
+                  />
+                )}
+              </section>
+            ))
+          : null}
       </div>
     </div>
   );

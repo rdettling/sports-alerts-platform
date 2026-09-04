@@ -165,6 +165,25 @@ export type PushSubscriptionPayload = {
 
 export type OpsAdminOverviewWindow = "1h" | "6h" | "24h" | "7d";
 
+export type ScheduleSnapshot = {
+  reported_at: string;
+  next_catalog_at: string;
+  jobs: {
+    competition: string;
+    job_type: "catalog_sync" | "live_sync";
+    next_run_at: string;
+    last_success_at: string | null;
+    state:
+      | "awaiting_first_result"
+      | "queued"
+      | "scheduled"
+      | "live"
+      | "waiting_for_start"
+      | "no_upcoming"
+      | "retry_scheduled";
+  }[];
+};
+
 export type OpsAdminSummaryResponse = {
   overview: {
     window: OpsAdminOverviewWindow;
@@ -184,6 +203,7 @@ export type OpsAdminSummaryResponse = {
     };
   };
   competition_settings: CompetitionSetting[];
+  schedule: ScheduleSnapshot | null;
 };
 
 export type OpsNeonUsageResponse = {

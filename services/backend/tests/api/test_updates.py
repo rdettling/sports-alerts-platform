@@ -85,3 +85,48 @@ def test_broadcaster_coalesces_bursts_per_subscriber():
         assert queue.empty()
     finally:
         broadcaster.unsubscribe(queue)
+
+
+def test_schedule_reports_replace_memory_without_sql_or_game_notifications(client, monkeypatch):
+    from sqlalchemy import event
+    from app.db.session import engine
+    from app.services import worker_schedule
+    from app.services.game_feed import game_feed_cache
+
+    sql = []
+    def track(*args):
+        sql.append(args[2])
+
+    def unexpected(*args):
+        raise AssertionError("schedule reports must not affect the game feed")
+
+    monkeypatch.setattr(game_feed_cache, "invalidate", unexpected)
+    monkeypatch.setattr(game_updates, "publish", unexpected)
+    payload = {"reported_at": "2026-09-04T16:00:00Z", "next_catalog_at": "2026-09-05T04:00:00Z", "jobs": [{
+        "competition": "NBA", "job_type": "live_sync",
+        "next_run_at": "2026-09-04T16:02:00Z", "last_success_at": None,
+        "state": "retry_scheduled",
+    }]}
+    event.listen(engine, "before_cursor_execute", track)
+    try:
+        monkeypatch.setattr(settings, "live_update_secret", "")
+        assert client.post("/internal/updates/schedule", json=payload).status_code == 503
+        monkeypatch.setattr(settings, "live_update_secret", "secret")
+        for headers in ({}, {"X-Live-Update-Secret": "wrong"}):
+            assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 401
+        assert worker_schedule.snapshot is None
+        headers = {"X-Live-Update-Secret": "secret"}
+        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
+        assert worker_schedule.snapshot.model_dump(mode="json") == payload
+        payload["jobs"][0].update(job_type="catalog_sync", state="queued")
+        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
+        assert worker_schedule.snapshot.jobs[0].state == "queued"
+        assert worker_schedule.snapshot.next_catalog_at.isoformat() == "2026-09-05T04:00:00+00:00"
+        payload["jobs"] = []
+        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
+        assert worker_schedule.snapshot.jobs == []
+        payload["reported_at"] = "2026-09-04T16:00:00"
+        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 422
+        assert sql == []
+    finally:
+        event.remove(engine, "before_cursor_execute", track)

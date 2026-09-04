@@ -17,12 +17,20 @@ At startup, the API:
 - ensures competition runtime rows exist
 - ensures a bootstrap admin user exists for the configured email
 
+### Worker Scheduling
+
 The single worker process runs continuously with an in-memory schedule and manages:
 
-- catalog sync across enabled competitions
+- one shared catalog cycle across enabled competitions
 - narrower live sync loops by competition
 - optional pregame odds snapshots
 - alert evaluation and delivery
+
+The worker reads enabled competitions at startup and on each scheduler iteration. When no job is due, it waits until the next scheduled job, capped at `CATALOG_SYNC_INTERVAL_SECONDS` (12 hours by default). With no enabled competitions, it waits one catalog interval before checking again. There is no separate hourly settings poll. Waits are interruptible on shutdown; kickoff scheduling, live polling, and job retries can all wake it sooner.
+
+Catalog cycles are anchored to worker startup: one immediate cycle, then every `CATALOG_SYNC_INTERVAL_SECONDS`. Each cycle queues one attempt per enabled league and advances the shared clock without waiting for completion. Missed cycles are skipped rather than replayed. Successful catalog records have no independent timer; failed attempts retain a per-league retry deadline (30 seconds, exponentially increasing to one hour). The next regular cycle replaces outstanding catalog retries and resets their failure counts. Due live jobs take priority between catalog attempts, except that a league's startup catalog attempt precedes its first live read. Each league attempt uses a separate transaction. A failed startup catalog attempt does not block that league's live reads of existing games.
+
+Admin league settings are saved immediately, but the sleeping worker discovers them on its next wake. Newly enabled leagues wait for the next shared catalog cycle, even if discovered earlier during live work, and may miss games or alerts for up to about 12 hours. Their existing live-job initialization can still monitor previously stored games. Disabled leagues are removed from the schedule before the next job is selected. Restarting the worker discovers current settings immediately and also reruns startup jobs.
 
 ## Current User-Facing Surfaces
 
@@ -31,7 +39,7 @@ The dashboard contains four sections:
 - `Games`
 - `Teams`
 - `Alerts`
-- `Admin` for users with `role=admin`
+- `Admin` for users with `role=admin`: Leagues and Activity & tools (see [Admin / Ops](#admin--ops))
 
 Games and Teams are public. Follow actions use progressive sign-in, and authenticated users can filter Games to their direct and team-derived follows.
 
@@ -71,7 +79,8 @@ The API is split into a small set of route groups:
 - `/competitions` — active competition metadata for the UI
 - `/ops` — admin-only alert activity, DB stats, and competition runtime controls
 - `/updates/games` — public SSE notifications containing no game or user data
-- `/internal/updates/games` — authenticated worker publish endpoint
+- `/internal/updates/games` — authenticated worker game-change endpoint
+- `/internal/updates/schedule` — authenticated worker schedule-report endpoint
 - `/healthz` — health check
 
 ## Core Data Model
@@ -148,7 +157,13 @@ Admin-only routes expose:
 - competition enable/disable controls
 - test tools
 
-Admin test alerts use transient sample objects to exercise the real Email and Push delivery paths. They return channel outcomes to the Tools view without entering game, alert history, or activity tables.
+Admin opens on Leagues and loads its summary. Neon usage loads on demand when Activity & tools is first opened and otherwise reuses cached data. Neither dataset has periodic, focus, or reconnect refetching. Refresh reloads both datasets on Activity & tools and only the summary on Leagues. Changing the activity window fetches that summary; switching internal tabs reuses cached data. Competition-setting changes still refresh the summary, and failed reads retain cached values with an error. Already-requested reads retain the normal bounded retry and can resume after an offline pause.
+
+The Admin Leagues tab combines availability controls and sync schedules from the worker's actual in-memory schedule. The worker posts a complete snapshot to `/internal/updates/schedule` after startup competition discovery, changes to its scheduled leagues, each queued catalog cycle, and each successful or failed job. The API authenticates with the existing live-update secret and atomically replaces one memory-only report. The admin summary includes this snapshot without additional SQL. Reports never invalidate the game feed or broadcast SSE events. They use the same timeout, single transient retry, and failure/recovery log suppression as [game notifications](#game-sync); delivery failures do not change job outcomes or scheduling. There are no reporting-only wake-ups. Local countdowns run only while Leagues is selected and the page is visible and make no requests; passed times require a manual refresh rather than implying a completed sync.
+
+Admin has two mounted panels, ordered Leagues then Activity & tools. Hidden panels retain selections, disclosures, and results. Leagues shows enabled/disabled indicators, inline availability controls, next live syncs, and live intervals. Its header contains one shared catalog countdown from `next_catalog_at`, with catalog exceptions in a disclosure. Activity & tools combines alert activity, database usage, and the test-alert form; these appear side by side on desktop and stack on smaller screens. Test inputs are disabled while sending, duplicate submissions are blocked, and the response is displayed directly without a summary reload.
+
+Admin test alerts use transient sample objects to exercise the real Email and Push delivery paths. They return channel outcomes in Activity & tools without entering game, alert history, or activity tables.
 
 ## Database Activity Observability
 
@@ -157,7 +172,7 @@ Both runtime processes aggregate existing SQLAlchemy connection, statement, tran
 ## Design Constraints
 
 - The worker is separate so ingest and delivery do not block request/response traffic
-- Scheduler state is process-local; worker logs are the source of truth for job timing and failures
+- Scheduler state and the API schedule report are process-local. Admin shows last reported plans, not worker liveness; worker logs remain the source of truth for actual execution and failures. API restarts clear its report until the next worker publication (potentially 12 hours later), and worker restarts clear remembered success times.
 - SSE fanout and the dashboard feed cache are process-local and assume one API process on one instance; multiple processes or instances require shared broadcasting and cache invalidation
 - Odds are persisted and read from the DB instead of fetched from the browser path
 - RBAC is DB-backed through `users.role`

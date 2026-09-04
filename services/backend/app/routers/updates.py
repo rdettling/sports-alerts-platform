@@ -4,7 +4,9 @@ from fastapi import APIRouter, Header, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
+from app.schemas.schedule import ScheduleSnapshot
 from app.schemas.update import GameUpdateEvent
+from app.services import worker_schedule
 from app.services.game_feed import game_feed_cache
 from app.services.live_updates import game_updates
 
@@ -29,6 +31,14 @@ async def publish_game_update(
     event: GameUpdateEvent,
     live_update_secret: str | None = Header(default=None, alias="X-Live-Update-Secret"),
 ) -> Response:
+    _require_worker_secret(live_update_secret)
+
+    game_feed_cache.invalidate()
+    game_updates.publish(event)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _require_worker_secret(live_update_secret: str | None) -> None:
     configured_secret = settings.live_update_secret
     if not configured_secret:
         raise HTTPException(
@@ -44,6 +54,12 @@ async def publish_game_update(
             detail="Invalid live update secret",
         )
 
-    game_feed_cache.invalidate()
-    game_updates.publish(event)
+
+@router.post("/internal/updates/schedule", status_code=status.HTTP_204_NO_CONTENT)
+async def publish_schedule(
+    snapshot: ScheduleSnapshot,
+    live_update_secret: str | None = Header(default=None, alias="X-Live-Update-Secret"),
+) -> Response:
+    _require_worker_secret(live_update_secret)
+    worker_schedule.snapshot = snapshot
     return Response(status_code=status.HTTP_204_NO_CONTENT)

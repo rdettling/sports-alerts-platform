@@ -33,10 +33,12 @@ from app.db.models import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.game_feed import game_feed_cache  # noqa: E402
+from app.services import worker_schedule  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    worker_schedule.snapshot = None
     game_feed_cache.invalidate()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

@@ -7,7 +7,7 @@ from app.worker import updates
 def _configure(monkeypatch):
     monkeypatch.setattr(updates.settings, "live_update_api_url", "https://api.example.com/")
     monkeypatch.setattr(updates.settings, "live_update_secret", "secret")
-    monkeypatch.setattr(updates, "_delivery_failing", False)
+    monkeypatch.setattr(updates, "_delivery_failures", set())
 
 
 def test_notification_is_disabled_without_complete_configuration(monkeypatch):
@@ -108,3 +108,32 @@ def test_publish_failure_has_bounded_attempts(monkeypatch, status):
     assert updates.notify_games_changed("NBA") is False
     assert len(calls) == (2 if status >= 500 else 1)
     assert delays == ([0.25] if status >= 500 else [])
+
+
+def test_schedule_transport_serializes_times_and_keeps_failure_logs_independent(monkeypatch, caplog):
+    from app.schemas.schedule import ScheduleSnapshot
+    _configure(monkeypatch)
+    snapshot = ScheduleSnapshot(reported_at="2026-09-04T16:00:00Z", next_catalog_at="2026-09-05T04:00:00Z", jobs=[])
+    calls, delays = [], []
+    failing = True
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(503 if failing and url.endswith("schedule") else 204,
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(updates.httpx, "post", post)
+    monkeypatch.setattr(updates, "sleep", delays.append)
+    with caplog.at_level("INFO", logger="app.worker.updates"):
+        assert updates.notify_schedule(snapshot) is False
+        assert updates.notify_games_changed("NBA") is True
+        assert updates.notify_schedule(snapshot) is False
+        failing = False
+        assert updates.notify_schedule(snapshot) is True
+    assert delays == [0.25, 0.25]
+    assert calls[0] == ("https://api.example.com/internal/updates/schedule", {
+        "headers": {"X-Live-Update-Secret": "secret"},
+        "json": {"reported_at": "2026-09-04T16:00:00Z", "next_catalog_at": "2026-09-05T04:00:00Z", "jobs": []}, "timeout": 2.0,
+    })
+    assert caplog.text.count("Schedule report delivery failed") == 1
+    assert caplog.text.count("Schedule report delivery recovered") == 1

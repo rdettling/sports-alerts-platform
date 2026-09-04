@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.schemas.competition import CompetitionSettingOut
+from app.schemas.schedule import ScheduleSnapshot
 
 
 class OpsAdminSummaryOverviewOut(BaseModel):
@@ -28,6 +29,7 @@ class OpsAdminSummaryOut(BaseModel):
     overview: OpsAdminSummaryOverviewOut
     delivery: OpsAdminDeliveryOut
     competition_settings: list[CompetitionSettingOut]
+    schedule: ScheduleSnapshot | None = None
 
 
 class NeonUsageOut(BaseModel):

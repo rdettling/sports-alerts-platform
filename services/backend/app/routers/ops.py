@@ -19,6 +19,7 @@ from app.schemas.ops import (
     OpsAdminSummaryOverviewOut,
     NeonUsageOut,
 )
+from app.services import worker_schedule
 from app.services.competitions import get_alert_types, get_competition_profile, list_competition_settings, normalize_competition
 from app.services.game_feed import game_feed_cache
 
@@ -112,6 +113,7 @@ def admin_summary(
                 failed=push_counts.get("failed", 0),
             ),
         ),
+        schedule=worker_schedule.snapshot,
         competition_settings=[_competition_setting_out(row) for row in list_competition_settings(db)],
     )
 

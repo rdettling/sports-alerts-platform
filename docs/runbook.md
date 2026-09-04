@@ -39,9 +39,38 @@ The API and worker emit `Database usage {…}` JSON summaries every five minutes
 
 To judge waste, compare awake hours and CU-hours from snapshots, identify activity during periods without live games, then check whether it came from game-feed fills, admin polling, startup, or worker scans. Look for repeated unchanged worker syncs and many discarded cache fills. Keep the old and new deployment revisions separate. Fast reconnects or many staggered viewers may still keep Neon awake even with the quiet fallback.
 
+Check the [worker schedule rules](architecture.md#worker-scheduling) and the next reported job time before treating a quiet interval or delayed league discovery as a failure. Catalog clustering may reduce scattered activity, but compute-hour savings must be measured.
+
+To verify idle sleep after a worker deploy, capture a fresh usage snapshot and confirm the startup log reports `idle_max_sleep=43200s` with the default catalog interval. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. Correlate its timestamps with `start_compute` and `suspend_compute` from `neon operations list --project-id solitary-resonance-98873129 -o json`. This reads Neon's control plane without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
+
 Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
 
+If admin requests appear repeatedly during idle periods, use the [Admin refresh checks](#admin-data-is-stale-or-refreshing-unexpectedly). Deliberate refreshes still authenticate against Postgres, including the Neon usage endpoint whose usage lookup itself uses the control plane.
+
 The report requests up to 1,000 summary records and warns if that limit is reached; use smaller windows in that case. Current partial windows and abruptly terminated processes can be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for a next-day review. Capture the report before retention expires.
+
+## Admin Data Is Stale Or Refreshing Unexpectedly
+
+Admin loads on demand; see the [refresh and panel rules](architecture.md#admin--ops). Use Refresh after leaving it open or returning from another app. After a partial failure, cached content remains visible beside errors.
+
+To verify request behavior in browser network tools:
+
+1. Open Admin, then open Activity & tools once so both the summary and Neon usage have loaded.
+2. Leave it visible for ten minutes, switch tabs, return from another app, and restore networking. These actions must not start additional `/ops/admin/summary` or `/ops/db/neon-usage` requests; an already-requested offline load can resume.
+3. Click Refresh on Activity & tools: expect summary and Neon usage requests. On Leagues, expect only the summary.
+4. Change the activity window or a league setting: expect a summary request. Sending a test alert displays its delivery response without requesting another summary.
+
+If requests exceed those expectations, check the frontend revision and distinguish deliberate actions and bounded retries from polling. For stale schedules, follow the checks below.
+
+## Admin League Sync Times
+
+For the [reported schedule](architecture.md#admin--ops), compare Next catalog refresh and each league’s live deadline with worker logs. A passed time or Catalog pending is not proof of completion: use Refresh, then inspect logs if the report remains old. Refresh reads API memory and does not contact the worker.
+
+Schedule unavailable can persist for up to 12 hours after an API restart while the worker sleeps. An enabled league absent from the report is awaiting discovery; a disabled league still present is awaiting confirmation. Check worker startup time before interpreting missing last-success values, which reset on worker restart.
+
+If reports stay unavailable after worker activity, check `Schedule report delivery failed` and the matching recovery log, then verify the worker API URL/shared secret. During a release, confirm the API and worker use compatible schedule fields; see the [catalog cutover instructions](deployment.md#shared-catalog-schedule-cutover).
+
+`Catalog cycle queued` logs show the league count and next shared deadline. Verify that completion times do not move that deadline, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior. Use `worker:catalog_sync:<league>` counters to attribute database activity separately from live polling and site visits.
 
 ## Games Screen Is Stale
 
@@ -55,7 +84,7 @@ The report requests up to 1,000 summary records and warns if that limit is reach
 
 Hidden/offline screens intentionally stop SSE and refresh timers. On an iPhone, reopen the Home Screen app and verify a catch-up request and a new stream connection. Render deployments also interrupt existing streams; reconnection must fetch the latest state. Existing displayed games remain visible during background refreshes. Failed reads use the existing error display and retry/fallback behavior.
 
-The five-second normal update target assumes healthy services/networking and a visible app. Two-minute missed-notification recovery applies when the feed already shows live games; quiet feeds trade recovery time (up to 30 minutes) for opportunities to suspend Neon. A delayed or overdue scheduled game does not by itself trigger minute-by-minute reads. Other viewers, worker jobs, and reconnects can still prevent suspension. These changes do not make upstream sports data arrive faster or keep iOS running in the background.
+The five-second normal update target assumes healthy services/networking and a visible app. Two-minute missed-notification recovery applies when the feed already shows live games; quiet feeds trade recovery time (up to 30 minutes) for opportunities to suspend Neon. A delayed or overdue scheduled game does not by itself trigger minute-by-minute reads. Other viewers, worker jobs, and reconnects can still prevent suspension. Display refreshes cannot accelerate upstream sports data or keep iOS running in the background.
 
 ## Frontend Route 404 On Hard Refresh
 

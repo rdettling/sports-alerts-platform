@@ -1,39 +1,12 @@
-import { type OpsAdminOverviewWindow } from "../../../../shared/api";
-
 import { ADMIN_TABS, type AdminTabsHeaderProps } from "./admin-tabs";
-
-function WindowSelect({
-  value,
-  onChange,
-}: {
-  value: OpsAdminOverviewWindow;
-  onChange: (next: OpsAdminOverviewWindow) => void;
-}) {
-  return (
-    <select
-      aria-label="Activity window"
-      value={value}
-      onChange={(event) => onChange(event.target.value as OpsAdminOverviewWindow)}
-    >
-      <option value="1h">1h</option>
-      <option value="6h">6h</option>
-      <option value="24h">24h</option>
-      <option value="7d">7d</option>
-    </select>
-  );
-}
 
 export function AdminTabsHeader({
   tab,
   onTabChange,
-  windowValue,
-  onWindowChange,
-  updatedAtLabel,
   isRefreshing,
   refreshFailed,
+  onRefresh,
 }: AdminTabsHeaderProps) {
-  const showWindow = tab === "overview";
-
   const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
     if (event.key === "ArrowRight") nextIndex = (index + 1) % ADMIN_TABS.length;
@@ -71,24 +44,20 @@ export function AdminTabsHeader({
         ))}
       </div>
       <div className="admin-tab-controls">
-        {showWindow ? (
-          <label>
-            Window
-            <WindowSelect value={windowValue} onChange={onWindowChange} />
-          </label>
-        ) : null}
+        <button
+          className="admin-refresh-button"
+          type="button"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+        >
+          Refresh
+        </button>
         <span
           className={`admin-refresh-status ${refreshFailed ? "is-error" : ""}`.trim()}
           role="status"
           aria-live="polite"
         >
-          {refreshFailed
-            ? "Refresh failed"
-            : isRefreshing
-              ? "Refreshing…"
-              : updatedAtLabel
-                ? `Updated ${updatedAtLabel}`
-                : ""}
+          {isRefreshing ? "Refreshing…" : refreshFailed ? "Refresh failed" : ""}
         </span>
       </div>
     </section>

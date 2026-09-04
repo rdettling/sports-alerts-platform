@@ -73,17 +73,21 @@ Required env:
 
 If you host the frontend as a single-page app, configure route fallback so browser refreshes on nested routes keep working.
 
-## Live Update Rollout
+## Service Release Order
 
-Live updates require no database migration or additional service. Configure the shared secret before deploying the feature, then deploy in this order:
+Configure the worker API URL and matching shared secret before starting worker publication. Release changes to worker/API/frontend contracts in this order:
 
-1. API, so both live update endpoints exist
-2. Worker, so changed commits begin publishing
-3. Frontend, so browsers begin opening SSE connections
+1. API, so worker update endpoints and frontend response fields are available
+2. Worker, so it publishes the expected game notifications and schedule reports
+3. Frontend, so it can consume the updated API
 
-Worker notification delivery retries transient failures once; a completed sync is never retried because its notification failed. The API invalidates its 30-second shared dashboard cache before publishing an event. The frontend batches events for one second, spaces event-driven requests at least two seconds apart, and uses a visible/online fallback of 60 seconds during live games. Quiet feeds wait 30 minutes or until the next scheduled game start, whichever is sooner, allowing the database to sleep between reads when other activity permits. Initial load failures retry via the 60-second fallback.
+Keep one worker and one Uvicorn process on one API instance. SSE, the game cache, and schedule reports are process-local; see [architecture](architecture.md#design-constraints). API restarts disconnect streams and discard schedule reports. Browsers must reconnect and fetch current games; Admin may show Schedule unavailable until the worker next reports, potentially 12 hours later. Worker restarts clear remembered success times, run an immediate catalog cycle, and reset the 12-hour catalog anchor.
 
-Keep one Uvicorn process on one API instance. Deploys and maintenance can disconnect SSE clients; the browser must reconnect and fetch current state. No new service, environment variable, or database migration is required for these changes.
+### Shared Catalog Schedule Cutover
+
+When releasing the shared catalog schedule, follow API → worker → frontend. Reports require `next_catalog_at` and accept the `queued` job state. Old worker reports may be rejected during the API/worker cutover; temporary Schedule unavailable is expected. This cutover needs no new configuration, dependency, or database migration.
+
+Remove any obsolete `SCHEDULER_IDLE_MAX_SLEEP_SECONDS` override from the worker environment; the maximum wait uses `CATALOG_SYNC_INTERVAL_SECONDS` instead.
 
 ## Database
 
@@ -120,7 +124,7 @@ Do not deploy the new API first and plan to reset afterward: its startup migrati
 
 ## Post-Deploy Checks
 
-After a deploy, capture a Neon usage snapshot as described in the [database usage runbook](runbook.md#reviewing-database-awake-time-and-waste). Confirm both API and worker log `Database usage logging started`, then check for nonempty summaries after five minutes of activity. The new summaries only exist after deploying the instrumented backend; collect at least a day before evaluating the change.
+Capture a fresh Neon usage baseline using the [database usage runbook](runbook.md#reviewing-database-awake-time-and-waste). Confirm API and worker log `Database usage logging started`, then check for nonempty summaries after five minutes of activity. Compare at least a day of logs from the same deployed revision before judging database savings.
 
 After a deploy:
 
@@ -136,3 +140,6 @@ After a deploy:
 10. On an actual iPhone Home Screen installation, check lock/unlock, app switching, and offline/online recovery. The stream should close while hidden/offline and reopen with a catch-up read on return
 11. Confirm a desktop client reconnects and refreshes after a normal API deployment; opening the stream must also fetch state to cover updates missed during connection establishment
 12. In local testing, suppress a notification on a feed already showing a live game and confirm the visible fallback recovers within two minutes; confirm concurrent dashboard readers share one cache fill. Also verify a quiet screen does not read games every minute and checks at an upcoming scheduled start. Quiet-period missed events can take up to 30 minutes to recover. Do not change production scores or disable production publishing for this check
+13. Compare Admin's single Next catalog refresh deadline and per-league outcomes with `Catalog cycle queued` and `Job completed` logs; use the [schedule troubleshooting procedure](runbook.md#admin-league-sync-times) for missing or stale reports
+14. Verify Admin makes no automatic requests while idle, across tab changes, or on foreground/reconnect events, using the [Admin refresh checks](runbook.md#admin-data-is-stale-or-refreshing-unexpectedly)
+15. Review an overnight quiet period for worker scans between scheduled jobs and correlate activity with Neon wake/sleep history using the database usage runbook

@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 from app.db.models import Alert, AlertDelivery, User
 from app.db.session import SessionLocal
+from app.schemas.schedule import ScheduleSnapshot
+from app.services import worker_schedule
 
 
 def _issue_token(client, monkeypatch, email: str) -> str:
@@ -65,7 +67,10 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     summary = client.get("/ops/admin/summary?window=24h", headers=headers)
     assert summary.status_code == 200
     summary_json = summary.json()
-    assert set(summary_json) == {"overview", "delivery", "competition_settings"}
+    assert set(summary_json) == {"overview", "delivery", "competition_settings", "schedule"}
+    assert summary_json["schedule"] is None
+    worker_schedule.snapshot = ScheduleSnapshot(reported_at=now, next_catalog_at=now, jobs=[])
+    assert client.get("/ops/admin/summary", headers=headers).json()["schedule"] == worker_schedule.snapshot.model_dump(mode="json")
     assert set(summary_json["overview"]) == {"window", "total_alerts_created", "last_updated_at"}
     assert set(summary_json["delivery"]) == {"email_alerts", "push_alerts"}
     assert summary_json["overview"]["total_alerts_created"] == 2

@@ -6,7 +6,6 @@ class WorkerSettings(BaseSettings):
 
     catalog_sync_interval_seconds: int = 43200
     odds_api_key: str = ""
-    scheduler_idle_max_sleep_seconds: int = 3600
     live_update_api_url: str = ""
     live_update_secret: str = ""
 

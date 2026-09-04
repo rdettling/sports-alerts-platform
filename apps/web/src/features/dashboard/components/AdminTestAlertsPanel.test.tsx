@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type CompetitionSetting } from "../../../shared/api";
+import { basketballCompetition, baseballCompetition } from "./admin/admin-test-fixtures";
 import { AdminTestAlertsPanel } from "./AdminTestAlertsPanel";
 
 const sendAdminTestAlertMock = vi.hoisted(() => vi.fn());
@@ -12,33 +13,16 @@ vi.mock("../../../shared/api", async () => {
 });
 
 const items: CompetitionSetting[] = [
+  { ...basketballCompetition, competition: "NBA", label: "NBA", badge_label: "NBA" },
   {
-    competition: "NBA",
-    sport: "basketball",
-    label: "NBA",
-    badge_label: "NBA",
-    alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
-    live_sync_interval_seconds: 120,
-    is_enabled: true,
-  },
-  {
+    ...basketballCompetition,
     competition: "NFL",
     sport: "football",
     label: "NFL",
     badge_label: "NFL",
-    alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
-    live_sync_interval_seconds: 120,
     is_enabled: false,
   },
-  {
-    competition: "MLB",
-    sport: "baseball",
-    label: "MLB",
-    badge_label: "MLB",
-    alert_types: ["game_start", "inning_start", "extra_innings_start", "final_result"],
-    live_sync_interval_seconds: 300,
-    is_enabled: true,
-  },
+  baseballCompetition,
 ];
 
 describe("AdminTestAlertsPanel", () => {
@@ -53,19 +37,24 @@ describe("AdminTestAlertsPanel", () => {
   it("shows only enabled competitions and their supported alert actions", () => {
     render(<AdminTestAlertsPanel token="token" items={items} />);
 
-    expect(screen.queryByRole("button", { name: "NFL" })).toBeNull();
-    expect(screen.getByText("Close game late test alert")).toBeInTheDocument();
-    expect(screen.queryByText("Inning start test alert")).toBeNull();
+    expect(screen.queryByRole("option", { name: "NFL" })).toBeNull();
+    expect(screen.getByText("Close game late")).toBeInTheDocument();
+    expect(screen.queryByText("Inning start")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "MLB" }));
-    expect(screen.getByText("Inning start test alert")).toBeInTheDocument();
-    expect(screen.queryByText("Close game late test alert")).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "League" }), {
+      target: { value: "MLB" },
+    });
+    expect(screen.getByText("Inning start")).toBeInTheDocument();
+    expect(screen.queryByText("Close game late")).toBeNull();
   });
 
   it("sends the selected test and reports channel outcomes", async () => {
     render(<AdminTestAlertsPanel token="token" items={items} />);
 
-    fireEvent.click(screen.getByText("Close game late test alert"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Alert type" }), {
+      target: { value: "close_game_late" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send test alert" }));
 
     await waitFor(() =>
       expect(sendAdminTestAlertMock).toHaveBeenCalledWith("token", {
@@ -82,7 +71,7 @@ describe("AdminTestAlertsPanel", () => {
     sendAdminTestAlertMock.mockRejectedValueOnce(new Error("Test delivery failed"));
     render(<AdminTestAlertsPanel token="token" items={items} />);
 
-    fireEvent.click(screen.getByText("Game start test alert"));
+    fireEvent.click(screen.getByRole("button", { name: "Send test alert" }));
     expect(await screen.findByText("Test delivery failed")).toBeInTheDocument();
   });
 
@@ -94,7 +83,55 @@ describe("AdminTestAlertsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Enable a competition to send test alerts.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Test alert actions")).toBeNull();
+    expect(screen.getByText("Enable a league in Leagues to send test alerts.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send test alert" })).toBeDisabled();
+  });
+  it("retains supported alert types, falls back for unsupported types, and clears feedback", async () => {
+    render(<AdminTestAlertsPanel token="token" items={items} />);
+    const league = screen.getByRole("combobox", { name: "League" });
+    const type = screen.getByRole("combobox", { name: "Alert type" });
+    expect(league).toHaveValue("NBA");
+    expect(type).toHaveValue("game_start");
+    fireEvent.change(type, { target: { value: "final_result" } });
+    fireEvent.change(league, { target: { value: "MLB" } });
+    expect(type).toHaveValue("final_result");
+    fireEvent.change(type, { target: { value: "inning_start" } });
+    fireEvent.change(league, { target: { value: "NBA" } });
+    expect(type).toHaveValue("game_start");
+    fireEvent.click(screen.getByRole("button", { name: "Send test alert" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Game start test for NBA: email sent.",
+    );
+    fireEvent.change(type, { target: { value: "final_result" } });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("blocks duplicate submissions and disables inputs while sending", async () => {
+    sendAdminTestAlertMock.mockImplementation(() => new Promise(() => {}));
+    const { container } = render(<AdminTestAlertsPanel token="token" items={items} />);
+    fireEvent.submit(container.querySelector("form")!);
+    fireEvent.submit(container.querySelector("form")!);
+    expect(sendAdminTestAlertMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("combobox", { name: "League" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Alert type" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
+  });
+
+  it("handles a selected league becoming disabled and missing alert types", () => {
+    const view = render(<AdminTestAlertsPanel token="token" items={items} />);
+    view.rerender(
+      <AdminTestAlertsPanel
+        token="token"
+        items={items.map((item) => ({
+          ...item,
+          is_enabled: item.competition === "MLB",
+          alert_types: [],
+        }))}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "League" })).toHaveValue("MLB");
+    expect(screen.getByRole("combobox", { name: "Alert type" })).toBeDisabled();
+    expect(screen.getByText("This league has no supported test alerts.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send test alert" })).toBeDisabled();
   });
 });

@@ -1,4 +1,9 @@
-import { type OpsAdminSummaryResponse, type OpsNeonUsageResponse } from "../../../../shared/api";
+import {
+  type OpsAdminOverviewWindow,
+  type OpsAdminSummaryResponse,
+  type OpsNeonUsageResponse,
+} from "../../../../shared/api";
+import { AdminTestAlertsPanel } from "../AdminTestAlertsPanel";
 import { formatAdminDateTime, formatNullableNumber } from "./admin-format";
 
 function formatHours(seconds: number | null | undefined, unit: string): string {
@@ -7,66 +12,76 @@ function formatHours(seconds: number | null | undefined, unit: string): string {
     : `${(seconds / 3600).toFixed(2)}${unit}`;
 }
 
-export function AdminOverviewSection({
+export function AdminActivitySection({
+  token,
   summary,
+  windowValue,
+  onWindowChange,
   neonUsage,
   neonLoading,
   neonError,
 }: {
+  token: string;
   summary: OpsAdminSummaryResponse;
+  windowValue: OpsAdminOverviewWindow;
+  onWindowChange: (value: OpsAdminOverviewWindow) => void;
   neonUsage: OpsNeonUsageResponse | undefined;
   neonLoading: boolean;
   neonError: string | null;
 }) {
-  const email = summary.delivery.email_alerts;
-  const push = summary.delivery.push_alerts;
-  const activity = [
-    { label: "Alerts created", value: formatNullableNumber(summary.overview.total_alerts_created) },
-    { label: "Email sent / attempted", value: `${email.sent} / ${email.attempted}` },
-    {
-      label: "Email failures",
-      value: formatNullableNumber(email.failed),
-      danger: email.failed > 0,
-    },
-    { label: "Push sent / attempted", value: `${push.sent} / ${push.attempted}` },
-    {
-      label: "Push failures",
-      value: formatNullableNumber(push.failed),
-      danger: push.failed > 0,
-    },
-  ];
-
   return (
-    <div className="admin-overview-grid">
-      <section
-        className="admin-panel admin-overview-activity surface"
-        aria-labelledby="admin-activity-title"
-      >
+    <div className="admin-activity-grid">
+      <section className="admin-panel surface" aria-labelledby="admin-activity-title">
         <div className="admin-panel-header surface-header">
-          <div>
-            <h2 id="admin-activity-title">Recent Activity</h2>
-            <p>Alert and delivery totals for the selected activity window.</p>
-          </div>
-        </div>
-        <div className="admin-metric-grid">
-          {activity.map((item) => (
-            <article
-              key={item.label}
-              className={`admin-metric ${item.danger ? "is-danger" : ""}`.trim()}
+          <h2 id="admin-activity-title">Alert activity</h2>
+          <label className="admin-window-select">
+            Window
+            <select
+              aria-label="Activity window"
+              value={windowValue}
+              onChange={(event) => onWindowChange(event.target.value as OpsAdminOverviewWindow)}
             >
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </article>
-          ))}
+              <option value="1h">1h</option>
+              <option value="6h">6h</option>
+              <option value="24h">24h</option>
+              <option value="7d">7d</option>
+            </select>
+          </label>
         </div>
+        <div className="admin-activity-total">
+          <span>Alerts created</span>
+          <strong>{formatNullableNumber(summary.overview.total_alerts_created)}</strong>
+        </div>
+        <table className="admin-delivery-table" aria-label="Alert delivery">
+          <thead>
+            <tr>
+              <th scope="col">Channel</th>
+              <th scope="col">Sent</th>
+              <th scope="col">Attempted</th>
+              <th scope="col">Failed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(
+              [
+                ["Email", summary.delivery.email_alerts],
+                ["Push", summary.delivery.push_alerts],
+              ] as const
+            ).map(([channel, counts]) => (
+              <tr key={channel}>
+                <th scope="row">{channel}</th>
+                <td>{counts.sent}</td>
+                <td>{counts.attempted}</td>
+                <td className={counts.failed ? "is-danger" : undefined}>{counts.failed}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="admin-panel surface" aria-labelledby="admin-neon-title">
         <div className="admin-panel-header surface-header">
-          <div>
-            <h2 id="admin-neon-title">Database</h2>
-            <p>Neon usage for the current billing cycle.</p>
-          </div>
+          <h2 id="admin-neon-title">Database</h2>
           {neonUsage?.dashboard_url ? (
             <a
               className="admin-link"
@@ -88,11 +103,11 @@ export function AdminOverviewSection({
             {neonError}
           </p>
         ) : null}
-        {!neonLoading && !neonError && neonUsage ? (
+        {neonUsage ? (
           neonUsage.available ? (
             <dl className="admin-detail-list">
               <div>
-                <dt>CPU used</dt>
+                <dt>Compute used</dt>
                 <dd>{formatHours(neonUsage.cpu_used_sec, " CUh")}</dd>
               </div>
               <div>
@@ -120,6 +135,7 @@ export function AdminOverviewSection({
           )
         ) : null}
       </section>
+      <AdminTestAlertsPanel token={token} items={summary.competition_settings} />
     </div>
   );
 }

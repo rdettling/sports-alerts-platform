@@ -5,16 +5,23 @@ from time import sleep
 
 import httpx
 
+from app.schemas.schedule import ScheduleSnapshot
 from app.worker.config import settings
 
 logger = logging.getLogger(__name__)
 NOTIFICATION_TIMEOUT_SECONDS = 2.0
-_delivery_failing = False
+_delivery_failures: set[str] = set()
 
 
 def notify_games_changed(competition: str) -> bool:
-    global _delivery_failing
+    return _post_update("games", {"competition": competition}, "Live update")
 
+
+def notify_schedule(snapshot: ScheduleSnapshot) -> bool:
+    return _post_update("schedule", snapshot.model_dump(mode="json"), "Schedule report")
+
+
+def _post_update(path: str, payload: dict, label: str) -> bool:
     api_url = settings.live_update_api_url.rstrip("/")
     secret = settings.live_update_secret
     if not api_url or not secret:
@@ -23,9 +30,9 @@ def notify_games_changed(competition: str) -> bool:
     for attempt in range(2):
         try:
             response = httpx.post(
-                f"{api_url}/internal/updates/games",
+                f"{api_url}/internal/updates/{path}",
                 headers={"X-Live-Update-Secret": secret},
-                json={"competition": competition},
+                json=payload,
                 timeout=NOTIFICATION_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
@@ -41,15 +48,16 @@ def notify_games_changed(competition: str) -> bool:
             if attempt == 0 and transient:
                 sleep(0.25)
                 continue
-            if not _delivery_failing:
+            if path not in _delivery_failures:
                 logger.warning(
-                    "Live update delivery failed; later failures will be suppressed: %s",
+                    "%s delivery failed; later failures will be suppressed: %s",
+                    label,
                     exc,
                 )
-            _delivery_failing = True
+            _delivery_failures.add(path)
             return False
 
-    if _delivery_failing:
-        logger.info("Live update delivery recovered")
-    _delivery_failing = False
+    if path in _delivery_failures:
+        logger.info("%s delivery recovered", label)
+    _delivery_failures.discard(path)
     return True
