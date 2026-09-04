@@ -129,7 +129,7 @@ class GameOddsOutcomeCurrent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     odds_id: Mapped[int] = mapped_column(ForeignKey("game_odds_current.id", ondelete="CASCADE"), index=True)
-    outcome_key: Mapped[str] = mapped_column(String(32))
+    outcome_key: Mapped[str] = mapped_column(String(128))
     outcome_label: Mapped[str] = mapped_column(String(80))
     outcome_order: Mapped[int] = mapped_column(Integer)
     price_american: Mapped[int | None] = mapped_column(Integer, nullable=True)

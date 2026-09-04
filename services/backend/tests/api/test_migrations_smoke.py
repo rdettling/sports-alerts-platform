@@ -32,6 +32,10 @@ def test_fresh_baseline_matches_current_schema(tmp_path):
     user_columns = {column["name"] for column in inspector.get_columns("users")}
     assert "email_alerts_enabled" in user_columns
     assert "alert_delivery_mode" not in user_columns
+    odds_outcome_columns = {
+        column["name"]: column for column in inspector.get_columns("game_odds_outcomes_current")
+    }
+    assert odds_outcome_columns["outcome_key"]["type"].length == 128
 
     _alembic(database_url, "downgrade", "base")
     assert inspect(create_engine(database_url)).get_table_names() == ["alembic_version"]
