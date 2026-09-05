@@ -10,7 +10,6 @@ from app.db.models import (
     AlertDelivery,
     Game,
     PushSubscription,
-    Team,
     User,
     UserAlertPreference,
     UserGameAlertOverride,
@@ -18,10 +17,10 @@ from app.db.models import (
     UserGameUnfollow,
     UserTeamFollow,
 )
-from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
 from app.services.alert_preferences import AlertSettings, resolve_alert_settings
 from app.services.competitions import get_alert_types, get_competition_profile
 from app.worker.alert_rules import detect_alerts
+from app.worker.score_events import ScoreChangeEvent
 from app.worker.soccer import SoccerDerivedEvents
 
 
@@ -120,6 +119,32 @@ def _resolve_settings_for_user_game(
     }
 
 
+def _load_close_game_notifications(
+    db: Session,
+    user_ids: set[int],
+    game_ids: list[int],
+) -> set[tuple[int, int]]:
+    if not user_ids or not game_ids:
+        return set()
+    rows = db.execute(
+        select(Alert.user_id, Alert.game_id, Alert.alert_type, Alert.event_data).where(
+            Alert.user_id.in_(sorted(user_ids)),
+            Alert.game_id.in_(game_ids),
+            Alert.alert_type.in_(("close_game_late", "lead_change")),
+        )
+    ).all()
+    return {
+        (user_id, game_id)
+        for user_id, game_id, alert_type, event_data in rows
+        if alert_type == "close_game_late"
+        or (
+            alert_type == "lead_change"
+            and isinstance(event_data, dict)
+            and event_data.get("covers_close_game_late") is True
+        )
+    }
+
+
 def _append_candidate_alert(
     candidate_alerts: list[Alert],
     candidate_event_keys: set[str],
@@ -148,16 +173,20 @@ def evaluate_and_record_alerts(
     db: Session,
     games: list[Game],
     *,
+    score_changes: dict[int, ScoreChangeEvent] | None = None,
     soccer_events: dict[int, SoccerDerivedEvents] | None = None,
 ) -> int:
     if not games:
         return 0
+    score_changes = score_changes or {}
     soccer_events = soccer_events or {}
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
     sports = {get_competition_profile(game.competition).sport for game in games}
     preferences_by_key = _load_preferences_by_user_sport(db, all_user_ids, sports)
-    overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, [game.id for game in games])
+    game_ids = [game.id for game in games]
+    overrides_by_key = _load_overrides_by_user_game(db, all_user_ids, game_ids)
+    close_game_notifications = _load_close_game_notifications(db, all_user_ids, game_ids)
 
     candidate_alerts: list[Alert] = []
     candidate_event_keys: set[str] = set()
@@ -174,7 +203,9 @@ def evaluate_and_record_alerts(
                 game,
                 followed_at,
                 settings_by_type,
-                soccer_events.get(game.id),
+                score_change=score_changes.get(game.id),
+                soccer_events=soccer_events.get(game.id),
+                close_game_already_notified=(user_id, game.id) in close_game_notifications,
             ):
                 _append_candidate_alert(
                     candidate_alerts,
@@ -210,44 +241,22 @@ def evaluate_and_record_alerts(
             .distinct()
         ).all()
     )
-    games_by_id = {game.id: game for game in games}
-    teams_by_id = {
-        team.id: team
-        for team in db.scalars(
-            select(Team).where(
-                Team.id.in_(sorted({team_id for game in games_by_id.values() for team_id in (game.home_team_id, game.away_team_id)}))
-            )
-        ).all()
-    }
     for alert in to_insert:
-        game = games_by_id.get(alert.game_id)
         user = users_by_id.get(alert.user_id)
         if user and user.email_alerts_enabled:
-            email_delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
-            db.add(email_delivery)
-            db.flush()
-            deliver_email_alert_now(
-                db,
-                alert=alert,
-                delivery=email_delivery,
-                user=user,
-                game=game,
-                home=teams_by_id.get(game.home_team_id) if game else None,
-                away=teams_by_id.get(game.away_team_id) if game else None,
-                service="worker",
+            db.add(
+                AlertDelivery(
+                    alert_id=alert.id,
+                    channel="email",
+                    status="pending",
+                )
             )
         if user and user.id in push_user_ids:
-            push_delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
-            db.add(push_delivery)
-            db.flush()
-            deliver_push_alert_now(
-                db,
-                alert=alert,
-                delivery=push_delivery,
-                user=user,
-                game=game,
-                home=teams_by_id.get(game.home_team_id) if game else None,
-                away=teams_by_id.get(game.away_team_id) if game else None,
-                service="worker",
+            db.add(
+                AlertDelivery(
+                    alert_id=alert.id,
+                    channel="push",
+                    status="pending",
+                )
             )
     return len(to_insert)

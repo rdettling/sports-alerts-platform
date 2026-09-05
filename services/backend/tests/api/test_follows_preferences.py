@@ -324,8 +324,14 @@ def test_alert_preferences_get_and_update(client):
         "game_start",
         "close_game_late",
         "overtime_start",
+        "score_changed",
+        "lead_change",
         "final_result",
     }
+    football_score = next(item for item in football["preferences"] if item["alert_type"] == "score_changed")
+    football_lead = next(item for item in football["preferences"] if item["alert_type"] == "lead_change")
+    assert football_score["is_enabled"] is False
+    assert football_lead["is_enabled"] is False
     football_close = next(item for item in football["preferences"] if item["alert_type"] == "close_game_late")
     assert football_close["close_game_margin_threshold"] == 8
     assert {item["alert_type"] for item in baseball["preferences"]} == {
@@ -508,6 +514,20 @@ def test_game_alert_override_flow(client):
     assert overtime_clear.status_code == 200
     assert overtime_clear.json()["is_enabled"] is True
     assert overtime_clear.json()["uses_sport_defaults"] is True
+
+
+def test_football_game_alerts_include_opt_in_score_and_lead_rules(client):
+    headers = _auth_headers(client, email="football-game-overrides@example.com")
+    game_id = _create_game("NFL")
+
+    response = client.get(f"/alert-preferences/games/{game_id}", headers=headers)
+
+    assert response.status_code == 200
+    items = {item["alert_type"]: item for item in response.json()["items"]}
+    assert items["score_changed"]["is_enabled"] is False
+    assert items["score_changed"]["uses_sport_defaults"] is True
+    assert items["lead_change"]["is_enabled"] is False
+    assert items["lead_change"]["uses_sport_defaults"] is True
 
 
 def test_extra_innings_game_alert_override_flow(client):

@@ -347,12 +347,12 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
 @pytest.mark.parametrize(
     ("competition", "interval"),
     [
-        ("FBS", 120),
-        ("MLB", 300),
-        ("MLS", 180),
-        ("LA_LIGA", 180),
-        ("PREMIER_LEAGUE", 180),
-        ("WORLD_CUP", 180),
+        ("FBS", 60),
+        ("MLB", 120),
+        ("MLS", 90),
+        ("LA_LIGA", 90),
+        ("PREMIER_LEAGUE", 90),
+        ("WORLD_CUP", 90),
     ],
 )
 def test_run_live_sync_job_uses_competition_live_interval(monkeypatch, competition, interval):
@@ -584,6 +584,25 @@ def test_reports_success_and_preserves_idle_wait_on_delivery_error(monkeypatch, 
     assert catalog.last_success_at == live.last_success_at == now
     assert catalog.state == "scheduled"
     assert live.state == state
+
+
+def test_successful_sync_with_alerts_wakes_delivery_dispatcher(monkeypatch, clock):
+    delivery_wake = Event()
+    monkeypatch.setattr(scheduler, "_load_active_competitions", lambda: ["MLB"])
+    monkeypatch.setattr(
+        scheduler,
+        "_run_catalog_sync_job",
+        lambda *args: _catalog_result(alerts_created=1),
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "_run_live_sync_job",
+        lambda *args: (43200, _live_result()),
+    )
+
+    scheduler.run(clock.stop, delivery_wake)
+
+    assert delivery_wake.is_set()
 
 
 def test_report_contains_catalog_adjustment_and_preserves_last_success_on_failure(monkeypatch, reports):

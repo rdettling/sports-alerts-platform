@@ -26,6 +26,8 @@ def default_alert_settings(sport: str, alert_type: str) -> AlertSettings:
         )
     if alert_type == "inning_start":
         return AlertSettings(is_enabled=True, inning_start_threshold=7)
+    if normalized_sport == "football" and alert_type in {"score_changed", "lead_change"}:
+        return AlertSettings(is_enabled=False)
     return AlertSettings(is_enabled=True)
 
 

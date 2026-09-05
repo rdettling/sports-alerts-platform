@@ -77,7 +77,18 @@ def test_ingest_creates_deduped_live_alerts(db_session):
     sent = db_session.scalars(select(Alert).order_by(Alert.alert_type.asc())).all()
     assert len(sent) == 2
     assert sorted([row.alert_type for row in sent]) == ["close_game_late", "game_start"]
-    assert all(row.deliveries[0].status == "sent" for row in sent)
+    assert all(row.deliveries[0].status == "pending" for row in sent)
+    assert all(row.deliveries[0].attempted_at is None for row in sent)
+    assert all(
+        {
+            "status",
+            "period",
+            "clock",
+            "home_score",
+            "away_score",
+        }.issubset(row.event_data)
+        for row in sent
+    )
 
 
 def test_ingest_supports_every_email_and_push_combination(db_session):
@@ -130,7 +141,8 @@ def test_ingest_supports_every_email_and_push_combination(db_session):
         alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
         game_start = next(alert for alert in alerts if alert.alert_type == "game_start")
         assert [row.channel for row in game_start.deliveries] == expected_channels[label]
-        assert all(row.status == "sent" for row in game_start.deliveries)
+        assert all(row.status == "pending" for row in game_start.deliveries)
+        assert all(row.attempted_at is None for row in game_start.deliveries)
 
 
 def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
@@ -226,7 +238,15 @@ def test_ingest_creates_final_result_alert(db_session):
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 1
     assert sent[0].alert_type == "final_result"
-    assert sent[0].deliveries[0].status == "sent"
+    assert sent[0].event_data == {
+        "status": "final",
+        "period": 4,
+        "clock": "00:00",
+        "home_score": 110,
+        "away_score": 104,
+    }
+    assert sent[0].deliveries[0].status == "pending"
+    assert sent[0].deliveries[0].attempted_at is None
 
 
 def test_wnba_reuses_deduped_basketball_alerts(db_session):
@@ -407,6 +427,238 @@ def test_nfl_creates_deduped_football_alerts(db_session):
     ]
 
 
+def test_fbs_score_and_lead_alerts_use_transition_precedence_and_dedupe(db_session):
+    user = User(email="fbs-score-alerts@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(competition_teams_query("FBS").where(Team.external_team_id == "333"))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(
+        UserAlertPreference(
+            user_id=user.id,
+            sport="football",
+            alert_type="game_start",
+            is_enabled_override=False,
+        )
+    )
+    for alert_type in ("score_changed", "lead_change"):
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="football",
+                alert_type=alert_type,
+                is_enabled_override=True,
+            )
+        )
+    db_session.commit()
+
+    def provider(home_score: int, away_score: int) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-fbs-score-alerts",
+                    home_external_team_id="333",
+                    away_external_team_id="2",
+                    status="in_progress",
+                    home_score=home_score,
+                    away_score=away_score,
+                    period=3,
+                    clock="07:15",
+                )
+            ]
+        )
+
+    run_catalog_sync(provider(0, 0), competition="FBS")
+    run_catalog_sync(provider(7, 0), competition="FBS")
+    run_catalog_sync(provider(7, 7), competition="FBS")
+    run_catalog_sync(provider(7, 10), competition="FBS")
+    run_catalog_sync(provider(7, 17), competition="FBS")
+    run_catalog_sync(provider(7, 17), competition="FBS")
+
+    alerts = db_session.scalars(
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in alerts] == [
+        "score_changed",
+        "lead_change",
+        "lead_change",
+        "score_changed",
+    ]
+    assert [alert.event_key.rsplit(":", 1)[-1] for alert in alerts] == [
+        "0-7",
+        "7-7",
+        "10-7",
+        "17-7",
+    ]
+    assert alerts[1].event_data["new_leader"] == "tied"
+    assert alerts[2].event_data["new_leader"] == "away"
+
+
+def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_session):
+    lead_user = User(email="covered-close-lead@example.com")
+    override_user = User(email="covered-close-override@example.com")
+    db_session.add_all((lead_user, override_user))
+    db_session.commit()
+    db_session.refresh(lead_user)
+    db_session.refresh(override_user)
+
+    team = db_session.scalar(competition_teams_query("FBS").where(Team.external_team_id == "333"))
+    assert team is not None
+    for user in (lead_user, override_user):
+        db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="football",
+                alert_type="game_start",
+                is_enabled_override=False,
+            )
+        )
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="football",
+                alert_type="close_game_late",
+                is_enabled_override=True,
+                close_game_margin_threshold_override=8,
+                close_game_time_threshold_seconds_override=300,
+            )
+        )
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="football",
+                alert_type="score_changed",
+                is_enabled_override=True,
+            )
+        )
+    db_session.add(
+        UserAlertPreference(
+            user_id=lead_user.id,
+            sport="football",
+            alert_type="lead_change",
+            is_enabled_override=True,
+        )
+    )
+    db_session.commit()
+
+    def provider(home_score: int, away_score: int, clock: str) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-covered-close-lead",
+                    home_external_team_id="333",
+                    away_external_team_id="2",
+                    status="in_progress",
+                    home_score=home_score,
+                    away_score=away_score,
+                    period=4,
+                    clock=clock,
+                )
+            ]
+        )
+
+    run_catalog_sync(provider(14, 21, "06:00"), competition="FBS")
+    game = db_session.scalar(
+        select(Game).where(Game.external_game_id == "game-covered-close-lead")
+    )
+    assert game is not None
+    db_session.add(
+        UserGameAlertOverride(
+            user_id=override_user.id,
+            game_id=game.id,
+            alert_type="close_game_late",
+            is_enabled_override=False,
+        )
+    )
+    db_session.commit()
+
+    run_catalog_sync(provider(24, 21, "03:00"), competition="FBS")
+    run_catalog_sync(provider(24, 21, "03:00"), competition="FBS")
+    run_catalog_sync(provider(24, 24, "02:00"), competition="FBS")
+
+    lead_alerts = db_session.scalars(
+        select(Alert).where(Alert.user_id == lead_user.id).order_by(Alert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in lead_alerts] == ["lead_change", "lead_change"]
+    assert lead_alerts[0].event_key.endswith("lead_change:21-24")
+    assert lead_alerts[0].event_data["covers_close_game_late"] is True
+    assert "covers_close_game_late" not in lead_alerts[1].event_data
+
+    override_alerts = db_session.scalars(
+        select(Alert).where(Alert.user_id == override_user.id).order_by(Alert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in override_alerts] == [
+        "score_changed",
+        "score_changed",
+    ]
+
+
+def test_existing_close_game_alert_does_not_suppress_later_scoring_alerts(db_session):
+    user = User(email="close-then-scoring@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(competition_teams_query("NFL").where(Team.external_team_id == "12"))
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    for alert_type in ("score_changed", "lead_change"):
+        db_session.add(
+            UserAlertPreference(
+                user_id=user.id,
+                sport="football",
+                alert_type=alert_type,
+                is_enabled_override=True,
+            )
+        )
+    db_session.add(
+        UserAlertPreference(
+            user_id=user.id,
+            sport="football",
+            alert_type="game_start",
+            is_enabled_override=False,
+        )
+    )
+    db_session.commit()
+
+    def provider(home_score: int, away_score: int, clock: str) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-close-then-scoring",
+                    home_external_team_id="2",
+                    away_external_team_id="12",
+                    status="in_progress",
+                    home_score=home_score,
+                    away_score=away_score,
+                    period=4,
+                    clock=clock,
+                )
+            ]
+        )
+
+    run_catalog_sync(provider(20, 10, "06:00"), competition="NFL")
+    run_catalog_sync(provider(20, 13, "03:00"), competition="NFL")
+    run_catalog_sync(provider(20, 21, "02:00"), competition="NFL")
+    run_catalog_sync(provider(20, 24, "01:00"), competition="NFL")
+
+    alerts = db_session.scalars(
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in alerts] == [
+        "close_game_late",
+        "lead_change",
+        "score_changed",
+    ]
+    assert alerts[0].event_key.endswith("close_game_late")
+    assert alerts[1].event_key.endswith("lead_change:21-20")
+    assert alerts[2].event_key.endswith("score_changed:24-20")
+
+
 def test_following_live_game_after_start_does_not_send_game_start_alert(db_session):
     user = User(email="late-follow@example.com")
     db_session.add(user)
@@ -443,8 +695,8 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
     assert all(row.alert_type != "game_start" for row in sent)
 
 
-def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
-    user = User(email="inline-fail@example.com")
+def test_ingest_queues_delivery_without_calling_provider(db_session, monkeypatch):
+    user = User(email="queued-delivery@example.com")
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
@@ -454,20 +706,21 @@ def test_ingest_continues_when_inline_delivery_fails(db_session, monkeypatch):
     db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
-    def fake_deliver(db, *, alert, delivery, user, game, home, away, service):
-        delivery.status = "failed"
-        delivery.provider_data = {"error": "synthetic_failure"}
-        return "failed"
-
-    monkeypatch.setattr("app.worker.alerts.deliver_email_alert_now", fake_deliver)
+    monkeypatch.setattr(
+        "app.services.alert_delivery.send_email_alert",
+        lambda payload: (_ for _ in ()).throw(
+            AssertionError("ingest must not call the delivery provider")
+        ),
+    )
 
     result = run_catalog_sync(make_live_close_provider())
     assert result.alerts_created == 2
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert len(sent) == 2
-    assert all(row.deliveries[0].status == "failed" for row in sent)
-    assert all(row.deliveries[0].provider_data["error"] == "synthetic_failure" for row in sent)
+    assert all(row.deliveries[0].status == "pending" for row in sent)
+    assert all(row.deliveries[0].attempted_at is None for row in sent)
+    assert all(row.deliveries[0].provider_data is None for row in sent)
 
 
 def test_live_sync_persists_long_clock_values(db_session):

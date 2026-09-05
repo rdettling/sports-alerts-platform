@@ -9,7 +9,8 @@ export const PREFERENCE_LABELS: Record<string, string> = {
   second_half_start: "Second half start",
   extra_time_start: "Extra time start",
   penalty_kicks: "Penalty kicks",
-  score_changed: "Score change",
+  score_changed: "Score update",
+  lead_change: "Lead change",
   final_result: "Final result",
 };
 

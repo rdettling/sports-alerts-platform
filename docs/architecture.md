@@ -28,7 +28,7 @@ The single worker process runs continuously with an in-memory schedule and manag
 
 The worker reads enabled competitions at startup and on each scheduler iteration. When no job is due, it waits until the next scheduled job, capped at `CATALOG_SYNC_INTERVAL_SECONDS` (12 hours by default). With no enabled competitions, it waits one catalog interval before checking again. There is no separate hourly settings poll. Waits are interruptible on shutdown; kickoff scheduling, live polling, and job retries can all wake it sooner.
 
-Catalog cycles are anchored to worker startup: one immediate cycle, then every `CATALOG_SYNC_INTERVAL_SECONDS`. Each cycle queues one attempt per enabled league and advances the shared clock without waiting for completion. Missed cycles are skipped rather than replayed. Successful catalog records have no independent timer; failed attempts retain a per-league retry deadline (30 seconds, exponentially increasing to one hour). The next regular cycle replaces outstanding catalog retries and resets their failure counts. Due live jobs take priority between catalog attempts, except that a league's startup catalog attempt precedes its first live read. Each league attempt uses a separate transaction. A failed startup catalog attempt does not block that league's live reads of existing games.
+Catalog cycles are anchored to worker startup: one immediate cycle, then every `CATALOG_SYNC_INTERVAL_SECONDS`. Each cycle queues one attempt per enabled league and advances the shared clock without waiting for completion. Missed cycles are skipped rather than replayed. Successful catalog records have no independent timer; failed attempts retain a per-league retry deadline (30 seconds, exponentially increasing to one hour). The next regular cycle replaces outstanding catalog retries and resets their failure counts. Due live jobs take priority between catalog attempts, except that a league's startup catalog attempt precedes its first live read. Each league attempt uses a short planning read, closes that session for scoreboard and odds HTTP requests, then opens one write transaction. A failed startup catalog attempt does not block that league's live reads of existing games.
 
 Admin league settings are saved immediately, but the sleeping worker discovers them on its next wake. Newly enabled leagues wait for the next shared catalog cycle, even if discovered earlier during live work, and may miss games or alerts for up to about 12 hours. Their existing live-job initialization can still monitor previously stored games. Disabled leagues are removed from the schedule before the next job is selected. Restarting the worker discovers current settings immediately and also reruns startup jobs.
 
@@ -125,9 +125,9 @@ Notable modeling decisions:
 
 ### Game Sync
 
-1. Worker fetches provider schedule/state for enabled competitions
-2. Worker maps provider team IDs to the API-seeded catalog, stores non-FBS opponents from FBS schedules without granting FBS membership, and upserts games into Postgres
-3. Worker snapshots odds for eligible pregame windows when enabled
+1. Worker briefly reads the enabled competition and request plan, then releases that database connection
+2. Worker fetches provider schedule/state and eligible pregame odds without an open database session
+3. Worker maps provider team IDs to the API-seeded catalog, stores non-FBS opponents from FBS schedules without granting FBS membership, and commits games, odds, alert events, and queued deliveries in one write transaction
 4. After a changed transaction commits, the worker sends a best-effort notification to the API
 5. The API invalidates its dashboard feed cache before broadcasting an in-memory SSE event. Visible Games screens batch events for one second and space event-driven reads at least two seconds apart, retaining one pending refresh if a request is already running
 6. Opening/reconnecting the stream and returning to a visible, online Games screen trigger a catch-up read. Hidden/offline screens close SSE and pause refresh timers
@@ -143,9 +143,12 @@ Worker notifications retry once after 250 milliseconds for network failures, tim
 
 1. Worker loads effective followers and alert settings for touched games
 2. Worker evaluates competition-appropriate alert types
-3. Worker writes a deduplicated `alerts` event and channel-specific Email and/or Push `alert_deliveries` rows
-4. Email delivery executes through log mode or live Resend mode
-5. Web reads alert history through `/alerts/history`
+3. Worker writes a deduplicated `alerts` event with an event-time score/status snapshot and channel-specific Email and/or Push `alert_deliveries` rows
+4. The transaction commits before the scheduler wakes the process-local delivery thread
+5. The delivery thread claims one pending row in a short transaction, sends with no database connection held, and saves the outcome in another short transaction
+6. Web reads alert history through `/alerts/history`
+
+The delivery thread drains once at worker startup and otherwise sleeps until a committed sync signals it; it does not poll the database. Provider failures are terminal. A row claimed before a worker interruption remains `pending` with `attempted_at` set and is marked failed on restart rather than resent, favoring at-most-once delivery over possible duplicate or stale sports alerts. Admin test alerts remain synchronous but also release their database transaction before calling Email or Push providers.
 
 ### Admin / Ops
 
@@ -172,6 +175,7 @@ Both runtime processes aggregate existing SQLAlchemy connection, statement, tran
 ## Design Constraints
 
 - The worker is separate so ingest and delivery do not block request/response traffic
+- Alert delivery is a process-local outbox dispatcher for the single worker, not a distributed queue; scaling to multiple workers would require revisiting its wake-up and claiming model
 - Scheduler state and the API schedule report are process-local. Admin shows last reported plans, not worker liveness; worker logs remain the source of truth for actual execution and failures. API restarts clear its report until the next worker publication (potentially 12 hours later), and worker restarts clear remembered success times.
 - SSE fanout and the dashboard feed cache are process-local and assume one API process on one instance; multiple processes or instances require shared broadcasting and cache invalidation
 - Odds are persisted and read from the DB instead of fetched from the browser path

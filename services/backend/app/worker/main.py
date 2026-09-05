@@ -7,12 +7,14 @@ from app.services.competitions import get_competition_profile, list_supported_co
 
 from app.worker import scheduler
 from app.worker.config import settings
+from app.worker.delivery import run_delivery_loop
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger("worker")
 _stop_event = threading.Event()
+_delivery_wake_event = threading.Event()
 
 
 def _stop_worker(*_: object) -> None:
@@ -33,8 +35,20 @@ def main() -> None:
         settings.catalog_sync_interval_seconds,
         live_intervals,
     )
+    delivery_thread = threading.Thread(
+        target=run_delivery_loop,
+        args=(_stop_event, _delivery_wake_event),
+        name="alert-delivery",
+        daemon=True,
+    )
     with database_usage_logging():
-        scheduler.run(_stop_event)
+        delivery_thread.start()
+        try:
+            scheduler.run(_stop_event, _delivery_wake_event)
+        finally:
+            _stop_event.set()
+            _delivery_wake_event.set()
+            delivery_thread.join()
     logger.info("Worker stopped")
 
 

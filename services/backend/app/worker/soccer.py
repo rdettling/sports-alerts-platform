@@ -4,22 +4,10 @@ import logging
 from dataclasses import dataclass
 
 from app.db.models import Game
+from app.worker.score_events import ScoreChangeEvent, classify_score_change
 from app.worker.scoreboard import ScoreboardGame
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ScoreChangeEvent:
-    previous_home_score: int
-    previous_away_score: int
-    new_home_score: int
-    new_away_score: int
-    scoring_side: str | None
-    is_inferred_goal: bool
-    period: int | None
-    clock: str | None
-    status: str
 
 
 @dataclass(frozen=True)
@@ -90,39 +78,7 @@ def snapshot_state(game: Game) -> StateSnapshot:
 def classify_events(previous: Game | None, payload: ScoreboardGame) -> SoccerDerivedEvents | None:
     if previous is None:
         return None
-    score_change: ScoreChangeEvent | None = None
-    if (
-        payload.status in {"in_progress", "live"}
-        and (payload.period or 0) < 5
-        and previous.home_score is not None
-        and previous.away_score is not None
-        and payload.home_score is not None
-        and payload.away_score is not None
-    ):
-        home_delta = payload.home_score - previous.home_score
-        away_delta = payload.away_score - previous.away_score
-        if not (home_delta == 0 and away_delta == 0) and not (home_delta < 0 or away_delta < 0):
-            if home_delta == 0 and away_delta == 1:
-                scoring_side = "away"
-                is_inferred_goal = True
-            elif away_delta == 0 and home_delta == 1:
-                scoring_side = "home"
-                is_inferred_goal = True
-            else:
-                scoring_side = None
-                is_inferred_goal = False
-
-            score_change = ScoreChangeEvent(
-                previous_home_score=previous.home_score,
-                previous_away_score=previous.away_score,
-                new_home_score=payload.home_score,
-                new_away_score=payload.away_score,
-                scoring_side=scoring_side,
-                is_inferred_goal=is_inferred_goal,
-                period=payload.period,
-                clock=payload.clock,
-                status=payload.status,
-            )
+    score_change = classify_score_change(previous, payload, sport="soccer")
 
     second_half_started = (
         not payload.is_final

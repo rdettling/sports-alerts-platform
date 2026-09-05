@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, aliased
 
 from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
@@ -15,7 +15,12 @@ from app.schemas.alert import (
     AlertHistoryItemOut,
     AlertHistoryResponse,
 )
-from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
+from app.services.alert_delivery import (
+    build_email_payload,
+    build_push_payload,
+    send_email_alert,
+    send_push_alert,
+)
 from app.services.competitions import competition_teams_query, get_active_competitions, get_alert_types, get_competition_profile
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -42,6 +47,7 @@ ADMIN_TEST_GAME_STATES = {
     "extra_time_start": AdminTestGameState("in_progress", 1, 1, 3, "91'", -timedelta(hours=2)),
     "penalty_kicks": AdminTestGameState("in_progress", 1, 1, 5, "Pens", -timedelta(hours=2)),
     "score_changed": AdminTestGameState("in_progress", 0, 1, 1, "18'", -timedelta(minutes=25)),
+    "lead_change": AdminTestGameState("in_progress", 24, 21, 4, "08:42", -timedelta(hours=2)),
     "final_result": AdminTestGameState("final", 109, 105, None, None, -timedelta(hours=4), True),
 }
 
@@ -51,6 +57,12 @@ ADMIN_TEST_SPORT_OVERRIDES = {
     ),
     ("football", "overtime_start"): AdminTestGameState(
         "in_progress", 20, 20, 5, "10:00", -timedelta(hours=2)
+    ),
+    ("football", "score_changed"): AdminTestGameState(
+        "in_progress", 10, 14, 3, "06:42", -timedelta(hours=2)
+    ),
+    ("football", "lead_change"): AdminTestGameState(
+        "in_progress", 24, 21, 4, "08:42", -timedelta(hours=2)
     ),
     ("football", "final_result"): AdminTestGameState(
         "final", 24, 21, 4, "0:00", -timedelta(hours=4), True
@@ -99,16 +111,43 @@ def _build_admin_test_objects(
         "status": state.status,
         "period": state.period,
         "clock": state.clock,
+        "home_score": state.home_score,
+        "away_score": state.away_score,
     }
-    if alert_type == "score_changed":
-        event_data.update(
-            previous_home_score=0,
-            previous_away_score=0,
-            new_home_score=state.home_score,
-            new_away_score=state.away_score,
-            scoring_side="away",
-            is_inferred_goal=True,
-        )
+    if alert_type in {"score_changed", "lead_change"}:
+        if sport == "football" and alert_type == "score_changed":
+            event_data.update(
+                previous_home_score=7,
+                previous_away_score=14,
+                new_home_score=state.home_score,
+                new_away_score=state.away_score,
+                scoring_side="home",
+                is_inferred_goal=False,
+                previous_leader="away",
+                new_leader="away",
+            )
+        elif sport == "football":
+            event_data.update(
+                previous_home_score=17,
+                previous_away_score=21,
+                new_home_score=state.home_score,
+                new_away_score=state.away_score,
+                scoring_side="home",
+                is_inferred_goal=False,
+                previous_leader="away",
+                new_leader="home",
+            )
+        else:
+            event_data.update(
+                previous_home_score=0,
+                previous_away_score=0,
+                new_home_score=state.home_score,
+                new_away_score=state.away_score,
+                scoring_side="away",
+                is_inferred_goal=True,
+                previous_leader="tied",
+                new_leader="away",
+            )
     return game, Alert(
         id=0,
         user_id=user_id,
@@ -207,46 +246,67 @@ def create_admin_test_alert(
         away_team=away_team,
         home_team=home_team,
     )
-    deliveries: list[AlertDelivery] = []
-    if current_user.email_alerts_enabled:
-        email_delivery = AlertDelivery(id=0, alert_id=0, channel="email", status="pending")
-        deliver_email_alert_now(
-            db,
+    email_message = (
+        build_email_payload(
             alert=alert,
-            delivery=email_delivery,
+            delivery_id=0,
             user=current_user,
             game=target_game,
             home=home_team,
             away=away_team,
             service="api-test",
         )
-        deliveries.append(email_delivery)
-    push_enabled = db.scalar(
-        select(PushSubscription.id).where(PushSubscription.user_id == current_user.id).limit(1)
+        if current_user.email_alerts_enabled
+        else None
     )
-    if push_enabled is not None:
-        push_delivery = AlertDelivery(id=0, alert_id=0, channel="push", status="pending")
-        deliver_push_alert_now(
-            db,
+    subscriptions = db.scalars(
+        select(PushSubscription)
+        .where(PushSubscription.user_id == current_user.id)
+        .order_by(PushSubscription.id.asc())
+    ).all()
+    push_message = (
+        build_push_payload(
             alert=alert,
-            delivery=push_delivery,
-            user=current_user,
             game=target_game,
             home=home_team,
             away=away_team,
+            subscriptions=list(subscriptions),
             service="api-test",
         )
-        deliveries.append(push_delivery)
+        if subscriptions
+        else None
+    )
     db.commit()
+
+    deliveries: list[AlertDeliveryOut] = []
+    attempted_at = datetime.now(timezone.utc)
+    if email_message is not None:
+        outcome = send_email_alert(email_message)
+        deliveries.append(
+            AlertDeliveryOut(
+                channel="email",
+                status=outcome.status,
+                attempted_at=attempted_at,
+            )
+        )
+    if push_message is not None:
+        outcome = send_push_alert(push_message)
+        deliveries.append(
+            AlertDeliveryOut(
+                channel="push",
+                status=outcome.status,
+                attempted_at=attempted_at,
+            )
+        )
+        if outcome.expired_subscription_ids:
+            db.execute(
+                delete(PushSubscription).where(
+                    PushSubscription.id.in_(outcome.expired_subscription_ids)
+                )
+            )
+            db.commit()
     return AdminTestAlertResponse(
         competition=competition,
         alert_type=payload.alert_type,
-        deliveries=[
-            AlertDeliveryOut(
-                channel=delivery.channel,
-                status=delivery.status,
-                attempted_at=delivery.attempted_at,
-            )
-            for delivery in deliveries
-        ],
+        deliveries=deliveries,
     )

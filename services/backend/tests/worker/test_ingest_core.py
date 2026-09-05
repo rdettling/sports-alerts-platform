@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from app.db.models import CompetitionSetting, CompetitionTeam, Game, Team
+from app.db.session import engine
 from app.services.competitions import competition_teams_query, ensure_competition_settings
 from app.worker.ingest import run_catalog_sync, run_live_sync
 from app.worker.scoreboard import TeamStrength
@@ -32,6 +33,77 @@ def test_ingest_run_failure(db_session):
     with pytest.raises(RuntimeError, match="boom"):
         run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
     assert db_session.scalar(select(Game)) is None
+
+
+def test_catalog_providers_run_without_database_checkout(db_session, monkeypatch):
+    active_connections = 0
+
+    def checkout(*_args):
+        nonlocal active_connections
+        active_connections += 1
+
+    def checkin(*_args):
+        nonlocal active_connections
+        active_connections -= 1
+
+    class Provider:
+        def fetch_games(self, competition, requests):
+            assert active_connections == 0
+            return make_success_provider().fetch_games(competition, requests)
+
+    def fetch_odds(_competition):
+        assert active_connections == 0
+        return {}
+
+    event.listen(engine, "checkout", checkout)
+    event.listen(engine, "checkin", checkin)
+    monkeypatch.setattr("app.worker.odds.fetch_odds_index", fetch_odds)
+    try:
+        run_catalog_sync(Provider())
+    finally:
+        event.remove(engine, "checkout", checkout)
+        event.remove(engine, "checkin", checkin)
+
+
+def test_live_provider_runs_without_database_checkout(db_session):
+    now = datetime.now(timezone.utc)
+    teams = db_session.scalars(
+        competition_teams_query("NBA").order_by(Team.id.asc()).limit(2)
+    ).all()
+    db_session.add(
+        Game(
+            external_game_id="connection-boundary-live",
+            competition="NBA",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=now,
+            status="live",
+            is_final=False,
+        )
+    )
+    db_session.commit()
+    active_connections = 0
+
+    def checkout(*_args):
+        nonlocal active_connections
+        active_connections += 1
+
+    def checkin(*_args):
+        nonlocal active_connections
+        active_connections -= 1
+
+    class Provider:
+        def fetch_games(self, competition, requests):
+            assert active_connections == 0
+            return []
+
+    event.listen(engine, "checkout", checkout)
+    event.listen(engine, "checkin", checkin)
+    try:
+        run_live_sync(Provider())
+    finally:
+        event.remove(engine, "checkout", checkout)
+        event.remove(engine, "checkin", checkin)
 
 
 def test_live_sync_returns_next_scheduled_start_when_no_live_games(db_session):

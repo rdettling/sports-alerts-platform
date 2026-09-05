@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from app.db.models import Game
 from app.services.alert_preferences import AlertSettings
 from app.services.competitions import get_competition_profile
+from app.worker.score_events import ScoreChangeEvent
 from app.worker.soccer import SoccerDerivedEvents, is_penalty_kicks_window
 
 
@@ -14,6 +15,16 @@ class DetectedAlert:
     alert_type: str
     event_key_suffix: str
     event_data: dict[str, object]
+
+
+def _event_snapshot(game: Game) -> dict[str, object]:
+    return {
+        "status": game.status,
+        "period": game.period or 0,
+        "clock": game.clock or "",
+        "home_score": game.home_score,
+        "away_score": game.away_score,
+    }
 
 
 def _parse_clock_seconds(clock: str | None) -> int | None:
@@ -91,7 +102,10 @@ def detect_alerts(
     game: Game,
     followed_at: datetime | None,
     settings_by_type: dict[str, AlertSettings],
+    score_change: ScoreChangeEvent | None = None,
     soccer_events: SoccerDerivedEvents | None = None,
+    *,
+    close_game_already_notified: bool = False,
 ) -> list[DetectedAlert]:
     detected: list[DetectedAlert] = []
 
@@ -102,30 +116,73 @@ def detect_alerts(
         and game.status in {"in_progress", "live"}
         and _followed_by_game_start(followed_at, game)
     ):
-        detected.append(DetectedAlert("game_start", "game_start", {"status": game.status}))
+        detected.append(DetectedAlert("game_start", "game_start", _event_snapshot(game)))
 
     final_result = settings_by_type.get("final_result")
     if final_result and final_result.is_enabled and (game.is_final or game.status == "final"):
-        detected.append(DetectedAlert("final_result", "final_result", {"status": game.status}))
+        detected.append(DetectedAlert("final_result", "final_result", _event_snapshot(game)))
 
-    score_change = soccer_events.score_change if soccer_events is not None else None
     score_changed = settings_by_type.get("score_changed")
-    if score_change and score_changed and score_changed.is_enabled:
+    lead_change = settings_by_type.get("lead_change")
+    close_game = settings_by_type.get("close_game_late")
+    fresh_close_game = bool(
+        close_game
+        and not close_game_already_notified
+        and _should_trigger_close_game_late(game, close_game)
+    )
+    score_event_data = (
+        {
+            **_event_snapshot(game),
+            "status": score_change.status,
+            "period": score_change.period or 0,
+            "clock": score_change.clock or "",
+            "home_score": score_change.new_home_score,
+            "away_score": score_change.new_away_score,
+            "previous_home_score": score_change.previous_home_score,
+            "previous_away_score": score_change.previous_away_score,
+            "new_home_score": score_change.new_home_score,
+            "new_away_score": score_change.new_away_score,
+            "scoring_side": score_change.scoring_side,
+            "is_inferred_goal": score_change.is_inferred_goal,
+            "previous_leader": score_change.previous_leader,
+            "new_leader": score_change.new_leader,
+        }
+        if score_change is not None
+        else None
+    )
+    is_football_score_change = (
+        score_change is not None
+        and get_competition_profile(game.competition).sport == "football"
+    )
+    is_football_lead_change = (
+        is_football_score_change
+        and score_change.lead_changed
+    )
+    if is_football_lead_change and lead_change and lead_change.is_enabled:
+        event_data = dict(score_event_data or {})
+        if fresh_close_game:
+            event_data["covers_close_game_late"] = True
+        detected.append(
+            DetectedAlert(
+                "lead_change",
+                f"lead_change:{score_change.new_away_score}-{score_change.new_home_score}",
+                event_data,
+            )
+        )
+    elif is_football_score_change and fresh_close_game:
+        detected.append(
+            DetectedAlert(
+                "close_game_late",
+                "close_game_late",
+                score_event_data or {},
+            )
+        )
+    elif score_change and score_changed and score_changed.is_enabled:
         detected.append(
             DetectedAlert(
                 "score_changed",
                 f"score_changed:{score_change.new_away_score}-{score_change.new_home_score}",
-                {
-                    "status": score_change.status,
-                    "period": score_change.period,
-                    "clock": score_change.clock or "",
-                    "previous_home_score": score_change.previous_home_score,
-                    "previous_away_score": score_change.previous_away_score,
-                    "new_home_score": score_change.new_home_score,
-                    "new_away_score": score_change.new_away_score,
-                    "scoring_side": score_change.scoring_side,
-                    "is_inferred_goal": score_change.is_inferred_goal,
-                },
+                score_event_data or {},
             )
         )
 
@@ -135,7 +192,7 @@ def detect_alerts(
             DetectedAlert(
                 "second_half_start",
                 "second_half_start",
-                {"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                _event_snapshot(game),
             )
         )
 
@@ -145,7 +202,7 @@ def detect_alerts(
             DetectedAlert(
                 "extra_time_start",
                 "extra_time_start",
-                {"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                _event_snapshot(game),
             )
         )
 
@@ -161,17 +218,16 @@ def detect_alerts(
             DetectedAlert(
                 "penalty_kicks",
                 "penalty_kicks",
-                {"status": game.status, "period": game.period or 0, "clock": game.clock or ""},
+                _event_snapshot(game),
             )
         )
 
-    close_game = settings_by_type.get("close_game_late")
-    if close_game and _should_trigger_close_game_late(game, close_game):
+    if fresh_close_game and not is_football_score_change:
         detected.append(
             DetectedAlert(
                 "close_game_late",
                 "close_game_late",
-                {"period": game.period or 0, "clock": game.clock or "", "status": game.status},
+                _event_snapshot(game),
             )
         )
 
@@ -182,7 +238,7 @@ def detect_alerts(
             DetectedAlert(
                 "overtime_start",
                 f"overtime_start:{period}",
-                {"period": period, "clock": game.clock or "", "status": game.status},
+                _event_snapshot(game),
             )
         )
 
@@ -193,7 +249,7 @@ def detect_alerts(
             DetectedAlert(
                 "extra_innings_start",
                 f"extra_innings_start:{inning}",
-                {"period": inning, "clock": game.clock or "", "status": game.status},
+                _event_snapshot(game),
             )
         )
 
@@ -203,7 +259,7 @@ def detect_alerts(
             DetectedAlert(
                 "inning_start",
                 "inning_start",
-                {"period": game.period or 0, "status": game.status},
+                _event_snapshot(game),
             )
         )
 

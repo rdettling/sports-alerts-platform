@@ -21,10 +21,15 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 
 Alert types default by sport and can be restricted for a specific competition:
 
-- `NBA`, `WNBA`, `NFL`, and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NBA` and `WNBA`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NFL` and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
 - `MLS` and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
+
+Football score updates and lead changes are opt-in. Lead changes cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.
+
+When a football score also qualifies for a close-game alert, each user receives one alert based on their enabled rules: lead change first, then close game, then score update. A lead alert that covers the one-time close-game rule prevents that close alert from arriving on the next sync.
 
 ## Repo Layout
 

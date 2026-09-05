@@ -59,14 +59,14 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     nba = get_competition_profile("NBA")
     assert (nba.sport, nba.live_sync_interval_seconds, nba.odds_sport_key) == (
         "basketball",
-        120,
+        60,
         "basketball_nba",
     )
 
     wnba = get_competition_profile("WNBA")
     assert (wnba.sport, wnba.live_sync_interval_seconds, wnba.odds_sport_key) == (
         "basketball",
-        120,
+        60,
         "basketball_wnba",
     )
     assert wnba.scoreboard_url.endswith("/sports/basketball/wnba/scoreboard")
@@ -76,16 +76,23 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     nfl = get_competition_profile("NFL")
     assert (nfl.sport, nfl.live_sync_interval_seconds, nfl.odds_sport_key) == (
         "football",
-        120,
+        60,
         "americanfootball_nfl",
     )
     assert nfl.scoreboard_url.endswith("/sports/football/nfl/scoreboard")
-    assert get_alert_types("NFL") == ("game_start", "close_game_late", "overtime_start", "final_result")
+    assert get_alert_types("NFL") == (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "lead_change",
+        "final_result",
+    )
 
     fbs = get_competition_profile("FBS")
     assert (fbs.sport, fbs.live_sync_interval_seconds, fbs.odds_sport_key) == (
         "football",
-        120,
+        60,
         "americanfootball_ncaaf",
     )
     assert fbs.scoreboard_url.endswith("/sports/football/college-football/scoreboard")
@@ -95,7 +102,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     mlb = get_competition_profile("MLB")
     assert (mlb.sport, mlb.live_sync_interval_seconds, mlb.odds_sport_key) == (
         "baseball",
-        300,
+        120,
         "baseball_mlb",
     )
     assert get_alert_types("MLB") == ("game_start", "inning_start", "extra_innings_start", "final_result")
@@ -103,7 +110,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     mls = get_competition_profile("MLS")
     assert (mls.sport, mls.live_sync_interval_seconds, mls.odds_sport_key) == (
         "soccer",
-        180,
+        90,
         "soccer_usa_mls",
     )
     assert mls.scoreboard_url.endswith("/sports/soccer/usa.1/scoreboard")
@@ -111,7 +118,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     la_liga = get_competition_profile("LA_LIGA")
     assert (la_liga.sport, la_liga.live_sync_interval_seconds, la_liga.odds_sport_key) == (
         "soccer",
-        180,
+        90,
         "soccer_spain_la_liga",
     )
     assert la_liga.scoreboard_url.endswith("/sports/soccer/esp.1/scoreboard")
@@ -127,14 +134,14 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
         premier_competition.sport,
         premier_competition.live_sync_interval_seconds,
         premier_competition.odds_sport_key,
-    ) == ("soccer", 180, "soccer_epl")
+    ) == ("soccer", 90, "soccer_epl")
     assert premier_competition.scoreboard_url.endswith("/sports/soccer/eng.1/scoreboard")
     assert get_alert_types("PREMIER_LEAGUE") == get_alert_types("LA_LIGA")
 
     world_cup = get_competition_profile("WORLD_CUP")
     assert (world_cup.sport, world_cup.live_sync_interval_seconds, world_cup.odds_sport_key) == (
         "soccer",
-        180,
+        90,
         "soccer_fifa_world_cup",
     )
     assert get_alert_types("MLS") == get_alert_types("WORLD_CUP")
@@ -164,15 +171,15 @@ def test_public_competitions_include_sport_and_live_cadence(client):
         )
         for item in response.json()
     ] == [
-        ("NBA", "basketball", 120),
-        ("WNBA", "basketball", 120),
-        ("NFL", "football", 120),
-        ("FBS", "football", 120),
-        ("MLB", "baseball", 300),
-        ("MLS", "soccer", 180),
-        ("LA_LIGA", "soccer", 180),
-        ("PREMIER_LEAGUE", "soccer", 180),
-        ("WORLD_CUP", "soccer", 180),
+        ("NBA", "basketball", 60),
+        ("WNBA", "basketball", 60),
+        ("NFL", "football", 60),
+        ("FBS", "football", 60),
+        ("MLB", "baseball", 120),
+        ("MLS", "soccer", 90),
+        ("LA_LIGA", "soccer", 90),
+        ("PREMIER_LEAGUE", "soccer", 90),
+        ("WORLD_CUP", "soccer", 90),
     ]
 
 

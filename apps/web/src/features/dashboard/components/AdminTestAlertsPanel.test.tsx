@@ -20,6 +20,14 @@ const items: CompetitionSetting[] = [
     sport: "football",
     label: "NFL",
     badge_label: "NFL",
+    alert_types: [
+      "game_start",
+      "close_game_late",
+      "overtime_start",
+      "score_changed",
+      "lead_change",
+      "final_result",
+    ],
     is_enabled: false,
   },
   baseballCompetition,
@@ -46,6 +54,23 @@ describe("AdminTestAlertsPanel", () => {
     });
     expect(screen.getByText("Inning start")).toBeInTheDocument();
     expect(screen.queryByText("Close game late")).toBeNull();
+  });
+
+  it("shows football score and lead test alerts", () => {
+    render(
+      <AdminTestAlertsPanel
+        token="token"
+        items={items.map((item) =>
+          item.competition === "NFL" ? { ...item, is_enabled: true } : item,
+        )}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "League" }), {
+      target: { value: "NFL" },
+    });
+    expect(screen.getByRole("option", { name: "Score update" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Lead change" })).toBeInTheDocument();
   });
 
   it("sends the selected test and reports channel outcomes", async () => {

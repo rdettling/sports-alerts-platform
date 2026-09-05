@@ -104,4 +104,38 @@ describe("GameAlertSettingsModal", () => {
 
     expect(screen.queryByRole("button", { name: "Use sport settings" })).toBeNull();
   });
+
+  it("shows football score and lead rules as disabled by default", () => {
+    render(
+      <GameAlertSettingsModal
+        isOpen
+        matchupLabel="KC at BUF"
+        alertsBusy={false}
+        gameAlertState={{
+          game_id: 24,
+          competition: "NFL",
+          sport: "football",
+          items: (["score_changed", "lead_change"] as const).map((alertType) => ({
+            sport: "football",
+            alert_type: alertType,
+            uses_sport_defaults: true,
+            is_enabled: false,
+            close_game_margin_threshold: null,
+            close_game_time_threshold_seconds: null,
+            inning_start_threshold: null,
+          })),
+        }}
+        onClose={vi.fn()}
+        onUpdateGameAlertSettings={vi.fn(async () => undefined)}
+        onResetGameAlertSettings={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen.getByRole("switch", { name: "Score update alerts for this game" }),
+    ).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByRole("switch", { name: "Lead change alerts for this game" }),
+    ).toHaveAttribute("aria-checked", "false");
+  });
 });

@@ -74,7 +74,7 @@ If reports stay unavailable after worker activity, check `Schedule report delive
 
 ## Games Screen Is Stale
 
-1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball/football use two minutes, soccer three, and MLB five
+1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball/football use one minute, soccer 90 seconds, and MLB two minutes
 2. Confirm `LIVE_UPDATE_API_URL` points to the API and both services have matching `LIVE_UPDATE_SECRET` values
 3. On a visible, online Games screen, inspect `/updates/games`: expect `text/event-stream`, periodic keep-alives, and `games` events after changed syncs
 4. An event should prompt a games read after about one second (at least two seconds between event-driven reads). The API invalidates its shared cache before sending the event

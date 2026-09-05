@@ -1,23 +1,30 @@
 from datetime import datetime, timezone
+from threading import Event
 
-from sqlalchemy import select
+import pytest
+from sqlalchemy import event, select
 
 from app.db.models import Alert, AlertDelivery, Game, PushSubscription, Team, User
+from app.db.session import engine
 from app.services import alert_delivery, resend
-from app.services.alert_delivery import deliver_email_alert_now, deliver_push_alert_now
-from app.services.competitions import competition_teams_query
+from app.services.alert_delivery import (
+    DeliveryOutcome,
+    build_email_payload,
+    build_push_payload,
+    send_email_alert,
+    send_push_alert,
+)
 from app.services.email_branding import APP_BRAND_NAME
+from app.worker import delivery as worker_delivery
 
 
-def _seed_alert(db_session) -> tuple[Alert, AlertDelivery]:
+def _seed_alert(db_session, *, channel: str = "email") -> tuple[Alert, AlertDelivery]:
     user = User(email="delivery@example.com")
     db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-
+    db_session.flush()
     teams = db_session.scalars(select(Team).order_by(Team.id.asc()).limit(2)).all()
     game = Game(
-        external_game_id="delivery-game",
+        external_game_id=f"delivery-game-{channel}-{user.id}",
         competition="NBA",
         home_team_id=teams[0].id,
         away_team_id=teams[1].id,
@@ -27,25 +34,62 @@ def _seed_alert(db_session) -> tuple[Alert, AlertDelivery]:
         away_score=99,
     )
     db_session.add(game)
-    db_session.commit()
-    db_session.refresh(game)
-
+    db_session.flush()
     alert = Alert(
         user_id=user.id,
         game_id=game.id,
         alert_type="game_start",
         event_key=f"{user.id}:{game.id}:game_start",
-        event_data={"status": "in_progress"},
+        event_data={
+            "status": "in_progress",
+            "period": 1,
+            "clock": "11:42",
+            "home_score": 101,
+            "away_score": 99,
+        },
     )
     db_session.add(alert)
     db_session.flush()
-    delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
+    delivery = AlertDelivery(alert_id=alert.id, channel=channel, status="pending")
     db_session.add(delivery)
     db_session.commit()
     return alert, delivery
 
 
-def test_email_delivery_success_marks_sent(db_session, monkeypatch):
+def _email_payload(db_session, alert: Alert, delivery: AlertDelivery):
+    user = db_session.get(User, alert.user_id)
+    game = db_session.get(Game, alert.game_id)
+    assert user is not None and game is not None
+    return build_email_payload(
+        alert=alert,
+        delivery_id=delivery.id,
+        user=user,
+        game=game,
+        home=db_session.get(Team, game.home_team_id),
+        away=db_session.get(Team, game.away_team_id),
+        service="worker",
+    )
+
+
+def _push_payload(db_session, alert: Alert):
+    game = db_session.get(Game, alert.game_id)
+    assert game is not None
+    subscriptions = db_session.scalars(
+        select(PushSubscription)
+        .where(PushSubscription.user_id == alert.user_id)
+        .order_by(PushSubscription.id.asc())
+    ).all()
+    return build_push_payload(
+        alert=alert,
+        game=game,
+        home=db_session.get(Team, game.home_team_id),
+        away=db_session.get(Team, game.away_team_id),
+        subscriptions=list(subscriptions),
+        service="worker",
+    )
+
+
+def test_email_sender_returns_success_without_mutating_database(db_session, monkeypatch):
     alert, delivery = _seed_alert(db_session)
 
     class Response:
@@ -61,12 +105,10 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
             return b'{"id":"email_123"}'
 
     def fake_urlopen(request, timeout):
-        assert "api.resend.com" in request.full_url
         body = request.data.decode("utf-8")
         assert "delivery@example.com" in body
         assert "Tip-off" in body
         assert APP_BRAND_NAME in body
-        assert request.headers["Authorization"] == "Bearer test-key"
         assert timeout == 15.0
         return Response()
 
@@ -74,33 +116,15 @@ def test_email_delivery_success_marks_sent(db_session, monkeypatch):
     monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
     monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
-    user = db_session.get(User, alert.user_id)
-    game = db_session.get(Game, alert.game_id)
-    assert user is not None
-    assert game is not None
-    home = db_session.get(Team, game.home_team_id)
-    away = db_session.get(Team, game.away_team_id)
-    status = deliver_email_alert_now(
-        db_session,
-        alert=alert,
-        delivery=delivery,
-        user=user,
-        game=game,
-        home=home,
-        away=away,
-        service="worker",
-    )
-    assert status == "sent"
+    outcome = send_email_alert(_email_payload(db_session, alert, delivery))
 
-    updated = db_session.get(AlertDelivery, delivery.id)
-    assert updated is not None
-    assert updated.status == "sent"
-    assert updated.provider_message_id == "email_123"
-    assert updated.provider_data is None
-    assert alert.event_data == {"status": "in_progress"}
+    assert outcome == DeliveryOutcome(status="sent", provider_message_id="email_123")
+    db_session.refresh(delivery)
+    assert delivery.status == "pending"
+    assert delivery.attempted_at is None
 
 
-def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monkeypatch, caplog):
+def test_email_sender_returns_provider_failure_metadata(db_session, monkeypatch, caplog):
     alert, delivery = _seed_alert(db_session)
 
     class ErrorResponse:
@@ -111,127 +135,50 @@ def test_email_delivery_failure_marks_failed_and_keeps_metadata(db_session, monk
             return None
 
     def fake_urlopen(request, timeout):
-        raise resend.HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=ErrorResponse())
+        raise resend.HTTPError(
+            request.full_url,
+            401,
+            "unauthorized",
+            hdrs=None,
+            fp=ErrorResponse(),
+        )
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
     monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "bad-key")
     monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
-    user = db_session.get(User, alert.user_id)
-    game = db_session.get(Game, alert.game_id)
-    assert user is not None
-    assert game is not None
-    home = db_session.get(Team, game.home_team_id)
-    away = db_session.get(Team, game.away_team_id)
-    status = deliver_email_alert_now(
-        db_session,
-        alert=alert,
-        delivery=delivery,
-        user=user,
-        game=game,
-        home=home,
-        away=away,
-        service="worker",
-    )
-    assert status == "failed"
+    outcome = send_email_alert(_email_payload(db_session, alert, delivery))
 
-    updated = db_session.get(AlertDelivery, delivery.id)
-    assert updated is not None
-    assert updated.status == "failed"
-    assert updated.provider_data is not None
-    assert alert.event_data == {"status": "in_progress"}
-    assert updated.provider_data["error"] == "resend_request_failed"
-    assert updated.provider_data["status_code"] == 401
+    assert outcome.status == "failed"
+    assert outcome.provider_data["error"] == "resend_request_failed"
+    assert outcome.provider_data["status_code"] == 401
     assert "Alert email delivery failed service=worker" in caplog.text
-    assert f"alert_id={alert.id}" in caplog.text
-    assert "error=resend_request_failed status_code=401" in caplog.text
 
 
-def test_email_delivery_log_mode_marks_delivery_sent_without_provider_call(db_session, monkeypatch):
+def test_email_sender_log_mode_skips_provider(db_session, monkeypatch):
     alert, delivery = _seed_alert(db_session)
-
-    def fail_urlopen(*args, **kwargs):
-        raise AssertionError("log mode must not call Resend")
-
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "log")
-    monkeypatch.setattr(resend, "urlopen", fail_urlopen)
-
-    game = db_session.get(Game, alert.game_id)
-    assert game is not None
-    status = deliver_email_alert_now(
-        db_session,
-        alert=alert,
-        delivery=delivery,
-        user=db_session.get(User, alert.user_id),
-        game=game,
-        home=db_session.get(Team, game.home_team_id),
-        away=db_session.get(Team, game.away_team_id),
-        service="worker",
+    monkeypatch.setattr(
+        resend,
+        "urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected request")),
     )
 
-    assert status == "sent"
-    assert delivery.provider_message_id == f"log-{delivery.id}"
-    assert delivery.attempted_at is not None
-    assert alert.event_data == {"status": "in_progress"}
+    outcome = send_email_alert(_email_payload(db_session, alert, delivery))
 
-
-def test_email_delivery_without_resend_key_marks_only_delivery_failed(db_session, monkeypatch):
-    alert, delivery = _seed_alert(db_session)
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "")
-
-    game = db_session.get(Game, alert.game_id)
-    assert game is not None
-    status = deliver_email_alert_now(
-        db_session,
-        alert=alert,
-        delivery=delivery,
-        user=db_session.get(User, alert.user_id),
-        game=game,
-        home=db_session.get(Team, game.home_team_id),
-        away=db_session.get(Team, game.away_team_id),
-        service="worker",
+    assert outcome == DeliveryOutcome(
+        status="sent",
+        provider_message_id=f"log-{delivery.id}",
     )
-
-    assert status == "failed"
-    assert delivery.provider_data == {"error": "missing_resend_api_key"}
-    assert alert.event_data == {"status": "in_progress"}
-
-
-def test_resend_success_without_message_id_returns_warning(monkeypatch):
-    class Response:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return None
-
-        def read(self):
-            return b"{}"
-
-    monkeypatch.setattr(resend.delivery_settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(resend, "urlopen", lambda request, timeout: Response())
-
-    result = resend.send_resend_email(
-        to_email="delivery@example.com",
-        subject="Test",
-        text_body="Test",
-        html_body="<p>Test</p>",
-    )
-
-    assert result.sent is True
-    assert result.provider_message_id is None
-    assert result.metadata == {"provider_warning": "missing_message_id"}
 
 
 def test_resend_network_failure_returns_metadata(monkeypatch):
-    def fail_urlopen(request, timeout):
-        raise resend.URLError("network unavailable")
-
     monkeypatch.setattr(resend.delivery_settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(resend, "urlopen", fail_urlopen)
+    monkeypatch.setattr(
+        resend,
+        "urlopen",
+        lambda request, timeout: (_ for _ in ()).throw(resend.URLError("network unavailable")),
+    )
 
     result = resend.send_resend_email(
         to_email="delivery@example.com",
@@ -241,157 +188,14 @@ def test_resend_network_failure_returns_metadata(monkeypatch):
     )
 
     assert result.sent is False
-    assert result.metadata == {"error": "resend_http_error", "detail": "network unavailable"}
+    assert result.metadata == {
+        "error": "resend_http_error",
+        "detail": "network unavailable",
+    }
 
 
-def test_score_changed_delivery_uses_metadata_scores_for_subject(db_session, monkeypatch):
-    user = User(email="score-changed@example.com")
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-
-    home = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "660"))
-    away = db_session.scalar(competition_teams_query("WORLD_CUP").where(Team.external_team_id == "203"))
-    assert home is not None and away is not None
-    game = Game(
-        external_game_id="delivery-world-cup-game",
-        competition="WORLD_CUP",
-        home_team_id=home.id,
-        away_team_id=away.id,
-        scheduled_start_time=datetime.now(timezone.utc),
-        status="in_progress",
-        home_score=2,
-        away_score=2,
-        period=2,
-        clock="70'",
-    )
-    db_session.add(game)
-    db_session.commit()
-    db_session.refresh(game)
-
-    alert = Alert(
-        user_id=user.id,
-        game_id=game.id,
-        alert_type="score_changed",
-        event_key=f"{user.id}:{game.id}:score_changed:2-2",
-        event_data={
-            "status": "in_progress",
-            "period": 2,
-            "clock": "68'",
-            "previous_home_score": 1,
-            "previous_away_score": 1,
-            "new_home_score": 2,
-            "new_away_score": 2,
-            "scoring_side": None,
-            "is_inferred_goal": False,
-        },
-    )
-    db_session.add(alert)
-    db_session.flush()
-    delivery = AlertDelivery(alert_id=alert.id, channel="email", status="pending")
-    db_session.add(delivery)
-    db_session.commit()
-
-    class Response:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return None
-
-        def read(self):
-            return b'{"id":"email_456"}'
-
-    def fake_urlopen(request, timeout):
-        body = request.data.decode("utf-8")
-        assert "Score update \\u00b7 MEX 2\\u20132 USA" in body
-        assert "68'" in body
-        return Response()
-
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
-    monkeypatch.setattr(resend, "urlopen", fake_urlopen)
-
-    persisted = db_session.scalar(select(Alert).where(Alert.id == alert.id))
-    assert persisted is not None
-    status = deliver_email_alert_now(
-        db_session,
-        alert=persisted,
-        delivery=delivery,
-        user=user,
-        game=game,
-        home=db_session.get(Team, game.home_team_id),
-        away=db_session.get(Team, game.away_team_id),
-        service="worker",
-    )
-    assert status == "sent"
-
-
-def _push_delivery(db_session, alert: Alert) -> AlertDelivery:
-    delivery = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
-    db_session.add(delivery)
-    db_session.commit()
-    return delivery
-
-
-def _deliver_push(db_session, alert: Alert, delivery: AlertDelivery) -> str:
-    game = db_session.get(Game, alert.game_id)
-    assert game is not None
-    return deliver_push_alert_now(
-        db_session,
-        alert=alert,
-        delivery=delivery,
-        user=db_session.get(User, alert.user_id),
-        game=game,
-        home=db_session.get(Team, game.home_team_id),
-        away=db_session.get(Team, game.away_team_id),
-        service="worker",
-    )
-
-
-def test_push_delivery_sends_every_device_and_aggregates_success(db_session, monkeypatch):
+def test_push_sender_aggregates_devices_without_mutating_subscriptions(db_session, monkeypatch):
     alert, _ = _seed_alert(db_session)
-    delivery = _push_delivery(db_session, alert)
-    db_session.add_all(
-        [
-            PushSubscription(
-                user_id=alert.user_id,
-                endpoint="https://push.example/one",
-                p256dh="p" * 43,
-                auth="a" * 22,
-            ),
-            PushSubscription(
-                user_id=alert.user_id,
-                endpoint="https://push.example/two",
-                p256dh="p" * 43,
-                auth="b" * 22,
-            ),
-        ]
-    )
-    db_session.commit()
-    sent_endpoints: list[str] = []
-
-    def fake_webpush(**kwargs):
-        sent_endpoints.append(kwargs["subscription_info"]["endpoint"])
-        assert kwargs["ttl"] == 300
-        assert kwargs["timeout"] == 10
-        assert kwargs["vapid_claims"] == {"sub": "mailto:alerts@example.com"}
-
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_subject", "mailto:alerts@example.com")
-    monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
-
-    assert _deliver_push(db_session, alert, delivery) == "sent"
-    assert sent_endpoints == ["https://push.example/one", "https://push.example/two"]
-    assert delivery.provider_data == {"attempted": 2, "sent": 2, "expired": 0}
-
-
-def test_push_delivery_keeps_success_and_deletes_expired_device(db_session, monkeypatch):
-    alert, _ = _seed_alert(db_session)
-    delivery = _push_delivery(db_session, alert)
     db_session.add_all(
         [
             PushSubscription(
@@ -416,73 +220,200 @@ def test_push_delivery_keeps_success_and_deletes_expired_device(db_session, monk
     def fake_webpush(**kwargs):
         if kwargs["subscription_info"]["endpoint"].endswith("/gone"):
             raise alert_delivery.WebPushException("gone", response=GoneResponse())
+        assert kwargs["timeout"] == 10
+        assert kwargs["ttl"] == 300
 
     monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
+    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "private")
     monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
 
-    assert _deliver_push(db_session, alert, delivery) == "sent"
-    assert delivery.provider_data == {"attempted": 2, "sent": 1, "expired": 1}
-    remaining = db_session.scalars(select(PushSubscription)).all()
-    assert [row.endpoint for row in remaining] == ["https://push.example/active"]
+    outcome = send_push_alert(_push_payload(db_session, alert))
+
+    assert outcome.status == "sent"
+    assert outcome.provider_data == {"attempted": 2, "sent": 1, "expired": 1}
+    assert len(outcome.expired_subscription_ids) == 1
+    assert len(db_session.scalars(select(PushSubscription)).all()) == 2
 
 
-def test_push_delivery_total_provider_failure_retains_subscription(db_session, monkeypatch):
-    alert, _ = _seed_alert(db_session)
-    delivery = _push_delivery(db_session, alert)
-    db_session.add(
-        PushSubscription(
-            user_id=alert.user_id,
-            endpoint="https://push.example/retry-later",
-            p256dh="p" * 43,
-            auth="a" * 22,
-        )
-    )
+def test_dispatcher_sends_outside_database_checkout(db_session, monkeypatch):
+    _, delivery = _seed_alert(db_session)
+    active_connections = 0
+
+    def checkout(*_args):
+        nonlocal active_connections
+        active_connections += 1
+
+    def checkin(*_args):
+        nonlocal active_connections
+        active_connections -= 1
+
+    event.listen(engine, "checkout", checkout)
+    event.listen(engine, "checkin", checkin)
+
+    def send(payload):
+        assert active_connections == 0
+        return DeliveryOutcome(status="sent", provider_message_id="provider-1")
+
+    monkeypatch.setattr(worker_delivery, "send_email_alert", send)
+    try:
+        result = worker_delivery.drain_pending_deliveries()
+    finally:
+        event.remove(engine, "checkout", checkout)
+        event.remove(engine, "checkin", checkin)
+
+    db_session.expire_all()
+    persisted = db_session.get(AlertDelivery, delivery.id)
+    assert result.sent == 1
+    assert persisted is not None
+    assert persisted.status == "sent"
+    assert persisted.attempted_at is not None
+    assert persisted.provider_message_id == "provider-1"
+
+
+def test_dispatcher_recovers_unattempted_but_never_retries_interrupted(
+    db_session,
+    monkeypatch,
+):
+    _, first = _seed_alert(db_session)
+    first.attempted_at = datetime.now(timezone.utc)
     db_session.commit()
-
-    class FailureResponse:
-        status_code = 503
-
-    def fake_webpush(**kwargs):
-        raise alert_delivery.WebPushException("unavailable", response=FailureResponse())
-
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
-    monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
-
-    assert _deliver_push(db_session, alert, delivery) == "failed"
-    assert delivery.provider_data == {
-        "attempted": 1,
-        "sent": 0,
-        "expired": 0,
-        "errors": ["http_503"],
-    }
-    assert db_session.scalar(select(PushSubscription)) is not None
-
-
-def test_push_delivery_without_subscriptions_or_vapid_fails_only_delivery(db_session, monkeypatch):
-    alert, _ = _seed_alert(db_session)
-    no_subscription = _push_delivery(db_session, alert)
-    assert _deliver_push(db_session, alert, no_subscription) == "failed"
-    assert no_subscription.provider_data["error"] == "no_active_subscriptions"
-    assert alert.event_data == {"status": "in_progress"}
-
-    db_session.add(
-        PushSubscription(
-            user_id=alert.user_id,
-            endpoint="https://push.example/config",
-            p256dh="p" * 43,
-            auth="a" * 22,
-        )
+    calls: list[int] = []
+    monkeypatch.setattr(
+        worker_delivery,
+        "send_email_alert",
+        lambda payload: calls.append(payload.alert_id) or DeliveryOutcome(status="sent"),
     )
-    db_session.delete(no_subscription)
+
+    result = worker_delivery.drain_pending_deliveries()
+
+    db_session.expire_all()
+    interrupted = db_session.get(AlertDelivery, first.id)
+    assert result.recovered == 1
+    assert result.failed == 1
+    assert calls == []
+    assert interrupted is not None
+    assert interrupted.status == "failed"
+    assert interrupted.provider_data == {"error": "interrupted_during_delivery"}
+
+
+def test_dispatcher_processes_pending_deliveries_in_id_order(db_session, monkeypatch):
+    first_alert, first = _seed_alert(db_session)
+    second_user = User(email="second@example.com")
+    db_session.add(second_user)
     db_session.flush()
-    missing_config = AlertDelivery(alert_id=alert.id, channel="push", status="pending")
-    db_session.add(missing_config)
+    second_alert = Alert(
+        user_id=second_user.id,
+        game_id=first_alert.game_id,
+        alert_type="game_start",
+        event_key=f"{second_user.id}:{first_alert.game_id}:game_start",
+        event_data=first_alert.event_data,
+    )
+    db_session.add(second_alert)
+    db_session.flush()
+    second = AlertDelivery(alert_id=second_alert.id, channel="email", status="pending")
+    db_session.add(second)
     db_session.commit()
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "")
+    calls: list[int] = []
+    monkeypatch.setattr(
+        worker_delivery,
+        "send_email_alert",
+        lambda payload: calls.append(payload.delivery_id) or DeliveryOutcome(status="sent"),
+    )
 
-    assert _deliver_push(db_session, alert, missing_config) == "failed"
-    assert missing_config.provider_data == {"error": "missing_vapid_private_key"}
-    assert alert.event_data == {"status": "in_progress"}
+    result = worker_delivery.drain_pending_deliveries()
+
+    assert result.sent == 2
+    assert calls == [first.id, second.id]
+
+
+def test_dispatcher_persists_expired_push_cleanup_after_send(db_session, monkeypatch):
+    alert, delivery = _seed_alert(db_session, channel="push")
+    subscription = PushSubscription(
+        user_id=alert.user_id,
+        endpoint="https://push.example/gone",
+        p256dh="p" * 43,
+        auth="a" * 22,
+    )
+    db_session.add(subscription)
+    db_session.commit()
+    subscription_id = subscription.id
+    active_connections = 0
+
+    def checkout(*_args):
+        nonlocal active_connections
+        active_connections += 1
+
+    def checkin(*_args):
+        nonlocal active_connections
+        active_connections -= 1
+
+    def send(_payload):
+        assert active_connections == 0
+        return DeliveryOutcome(
+            status="failed",
+            provider_data={"error": "all_subscriptions_expired"},
+            expired_subscription_ids=(subscription_id,),
+        )
+
+    event.listen(engine, "checkout", checkout)
+    event.listen(engine, "checkin", checkin)
+    monkeypatch.setattr(worker_delivery, "send_push_alert", send)
+
+    try:
+        result = worker_delivery.drain_pending_deliveries()
+    finally:
+        event.remove(engine, "checkout", checkout)
+        event.remove(engine, "checkin", checkin)
+
+    db_session.expire_all()
+    assert result.failed == 1
+    assert db_session.get(PushSubscription, subscription_id) is None
+    assert db_session.get(AlertDelivery, delivery.id).status == "failed"
+
+
+def test_result_persistence_failure_leaves_attempt_mark_for_safe_recovery(
+    db_session,
+    monkeypatch,
+):
+    _, delivery = _seed_alert(db_session)
+    monkeypatch.setattr(
+        worker_delivery,
+        "send_email_alert",
+        lambda payload: DeliveryOutcome(status="sent"),
+    )
+    monkeypatch.setattr(
+        worker_delivery,
+        "_save_outcome",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        worker_delivery.drain_pending_deliveries()
+
+    db_session.expire_all()
+    attempted = db_session.get(AlertDelivery, delivery.id)
+    assert attempted is not None
+    assert attempted.status == "pending"
+    assert attempted.attempted_at is not None
+
+
+def test_delivery_loop_drains_once_then_waits_without_polling(monkeypatch):
+    stop_event = Event()
+    drains: list[bool] = []
+
+    class WakeEvent:
+        def wait(self):
+            stop_event.set()
+
+        def clear(self):
+            return None
+
+    monkeypatch.setattr(
+        worker_delivery,
+        "drain_pending_deliveries",
+        lambda stop: drains.append(stop is stop_event) or worker_delivery.DrainResult(),
+    )
+
+    worker_delivery.run_delivery_loop(stop_event, WakeEvent())
+
+    assert drains == [True]

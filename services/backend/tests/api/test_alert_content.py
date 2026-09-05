@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 
 from app.db.models import Alert, Game, Team
-from app.services.email_templates import build_alert_email_content, build_alert_subject
+from app.services.alert_content import (
+    build_alert_email_content,
+    build_alert_push_content,
+    build_alert_subject,
+)
 
 
 def _mk_alert(alert_type: str) -> Alert:
@@ -95,6 +99,38 @@ def test_nba_game_start_keeps_tipoff_and_nba_logo_source():
     assert "teamlogos/nba/500/lal.png" in html_body
 
 
+def test_delayed_delivery_uses_event_snapshot_after_game_changes():
+    away = Team(external_team_id="2", name="Boston Celtics", abbreviation="BOS")
+    home = Team(external_team_id="13", name="Los Angeles Lakers", abbreviation="LAL")
+    game = Game(
+        external_game_id="nba-delayed-final",
+        competition="NBA",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=120,
+        away_score=118,
+        period=5,
+        clock="03:00",
+    )
+    alert = _mk_alert("final_result")
+    alert.event_data = {
+        "status": "final",
+        "period": 4,
+        "clock": "0:00",
+        "home_score": 109,
+        "away_score": 105,
+    }
+
+    subject = build_alert_subject(alert, game, home, away)
+    text_body, _ = build_alert_email_content(alert, game, home, away)
+
+    assert subject == "Final · BOS 105–109 LAL"
+    assert "BOS (105) @ LAL (109)" in text_body
+    assert "Final • Q4 • 0:00 left" in text_body
+
+
 def test_wnba_game_start_uses_basketball_copy_and_wnba_logos():
     away = Team(external_team_id="17", name="Las Vegas Aces", abbreviation="LV")
     home = Team(external_team_id="9", name="New York Liberty", abbreviation="NY")
@@ -148,6 +184,90 @@ def test_nfl_alerts_use_football_copy_periods_and_logos():
     overtime = _mk_alert("overtime_start")
     overtime.event_data = {"status": "in_progress", "period": 5, "clock": "10:00"}
     assert build_alert_subject(overtime, game, home, away) == "OT1 · KC 20–20 BUF"
+
+
+def test_football_score_and_lead_alerts_use_event_time_scores():
+    away = Team(external_team_id="12", name="Kansas City Chiefs", abbreviation="KC")
+    home = Team(external_team_id="2", name="Buffalo Bills", abbreviation="BUF")
+    game = Game(
+        external_game_id="nfl-score-events",
+        competition="NFL",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=28,
+        away_score=24,
+        period=4,
+        clock="01:00",
+    )
+    score_update = _mk_alert("score_changed")
+    score_update.event_data = {
+        "status": "in_progress",
+        "period": 3,
+        "clock": "06:42",
+        "previous_home_score": 7,
+        "previous_away_score": 14,
+        "new_home_score": 10,
+        "new_away_score": 14,
+        "scoring_side": "home",
+        "is_inferred_goal": False,
+        "previous_leader": "away",
+        "new_leader": "away",
+    }
+
+    subject = build_alert_subject(score_update, game, home, away)
+    text_body, _ = build_alert_email_content(score_update, game, home, away)
+
+    assert subject == "Score update · KC 14–10 BUF"
+    assert "Score update · KC 14–10 BUF" in text_body
+    assert "In Progress • Q3 • 06:42 left" in text_body
+
+    lead_change = _mk_alert("lead_change")
+    lead_change.event_data = {
+        **score_update.event_data,
+        "period": 4,
+        "clock": "08:42",
+        "previous_home_score": 17,
+        "previous_away_score": 21,
+        "new_home_score": 24,
+        "new_away_score": 21,
+        "previous_leader": "away",
+        "new_leader": "home",
+        "covers_close_game_late": True,
+    }
+    subject = build_alert_subject(lead_change, game, home, away)
+    text_body, _ = build_alert_email_content(lead_change, game, home, away)
+
+    assert subject == "BUF takes the lead · KC 21–24 BUF"
+    assert "BUF takes the lead · KC 21–24 BUF" in text_body
+    assert "In Progress • Q4 • 08:42 left" in text_body
+    assert build_alert_push_content(lead_change, game, home, away) == (
+        "BUF takes the lead · KC 21–24 BUF",
+        "BUF takes the lead · KC 21–24 BUF • Q4 • 08:42 left",
+    )
+
+    close_game = _mk_alert("close_game_late")
+    close_game.event_data = {
+        **score_update.event_data,
+        "period": 4,
+        "clock": "03:00",
+        "previous_home_score": 20,
+        "previous_away_score": 10,
+        "new_home_score": 20,
+        "new_away_score": 13,
+    }
+    close_text, _ = build_alert_email_content(close_game, game, home, away)
+    assert build_alert_subject(close_game, game, home, away) == "Close game · KC 13–20 BUF"
+    assert "KC 13–20 BUF • Q4 • 03:00 left" in close_text
+
+    lead_change.event_data = {
+        **lead_change.event_data,
+        "new_home_score": 21,
+        "new_away_score": 21,
+        "new_leader": "tied",
+    }
+    assert build_alert_subject(lead_change, game, home, away) == "Game tied · KC 21–21 BUF"
 
 
 def test_fbs_alerts_use_football_copy_and_ncaa_team_logos():

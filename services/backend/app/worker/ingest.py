@@ -8,7 +8,7 @@ from typing import Protocol
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import CompetitionTeam, Game, Team
+from app.db.models import CompetitionTeam, Game, GameOddsCurrent, Team
 from app.db.session import SessionLocal
 from app.services.competitions import competition_supports_odds, competition_teams_query, get_active_competitions, get_competition_profile, normalize_competition
 from app.worker import odds, soccer
@@ -16,6 +16,7 @@ from app.worker.alerts import evaluate_and_record_alerts
 from app.worker.cleanup import cleanup_games_outside_window
 from app.worker.config import settings
 from app.worker.planner import build_catalog_dates, build_live_requests
+from app.worker.score_events import ScoreChangeEvent, classify_score_change
 from app.worker.scoreboard import ScoreboardGame, TeamStrength
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ class ScoreboardFetcher(Protocol):
 class GameUpdateResult:
     did_update: bool
     game_id: int | None
+    score_change: ScoreChangeEvent | None = None
     soccer_events: soccer.SoccerDerivedEvents | None = None
 
 
@@ -53,6 +55,13 @@ class LiveSyncResult:
     alerts_created: int
     has_live_games: bool
     next_scheduled_start_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PregameOddsCandidate:
+    external_game_id: str
+    scheduled_start_time: datetime
+    matchup_key: tuple[str, str] | None
 
 
 def _assert_competition_enabled(db: Session, competition: str) -> None:
@@ -85,6 +94,63 @@ def _competition_team_maps(db: Session, competition: str) -> tuple[dict[str, int
         {team.external_team_id: team.id for team in rows},
         {team.id: team.name for team in rows},
     )
+
+
+def _existing_odds_external_ids(db: Session, competition: str) -> set[str]:
+    return set(
+        db.scalars(
+            select(Game.external_game_id)
+            .join(GameOddsCurrent, GameOddsCurrent.game_id == Game.id)
+            .where(Game.competition == competition)
+        ).all()
+    )
+
+
+def _pregame_odds_candidates(
+    games: list[ScoreboardGame],
+    competition: str,
+    now: datetime,
+    existing_odds_external_ids: set[str],
+    team_map: dict[str, int],
+    team_names: dict[int, str],
+) -> list[PregameOddsCandidate]:
+    if not settings.odds_api_key.strip() or not competition_supports_odds(competition):
+        return []
+    cutoff = now + odds.ODDS_PREGAME_WINDOW
+    candidates: list[PregameOddsCandidate] = []
+    seen: set[str] = set()
+    for game in games:
+        starts_at = _as_utc(game.scheduled_start_time)
+        if (
+            game.external_game_id in seen
+            or game.external_game_id in existing_odds_external_ids
+            or game.status != "scheduled"
+            or game.is_final
+            or starts_at is None
+            or starts_at < now
+            or starts_at > cutoff
+            or (competition == "NFL" and game.season_slug == "preseason")
+        ):
+            continue
+        seen.add(game.external_game_id)
+        home_name = game.home_team_name or team_names.get(
+            team_map.get(game.home_external_team_id, -1)
+        )
+        away_name = game.away_team_name or team_names.get(
+            team_map.get(game.away_external_team_id, -1)
+        )
+        candidates.append(
+            PregameOddsCandidate(
+                external_game_id=game.external_game_id,
+                scheduled_start_time=starts_at,
+                matchup_key=(
+                    odds.game_key(home_name, away_name)
+                    if home_name and away_name
+                    else None
+                ),
+            )
+        )
+    return candidates
 
 
 def _register_fbs_opponents(
@@ -180,9 +246,13 @@ def _upsert_game(
         )
     )
     if existing:
-        is_soccer = get_competition_profile(competition).sport == "soccer"
+        sport = get_competition_profile(competition).sport
+        is_soccer = sport == "soccer"
         previous_snapshot = soccer.snapshot_state(existing) if is_soccer else None
         soccer_events = soccer.classify_events(existing, payload) if is_soccer else None
+        score_change = soccer_events.score_change if soccer_events else None
+        if sport == "football":
+            score_change = classify_score_change(existing, payload, sport=sport)
         state_before = (
             existing.context_label,
             tuple(existing.broadcast_names),
@@ -218,6 +288,7 @@ def _upsert_game(
         return GameUpdateResult(
             did_update=state_changed or strength_changed,
             game_id=existing.id,
+            score_change=score_change,
             soccer_events=soccer_events,
         )
 
@@ -250,7 +321,12 @@ def _upsert_games_and_collect(
     team_names: dict[int, str],
     *,
     only_external_ids: set[str] | None = None,
-) -> tuple[int, list[int], dict[int, tuple[str, str]], dict[int, soccer.SoccerDerivedEvents]]:
+) -> tuple[
+    int,
+    list[int],
+    dict[int, ScoreChangeEvent],
+    dict[int, soccer.SoccerDerivedEvents],
+]:
     if competition == "FBS":
         _register_fbs_opponents(db, scoreboard_games, team_map, team_names)
     memberships = {
@@ -259,7 +335,7 @@ def _upsert_games_and_collect(
     }
     updated = 0
     touched_game_ids: list[int] = []
-    game_key_by_id: dict[int, tuple[str, str]] = {}
+    score_changes: dict[int, ScoreChangeEvent] = {}
     soccer_events: dict[int, soccer.SoccerDerivedEvents] = {}
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
@@ -269,50 +345,67 @@ def _upsert_games_and_collect(
             updated += 1
         if result.game_id:
             touched_game_ids.append(result.game_id)
-            home_id = team_map.get(scoreboard_game.home_external_team_id)
-            away_id = team_map.get(scoreboard_game.away_external_team_id)
-            home_name = team_names.get(home_id) if home_id else None
-            away_name = team_names.get(away_id) if away_id else None
-            if home_name and away_name:
-                game_key_by_id[result.game_id] = odds.game_key(home_name, away_name)
+            if result.score_change is not None:
+                score_changes[result.game_id] = result.score_change
             if result.soccer_events is not None:
                 soccer_events[result.game_id] = result.soccer_events
-    return updated, touched_game_ids, game_key_by_id, soccer_events
+    return updated, touched_game_ids, score_changes, soccer_events
 
 
 def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> CatalogSyncResult:
     competition = normalize_competition(competition)
-    db = SessionLocal()
     now = datetime.now(timezone.utc)
+    with SessionLocal() as planning_db:
+        _assert_competition_enabled(planning_db, competition)
+        planning_team_map, planning_team_names = _competition_team_maps(
+            planning_db,
+            competition,
+        )
+        existing_odds_external_ids = (
+            _existing_odds_external_ids(planning_db, competition)
+            if settings.odds_api_key.strip() and competition_supports_odds(competition)
+            else set()
+        )
+
+    requests = build_catalog_dates(now)
+    all_games = provider.fetch_games(competition, requests)
+    odds_candidates = _pregame_odds_candidates(
+        all_games,
+        competition,
+        now,
+        existing_odds_external_ids,
+        planning_team_map,
+        planning_team_names,
+    )
+    odds_by_matchup = odds.fetch_odds_index(competition) if odds_candidates else {}
+
+    db = SessionLocal()
     try:
-        _assert_competition_enabled(db, competition)
-        requests = build_catalog_dates(now)
         team_map, team_names = _competition_team_maps(db, competition)
-        all_games = provider.fetch_games(competition, requests)
-        updated, touched_game_ids, game_key_by_id, soccer_events = _upsert_games_and_collect(db, competition, all_games, team_map, team_names)
+        updated, touched_game_ids, score_changes, soccer_events = _upsert_games_and_collect(
+            db, competition, all_games, team_map, team_names
+        )
         if all_games and not touched_game_ids:
             raise RuntimeError(f"No {competition} games could be mapped to catalog teams")
 
-        odds_eligible_external_ids = None
-        if competition == "NFL":
-            odds_eligible_external_ids = {
-                game.external_game_id for game in all_games if game.season_slug != "preseason"
-            }
-        odds_candidates = (
-            odds.games_missing_pregame_snapshot(
-                db,
-                competition,
-                now,
-                eligible_external_ids=odds_eligible_external_ids,
-            )
-            if settings.odds_api_key.strip() and competition_supports_odds(competition)
-            else []
-        )
         odds_snapshots_created = 0
         if odds_candidates:
-            odds_by_matchup = odds.fetch_odds_index(competition)
-            for game in odds_candidates:
-                key = game_key_by_id.get(game.id)
+            games_by_external_id = {
+                game.external_game_id: game
+                for game in db.scalars(
+                    select(Game).where(
+                        Game.competition == competition,
+                        Game.external_game_id.in_(
+                            [candidate.external_game_id for candidate in odds_candidates]
+                        ),
+                    )
+                ).all()
+            }
+            for candidate in odds_candidates:
+                game = games_by_external_id.get(candidate.external_game_id)
+                if game is None:
+                    continue
+                key = candidate.matchup_key
                 if key is None:
                     home_name = team_names.get(game.home_team_id)
                     away_name = team_names.get(game.away_team_id)
@@ -320,13 +413,21 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
                         continue
                     key = odds.game_key(home_name, away_name)
                 matchup_odds = odds_by_matchup.get(key)
-                game_odds = odds.select_best_for_game(matchup_odds, game.scheduled_start_time)
+                game_odds = odds.select_best_for_game(
+                    matchup_odds,
+                    candidate.scheduled_start_time,
+                )
                 if game_odds and odds.upsert_game_odds(db, game.id, game_odds):
                     odds_snapshots_created += 1
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, soccer_events=soccer_events)
+        alerts_created = evaluate_and_record_alerts(
+            db,
+            touched_games,
+            score_changes=score_changes,
+            soccer_events=soccer_events,
+        )
         games_removed = cleanup_games_outside_window(db, now)
         has_live_games = bool(
             db.scalar(
@@ -360,11 +461,10 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
 
 def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> LiveSyncResult:
     competition = normalize_competition(competition)
-    db = SessionLocal()
     now = datetime.now(timezone.utc)
-    try:
-        _assert_competition_enabled(db, competition)
-        requests = build_live_requests(db, competition)
+    with SessionLocal() as planning_db:
+        _assert_competition_enabled(planning_db, competition)
+        requests = build_live_requests(planning_db, competition)
         if not requests:
             return LiveSyncResult(
                 competition=competition,
@@ -372,22 +472,26 @@ def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> Live
                 games_updated=0,
                 alerts_created=0,
                 has_live_games=False,
-                next_scheduled_start_at=_as_utc(_next_scheduled_start(db, competition, now)),
+                next_scheduled_start_at=_as_utc(
+                    _next_scheduled_start(planning_db, competition, now)
+                ),
             )
-
-        team_map, team_names = _competition_team_maps(db, competition)
-        provider_games = provider.fetch_games(competition, requests)
-        candidate_ids = {
-            external_id
-            for external_id, in db.execute(
+        candidate_ids = set(
+            planning_db.scalars(
                 select(Game.external_game_id).where(
                     Game.competition == competition,
                     Game.is_final.is_(False),
                     Game.status.in_(("in_progress", "live", "scheduled")),
                 )
             ).all()
-        }
-        updated, touched_game_ids, _, soccer_events = _upsert_games_and_collect(
+        )
+
+    provider_games = provider.fetch_games(competition, requests)
+
+    db = SessionLocal()
+    try:
+        team_map, team_names = _competition_team_maps(db, competition)
+        updated, touched_game_ids, score_changes, soccer_events = _upsert_games_and_collect(
             db,
             competition,
             provider_games,
@@ -397,7 +501,12 @@ def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> Live
         )
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
-        alerts_created = evaluate_and_record_alerts(db, touched_games, soccer_events=soccer_events)
+        alerts_created = evaluate_and_record_alerts(
+            db,
+            touched_games,
+            score_changes=score_changes,
+            soccer_events=soccer_events,
+        )
         has_live_games = bool(
             db.scalar(
                 select(func.count(Game.id)).where(

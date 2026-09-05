@@ -13,7 +13,7 @@ from urllib.request import urlopen
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Game, GameOddsCurrent, GameOddsOutcomeCurrent
+from app.db.models import GameOddsCurrent, GameOddsOutcomeCurrent
 from app.services.competitions import get_competition_profile
 from app.worker.config import settings
 
@@ -164,38 +164,6 @@ def select_best_for_game(
     if abs((closest_commence - target).total_seconds()) > MATCH_MAX_COMMENCE_DIFF.total_seconds():
         return None
     return closest
-
-
-def games_missing_pregame_snapshot(
-    db: Session,
-    competition: str,
-    now: datetime,
-    *,
-    eligible_external_ids: set[str] | None = None,
-) -> list[Game]:
-    if eligible_external_ids is not None and not eligible_external_ids:
-        return []
-    pregame_cutoff = now + ODDS_PREGAME_WINDOW
-    stmt = select(Game).where(
-        Game.competition == competition,
-        Game.is_final.is_(False),
-        Game.status == "scheduled",
-        Game.scheduled_start_time >= now,
-        Game.scheduled_start_time <= pregame_cutoff,
-    )
-    if eligible_external_ids is not None:
-        stmt = stmt.where(Game.external_game_id.in_(sorted(eligible_external_ids)))
-    rows = db.scalars(stmt.order_by(Game.scheduled_start_time.asc())).all()
-    if not rows:
-        return []
-    game_ids = [game.id for game in rows]
-    existing_ids = {
-        game_id
-        for game_id, in db.execute(
-            select(GameOddsCurrent.game_id).where(GameOddsCurrent.game_id.in_(game_ids))
-        ).all()
-    }
-    return [game for game in rows if game.id not in existing_ids]
 
 
 def _parse_datetime(value: str | None) -> datetime | None:

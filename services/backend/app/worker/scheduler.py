@@ -258,7 +258,10 @@ def _report_schedule(jobs: JobSchedule, next_catalog_at: datetime) -> None:
         logger.exception("Unexpected schedule report error")
 
 
-def run(stop_event: threading.Event) -> None:
+def run(
+    stop_event: threading.Event,
+    delivery_wake_event: threading.Event | None = None,
+) -> None:
     jobs: JobSchedule = {}
     initial_report = True
     next_catalog_at = _utcnow()
@@ -288,6 +291,8 @@ def run(stop_event: threading.Event) -> None:
                     next_run = None
                 else:
                     next_run, result = _run_live_sync_job(due_job.competition)
+            if delivery_wake_event is not None and result.alerts_created:
+                delivery_wake_event.set()
             completed_at = _utcnow()
             duration_ms = int((monotonic() - started_at) * 1000)
             _log_job_success(

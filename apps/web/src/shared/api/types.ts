@@ -141,6 +141,7 @@ export type AlertType =
   | "extra_time_start"
   | "penalty_kicks"
   | "score_changed"
+  | "lead_change"
   | "final_result";
 export type DeliveryStatus = "pending" | "sent" | "failed";
 

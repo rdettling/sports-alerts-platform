@@ -69,8 +69,28 @@ const baseballPreferences = [
   },
 ];
 
+const footballPreferences = [
+  {
+    sport: "football",
+    alert_type: "score_changed",
+    is_enabled: false,
+    close_game_margin_threshold: null,
+    close_game_time_threshold_seconds: null,
+    inning_start_threshold: null,
+  },
+  {
+    sport: "football",
+    alert_type: "lead_change",
+    is_enabled: false,
+    close_game_margin_threshold: null,
+    close_game_time_threshold_seconds: null,
+    inning_start_threshold: null,
+  },
+];
+
 const preferenceGroups = [
   { sport: "basketball", preferences: basketballPreferences },
+  { sport: "football", preferences: footballPreferences },
   { sport: "baseball", preferences: baseballPreferences },
 ];
 
@@ -97,6 +117,16 @@ const historyItems = [
     home_team_abbreviation: "SEA",
     away_team_abbreviation: "ATL",
     deliveries: [],
+  },
+  {
+    id: 4,
+    game_id: 14,
+    alert_type: "lead_change",
+    triggered_at: "2026-08-13T14:00:00-07:00",
+    game_external_id: "game-4",
+    home_team_abbreviation: "BUF",
+    away_team_abbreviation: "KC",
+    deliveries: [{ channel: "push", status: "sent", attempted_at: "2026-08-13T14:00:02-07:00" }],
   },
   {
     id: 3,
@@ -135,13 +165,13 @@ describe("AlertsView", () => {
       "true",
     );
     expect(screen.getByText("Close game late")).toBeInTheDocument();
-    expect(screen.queryByText("Score change")).toBeNull();
+    expect(screen.queryByText("Score update")).toBeNull();
     expect(screen.getByRole("switch", { name: "Overtime start alerts" })).toHaveAttribute(
       "aria-checked",
       "false",
     );
 
-    expect(screen.getByText("Last 7 days · 3 events")).toBeInTheDocument();
+    expect(screen.getByText("Last 7 days · 4 events")).toBeInTheDocument();
     const today = screen.getByRole("region", { name: "Today" });
     expect(within(today).getAllByRole("listitem")[0]).toHaveTextContent("NY @ LV");
     expect(within(today).getAllByRole("listitem")[1]).toHaveTextContent("ATL @ SEA");
@@ -150,6 +180,7 @@ describe("AlertsView", () => {
     expect(within(today).getByText("Email sent")).toHaveClass("status-sent");
     expect(within(today).getByText("Push pending")).toHaveClass("status-pending");
     expect(within(today).getByText("—")).toBeInTheDocument();
+    expect(within(today).getByText("Lead change")).toBeInTheDocument();
     const yesterday = screen.getByRole("region", { name: "Yesterday" });
     expect(yesterday).toHaveTextContent("Email failed");
     expect(within(yesterday).getByText("Email failed")).toHaveClass("status-failed");
@@ -165,6 +196,16 @@ describe("AlertsView", () => {
     );
     expect(screen.getByRole("switch", { name: "Inning start alerts" })).toBeInTheDocument();
     expect(screen.queryByText("Close game late")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Football" }));
+    expect(screen.getByRole("switch", { name: "Score update alerts" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.getByRole("switch", { name: "Lead change alerts" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 
   it("updates a switch and local state without refetching alert data", async () => {

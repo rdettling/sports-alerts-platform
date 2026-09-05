@@ -29,7 +29,14 @@ class CompetitionProfile:
 
 SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
     "basketball": ("game_start", "close_game_late", "overtime_start", "final_result"),
-    "football": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "football": (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "lead_change",
+        "final_result",
+    ),
     "baseball": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "soccer": (
         "game_start",
@@ -51,7 +58,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="NBA",
         badge_label="NBA",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-        live_sync_interval_seconds=120,
+        live_sync_interval_seconds=60,
         odds_sport_key="basketball_nba",
     ),
     "WNBA": CompetitionProfile(
@@ -61,7 +68,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="WNBA",
         badge_label="WNBA",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
-        live_sync_interval_seconds=120,
+        live_sync_interval_seconds=60,
         odds_sport_key="basketball_wnba",
     ),
     "NFL": CompetitionProfile(
@@ -71,7 +78,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="NFL",
         badge_label="NFL",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-        live_sync_interval_seconds=120,
+        live_sync_interval_seconds=60,
         odds_sport_key="americanfootball_nfl",
     ),
     "FBS": CompetitionProfile(
@@ -82,7 +89,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         badge_label="FBS",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
         scoreboard_params=(("groups", "80"),),
-        live_sync_interval_seconds=120,
+        live_sync_interval_seconds=60,
         odds_sport_key="americanfootball_ncaaf",
     ),
     "MLB": CompetitionProfile(
@@ -92,7 +99,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="MLB",
         badge_label="MLB",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-        live_sync_interval_seconds=300,
+        live_sync_interval_seconds=120,
         odds_sport_key="baseball_mlb",
     ),
     "MLS": CompetitionProfile(
@@ -102,7 +109,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="MLS",
         badge_label="MLS",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard",
-        live_sync_interval_seconds=180,
+        live_sync_interval_seconds=90,
         odds_sport_key="soccer_usa_mls",
     ),
     "LA_LIGA": CompetitionProfile(
@@ -112,7 +119,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="La Liga",
         badge_label="LALIGA",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard",
-        live_sync_interval_seconds=180,
+        live_sync_interval_seconds=90,
         odds_sport_key="soccer_spain_la_liga",
         supported_alert_types=("game_start", "second_half_start", "score_changed", "final_result"),
     ),
@@ -123,7 +130,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="Premier League",
         badge_label="EPL",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
-        live_sync_interval_seconds=180,
+        live_sync_interval_seconds=90,
         odds_sport_key="soccer_epl",
         supported_alert_types=("game_start", "second_half_start", "score_changed", "final_result"),
     ),
@@ -134,7 +141,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         label="World Cup",
         badge_label="WC",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-        live_sync_interval_seconds=180,
+        live_sync_interval_seconds=90,
         odds_sport_key="soccer_fifa_world_cup",
     ),
 }

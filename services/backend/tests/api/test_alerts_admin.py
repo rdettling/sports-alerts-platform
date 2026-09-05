@@ -1,20 +1,35 @@
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from app.core.security import create_access_token
 from app.db.models import Alert, AlertDelivery, Game, CompetitionSetting, PushSubscription, Team, User
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.services.competitions import competition_teams_query
 from app.routers.alerts import _build_admin_test_objects
 from app.services import alert_delivery
+from app.services.alert_delivery import DeliveryOutcome
 from app.services.resend import ResendResult
 
 
 SUPPORTED_TEST_ALERTS = {
     "NBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
     "WNBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
-    "NFL": ("game_start", "close_game_late", "overtime_start", "final_result"),
-    "FBS": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "NFL": (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "lead_change",
+        "final_result",
+    ),
+    "FBS": (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "lead_change",
+        "final_result",
+    ),
     "MLB": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "MLS": (
         "game_start",
@@ -113,6 +128,8 @@ def test_admin_test_alert_supports_every_competition_alert_combination(client, c
     [
         ("NBA", "overtime_start", ("in_progress", 112, 112, 5, "05:00")),
         ("NFL", "close_game_late", ("in_progress", 20, 17, 4, "04:30")),
+        ("NFL", "score_changed", ("in_progress", 10, 14, 3, "06:42")),
+        ("NFL", "lead_change", ("in_progress", 24, 21, 4, "08:42")),
         ("MLB", "extra_innings_start", ("in_progress", 3, 3, 10, "Top 10th")),
         ("MLS", "final_result", ("final", 2, 1, 2, "FT")),
     ],
@@ -203,6 +220,39 @@ def test_admin_test_alert_returns_no_deliveries_when_both_channels_are_off(clien
 
     assert response.status_code == 200
     assert response.json()["deliveries"] == []
+
+
+def test_admin_test_sends_after_releasing_database_checkout(client, monkeypatch):
+    headers = _auth_headers(client)
+    active_connections = 0
+
+    def checkout(*_args):
+        nonlocal active_connections
+        active_connections += 1
+
+    def checkin(*_args):
+        nonlocal active_connections
+        active_connections -= 1
+
+    def send(_payload):
+        assert active_connections == 0
+        return DeliveryOutcome(status="sent")
+
+    event.listen(engine, "checkout", checkout)
+    event.listen(engine, "checkin", checkin)
+    monkeypatch.setattr("app.routers.alerts.send_email_alert", send)
+    try:
+        response = client.post(
+            "/alerts/admin/test",
+            headers=headers,
+            json={"competition": "NBA", "alert_type": "game_start"},
+        )
+    finally:
+        event.remove(engine, "checkout", checkout)
+        event.remove(engine, "checkin", checkin)
+
+    assert response.status_code == 200
+    assert response.json()["deliveries"][0]["status"] == "sent"
 
 
 def test_admin_test_alert_returns_expected_delivery_failure(client, monkeypatch):

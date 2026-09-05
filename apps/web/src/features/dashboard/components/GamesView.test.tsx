@@ -406,8 +406,15 @@ vi.mock("../hooks/useGamesData", () => ({
           sport: "football",
           label: "College Football",
           badge_label: "FBS",
-          alert_types: ["game_start", "close_game_late", "overtime_start", "final_result"],
-          live_sync_interval_seconds: 120,
+          alert_types: [
+            "game_start",
+            "close_game_late",
+            "overtime_start",
+            "score_changed",
+            "lead_change",
+            "final_result",
+          ],
+          live_sync_interval_seconds: 60,
           is_enabled: true,
         },
         {
