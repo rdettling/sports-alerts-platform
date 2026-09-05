@@ -204,6 +204,134 @@ describe("GameScoreRow", () => {
     expect(screen.getByText("79")).toBeInTheDocument();
   });
 
+  it("toggles a live game between its score and pregame odds", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ status: "in_progress", home_score: 82, away_score: 79 })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Q4 2:14"
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Pregame odds" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("82")).toBeInTheDocument();
+    expect(screen.queryByText("-120")).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("82")).toBeNull();
+    expect(screen.getByText("+105")).toBeInTheDocument();
+    expect(screen.getByText("-120")).toBeInTheDocument();
+    expect(screen.getByText("Q4 2:14")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("82")).toBeInTheDocument();
+    expect(screen.queryByText("-120")).toBeNull();
+  });
+
+  it("preserves the selected odds view across live game updates", () => {
+    const { rerender } = render(
+      <GameScoreRow
+        game={makeGame({ status: "in_progress", home_score: 82, away_score: 79 })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Q4 2:14"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
+    rerender(
+      <GameScoreRow
+        game={makeGame({ status: "in_progress", home_score: 84, away_score: 81 })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Q4 1:42"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Pregame odds" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("+105")).toBeInTheDocument();
+    expect(screen.queryByText("84")).toBeNull();
+  });
+
+  it("toggles final games while preserving winner and loser emphasis", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 })}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Final"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
+
+    expect(screen.getByText("Boston Celtics").closest(".game-score-team")).toHaveClass("winner");
+    expect(screen.getByText("Atlanta Hawks").closest(".game-score-team")).toHaveClass("loser");
+    expect(screen.getByText("+105")).toBeInTheDocument();
+    expect(screen.getByText("-120")).toBeInTheDocument();
+    expect(screen.queryByText("110")).toBeNull();
+  });
+
+  it.each([
+    ["scheduled", makeGame()],
+    ["postponed", makeGame({ status: "postponed" })],
+  ])("does not show the pregame toggle for %s games", (_label, game) => {
+    render(
+      <GameScoreRow
+        game={game}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Game status"
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Pregame odds" })).toBeNull();
+  });
+
+  it.each([
+    ["live", makeGame({ status: "in_progress", home_score: 82, away_score: 79, odds: null })],
+    [
+      "final",
+      makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108, odds: null }),
+    ],
+  ])("shows placeholder odds for %s games without a snapshot", (_label, game) => {
+    render(
+      <GameScoreRow
+        game={game}
+        sport="basketball"
+        home={home}
+        away={away}
+        isFollowed={false}
+        statusLabel="Game status"
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Pregame odds" });
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
   it("marks postponed games and uses em dashes when no values exist", () => {
     render(
       <GameScoreRow
@@ -255,12 +383,17 @@ describe("GameScoreRow", () => {
       );
 
       const disclosure = screen.getByLabelText("Broadcasts: ESPN, Peacock");
-      const group = disclosure.closest(".game-status-broadcast-group");
+      const group = disclosure.closest(".game-status-broadcast-group") as HTMLElement;
       expect(group).not.toBeNull();
-      expect(group?.children[0]).toHaveClass("game-state-pill");
-      expect(group?.children[0]).toHaveTextContent(status === "scheduled" ? "7:00 PM" : "Q2 4:12");
-      expect(group?.children[1]).toHaveTextContent("·");
-      expect(group?.children[2]).toBe(disclosure.closest("details"));
+      const statusPill = within(group).getByText(status === "scheduled" ? "7:00 PM" : "Q2 4:12");
+      expect(statusPill).toHaveClass("game-state-pill");
+      expect(statusPill.nextElementSibling).toHaveTextContent("·");
+      expect(statusPill.nextElementSibling?.nextElementSibling).toBe(disclosure.closest("details"));
+      if (status === "in_progress") {
+        expect(within(group).getByRole("button", { name: "Pregame odds" }).nextElementSibling).toBe(
+          statusPill,
+        );
+      }
       expect(disclosure).toHaveAttribute("title", "ESPN, Peacock");
       expect(within(disclosure).getByText("ESPN")).toBeInTheDocument();
       expect(within(disclosure).getByText("+1")).toBeInTheDocument();
@@ -380,6 +513,55 @@ describe("GameScoreRow", () => {
     expect(screen.getByText("Draw")).toBeInTheDocument();
     expect(screen.getByText("+210")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "WC logo" })).toBeInTheDocument();
+  });
+
+  it("shows the draw outcome only while a started soccer game displays pregame odds", () => {
+    render(
+      <GameScoreRow
+        game={makeGame({
+          competition: "WORLD_CUP",
+          status: "in_progress",
+          home_score: 1,
+          away_score: 0,
+          odds: {
+            bookmaker: null,
+            last_update: null,
+            outcomes: [
+              {
+                outcome_key: "mexico",
+                outcome_label: "Mexico",
+                price_american: 180,
+                team_side: "away",
+              },
+              { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
+              {
+                outcome_key: "usa",
+                outcome_label: "United States",
+                price_american: 160,
+                team_side: "home",
+              },
+            ],
+          },
+        })}
+        sport="soccer"
+        home={{ ...home, sport: "soccer", competitions: ["WORLD_CUP"] }}
+        away={{ ...away, sport: "soccer", competitions: ["WORLD_CUP"] }}
+        isFollowed={false}
+        statusLabel="2H 74′"
+      />,
+    );
+
+    expect(screen.queryByText("Draw")).toBeNull();
+
+    const toggle = screen.getByRole("button", { name: "Pregame odds" });
+    fireEvent.click(toggle);
+
+    expect(screen.getByText("Draw")).toBeInTheDocument();
+    expect(screen.getByText("+210")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.queryByText("Draw")).toBeNull();
   });
 
   it("uses a text fallback when a competition has no logo", () => {

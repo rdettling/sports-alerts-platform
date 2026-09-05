@@ -297,6 +297,16 @@
   padding: 0.2rem 0.3rem;
 }
 
+.game-score-odds-toggle {
+  flex: 0 0 auto;
+  margin-right: 0.25rem;
+}
+
+.game-score-odds-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
 .game-score-matchup {
   display: grid;
   gap: 0.3rem;

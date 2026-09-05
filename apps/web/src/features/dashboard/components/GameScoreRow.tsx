@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { type Game, type GameTeam, type Sport, type Team } from "../../../shared/api";
 import { CompetitionMark } from "../../../shared/components/CompetitionMark";
 import { TeamLogo } from "../../../shared/components/TeamLogo";
@@ -36,10 +38,13 @@ export function GameScoreRow({
   onUnfollow,
   onOpenAlertSettings,
 }: GameScoreRowProps) {
+  const [showPregameOdds, setShowPregameOdds] = useState(false);
   const hasScore = game.away_score !== null && game.home_score !== null;
   const isLive = game.status === "in_progress" || game.status === "live";
   const isFinal = game.status === "final" || game.is_final;
-  const showScoreValues = isLive || isFinal;
+  const canTogglePregameOdds = isLive || isFinal;
+  const isShowingPregameOdds = canTogglePregameOdds && showPregameOdds;
+  const showScoreValues = (isLive || isFinal) && !isShowingPregameOdds;
   const awayWon = Boolean(hasScore && isFinal && game.away_score! > game.home_score!);
   const homeWon = Boolean(hasScore && isFinal && game.home_score! > game.away_score!);
   const showThreeWayOdds = !showScoreValues && sport === "soccer" && isThreeWayOdds(game);
@@ -86,6 +91,16 @@ export function GameScoreRow({
 
         <div className="game-score-header-end">
           <div className="game-status-broadcast-group">
+            {canTogglePregameOdds ? (
+              <button
+                className="game-score-action game-score-odds-toggle text-action"
+                type="button"
+                aria-pressed={isShowingPregameOdds}
+                onClick={() => setShowPregameOdds((current) => !current)}
+              >
+                Pregame odds
+              </button>
+            ) : null}
             <span className={`game-state-pill ${statusTone}`}>{statusLabel}</span>
             {showBroadcast ? (
               <>
