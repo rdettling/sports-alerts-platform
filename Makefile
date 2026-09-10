@@ -9,7 +9,7 @@ ENV_FILE ?= .env
 COMPOSE := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 ESSENTIAL_ENV_VARS := POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB POSTGRES_PORT DATABASE_URL JWT_SECRET_KEY RESEND_API_KEY VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT VITE_API_BASE_URL
 
-.PHONY: help setup up rebuild down reset logs test web web-fix _lint-python _test-api _test-worker _test-web _check-docker _check-env
+.PHONY: help setup up rebuild down reset logs production-usage test web web-fix _lint-python _test-api _test-worker _test-web _check-docker _check-env
 
 help:
 	@echo "Sports Alerts Platform"
@@ -20,6 +20,7 @@ help:
 	@echo "  make down       Stop stack"
 	@echo "  make reset      Stop stack and wipe volumes"
 	@echo "  make logs       Tail logs (all services, or SERVICE=api)"
+	@echo "  make production-usage  Review production DB usage (DAYS=7)"
 	@echo "  make web        Recreate only web service"
 	@echo "  make web-fix    Repair web node_modules and recreate web"
 	@echo "  make test       Run API + worker + web checks"
@@ -72,6 +73,9 @@ reset:
 logs:
 	@$(MAKE) _check-docker
 	$(COMPOSE) logs -f $(SERVICE)
+
+production-usage:
+	python3 scripts/production_usage_report.py --days $(or $(DAYS),7)
 
 web:
 	@$(MAKE) _check-docker

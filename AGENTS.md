@@ -83,6 +83,8 @@ When a task may involve production logs, deploy state, runtime debugging, or pro
 - Prefer setting up CLI auth proactively once production access is relevant, instead of waiting for a failed command later.
 - Do not ask the user to authenticate up front for tasks that do not require production access.
 
+For a request to review production database usage over the last X days, run `make production-usage DAYS=X` first. Treat its Neon counters, lifecycle-derived awake time, estimated interval CU-hours, and Render-observed attribution according to the confidence labels in the report. Follow up with narrower log inspection only when the report flags incomplete evidence or a source that needs diagnosis.
+
 ## Verification
 
 Run the narrowest relevant checks for the area changed, then broaden when the touched behavior is shared. If checks cannot be run, state that clearly and explain the residual risk.

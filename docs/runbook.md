@@ -16,16 +16,24 @@ Checks:
 
 ## Reviewing Database Awake Time And Waste
 
-Neon usage snapshots measure actual project compute consumption; Render application logs explain which app activity contributed to keeping the database busy. Render's own API/worker CPU charts describe those containers, not the Neon database.
+Neon control-plane counters measure actual project compute consumption; Render application logs explain which app activity contributed to keeping the database busy. Render's own API/worker CPU charts describe those containers, not the Neon database.
 
-At deployment and again after at least a day, run from the repo root:
+Run the read-only production report from the repo root:
 
 ```sh
-python3 scripts/neon_usage_snapshot.py --project-id solitary-resonance-98873129
-python3 scripts/database_usage_report.py --resources srv-d79kbthr0fns73eietr0,srv-d79kfgqdbo4c73adcthg --hours 24
+make production-usage DAYS=7
 ```
 
-Snapshots are saved under `.cache/neon-usage/`; compare only the same project and billing period. Missing usage counters are unavailable, never zero. Neon counters may lag, so avoid conclusions from short intervals. A snapshot captured before deployment is only a baseline for the old deployment; capture another at cutover for a clean comparison.
+The report checks Render and Neon authentication, discovers the production API and worker, splits capped log queries, and combines Neon control-plane data with Render's existing database-usage summaries. It writes no files and never connects to Postgres. If authentication has expired, follow the exact login command in the report and rerun it.
+
+Interpret each measurement according to its label:
+
+- **Neon counter** values are exact billing-cycle totals as reported by Neon, though counters may lag.
+- **Lifecycle-derived** awake time is reconstructed from Neon `start_compute` and `suspend_compute` operations.
+- **Estimated** interval CU-hours multiply lifecycle-derived awake time by the billing cycle's average CU while active. Neon does not expose exact historical interval CU-hours on the Free plan.
+- **Render-observed** values attribute application activity found in retained logs. Missing summaries can mean an idle process, an abrupt shutdown, or unavailable logs.
+
+The command accepts any positive number of days. Requests beyond Render's seven-day retention still return available Neon and Render evidence, but are explicitly marked partial. A nonzero exit means at least one source was partial or unavailable; the printed evidence remains usable.
 
 The API and worker emit `Database usage {…}` JSON summaries every five minutes when activity exists, plus a partial summary on graceful shutdown. Each includes the deployed revision and bounded source groups:
 
@@ -35,19 +43,19 @@ The API and worker emit `Database usage {…}` JSON summaries every five minutes
 - `api:startup`: startup seed work
 - Game cache hits, fills, and discarded fills: cache hits should require no connection; repeated fills without changed worker data can expose excessive refreshes
 
-`db_minutes` identifies UTC minutes containing observed database activity, including failed calls. The report unions these across services, ranks sources by connection count, and shows activity by UTC hour to help locate quiet-period polling. These minutes are **not** actual awake hours: Neon can remain awake after the last query, and external clients can cause activity absent from these logs. SQL statement counts represent execution calls, not rows, database CPU time, or all internal driver traffic. Read-only session cleanup also produces rollbacks; a rollback count alone does not mean failed work.
+`db_minutes` identifies UTC minutes containing observed database activity, including failed calls. The report unions these across services, ranks sources by connection count, and shows daily activity in Pacific time to help locate quiet-period polling. These minutes are **not** actual awake hours: Neon can remain awake after the last query, and external clients can cause activity absent from these logs. SQL statement counts represent execution calls, not rows, database CPU time, or all internal driver traffic. Read-only session cleanup also produces rollbacks; a rollback count alone does not mean failed work.
 
-To judge waste, compare awake hours and CU-hours from snapshots, identify activity during periods without live games, then check whether it came from game-feed fills, admin polling, startup, or worker scans. Look for repeated unchanged worker syncs and many discarded cache fills. Keep the old and new deployment revisions separate. Fast reconnects or many staggered viewers may still keep Neon awake even with the quiet fallback.
+To judge waste, compare lifecycle-derived awake hours and estimated CU-hours, identify activity during periods without live games, then check whether it came from game-feed fills, admin polling, startup, or worker scans. Look for repeated unchanged worker syncs and many discarded cache fills. Keep the old and new deployment revisions separate. Fast reconnects or many staggered viewers may still keep Neon awake even with the quiet fallback.
 
 Check the [worker schedule rules](architecture.md#worker-scheduling) and the next reported job time before treating a quiet interval or delayed league discovery as a failure. Catalog clustering may reduce scattered activity, but compute-hour savings must be measured.
 
-To verify idle sleep after a worker deploy, capture a fresh usage snapshot and confirm the startup log reports `idle_max_sleep=43200s` with the default catalog interval. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. Correlate its timestamps with `start_compute` and `suspend_compute` from `neon operations list --project-id solitary-resonance-98873129 -o json`. This reads Neon's control plane without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
+To verify idle sleep after a worker deploy, run the report for the post-deploy period and confirm the startup log reports `idle_max_sleep=43200s` with the default catalog interval. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. The report correlates those logs with Neon lifecycle operations without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
 
 Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
 
 If admin requests appear repeatedly during idle periods, use the [Admin refresh checks](#admin-data-is-stale-or-refreshing-unexpectedly). Deliberate refreshes still authenticate against Postgres, including the Neon usage endpoint whose usage lookup itself uses the control plane.
 
-The report requests up to 1,000 summary records and warns if that limit is reached; use smaller windows in that case. Current partial windows and abruptly terminated processes can be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for a next-day review. Capture the report before retention expires.
+The report recursively splits queries that reach Render's 1,000-record limit and deduplicates overlapping results. Current partial windows and abruptly terminated processes can still be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for an on-demand weekly review.
 
 ## Admin Data Is Stale Or Refreshing Unexpectedly
 
