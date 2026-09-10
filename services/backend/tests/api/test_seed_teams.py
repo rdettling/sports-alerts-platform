@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 
 from app.db.models import CompetitionTeam, Team, User, UserTeamFollow
 from app.db.session import SessionLocal
-from app.services.competitions import competition_teams_query
+from app.services.competitions import competition_teams_query, get_competition_profile
 from app.services.seed import ensure_seeded_teams
 from app.services.team_catalog import (
     FBS_TEAM_CONFERENCES,
@@ -62,8 +62,12 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
             mls_abbreviation,
         )
         assert unknown is not None
-        seeded_team_count = sum(
-            len(teams) for teams in TEAM_SEEDS_BY_COMPETITION.values()
+        seeded_team_count = len(
+            {
+                (get_competition_profile(competition).provider_team_scope, external_team_id)
+                for competition, teams in TEAM_SEEDS_BY_COMPETITION.items()
+                for external_team_id, _, _ in teams
+            }
         )
         assert (
             db.scalar(select(func.count()).select_from(Team)) == seeded_team_count + 1

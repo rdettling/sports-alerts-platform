@@ -2,7 +2,7 @@
 
 Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-The current product surface supports nine competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `WORLD_CUP`.
+The current product surface supports ten competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, `CHAMPIONS_LEAGUE`, and `WORLD_CUP`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -24,7 +24,7 @@ Alert types default by sport and can be restricted for a specific competition:
 - `NBA` and `WNBA`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
 - `NFL` and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
-- `MLS` and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
+- `MLS`, `CHAMPIONS_LEAGUE`, and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
 
 Football score updates and lead changes are opt-in. Lead changes cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.

@@ -352,6 +352,7 @@ def test_run_live_sync_job_uses_catalog_fallback_when_no_upcoming(monkeypatch):
         ("MLS", 90),
         ("LA_LIGA", 90),
         ("PREMIER_LEAGUE", 90),
+        ("CHAMPIONS_LEAGUE", 90),
         ("WORLD_CUP", 90),
     ],
 )

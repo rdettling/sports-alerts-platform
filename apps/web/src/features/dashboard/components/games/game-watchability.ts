@@ -3,7 +3,6 @@ import { type Competition, type Game, type TeamStrength } from "../../../../shar
 type MarginBand = readonly [maximum: number, factor: number];
 
 const FOOTBALL_COMPETITIONS = new Set<Competition>(["NFL", "FBS"]);
-const SOCCER_COMPETITIONS = new Set<Competition>(["MLS", "LA_LIGA", "PREMIER_LEAGUE", "WORLD_CUP"]);
 
 const FOOTBALL_QUARTER_SECONDS = 15 * 60;
 const FOOTBALL_REGULATION_SECONDS = 4 * FOOTBALL_QUARTER_SECONDS;
@@ -233,7 +232,7 @@ export function basketballGameSecondsRemaining(game: Game): number | null {
 
 export function soccerRegulationMinutesRemaining(game: Game): number | null {
   if (
-    !SOCCER_COMPETITIONS.has(game.competition) ||
+    !isSoccerGame(game) ||
     !isLiveGame(game) ||
     game.period === null ||
     game.period < 1
@@ -281,7 +280,7 @@ export function liveGameRemainingShare(game: Game): number | null {
 }
 
 export function liveGameStagePriority(game: Game): number {
-  if (!SOCCER_COMPETITIONS.has(game.competition) || game.period === null) return 0;
+  if (!isSoccerGame(game) || game.period === null) return 0;
   if (game.period >= 5) return 2;
   return game.period >= 3 ? 1 : 0;
 }
@@ -388,7 +387,7 @@ function normalizedPregameProbabilities(game: Game): number[] | null {
 
 function hasCompleteMoneyline(game: Game): boolean {
   const outcomes = game.odds?.outcomes;
-  const expectedOutcomeCount = SOCCER_COMPETITIONS.has(game.competition) ? 3 : 2;
+  const expectedOutcomeCount = isSoccerGame(game) ? 3 : 2;
   if (!outcomes || outcomes.length !== expectedOutcomeCount) return false;
   if (new Set(outcomes.map((outcome) => outcome.outcome_key)).size !== outcomes.length)
     return false;
@@ -407,4 +406,8 @@ function isLiveGame(game: Game): boolean {
 
 function isLiveFootballGame(game: Game): boolean {
   return FOOTBALL_COMPETITIONS.has(game.competition) && isLiveGame(game);
+}
+
+function isSoccerGame(game: Game): boolean {
+  return game.home_team.sport === "soccer";
 }

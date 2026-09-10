@@ -211,6 +211,31 @@ def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
     assert [game.external_game_id for game in games] == ["mls-mapped"]
 
 
+def test_catalog_sync_maps_seeded_champions_league_clubs(db_session, monkeypatch):
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="champions-league-mapped",
+                home_external_team_id="83",
+                away_external_team_id="359",
+                status="scheduled",
+            )
+        ]
+    )
+
+    result = run_catalog_sync(provider, competition="CHAMPIONS_LEAGUE")
+
+    assert result.games_checked == result.games_updated == 1
+    game = db_session.scalar(
+        select(Game).where(
+            Game.competition == "CHAMPIONS_LEAGUE",
+            Game.external_game_id == "champions-league-mapped",
+        )
+    )
+    assert game is not None
+
+
 def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monkeypatch):
     monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     provider = StaticProvider(

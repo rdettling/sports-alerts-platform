@@ -143,6 +143,20 @@ def _format_world_cup_stage(slug: str | None) -> str | None:
     return mapping.get(slug)
 
 
+def _format_champions_league_stage(slug: str | None) -> str | None:
+    if not slug:
+        return None
+    mapping = {
+        "league-phase": "League Phase",
+        "knockout-playoff": "Knockout Playoff",
+        "round-of-16": "Round of 16",
+        "quarterfinals": "Quarterfinals",
+        "semifinals": "Semifinals",
+        "final": "Final",
+    }
+    return mapping.get(slug)
+
+
 class EspnScoreboardClient:
     def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
         self._fetch_json = fetch_json or self._default_fetch_json
@@ -227,6 +241,10 @@ class EspnScoreboardClient:
             season_type = season.get("type")
             season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
             context_label = _format_world_cup_stage(season_slug) or season_type_name
+        elif normalized_competition == "CHAMPIONS_LEAGUE":
+            stage = _format_champions_league_stage(season_slug)
+            note = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
+            context_label = " · ".join(part for part in (stage, note) if part) or None
 
         return ScoreboardGame(
             external_game_id=str(event.get("id")),

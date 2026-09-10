@@ -134,6 +134,16 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         odds_sport_key="soccer_epl",
         supported_alert_types=("game_start", "second_half_start", "score_changed", "final_result"),
     ),
+    "CHAMPIONS_LEAGUE": CompetitionProfile(
+        competition="CHAMPIONS_LEAGUE",
+        sport="soccer",
+        provider_team_scope="soccer",
+        label="Champions League",
+        badge_label="UCL",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+        live_sync_interval_seconds=90,
+        odds_sport_key="soccer_uefa_champs_league",
+    ),
     "WORLD_CUP": CompetitionProfile(
         competition="WORLD_CUP",
         sport="soccer",

@@ -428,6 +428,29 @@ def test_la_liga_game_start_uses_club_logos_and_kickoff_copy():
     assert "teamlogos/soccer/500/83.png" in html_body
 
 
+def test_champions_league_game_start_uses_generic_club_soccer_logos():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
+    game = Game(
+        external_game_id="champions-league-1",
+        competition="CHAMPIONS_LEAGUE",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=0,
+        away_score=0,
+        period=1,
+        clock="2'",
+    )
+    alert = _mk_alert("game_start")
+
+    _, html_body = build_alert_email_content(alert, game, home, away)
+
+    assert "teamlogos/soccer/500/359.png" in html_body
+    assert "teamlogos/soccer/500/83.png" in html_body
+
+
 def test_premier_competition_game_start_uses_club_logos_and_kickoff_copy():
     away = Team(
         external_team_id="364", name="Liverpool",

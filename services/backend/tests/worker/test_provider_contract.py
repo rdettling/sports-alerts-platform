@@ -442,6 +442,40 @@ def test_provider_builds_world_cup_stage_context_label():
     assert schedule[0].context_label == "Group Stage"
 
 
+def test_provider_builds_champions_league_stage_and_leg_context_label():
+    payload = {
+        "events": [
+            {
+                "id": "401999301",
+                "date": "2027-03-10T20:00Z",
+                "season": {"year": 2026, "type": 1, "slug": "round-of-16"},
+                "competitions": [
+                    {
+                        "notes": [{"headline": "2nd Leg - Barcelona advance 4-1 on aggregate"}],
+                        "status": {
+                            "period": 2,
+                            "displayClock": "90'+3'",
+                            "type": {"state": "post", "name": "STATUS_FINAL", "completed": True},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "3", "team": {"id": "83", "abbreviation": "BAR"}},
+                            {"homeAway": "away", "score": "1", "team": {"id": "359", "abbreviation": "ARS"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    schedule = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games(
+        "CHAMPIONS_LEAGUE", ["20270310"]
+    )
+
+    assert len(schedule) == 1
+    assert schedule[0].context_label == "Round of 16 · 2nd Leg - Barcelona advance 4-1 on aggregate"
+    assert schedule[0].is_final is True
+
+
 def test_provider_skips_if_necessary_playoff_games():
     payload = {
         "events": [

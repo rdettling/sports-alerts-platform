@@ -25,16 +25,25 @@ import {
 import { sortGames } from "./games-view-utils";
 
 function makeGame(overrides: Partial<Game> = {}): Game {
+  const competition = overrides.competition ?? "MLB";
+  const sport =
+    competition === "NBA" || competition === "WNBA"
+      ? "basketball"
+      : competition === "NFL" || competition === "FBS"
+        ? "football"
+        : competition === "MLB"
+          ? "baseball"
+          : "soccer";
   return {
     id: 1,
     external_game_id: "g-1",
-    competition: "MLB",
+    competition,
     home_team_id: 10,
     away_team_id: 11,
     home_team: {
       id: 10,
       external_team_id: "10",
-      sport: "basketball",
+      sport,
       conference: null,
       name: "Home Team",
       abbreviation: "HOME",
@@ -42,7 +51,7 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     away_team: {
       id: 11,
       external_team_id: "11",
-      sport: "basketball",
+      sport,
       conference: null,
       name: "Away Team",
       abbreviation: "AWAY",
@@ -359,7 +368,7 @@ describe("pregame market competitiveness", () => {
     const twoWay = withOdds(makeGame({ competition: "NBA" }), [-400, 400]);
     expect(pregameFavoriteNonWinProbability(twoWay)).toBeCloseTo(0.2);
 
-    const threeWay = withOdds(makeGame({ competition: "PREMIER_LEAGUE" }), [-400, 500, 900]);
+    const threeWay = withOdds(makeGame({ competition: "CHAMPIONS_LEAGUE" }), [-400, 500, 900]);
     expect(pregameFavoriteNonWinProbability(threeWay)).toBeCloseTo(0.25);
   });
 
@@ -388,7 +397,7 @@ describe("pregame market competitiveness", () => {
     expect(pregameMarketCompetitiveness(malformed)).toBeNull();
     expect(pregameWatchabilityScore(malformed)).toBe(60);
 
-    const incompleteSoccer = withOdds(makeGame({ competition: "PREMIER_LEAGUE" }), [110, -130]);
+    const incompleteSoccer = withOdds(makeGame({ competition: "CHAMPIONS_LEAGUE" }), [110, -130]);
     expect(pregameMarketCompetitiveness(incompleteSoccer)).toBeNull();
   });
 

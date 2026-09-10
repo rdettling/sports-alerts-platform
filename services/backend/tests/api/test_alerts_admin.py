@@ -41,6 +41,14 @@ SUPPORTED_TEST_ALERTS = {
     ),
     "LA_LIGA": ("game_start", "second_half_start", "score_changed", "final_result"),
     "PREMIER_LEAGUE": ("game_start", "second_half_start", "score_changed", "final_result"),
+    "CHAMPIONS_LEAGUE": (
+        "game_start",
+        "second_half_start",
+        "extra_time_start",
+        "penalty_kicks",
+        "score_changed",
+        "final_result",
+    ),
     "WORLD_CUP": (
         "game_start",
         "second_half_start",

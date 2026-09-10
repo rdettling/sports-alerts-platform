@@ -53,6 +53,7 @@ Current supported competitions:
 - `MLS`
 - `LA_LIGA`
 - `PREMIER_LEAGUE`
+- `CHAMPIONS_LEAGUE`
 - `WORLD_CUP`
 
 Competition availability has three independent layers:
@@ -63,7 +64,7 @@ Competition availability has three independent layers:
 
 Changing a competition to inactive preserves its games, teams, follows, alerts, and user visibility preferences. Reactivating it restores that state. A fresh database activates the current supported catalog, while profiles added to an initialized database start inactive until an admin activates them.
 
-Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as football season context or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed. FBS uses ESPN's FBS group and the NCAAF odds feed; schedule opponents outside FBS are discovered during ingest so those games remain mappable.
+Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as football season context, Champions League stage and leg labels, or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed. FBS uses ESPN's FBS group and the NCAAF odds feed; schedule opponents outside FBS are discovered during ingest so those games remain mappable.
 
 ## Main API Areas
 

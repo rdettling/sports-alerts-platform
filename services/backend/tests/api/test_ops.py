@@ -85,6 +85,7 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "MLS",
         "LA_LIGA",
         "PREMIER_LEAGUE",
+        "CHAMPIONS_LEAGUE",
         "WORLD_CUP",
     ]
     assert "runtime" not in summary_json

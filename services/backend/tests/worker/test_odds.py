@@ -60,6 +60,11 @@ def test_premier_competition_names_match_seeded_names():
     assert _odds_sport_key_for_competition("PREMIER_LEAGUE") == "soccer_epl"
 
 
+def test_champions_league_uses_its_soccer_odds_feed_and_seeded_names():
+    assert _odds_sport_key_for_competition("CHAMPIONS_LEAGUE") == "soccer_uefa_champs_league"
+    assert game_key("Bodø/Glimt", "Fenerbahçe") == game_key("Bodo/Glimt", "Fenerbahce")
+
+
 def test_wnba_uses_its_basketball_odds_feed_and_seeded_names():
     assert _odds_sport_key_for_competition("WNBA") == "basketball_wnba"
     assert game_key("Las Vegas Aces", "New York Liberty") == ("las vegas aces", "new york liberty")

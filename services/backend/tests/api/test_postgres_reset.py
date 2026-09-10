@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from app.db.models import Base
+from app.services.competitions import get_competition_profile
 from app.services.team_catalog import TEAM_SEEDS_BY_COMPETITION
 
 
@@ -69,8 +70,13 @@ def test_complete_reset_replaces_old_postgres_revision_and_data():
         assert connection.scalar(
             text("SELECT COUNT(*) FROM users WHERE email = 'reset-admin@example.com' AND role = 'admin'")
         ) == 1
-        seeded_team_count = sum(
-            len(teams) for teams in TEAM_SEEDS_BY_COMPETITION.values()
+        seeded_team_count = len(
+            {
+                (get_competition_profile(competition).provider_team_scope, external_team_id)
+                for competition, teams in TEAM_SEEDS_BY_COMPETITION.items()
+                for external_team_id, _, _ in teams
+            }
         )
+        seeded_membership_count = sum(len(teams) for teams in TEAM_SEEDS_BY_COMPETITION.values())
         assert connection.scalar(text("SELECT COUNT(*) FROM teams")) == seeded_team_count
-        assert connection.scalar(text("SELECT COUNT(*) FROM competition_teams")) == seeded_team_count
+        assert connection.scalar(text("SELECT COUNT(*) FROM competition_teams")) == seeded_membership_count

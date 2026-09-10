@@ -53,6 +53,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
         "MLS",
         "LA_LIGA",
         "PREMIER_LEAGUE",
+        "CHAMPIONS_LEAGUE",
         "WORLD_CUP",
     ]
 
@@ -138,6 +139,15 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     assert premier_competition.scoreboard_url.endswith("/sports/soccer/eng.1/scoreboard")
     assert get_alert_types("PREMIER_LEAGUE") == get_alert_types("LA_LIGA")
 
+    champions_league = get_competition_profile("CHAMPIONS_LEAGUE")
+    assert (
+        champions_league.sport,
+        champions_league.live_sync_interval_seconds,
+        champions_league.odds_sport_key,
+    ) == ("soccer", 90, "soccer_uefa_champs_league")
+    assert champions_league.scoreboard_url.endswith("/sports/soccer/uefa.champions/scoreboard")
+    assert get_alert_types("CHAMPIONS_LEAGUE") == get_alert_types("MLS")
+
     world_cup = get_competition_profile("WORLD_CUP")
     assert (world_cup.sport, world_cup.live_sync_interval_seconds, world_cup.odds_sport_key) == (
         "soccer",
@@ -163,6 +173,10 @@ def test_public_competitions_include_sport_and_live_cadence(client):
     assert premier_competition["is_enabled"] is True
     assert premier_competition["label"] == "Premier League"
     assert premier_competition["badge_label"] == "EPL"
+    champions_league = next(item for item in response.json() if item["competition"] == "CHAMPIONS_LEAGUE")
+    assert champions_league["is_enabled"] is True
+    assert champions_league["label"] == "Champions League"
+    assert champions_league["badge_label"] == "UCL"
     assert [
         (
             item["competition"],
@@ -179,6 +193,7 @@ def test_public_competitions_include_sport_and_live_cadence(client):
         ("MLS", "soccer", 90),
         ("LA_LIGA", "soccer", 90),
         ("PREMIER_LEAGUE", "soccer", 90),
+        ("CHAMPIONS_LEAGUE", "soccer", 90),
         ("WORLD_CUP", "soccer", 90),
     ]
 
@@ -244,6 +259,22 @@ def test_premier_competition_team_catalog_contains_all_current_clubs(client):
         ("364", "LIV"),
         ("382", "MNC"),
         ("388", "COV"),
+    }
+
+
+def test_champions_league_team_catalog_contains_the_current_league_phase_clubs(client):
+    client.get("/competitions")
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("CHAMPIONS_LEAGUE")).all()
+
+    assert len(teams) == 36
+    assert {(team.external_team_id, team.abbreviation) for team in teams} >= {
+        ("359", "ARS"),
+        ("83", "BAR"),
+        ("132", "MUN"),
+        ("364", "LIV"),
+        ("86", "RMA"),
+        ("2250", "SCP"),
     }
 
 

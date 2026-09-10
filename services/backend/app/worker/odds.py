@@ -29,6 +29,7 @@ MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
     "athletic bilbao": "athletic club",
+    "bod glimt": "bodo glimt",
     "bournemouth": "afc bournemouth",
     "ca osasuna": "osasuna",
     "la clippers": "los angeles clippers",

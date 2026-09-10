@@ -16,6 +16,7 @@ describe("CompetitionMark", () => {
     ],
     ["LA_LIGA", "LALIGA", "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png"],
     ["PREMIER_LEAGUE", "EPL", "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png"],
+    ["CHAMPIONS_LEAGUE", "UCL", "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png"],
   ])("renders the configured %s artwork", (competition, badge, logoUrl) => {
     render(<CompetitionMark competition={competition} />);
 

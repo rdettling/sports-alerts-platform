@@ -36,6 +36,10 @@ const COMPETITION_MARKS = {
     logoUrl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
     fallback: "EPL",
   },
+  CHAMPIONS_LEAGUE: {
+    logoUrl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
+    fallback: "UCL",
+  },
   WORLD_CUP: {
     logoUrl: worldCupMark,
     fallback: "WC",

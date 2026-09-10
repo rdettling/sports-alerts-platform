@@ -254,7 +254,11 @@ def test_canonical_team_follow_spans_competitions_and_survives_membership_change
     arsenal_rows = [team for team in client.get("/teams").json() if team["id"] == arsenal_id]
     assert len(arsenal_rows) == 1
     assert arsenal_rows[0]["sport"] == "soccer"
-    assert set(arsenal_rows[0]["competitions"]) == {"PREMIER_LEAGUE", "LA_LIGA"}
+    assert set(arsenal_rows[0]["competitions"]) == {
+        "PREMIER_LEAGUE",
+        "LA_LIGA",
+        "CHAMPIONS_LEAGUE",
+    }
 
     assert client.post(f"/follows/teams/{arsenal_id}", headers=headers).status_code == 201
     followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
@@ -288,7 +292,11 @@ def test_canonical_team_follow_spans_competitions_and_survives_membership_change
         ) is not None
 
     moved_arsenal = next(team for team in client.get("/teams").json() if team["id"] == arsenal_id)
-    assert set(moved_arsenal["competitions"]) == {"PREMIER_LEAGUE", "MLS"}
+    assert set(moved_arsenal["competitions"]) == {
+        "PREMIER_LEAGUE",
+        "MLS",
+        "CHAMPIONS_LEAGUE",
+    }
     followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
     assert mls_game_id in followed_game_ids
 
@@ -297,10 +305,40 @@ def test_canonical_team_follow_spans_competitions_and_survives_membership_change
         db.commit()
 
     hidden_arsenal = next(team for team in client.get("/teams").json() if team["id"] == arsenal_id)
-    assert hidden_arsenal["competitions"] == ["PREMIER_LEAGUE"]
+    assert hidden_arsenal["competitions"] == ["CHAMPIONS_LEAGUE", "PREMIER_LEAGUE"]
     follows = client.get("/follows", headers=headers).json()
     assert follows["teams"][0]["id"] == arsenal_id
     assert mls_game_id not in {game["id"] for game in follows["games"]}
+
+
+def test_existing_club_follow_includes_champions_league_games(client):
+    headers = _auth_headers(client, email="champions-league-follow@example.com")
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        arsenal = db.scalar(
+            competition_teams_query("PREMIER_LEAGUE").where(Team.external_team_id == "359")
+        )
+        barcelona = db.scalar(
+            competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "83")
+        )
+        assert arsenal and barcelona
+        game = Game(
+            external_game_id="arsenal-champions-league-test",
+            competition="CHAMPIONS_LEAGUE",
+            home_team_id=barcelona.id,
+            away_team_id=arsenal.id,
+            scheduled_start_time=now + timedelta(hours=1),
+            status="scheduled",
+        )
+        db.add(game)
+        db.commit()
+
+        arsenal_id = arsenal.id
+        game_id = game.id
+
+    assert client.post(f"/follows/teams/{arsenal_id}", headers=headers).status_code == 201
+    followed_game_ids = {game["id"] for game in client.get("/follows", headers=headers).json()["games"]}
+    assert game_id in followed_game_ids
 
 
 def test_alert_preferences_get_and_update(client):

@@ -14,7 +14,16 @@ export type UserProfile = {
 };
 
 export type Competition =
-  "NBA" | "WNBA" | "NFL" | "FBS" | "MLB" | "MLS" | "LA_LIGA" | "PREMIER_LEAGUE" | "WORLD_CUP";
+  | "NBA"
+  | "WNBA"
+  | "NFL"
+  | "FBS"
+  | "MLB"
+  | "MLS"
+  | "LA_LIGA"
+  | "PREMIER_LEAGUE"
+  | "CHAMPIONS_LEAGUE"
+  | "WORLD_CUP";
 export type Sport = "basketball" | "football" | "baseball" | "soccer";
 
 export type Team = {
