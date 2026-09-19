@@ -65,6 +65,7 @@ class PregameOddsCandidate:
     matchup_key: tuple[str, str] | None
     matchup: str | None
     competition_team_keys: tuple[str, ...]
+    is_neutral_site: bool
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,7 @@ def _pregame_odds_candidates(
                     )
                     if external_team_id in team_map and team_name
                 ),
+                is_neutral_site=game.is_neutral_site,
             )
         )
     return candidates
@@ -455,6 +457,13 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
                     matchup_odds,
                     candidate.scheduled_start_time,
                 )
+                if game_odds is None and candidate.is_neutral_site and key is not None:
+                    game_odds = odds.select_best_for_reversed_neutral_site_game(
+                        odds_by_matchup.get((key[1], key[0])),
+                        candidate.scheduled_start_time,
+                        home_team_key=key[0],
+                        away_team_key=key[1],
+                    )
                 if game_odds is None and competition == "FBS":
                     game_odds = odds.select_best_for_single_team(
                         odds_by_matchup,

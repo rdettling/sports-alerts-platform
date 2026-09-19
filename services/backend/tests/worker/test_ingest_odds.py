@@ -126,6 +126,50 @@ def test_fbs_catalog_sync_matches_fcs_game_by_fbs_team_only(db_session, monkeypa
     assert db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id)) is not None
 
 
+def test_fbs_catalog_sync_matches_reversed_neutral_site_odds(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-neutral-site",
+                home_external_team_id="66",
+                away_external_team_id="fcs-999",
+                home_team_name="Iowa State Cyclones",
+                home_team_abbreviation="ISU",
+                away_team_name="Southeast Missouri State Redhawks",
+                away_team_abbreviation="SEMO",
+                is_neutral_site=True,
+                scheduled_start_time=now + timedelta(hours=3),
+                status="scheduled",
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        "app.worker.odds.fetch_odds_index",
+        lambda competition: {
+            ("southeast missouri state redhawks", "iowa state cyclones"): make_snapshot(
+                away_label="Iowa State Cyclones",
+                away_price=110,
+                home_label="Southeast Missouri State Redhawks",
+                home_price=-130,
+                last_update=now,
+            )
+        },
+    )
+
+    result = run_catalog_sync(provider, competition="FBS")
+
+    assert result.odds_snapshots_created == 1
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-neutral-site"))
+    assert game is not None
+    current_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id))
+    assert current_odds is not None
+    assert [(outcome.outcome_label, outcome.team_side) for outcome in current_odds.outcomes] == [
+        ("Iowa State Cyclones", "home"),
+        ("Southeast Missouri State Redhawks", "away"),
+    ]
+
+
 def test_la_liga_catalog_sync_persists_game_and_three_way_odds(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
     provider = StaticProvider(

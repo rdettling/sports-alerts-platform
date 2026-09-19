@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from time import monotonic
@@ -194,6 +194,33 @@ def select_best_for_single_team(
     if len(matching_events) != 1:
         return None
     return select_best_for_game(matching_events[0], scheduled_start_time)
+
+
+def select_best_for_reversed_neutral_site_game(
+    options: list[OddsSnapshot] | OddsSnapshot | None,
+    scheduled_start_time: datetime,
+    home_team_key: str,
+    away_team_key: str,
+) -> OddsSnapshot | None:
+    selected = select_best_for_game(options, scheduled_start_time)
+    if selected is None:
+        return None
+    return replace(
+        selected,
+        outcomes=tuple(
+            replace(
+                outcome,
+                team_side=(
+                    "home"
+                    if team_key(outcome.outcome_label) == home_team_key
+                    else "away"
+                    if team_key(outcome.outcome_label) == away_team_key
+                    else None
+                ),
+            )
+            for outcome in selected.outcomes
+        ),
+    )
 
 
 def match_failure_reason(

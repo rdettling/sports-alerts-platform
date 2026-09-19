@@ -169,6 +169,31 @@ def test_fbs_provider_normalizes_top_25_and_unranked_teams():
     assert game.away_team_strength == TeamStrength(wins=0, losses=1, ties=0, rank=None, rank_observed=True)
 
 
+def test_provider_preserves_neutral_site_flag():
+    payload = {
+        "events": [
+            {
+                "id": "401856802",
+                "date": "2026-09-19T23:30Z",
+                "competitions": [
+                    {
+                        "neutralSite": True,
+                        "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False}},
+                        "competitors": [
+                            {"homeAway": "home", "team": {"id": "258", "abbreviation": "UVA"}},
+                            {"homeAway": "away", "team": {"id": "277", "abbreviation": "WVU"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("FBS", ["20260919"])[0]
+
+    assert game.is_neutral_site is True
+
+
 def test_soccer_competition_feeds_preserve_shared_club_ids():
     def payload(game_id: str) -> dict:
         return {

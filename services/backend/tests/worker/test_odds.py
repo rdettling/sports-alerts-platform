@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from app.worker import odds
-from app.worker.odds import OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key, select_best_for_single_team
+from app.worker.odds import OddsOutcome, OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key, select_best_for_reversed_neutral_site_game, select_best_for_single_team
 
 
 def test_blank_api_key_disables_fetch(monkeypatch):
@@ -126,6 +126,30 @@ def test_single_fbs_team_match_requires_one_provider_event():
         ("ul monroe warhawks", "southeastern louisiana lions"),
         datetime.now(timezone.utc),
     ) is None
+
+
+def test_reversed_neutral_site_odds_use_the_scoreboard_team_sides():
+    snapshot = OddsSnapshot(
+        outcomes=(
+            OddsOutcome("virginia", "Virginia Cavaliers", 0, 120, "away"),
+            OddsOutcome("west_virginia", "West Virginia Mountaineers", 1, -140, "home"),
+        ),
+        bookmaker="DraftKings",
+        last_update=None,
+    )
+
+    selected = select_best_for_reversed_neutral_site_game(
+        snapshot,
+        datetime.now(timezone.utc),
+        home_team_key="virginia cavaliers",
+        away_team_key="west virginia mountaineers",
+    )
+
+    assert selected is not None
+    assert [(outcome.outcome_label, outcome.team_side) for outcome in selected.outcomes] == [
+        ("Virginia Cavaliers", "home"),
+        ("West Virginia Mountaineers", "away"),
+    ]
 
 
 def test_closest_provider_matchups_keeps_provider_team_names():

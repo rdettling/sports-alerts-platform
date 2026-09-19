@@ -39,6 +39,7 @@ class ScoreboardGame:
     season_slug: str | None = None
     season_week: int | None = None
     context_label: str | None = None
+    is_neutral_site: bool = False
     home_team_strength: TeamStrength = field(default_factory=TeamStrength)
     away_team_strength: TeamStrength = field(default_factory=TeamStrength)
     home_score: int | None = None
@@ -258,6 +259,7 @@ class EspnScoreboardClient:
             season_slug=season_slug,
             season_week=season_week,
             context_label=context_label,
+            is_neutral_site=bool(event_competition.get("neutralSite")),
             home_team_strength=_team_strength(home, sport, normalized_competition),
             away_team_strength=_team_strength(away, sport, normalized_competition),
             status=status,
