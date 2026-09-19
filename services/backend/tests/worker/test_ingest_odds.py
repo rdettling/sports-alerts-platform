@@ -88,6 +88,44 @@ def test_fbs_catalog_sync_persists_odds_for_long_team_name(db_session, monkeypat
     ]
 
 
+def test_fbs_catalog_sync_matches_fcs_game_by_fbs_team_only(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="game-fbs-single-team-match",
+                home_external_team_id="66",
+                away_external_team_id="fcs-999",
+                home_team_name="Iowa State Cyclones",
+                home_team_abbreviation="ISU",
+                away_team_name="SE Louisiana Lions",
+                away_team_abbreviation="SELA",
+                scheduled_start_time=now + timedelta(hours=3),
+                status="scheduled",
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        "app.worker.odds.fetch_odds_index",
+        lambda competition: {
+            ("iowa state cyclones", "southeastern louisiana lions"): make_snapshot(
+                away_label="Southeastern Louisiana Lions",
+                away_price=2400,
+                home_label="Iowa State Cyclones",
+                home_price=-10000,
+                last_update=now,
+            )
+        },
+    )
+
+    result = run_catalog_sync(provider, competition="FBS")
+
+    assert result.odds_snapshots_created == 1
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "game-fbs-single-team-match"))
+    assert game is not None
+    assert db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == game.id)) is not None
+
+
 def test_la_liga_catalog_sync_persists_game_and_three_way_odds(db_session, monkeypatch):
     now = datetime.now(timezone.utc)
     provider = StaticProvider(

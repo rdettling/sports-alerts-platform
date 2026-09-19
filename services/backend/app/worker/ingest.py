@@ -64,6 +64,7 @@ class PregameOddsCandidate:
     scheduled_start_time: datetime
     matchup_key: tuple[str, str] | None
     matchup: str | None
+    competition_team_keys: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,14 @@ def _pregame_odds_candidates(
                     else None
                 ),
                 matchup=f"{away_name} @ {home_name}" if home_name and away_name else None,
+                competition_team_keys=tuple(
+                    odds.team_key(team_name)
+                    for external_team_id, team_name in (
+                        (game.home_external_team_id, home_name),
+                        (game.away_external_team_id, away_name),
+                    )
+                    if external_team_id in team_map and team_name
+                ),
             )
         )
     return candidates
@@ -446,6 +455,12 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
                     matchup_odds,
                     candidate.scheduled_start_time,
                 )
+                if game_odds is None and competition == "FBS":
+                    game_odds = odds.select_best_for_single_team(
+                        odds_by_matchup,
+                        candidate.competition_team_keys,
+                        candidate.scheduled_start_time,
+                    )
                 if game_odds and odds.upsert_game_odds(db, game.id, game_odds):
                     odds_snapshots_created += 1
                 elif game_odds is None:

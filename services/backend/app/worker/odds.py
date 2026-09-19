@@ -46,6 +46,9 @@ TEAM_NAME_ALIASES = {
     "lafc": "los angeles fc",
     "red bull new york": "new york red bulls",
     "real racing club de santander": "racing santander",
+    "massachusetts minutemen": "umass minutemen",
+    "sam houston bearkats": "sam houston state bearkats",
+    "southern miss golden eagles": "southern mississippi golden eagles",
     "turkey": "turkiye",
     "uconn huskies": "connecticut huskies",
     "usa": "united states",
@@ -84,8 +87,12 @@ def _normalize_team_name(name: str) -> str:
     return TEAM_NAME_ALIASES.get(cleaned, cleaned)
 
 
+def team_key(team_name: str) -> str:
+    return _normalize_team_name(team_name)
+
+
 def game_key(home_team_name: str, away_team_name: str) -> tuple[str, str]:
-    return (_normalize_team_name(home_team_name), _normalize_team_name(away_team_name))
+    return (team_key(home_team_name), team_key(away_team_name))
 
 
 def _odds_signature(odds: OddsSnapshot) -> tuple[tuple[str, str | None, int | None, str | None], ...]:
@@ -170,6 +177,23 @@ def select_best_for_game(
     if abs((closest_commence - target).total_seconds()) > MATCH_MAX_COMMENCE_DIFF.total_seconds():
         return None
     return closest
+
+
+def select_best_for_single_team(
+    odds_index: dict[tuple[str, str], list[OddsSnapshot]],
+    team_keys: tuple[str, ...],
+    scheduled_start_time: datetime,
+) -> OddsSnapshot | None:
+    if len(team_keys) != 1:
+        return None
+    matching_events = [
+        event_odds
+        for matchup_key, event_odds in odds_index.items()
+        if team_keys[0] in matchup_key
+    ]
+    if len(matching_events) != 1:
+        return None
+    return select_best_for_game(matching_events[0], scheduled_start_time)
 
 
 def match_failure_reason(

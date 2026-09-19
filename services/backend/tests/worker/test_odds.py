@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from app.worker import odds
-from app.worker.odds import OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key
+from app.worker.odds import OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key, select_best_for_single_team
 
 
 def test_blank_api_key_disables_fetch(monkeypatch):
@@ -97,6 +99,33 @@ def test_fbs_name_aliases_match_odds_provider_names():
     assert game_key("Connecticut Huskies", "Southern Miss Golden Eagles") == game_key(
         "UConn Huskies", "Southern Miss Golden Eagles"
     )
+    assert game_key("Massachusetts Minutemen", "Stonehill Skyhawks") == game_key(
+        "UMass Minutemen", "Stonehill Skyhawks"
+    )
+    assert game_key("Southern Miss Golden Eagles", "UConn Huskies") == game_key(
+        "Southern Mississippi Golden Eagles", "UConn Huskies"
+    )
+    assert game_key("Sam Houston Bearkats", "Nicholls Colonels") == game_key(
+        "Sam Houston State Bearkats", "Nicholls Colonels"
+    )
+
+
+def test_single_fbs_team_match_requires_one_provider_event():
+    snapshot = OddsSnapshot(outcomes=(), bookmaker=None, last_update=None)
+    odds_index = {
+        game_key("UL Monroe Warhawks", "Southeastern Louisiana Lions"): [snapshot]
+    }
+
+    assert select_best_for_single_team(
+        odds_index,
+        ("ul monroe warhawks",),
+        datetime.now(timezone.utc),
+    ) is snapshot
+    assert select_best_for_single_team(
+        odds_index,
+        ("ul monroe warhawks", "southeastern louisiana lions"),
+        datetime.now(timezone.utc),
+    ) is None
 
 
 def test_closest_provider_matchups_keeps_provider_team_names():
