@@ -88,3 +88,12 @@ def test_fbs_uses_college_football_odds_feed():
         "alabama crimson tide",
         "auburn tigers",
     )
+
+
+def test_fbs_name_aliases_match_odds_provider_names():
+    assert game_key("App State Mountaineers", "Charlotte 49ers") == game_key(
+        "Appalachian State Mountaineers", "Charlotte 49ers"
+    )
+    assert game_key("Connecticut Huskies", "Southern Miss Golden Eagles") == game_key(
+        "UConn Huskies", "Southern Miss Golden Eagles"
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from dataclasses import dataclass
@@ -153,6 +154,23 @@ def _log_job_success(
             result.odds_snapshots_created,
             result.games_removed,
         )
+        if result.unmatched_odds:
+            logger.warning(
+                "Odds coverage incomplete competition=%s issues=%s",
+                result.competition,
+                json.dumps(
+                    [
+                        {
+                            "external_game_id": issue.external_game_id,
+                            "matchup": issue.matchup,
+                            "scheduled_start_time": issue.scheduled_start_time.isoformat(),
+                            "reason": issue.reason,
+                        }
+                        for issue in result.unmatched_odds
+                    ],
+                    separators=(",", ":"),
+                ),
+            )
         return
 
     logger.info(

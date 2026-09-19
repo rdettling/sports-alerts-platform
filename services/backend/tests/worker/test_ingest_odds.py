@@ -227,7 +227,7 @@ def test_ingest_matches_repeat_matchup_odds_by_commence_time(db_session, monkeyp
 def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     now = datetime.now(timezone.utc).replace(microsecond=0)
     first_start = now + timedelta(hours=2)
-    second_start = now + timedelta(days=2, hours=2)
+    second_start = now + timedelta(hours=21)
     provider = RepeatMatchupProvider(first_start=first_start, second_start=second_start)
     monkeypatch.setattr(
         "app.worker.odds.fetch_odds_index",
@@ -250,6 +250,9 @@ def test_ingest_does_not_apply_far_away_matchup_odds(db_session, monkeypatch):
     second_odds = db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == second_game.id))
     assert first_odds is not None
     assert second_odds is None
+    assert [(issue.external_game_id, issue.reason) for issue in result.unmatched_odds] == [
+        ("game-repeat-2", "provider_start_time_mismatch")
+    ]
 
 
 def test_ingest_reports_odds_candidates(db_session, monkeypatch):
@@ -257,6 +260,9 @@ def test_ingest_reports_odds_candidates(db_session, monkeypatch):
 
     result = run_catalog_sync(make_success_provider())
     assert result.odds_candidates == 1
+    assert [(issue.matchup, issue.reason) for issue in result.unmatched_odds] == [
+        ("Boston Celtics @ Atlanta Hawks", "provider_matchup_missing")
+    ]
 
 
 def test_catalog_sync_creates_single_pregame_odds_snapshot(db_session, monkeypatch):

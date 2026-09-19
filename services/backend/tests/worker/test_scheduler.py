@@ -7,7 +7,7 @@ import pytest
 from app.db.models import CompetitionSetting
 from app.services.competitions import ensure_competition_settings, get_competition_profile
 from app.worker import scheduler
-from app.worker.ingest import CatalogSyncResult, LiveSyncResult
+from app.worker.ingest import CatalogSyncResult, LiveSyncResult, OddsCoverageIssue
 
 
 @pytest.fixture(autouse=True)
@@ -536,6 +536,25 @@ def test_log_catalog_success_includes_all_job_counts(caplog):
         "games_checked=12 games_updated=3 alerts_created=2 odds_candidates=4 "
         "odds_snapshots_created=1 games_removed=5"
     ) in caplog.text
+
+
+def test_log_catalog_odds_coverage_issues_are_structured(caplog):
+    issue = OddsCoverageIssue(
+        external_game_id="401234567",
+        matchup="UConn Huskies @ Southern Miss Golden Eagles",
+        scheduled_start_time=datetime(2026, 9, 19, 23, tzinfo=timezone.utc),
+        reason="provider_matchup_missing",
+    )
+
+    with caplog.at_level("WARNING", logger="app.worker.scheduler"):
+        scheduler._log_job_success(
+            result=_catalog_result(unmatched_odds=(issue,)),
+            next_run_seconds=43200,
+            duration_ms=210,
+        )
+
+    assert 'Odds coverage incomplete competition=MLB issues=[{"external_game_id":"401234567"' in caplog.text
+    assert '"reason":"provider_matchup_missing"' in caplog.text
 
 
 def test_pull_live_sync_forward_uses_native_hint():

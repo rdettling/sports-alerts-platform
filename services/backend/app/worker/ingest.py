@@ -45,6 +45,7 @@ class CatalogSyncResult:
     odds_snapshots_created: int
     games_removed: int
     next_live_sync_at: datetime | None
+    unmatched_odds: tuple["OddsCoverageIssue", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,15 @@ class PregameOddsCandidate:
     external_game_id: str
     scheduled_start_time: datetime
     matchup_key: tuple[str, str] | None
+    matchup: str | None
+
+
+@dataclass(frozen=True)
+class OddsCoverageIssue:
+    external_game_id: str
+    matchup: str | None
+    scheduled_start_time: datetime
+    reason: str
 
 
 def _assert_competition_enabled(db: Session, competition: str) -> None:
@@ -148,6 +158,7 @@ def _pregame_odds_candidates(
                     if home_name and away_name
                     else None
                 ),
+                matchup=f"{away_name} @ {home_name}" if home_name and away_name else None,
             )
         )
     return candidates
@@ -389,6 +400,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             raise RuntimeError(f"No {competition} games could be mapped to catalog teams")
 
         odds_snapshots_created = 0
+        unmatched_odds: list[OddsCoverageIssue] = []
         if odds_candidates:
             games_by_external_id = {
                 game.external_game_id: game
@@ -404,12 +416,28 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             for candidate in odds_candidates:
                 game = games_by_external_id.get(candidate.external_game_id)
                 if game is None:
+                    unmatched_odds.append(
+                        OddsCoverageIssue(
+                            external_game_id=candidate.external_game_id,
+                            matchup=candidate.matchup,
+                            scheduled_start_time=candidate.scheduled_start_time,
+                            reason="game_not_persisted",
+                        )
+                    )
                     continue
                 key = candidate.matchup_key
                 if key is None:
                     home_name = team_names.get(game.home_team_id)
                     away_name = team_names.get(game.away_team_id)
                     if not home_name or not away_name:
+                        unmatched_odds.append(
+                            OddsCoverageIssue(
+                                external_game_id=candidate.external_game_id,
+                                matchup=candidate.matchup,
+                                scheduled_start_time=candidate.scheduled_start_time,
+                                reason="missing_team_name",
+                            )
+                        )
                         continue
                     key = odds.game_key(home_name, away_name)
                 matchup_odds = odds_by_matchup.get(key)
@@ -419,6 +447,18 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
                 )
                 if game_odds and odds.upsert_game_odds(db, game.id, game_odds):
                     odds_snapshots_created += 1
+                elif game_odds is None:
+                    unmatched_odds.append(
+                        OddsCoverageIssue(
+                            external_game_id=candidate.external_game_id,
+                            matchup=candidate.matchup,
+                            scheduled_start_time=candidate.scheduled_start_time,
+                            reason=odds.match_failure_reason(
+                                matchup_odds,
+                                candidate.scheduled_start_time,
+                            ),
+                        )
+                    )
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
@@ -451,6 +491,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             odds_snapshots_created=odds_snapshots_created,
             games_removed=games_removed,
             next_live_sync_at=next_live_sync_at,
+            unmatched_odds=tuple(unmatched_odds),
         )
     except Exception:
         db.rollback()

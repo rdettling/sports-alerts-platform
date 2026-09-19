@@ -29,6 +29,7 @@ MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
     "athletic bilbao": "athletic club",
+    "app state mountaineers": "appalachian state mountaineers",
     "bod glimt": "bodo glimt",
     "bournemouth": "afc bournemouth",
     "ca osasuna": "osasuna",
@@ -45,6 +46,7 @@ TEAM_NAME_ALIASES = {
     "red bull new york": "new york red bulls",
     "real racing club de santander": "racing santander",
     "turkey": "turkiye",
+    "uconn huskies": "connecticut huskies",
     "usa": "united states",
     "vancouver whitecaps": "vancouver whitecaps fc",
 }
@@ -165,6 +167,17 @@ def select_best_for_game(
     if abs((closest_commence - target).total_seconds()) > MATCH_MAX_COMMENCE_DIFF.total_seconds():
         return None
     return closest
+
+
+def match_failure_reason(
+    options: list[OddsSnapshot] | OddsSnapshot | None,
+    scheduled_start_time: datetime,
+) -> str:
+    if not options:
+        return "provider_matchup_missing"
+    if select_best_for_game(options, scheduled_start_time) is None:
+        return "provider_start_time_mismatch"
+    return "unknown"
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
