@@ -6,6 +6,7 @@ import threading
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from time import monotonic
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -71,6 +72,8 @@ class OddsSnapshot:
     bookmaker: str | None
     last_update: datetime | None
     commence_time: datetime | None = None
+    home_team_name: str | None = None
+    away_team_name: str | None = None
 
 
 def _normalize_team_name(name: str) -> str:
@@ -180,6 +183,30 @@ def match_failure_reason(
     return "unknown"
 
 
+def closest_provider_matchups(
+    matchup_key: tuple[str, str],
+    odds_index: dict[tuple[str, str], list[OddsSnapshot]],
+    limit: int = 3,
+) -> tuple[str, ...]:
+    target = " ".join(matchup_key)
+    ranked = sorted(
+        odds_index.items(),
+        key=lambda item: SequenceMatcher(None, target, " ".join(item[0])).ratio(),
+        reverse=True,
+    )
+    matches: list[str] = []
+    for key, snapshots in ranked:
+        if SequenceMatcher(None, target, " ".join(key)).ratio() < 0.55:
+            break
+        snapshot = snapshots[0]
+        home_name = snapshot.home_team_name or key[0]
+        away_name = snapshot.away_team_name or key[1]
+        matches.append(f"{away_name} @ {home_name}")
+        if len(matches) == limit:
+            break
+    return tuple(matches)
+
+
 def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -197,8 +224,10 @@ def _outcome_key_from_name(name: str) -> str:
 
 
 def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
-    home_name = _normalize_team_name(str(event.get("home_team", "")))
-    away_name = _normalize_team_name(str(event.get("away_team", "")))
+    raw_home_name = str(event.get("home_team", ""))
+    raw_away_name = str(event.get("away_team", ""))
+    home_name = _normalize_team_name(raw_home_name)
+    away_name = _normalize_team_name(raw_away_name)
     if not home_name or not away_name:
         return None
 
@@ -244,6 +273,8 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
                 bookmaker=bookmaker.get("title") if isinstance(bookmaker, dict) else None,
                 last_update=_parse_datetime(bookmaker.get("last_update") if isinstance(bookmaker, dict) else None),
                 commence_time=_parse_datetime(event.get("commence_time")),
+                home_team_name=raw_home_name,
+                away_team_name=raw_away_name,
             )
     return None
 

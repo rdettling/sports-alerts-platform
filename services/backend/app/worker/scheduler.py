@@ -165,6 +165,7 @@ def _log_job_success(
                             "matchup": issue.matchup,
                             "scheduled_start_time": issue.scheduled_start_time.isoformat(),
                             "reason": issue.reason,
+                            "nearby_provider_matchups": issue.nearby_provider_matchups,
                         }
                         for issue in result.unmatched_odds
                     ],

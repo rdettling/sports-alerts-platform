@@ -72,6 +72,7 @@ class OddsCoverageIssue:
     matchup: str | None
     scheduled_start_time: datetime
     reason: str
+    nearby_provider_matchups: tuple[str, ...] = ()
 
 
 def _assert_competition_enabled(db: Session, competition: str) -> None:
@@ -456,6 +457,11 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
                             reason=odds.match_failure_reason(
                                 matchup_odds,
                                 candidate.scheduled_start_time,
+                            ),
+                            nearby_provider_matchups=(
+                                odds.closest_provider_matchups(key, odds_by_matchup)
+                                if matchup_odds is None
+                                else ()
                             ),
                         )
                     )

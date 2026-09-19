@@ -1,5 +1,5 @@
 from app.worker import odds
-from app.worker.odds import _odds_sport_key_for_competition, game_key
+from app.worker.odds import OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key
 
 
 def test_blank_api_key_disables_fetch(monkeypatch):
@@ -97,3 +97,22 @@ def test_fbs_name_aliases_match_odds_provider_names():
     assert game_key("Connecticut Huskies", "Southern Miss Golden Eagles") == game_key(
         "UConn Huskies", "Southern Miss Golden Eagles"
     )
+
+
+def test_closest_provider_matchups_keeps_provider_team_names():
+    provider_odds = OddsSnapshot(
+        outcomes=(),
+        bookmaker=None,
+        last_update=None,
+        home_team_name="Southern Mississippi Golden Eagles",
+        away_team_name="Connecticut Huskies",
+    )
+
+    assert closest_provider_matchups(
+        game_key("Southern Miss Golden Eagles", "UConn Huskies"),
+        {
+            game_key("Southern Mississippi Golden Eagles", "Connecticut Huskies"): [
+                provider_odds
+            ]
+        },
+    ) == ("Connecticut Huskies @ Southern Mississippi Golden Eagles",)
