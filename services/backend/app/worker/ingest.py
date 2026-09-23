@@ -277,6 +277,7 @@ def _upsert_game(
         if sport == "football":
             score_change = classify_score_change(existing, payload, sport=sport)
         state_before = (
+            _as_utc(existing.scheduled_start_time),
             existing.context_label,
             tuple(existing.broadcast_names),
             existing.status,
@@ -286,6 +287,7 @@ def _upsert_game(
             existing.clock,
             existing.is_final,
         )
+        existing.scheduled_start_time = payload.scheduled_start_time
         existing.context_label = payload.context_label
         existing.broadcast_names = list(payload.broadcast_names)
         existing.status = payload.status
@@ -296,6 +298,7 @@ def _upsert_game(
         existing.is_final = payload.is_final
         existing.last_ingested_at = datetime.now(timezone.utc)
         state_after = (
+            _as_utc(existing.scheduled_start_time),
             existing.context_label,
             tuple(existing.broadcast_names),
             existing.status,

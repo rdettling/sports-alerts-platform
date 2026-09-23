@@ -327,6 +327,38 @@ def test_ingest_persists_and_refreshes_context_label(db_session):
     assert game.context_label == "NBA Finals - Game 5 · Series tied 3-3"
 
 
+def test_ingest_refreshes_scheduled_start_time_and_reschedules_live_sync(db_session, monkeypatch):
+    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    initial = make_game(
+        external_game_id="nba-rescheduled",
+        home_external_team_id="1",
+        away_external_team_id="2",
+        scheduled_start_time=now + timedelta(hours=2),
+        status="scheduled",
+    )
+    run_catalog_sync(StaticProvider([initial]), competition="NBA")
+
+    corrected_start = now + timedelta(hours=8)
+    corrected = make_game(
+        external_game_id="nba-rescheduled",
+        home_external_team_id="1",
+        away_external_team_id="2",
+        scheduled_start_time=corrected_start,
+        status="scheduled",
+    )
+    result = run_catalog_sync(StaticProvider([corrected]), competition="NBA")
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "nba-rescheduled"))
+    assert game is not None
+    assert result.games_updated == 1
+    assert result.next_live_sync_at == corrected_start
+    assert game.scheduled_start_time.replace(tzinfo=timezone.utc) == corrected_start
+
+    unchanged_result = run_catalog_sync(StaticProvider([corrected]), competition="NBA")
+    assert unchanged_result.games_updated == 0
+
+
 def test_ingest_persists_refreshes_and_clears_broadcast_names(db_session):
     initial = make_game(
         external_game_id="nba-broadcasts",
@@ -370,10 +402,12 @@ def test_ingest_persists_refreshes_and_clears_broadcast_names(db_session):
 
 def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeypatch, caplog):
     monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
+    scheduled_start = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=3)
     initial = make_game(
         external_game_id="mls-records",
         home_external_team_id="187",
         away_external_team_id="18966",
+        scheduled_start_time=scheduled_start,
         status="scheduled",
         home_team_strength=TeamStrength(wins=6, losses=8, ties=7),
         away_team_strength=TeamStrength(wins=10, losses=7, ties=4),
@@ -393,6 +427,7 @@ def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeyp
         external_game_id="mls-records",
         home_external_team_id="187",
         away_external_team_id="18966",
+        scheduled_start_time=scheduled_start,
         status="scheduled",
         home_team_strength=TeamStrength(wins=7, losses=8, ties=7),
         away_team_strength=TeamStrength(wins=10, losses=7, ties=5),
@@ -411,6 +446,7 @@ def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeyp
         external_game_id="mls-records",
         home_external_team_id="187",
         away_external_team_id="18966",
+        scheduled_start_time=scheduled_start,
         status="scheduled",
     )
     result = run_catalog_sync(StaticProvider([missing]), competition="MLS")
