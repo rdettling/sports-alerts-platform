@@ -272,6 +272,37 @@ def test_provider_builds_nba_context_label_from_round_and_series():
     assert schedule[0].context_label == "NBA Finals - Game 5 · NY leads series 3-1"
 
 
+def test_provider_builds_mlb_context_label_from_round_and_series():
+    payload = {
+        "events": [
+            {
+                "id": "401907972",
+                "date": "2026-09-30T18:00Z",
+                "season": {"year": 2026, "type": 3, "slug": "post-season"},
+                "competitions": [
+                    {
+                        "notes": [{"headline": "NLWC - Game 2"}],
+                        "series": {"summary": "ATL leads series 1-0"},
+                        "status": {
+                            "period": 0,
+                            "displayClock": "0:00",
+                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
+                        },
+                        "competitors": [
+                            {"homeAway": "home", "score": "0", "team": {"id": "15", "abbreviation": "ATL"}},
+                            {"homeAway": "away", "score": "0", "team": {"id": "22", "abbreviation": "PHI"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    schedule = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("MLB", ["20260930"])
+
+    assert schedule[0].context_label == "NLWC - Game 2 · ATL leads series 1-0"
+
+
 def test_provider_parses_wnba_state_team_ids_and_postseason_context():
     payload = {
         "events": [

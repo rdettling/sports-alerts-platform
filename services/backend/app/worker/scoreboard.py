@@ -226,7 +226,7 @@ class EspnScoreboardClient:
         raw_season_week = week.get("number") if isinstance(week, dict) else None
         season_week = int(raw_season_week) if isinstance(raw_season_week, int) else None
         context_label: str | None = None
-        if sport == "basketball":
+        if sport in {"baseball", "basketball"}:
             round_label = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
             series_summary = _clean_text(((event_competition.get("series") or {}).get("summary")))
             context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary

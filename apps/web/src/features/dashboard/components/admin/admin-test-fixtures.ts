@@ -32,6 +32,12 @@ export const baseSummary: OpsAdminSummaryResponse = {
     push_alerts: { attempted: 0, sent: 0, failed: 0 },
   },
   schedule: null,
+  odds_api_usage: {
+    credits_used: 0,
+    daily_credit_cap: 16,
+    provider_credits_remaining: null,
+    provider_observed_at: null,
+  },
   competition_settings: competitionSettings,
 };
 

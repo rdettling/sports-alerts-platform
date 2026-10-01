@@ -67,7 +67,13 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     summary = client.get("/ops/admin/summary?window=24h", headers=headers)
     assert summary.status_code == 200
     summary_json = summary.json()
-    assert set(summary_json) == {"overview", "delivery", "competition_settings", "schedule"}
+    assert set(summary_json) == {"overview", "delivery", "competition_settings", "schedule", "odds_api_usage"}
+    assert summary_json["odds_api_usage"] == {
+        "credits_used": 0,
+        "daily_credit_cap": 16,
+        "provider_credits_remaining": None,
+        "provider_observed_at": None,
+    }
     assert summary_json["schedule"] is None
     worker_schedule.snapshot = ScheduleSnapshot(reported_at=now, next_catalog_at=now, jobs=[])
     assert client.get("/ops/admin/summary", headers=headers).json()["schedule"] == worker_schedule.snapshot.model_dump(mode="json")

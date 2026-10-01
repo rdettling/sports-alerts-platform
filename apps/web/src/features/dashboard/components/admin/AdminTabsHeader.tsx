@@ -1,12 +1,6 @@
 import { ADMIN_TABS, type AdminTabsHeaderProps } from "./admin-tabs";
 
-export function AdminTabsHeader({
-  tab,
-  onTabChange,
-  isRefreshing,
-  refreshFailed,
-  onRefresh,
-}: AdminTabsHeaderProps) {
+export function AdminTabsHeader({ tab, onTabChange }: AdminTabsHeaderProps) {
   const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
     if (event.key === "ArrowRight") nextIndex = (index + 1) % ADMIN_TABS.length;
@@ -42,23 +36,6 @@ export function AdminTabsHeader({
             {item.label}
           </button>
         ))}
-      </div>
-      <div className="admin-tab-controls">
-        <button
-          className="admin-refresh-button"
-          type="button"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-        >
-          Refresh
-        </button>
-        <span
-          className={`admin-refresh-status ${refreshFailed ? "is-error" : ""}`.trim()}
-          role="status"
-          aria-live="polite"
-        >
-          {isRefreshing ? "Refreshing…" : refreshFailed ? "Refresh failed" : ""}
-        </span>
       </div>
     </section>
   );

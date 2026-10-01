@@ -180,8 +180,8 @@ export type ScheduleSnapshot = {
   next_catalog_at: string;
   jobs: {
     competition: string;
-    job_type: "catalog_sync" | "live_sync";
-    next_run_at: string;
+    job_type: "catalog_sync" | "live_sync" | "odds_sync";
+    next_run_at: string | null;
     last_success_at: string | null;
     state:
       | "awaiting_first_result"
@@ -190,7 +190,8 @@ export type ScheduleSnapshot = {
       | "live"
       | "waiting_for_start"
       | "no_upcoming"
-      | "retry_scheduled";
+      | "retry_scheduled"
+      | "budget_limited";
   }[];
 };
 
@@ -214,6 +215,12 @@ export type OpsAdminSummaryResponse = {
   };
   competition_settings: CompetitionSetting[];
   schedule: ScheduleSnapshot | null;
+  odds_api_usage: {
+    credits_used: number;
+    daily_credit_cap: number;
+    provider_credits_remaining: number | null;
+    provider_observed_at: string | null;
+  };
 };
 
 export type OpsNeonUsageResponse = {

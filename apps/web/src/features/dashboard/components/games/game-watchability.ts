@@ -231,12 +231,7 @@ export function basketballGameSecondsRemaining(game: Game): number | null {
 }
 
 export function soccerRegulationMinutesRemaining(game: Game): number | null {
-  if (
-    !isSoccerGame(game) ||
-    !isLiveGame(game) ||
-    game.period === null ||
-    game.period < 1
-  ) {
+  if (!isSoccerGame(game) || !isLiveGame(game) || game.period === null || game.period < 1) {
     return null;
   }
   if (game.period >= 5) return 0;

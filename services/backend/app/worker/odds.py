@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 import unicodedata
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
-from time import monotonic
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -24,8 +22,6 @@ ODDS_API_REGION = "us"
 ODDS_MARKET = "h2h"
 ODDS_FORMAT = "american"
 ODDS_TIMEOUT_SECONDS = 6
-ODDS_CACHE_SECONDS = 60
-ODDS_PREGAME_WINDOW = timedelta(hours=24)
 MATCH_MAX_COMMENCE_DIFF = timedelta(hours=18)
 
 TEAM_NAME_ALIASES = {
@@ -55,11 +51,6 @@ TEAM_NAME_ALIASES = {
     "vancouver whitecaps": "vancouver whitecaps fc",
 }
 
-_CACHE_LOCK = threading.Lock()
-_CACHE_FETCHED_AT_BY_COMPETITION: dict[str, float] = {}
-_CACHE_DATA_BY_COMPETITION: dict[str, dict[tuple[str, str], list[OddsSnapshot]]] = {}
-
-
 @dataclass(frozen=True)
 class OddsOutcome:
     outcome_key: str
@@ -77,6 +68,13 @@ class OddsSnapshot:
     commence_time: datetime | None = None
     home_team_name: str | None = None
     away_team_name: str | None = None
+
+
+@dataclass(frozen=True)
+class OddsProviderResult:
+    odds_index: dict[tuple[str, str], list[OddsSnapshot]]
+    credits_used: int | None = None
+    credits_remaining: int | None = None
 
 
 def _normalize_team_name(name: str) -> str:
@@ -337,7 +335,24 @@ def _odds_sport_key_for_competition(competition: str) -> str:
     return sport_key
 
 
-def _fetch_from_provider(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
+def _parse_odds_index(payload: object) -> dict[tuple[str, str], list[OddsSnapshot]]:
+    if not isinstance(payload, list):
+        return {}
+    odds_index: dict[tuple[str, str], list[OddsSnapshot]] = {}
+    for event in payload:
+        if not isinstance(event, dict):
+            continue
+        home_name = _normalize_team_name(str(event.get("home_team", "")))
+        away_name = _normalize_team_name(str(event.get("away_team", "")))
+        if not home_name or not away_name:
+            continue
+        odds = _extract_event_moneyline(event)
+        if odds:
+            odds_index.setdefault((home_name, away_name), []).append(odds)
+    return odds_index
+
+
+def _fetch_provider_result(competition: str) -> OddsProviderResult:
     query = urlencode(
         {
             "apiKey": settings.odds_api_key.strip(),
@@ -351,25 +366,19 @@ def _fetch_from_provider(competition: str) -> dict[tuple[str, str], list[OddsSna
 
     with urlopen(url, timeout=ODDS_TIMEOUT_SECONDS) as response:  # noqa: S310
         payload = json.loads(response.read().decode("utf-8"))
+        headers = response.headers
+        used = headers.get("x-requests-used")
+        remaining = headers.get("x-requests-remaining")
 
-    if not isinstance(payload, list):
-        return {}
+    return OddsProviderResult(
+        odds_index=_parse_odds_index(payload),
+        credits_used=int(used) if used and used.isdigit() else None,
+        credits_remaining=int(remaining) if remaining and remaining.isdigit() else None,
+    )
 
-    odds_index: dict[tuple[str, str], list[OddsSnapshot]] = {}
-    for event in payload:
-        if not isinstance(event, dict):
-            continue
-        home_name = _normalize_team_name(str(event.get("home_team", "")))
-        away_name = _normalize_team_name(str(event.get("away_team", "")))
-        if not home_name or not away_name:
-            continue
-        odds = _extract_event_moneyline(event)
-        if odds:
-            key = (home_name, away_name)
-            existing = odds_index.get(key, [])
-            existing.append(odds)
-            odds_index[key] = existing
-    return odds_index
+
+def _fetch_from_provider(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
+    return _fetch_provider_result(competition).odds_index
 
 
 def fetch_odds_index(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
@@ -384,20 +393,28 @@ def fetch_odds_index(competition: str) -> dict[tuple[str, str], list[OddsSnapsho
     if profile.odds_sport_key is None:
         return {}
 
-    now = monotonic()
-    with _CACHE_LOCK:
-        cached = _CACHE_DATA_BY_COMPETITION.get(normalized)
-        fetched_at = _CACHE_FETCHED_AT_BY_COMPETITION.get(normalized, 0.0)
-        if cached and now - fetched_at < ODDS_CACHE_SECONDS:
-            return cached
-
     try:
-        fresh_data = _fetch_from_provider(normalized)
+        return _fetch_from_provider(normalized)
     except Exception as exc:
         logger.warning("Odds API request failed: %s", exc)
         return {}
 
-    with _CACHE_LOCK:
-        _CACHE_DATA_BY_COMPETITION[normalized] = fresh_data
-        _CACHE_FETCHED_AT_BY_COMPETITION[normalized] = monotonic()
-        return _CACHE_DATA_BY_COMPETITION[normalized]
+
+def fetch_odds_with_usage(competition: str) -> OddsProviderResult:
+    if not settings.odds_api_key.strip():
+        return OddsProviderResult({})
+    return _fetch_provider_result(competition.strip().upper())
+
+
+def fetch_quota_status() -> OddsProviderResult:
+    query = urlencode({"apiKey": settings.odds_api_key.strip()})
+    with urlopen(f"{ODDS_API_BASE_URL}?{query}", timeout=ODDS_TIMEOUT_SECONDS) as response:  # noqa: S310
+        response.read()
+        headers = response.headers
+        used = headers.get("x-requests-used")
+        remaining = headers.get("x-requests-remaining")
+    return OddsProviderResult(
+        {},
+        credits_used=int(used) if used and used.isdigit() else None,
+        credits_remaining=int(remaining) if remaining and remaining.isdigit() else None,
+    )

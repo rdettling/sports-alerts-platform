@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -102,8 +102,21 @@ class Game(Base):
     period: Mapped[int | None] = mapped_column(Integer, nullable=True)
     clock: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_final: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_neutral_site: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_odds_eligible: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     last_ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class OddsApiDailyUsage(Base):
+    __tablename__ = "odds_api_daily_usage"
+
+    usage_date: Mapped[date] = mapped_column(primary_key=True)
+    credits_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    provider_credits_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_credits_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    provider_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

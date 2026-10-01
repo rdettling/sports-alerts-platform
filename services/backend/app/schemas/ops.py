@@ -25,11 +25,19 @@ class OpsAdminDeliveryOut(BaseModel):
     push_alerts: OpsAdminDeliveryStatsOut
 
 
+class OddsApiUsageOut(BaseModel):
+    credits_used: int
+    daily_credit_cap: int
+    provider_credits_remaining: int | None = None
+    provider_observed_at: datetime | None = None
+
+
 class OpsAdminSummaryOut(BaseModel):
     overview: OpsAdminSummaryOverviewOut
     delivery: OpsAdminDeliveryOut
     competition_settings: list[CompetitionSettingOut]
     schedule: ScheduleSnapshot | None = None
+    odds_api_usage: OddsApiUsageOut
 
 
 class NeonUsageOut(BaseModel):

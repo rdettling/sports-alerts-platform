@@ -7,7 +7,6 @@ os.environ.update(
     {
         "DATABASE_URL": f"sqlite+pysqlite:///{TEST_DB_PATH}",
         "ODDS_API_KEY": "test-odds-key",
-        "CATALOG_SYNC_INTERVAL_SECONDS": "43200",
         "DELIVERY_MODE": "log",
         "FROM_EMAIL": "alerts@test.local",
         "RESEND_API_KEY": "test-key",

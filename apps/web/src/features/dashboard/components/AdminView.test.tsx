@@ -45,10 +45,6 @@ async function openActivity() {
   await settle();
 }
 
-function refresh() {
-  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-}
-
 describe("AdminView", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -120,19 +116,16 @@ describe("AdminView", () => {
     await settle();
     expect(interval).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
-    const panel = within(screen.getByRole("region", { name: "Leagues" }));
-    expect(panel.getAllByText("Catalog sync in 12h 0m")).toHaveLength(1);
-    fireEvent.click(panel.getByText("Catalog status (1)"));
-    expect(panel.queryByText("In 2h 0m")).toBeNull();
-    expect(panel.getByText("Catalog retry · In 2m")).toBeVisible();
+    const panel = within(screen.getByRole("tabpanel", { name: "Leagues" }));
+    expect(panel.queryByText(/^Catalog sync/)).toBeNull();
     const liveRow = within(panel.getByRole("listitem", { name: "WNBA" }));
     expect(liveRow.getByText("In 3s")).toBeInTheDocument();
-    expect(liveRow.getByText("2m")).toBeInTheDocument();
+    expect(liveRow.getByText("Every 2m")).toBeInTheDocument();
     expect(panel.queryByText("Last success")).toBeNull();
     await settle(1000);
     expect(liveRow.getByText("In 2s")).toBeInTheDocument();
     await settle(2000);
-    expect(liveRow.getByText("Scheduled time passed — refresh for status")).toBeInTheDocument();
+    expect(liveRow.getByText("Scheduled time passed — reload for status")).toBeInTheDocument();
     await settle(10 * 60_000);
     expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).not.toHaveBeenCalled();
@@ -160,7 +153,7 @@ describe("AdminView", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows queued catalog work without treating a passed shared time as completed", async () => {
+  it("does not surface shared catalog work in the league table", async () => {
     mocks.getOpsAdminSummary.mockResolvedValue({
       ...baseSummary,
       schedule: {
@@ -187,21 +180,18 @@ describe("AdminView", () => {
     renderAdmin();
     await settle();
     fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
-    expect(screen.getAllByText("Catalog sync in 2s")).toHaveLength(1);
-    fireEvent.click(screen.getByText("Catalog status (1)"));
-    expect(screen.getByText("Catalog pending")).toBeVisible();
+    expect(screen.queryByText(/^Catalog sync/)).toBeNull();
+    expect(screen.queryByText("Catalog pending")).toBeNull();
+    expect(
+      within(screen.getByRole("listitem", { name: "WNBA" })).getByText("In 1h 0m"),
+    ).toBeInTheDocument();
     await settle(3000);
-    expect(screen.getByText("Scheduled time passed — refresh for status")).toBeVisible();
-    expect(screen.getByText("Catalog pending")).toBeVisible();
+    expect(screen.queryByText("Catalog pending")).toBeNull();
     expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).not.toHaveBeenCalled();
   });
 
-  it("distinguishes missing reports, discovery, disabled leagues, and cached report failures", async () => {
-    renderAdmin();
-    await settle();
-    fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
-    expect(screen.getAllByText(/^Schedule unavailable —/)).toHaveLength(1);
+  it("distinguishes discovery and disabled leagues without a manual refresh control", async () => {
     const summary = {
       ...baseSummary,
       competition_settings: [
@@ -223,7 +213,7 @@ describe("AdminView", () => {
           {
             competition: "WNBA",
             job_type: "live_sync",
-            next_run_at: new Date(Date.now() + 60_000).toISOString(),
+            next_run_at: null,
             state: "no_upcoming",
             last_success_at: null,
           },
@@ -238,24 +228,23 @@ describe("AdminView", () => {
       },
     };
     mocks.getOpsAdminSummary.mockResolvedValue(summary);
-    refresh();
-    await settle(1000);
-    expect(screen.getByText("Awaiting first catalog refresh")).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("listitem", { name: "WNBA" })).getByText("In 1m"),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("Awaiting worker discovery")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Enable NBA" })).toBeVisible();
-    expect(screen.getByText("Worker confirmation pending")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Enable NFL" })).toBeVisible();
-    mocks.getOpsAdminSummary.mockRejectedValue(new Error("offline"));
-    refresh();
+    renderAdmin();
     await settle();
-    expect(
-      within(screen.getByRole("listitem", { name: "WNBA" })).getByText("In 1m"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
-    expect(screen.getByText("Refresh failed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
+    const wnbaRow = within(screen.getByRole("listitem", { name: "WNBA" }));
+    expect(wnbaRow.getByText("No upcoming games")).toBeInTheDocument();
+    expect(wnbaRow.getByText("Rechecked after catalog")).toBeInTheDocument();
+    expect(screen.getAllByText("Awaiting worker discovery")).toHaveLength(3);
+    expect(screen.getByRole("switch", { name: "NBA league enabled" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.getByText("Worker confirmation pending")).toBeVisible();
+    expect(screen.getByRole("switch", { name: "NFL league enabled" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
   });
 
   it("refreshes the summary on reopening and loads database usage on demand", async () => {
@@ -311,13 +300,12 @@ describe("AdminView", () => {
     },
   );
 
-  it("reuses tab data and refreshes only the datasets relevant to the current tab", async () => {
+  it("reuses tab data without refetching when tabs change", async () => {
     renderAdmin();
     await settle();
     expect(screen.queryByRole("combobox", { name: "Activity window" })).toBeNull();
-    refresh();
-    await settle();
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).not.toHaveBeenCalled();
     fireEvent.keyDown(screen.getByRole("tab", { name: "Leagues" }), { key: "ArrowRight" });
     await settle(20);
@@ -327,20 +315,17 @@ describe("AdminView", () => {
     );
     expect(screen.getByRole("combobox", { name: "Activity window" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Send test alert" })).toBeVisible();
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(2);
+    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(screen.getByRole("tab", { name: "Activity & tools" }), { key: "ArrowRight" });
     await settle(20);
     expect(screen.getByRole("tab", { name: "Leagues" })).toHaveAttribute("aria-selected", "true");
     await openActivity();
     expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(1);
-    refresh();
-    await settle();
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(3);
-    expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(2);
+    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
   });
 
-  it("preserves league scroll, form selections and pending delivery across tabs and refreshes", async () => {
+  it("preserves league scroll, form selections and pending delivery across tabs", async () => {
     renderAdmin();
     await settle();
     fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
@@ -363,9 +348,6 @@ describe("AdminView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send test alert" }));
     fireEvent.click(screen.getByRole("tab", { name: "Leagues" }));
     expect(list.scrollTop).toBe(120);
-    refresh();
-    await settle();
-    expect(list.scrollTop).toBe(120);
     fireEvent.click(screen.getByRole("tab", { name: "Activity & tools" }));
     expect(screen.getByRole("button", { name: "Sending…" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "League" })).toHaveValue("MLB");
@@ -374,52 +356,9 @@ describe("AdminView", () => {
     await settle();
     expect(screen.getByText("Inning start test for MLB: email sent.")).toBeVisible();
     expect(mocks.sendAdminTestAlert).toHaveBeenCalledTimes(1);
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(2);
+    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(1);
-    refresh();
-    await settle();
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(3);
-    expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(2);
     expect(screen.getByText("Inning start test for MLB: email sent.")).toBeVisible();
-  });
-
-  it("keeps content and scroll position while sharing in-flight refreshes", async () => {
-    const { container } = renderAdmin();
-    await settle();
-    await openActivity();
-    const scroll = container.querySelector(".admin-content-scroll")!;
-    scroll.scrollTop = 120;
-    let finishSummary!: (value: OpsAdminSummaryResponse) => void;
-    let finishNeon!: (value: unknown) => void;
-    mocks.getOpsAdminSummary.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishSummary = resolve;
-        }),
-    );
-    mocks.getOpsNeonUsage.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishNeon = resolve;
-        }),
-    );
-    refresh();
-    refresh();
-    await settle();
-    expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(2);
-    expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
-    expect(screen.getByText("Refreshing…")).toBeInTheDocument();
-    expect(screen.getByText("Alerts created")).toBeInTheDocument();
-    expect(screen.getByText("2.00 CUh")).toBeInTheDocument();
-    finishSummary(baseSummary);
-    await settle();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
-    finishNeon({ available: false, message: "Not configured" });
-    await settle();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
-    expect(screen.getByText("Not configured")).toBeInTheDocument();
-    expect(scroll.scrollTop).toBe(120);
   });
 
   it("fetches each selected window including previously cached windows", async () => {
@@ -460,54 +399,16 @@ describe("AdminView", () => {
     expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["summary", "neon"])(
-    "retains failed data while updating successful data when %s refresh fails",
-    async (failed) => {
-      renderAdmin();
-      await settle();
-      await openActivity();
-      await settle(60_000);
-      (failed === "summary"
-        ? mocks.getOpsAdminSummary
-        : mocks.getOpsNeonUsage
-      ).mockRejectedValueOnce(new Error("Refresh unavailable"));
-      if (failed === "summary") {
-        mocks.getOpsNeonUsage.mockResolvedValueOnce({ available: true, cpu_used_sec: 10800 });
-      } else {
-        mocks.getOpsAdminSummary.mockResolvedValueOnce({
-          ...baseSummary,
-          overview: { ...baseSummary.overview, total_alerts_created: 9 },
-        });
-      }
-      refresh();
-      await settle();
-      expect(screen.getByText("Refresh unavailable")).toBeInTheDocument();
-      expect(screen.getByText("Refresh failed")).toBeInTheDocument();
-      expect(screen.getByText("Alerts created")).toBeInTheDocument();
-      expect(screen.getByText("Alerts created").closest(".admin-activity-total")).toHaveTextContent(
-        failed === "summary" ? "3" : "9",
-      );
-      expect(screen.getByText(failed === "summary" ? "3.00 CUh" : "2.00 CUh")).toBeInTheDocument();
-      refresh();
-      await settle();
-      expect(screen.queryByText("Refresh failed")).toBeNull();
-    },
-  );
-
-  it("allows manual recovery after initial errors without periodic retries", async () => {
+  it("shows initial errors without periodic retries or manual refresh", async () => {
     mocks.getOpsAdminSummary.mockRejectedValueOnce(new Error("Admin unavailable"));
     mocks.getOpsNeonUsage.mockRejectedValueOnce(new Error("Neon unavailable"));
     renderAdmin();
     await openActivity();
     expect(screen.getByText("Admin unavailable")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
     await settle(10 * 60_000);
     expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(1);
     expect(mocks.getOpsNeonUsage).toHaveBeenCalledTimes(1);
-    refresh();
-    await settle();
-    expect(screen.getByText("Alerts created")).toBeInTheDocument();
-    expect(screen.getByText("2.00 CUh")).toBeInTheDocument();
   });
 
   it("preserves the bounded retry and resumes a requested offline load", async () => {
@@ -539,9 +440,12 @@ describe("AdminView", () => {
         competitionSettings[1],
       ],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Disable WNBA" }));
+    fireEvent.click(screen.getByRole("switch", { name: "WNBA league enabled" }));
     await settle();
-    expect(screen.getByRole("button", { name: "Enable WNBA" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "WNBA league enabled" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
     expect(mocks.getOpsAdminSummary).toHaveBeenCalledTimes(2);
     expect(mocks.getOpsNeonUsage).not.toHaveBeenCalled();
   });

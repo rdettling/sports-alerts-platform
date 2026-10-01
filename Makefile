@@ -44,7 +44,6 @@ setup:
 			'VAPID_PUBLIC_KEY=' \
 			'VAPID_PRIVATE_KEY=' \
 			'VAPID_SUBJECT=mailto:you@example.com' \
-			'CATALOG_SYNC_INTERVAL_SECONDS=43200' \
 			'VITE_API_BASE_URL=http://localhost:8000' \
 			> .env; \
 		echo "Created .env with all required variables. Fill in real secret values."; \

@@ -20,7 +20,6 @@ LIVE_UPDATE_SECRET=replace-with-live-update-secret
 LIVE_UPDATE_API_URL=http://api:8000
 
 ODDS_API_KEY=
-CATALOG_SYNC_INTERVAL_SECONDS=43200
 
 RESEND_API_KEY=replace-with-resend-api-key
 DELIVERY_MODE=log
@@ -73,12 +72,11 @@ Notes:
 
 ## Worker Config
 
-The worker reads ingest cadence and odds settings.
+The worker reads odds and live-update settings; catalog and odds timing are fixed UTC schedules.
 
 Common values:
 
 - `DATABASE_URL`
-- `CATALOG_SYNC_INTERVAL_SECONDS`
 - `ODDS_API_KEY`
 - `DELIVERY_MODE`
 - `VAPID_PRIVATE_KEY`
@@ -90,7 +88,8 @@ Notes:
 
 - Odds fetching is enabled when `ODDS_API_KEY` is nonblank and disabled when it is blank.
 - Competition-specific live cadences and odds provider sport keys are stable values in the competition registry, not environment settings.
-- The provider, moneyline market, region, format, request timeout, cache duration, and pregame window are fixed implementation details.
+- Catalog runs immediately at worker startup, then at 00:00, 06:00, 12:00, and 18:00 UTC. Odds sweeps run at 00:00 and 12:00 UTC for competitions with unpriced games in the next 48 hours.
+- The provider, moneyline market, region, format, request timeout, and odds window are fixed implementation details.
 - Disabling odds does not disable schedule ingest or alert evaluation.
 - Live update delivery is best-effort and disabled unless both live update values are nonblank. Locally, use `http://api:8000`; on Render, use the API's HTTPS origin.
 

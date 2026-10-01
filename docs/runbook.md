@@ -49,36 +49,36 @@ To judge waste, compare lifecycle-derived awake hours and estimated CU-hours, id
 
 Check the [worker schedule rules](architecture.md#worker-scheduling) and the next reported job time before treating a quiet interval or delayed league discovery as a failure. Catalog clustering may reduce scattered activity, but compute-hour savings must be measured.
 
-To verify idle sleep after a worker deploy, run the report for the post-deploy period and confirm the startup log reports `idle_max_sleep=43200s` with the default catalog interval. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. The report correlates those logs with Neon lifecycle operations without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
+To verify idle sleep after a worker deploy, run the report for the post-deploy period and confirm the startup log reports the UTC catalog schedule. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. The report correlates those logs with Neon lifecycle operations without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, twice-daily odds sweeps, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
 
 Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
 
-If admin requests appear repeatedly during idle periods, use the [Admin refresh checks](#admin-data-is-stale-or-refreshing-unexpectedly). Deliberate refreshes still authenticate against Postgres, including the Neon usage endpoint whose usage lookup itself uses the control plane.
+If admin requests appear repeatedly during idle periods, use the [Admin request checks](#admin-data-is-stale-or-requesting-unexpectedly). Admin reads still authenticate against Postgres, including the Neon usage endpoint whose usage lookup itself uses the control plane.
 
 The report recursively splits queries that reach Render's 1,000-record limit and deduplicates overlapping results. Current partial windows and abruptly terminated processes can still be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for an on-demand weekly review.
 
-## Admin Data Is Stale Or Refreshing Unexpectedly
+## Admin Data Is Stale Or Requesting Unexpectedly
 
-Admin loads on demand; see the [refresh and panel rules](architecture.md#admin--ops). Use Refresh after leaving it open or returning from another app. After a partial failure, cached content remains visible beside errors.
+Admin loads on demand; see the [request and panel rules](architecture.md#admin--ops). Reload Admin when current data is required after leaving it open or returning from another app. After a partial failure, cached content remains visible beside errors.
 
 To verify request behavior in browser network tools:
 
 1. Open Admin, then open Activity & tools once so both the summary and Neon usage have loaded.
 2. Leave it visible for ten minutes, switch tabs, return from another app, and restore networking. These actions must not start additional `/ops/admin/summary` or `/ops/db/neon-usage` requests; an already-requested offline load can resume.
-3. Click Refresh on Activity & tools: expect summary and Neon usage requests. On Leagues, expect only the summary.
+3. Confirm there is no manual refresh control on either tab.
 4. Change the activity window or a league setting: expect a summary request. Sending a test alert displays its delivery response without requesting another summary.
 
 If requests exceed those expectations, check the frontend revision and distinguish deliberate actions and bounded retries from polling. For stale schedules, follow the checks below.
 
 ## Admin League Sync Times
 
-For the [reported schedule](architecture.md#admin--ops), compare Next catalog refresh and each league’s live deadline with worker logs. A passed time or Catalog pending is not proof of completion: use Refresh, then inspect logs if the report remains old. Refresh reads API memory and does not contact the worker.
+For the [reported schedule](architecture.md#admin--ops), compare scheduled league deadlines with worker logs. `No upcoming games` means the live job is dormant until catalog discovers eligible work; it does not have a hidden live-sync deadline. A passed time is not proof of completion: reload Admin, then inspect logs if the report remains old. Reloading reads API memory and does not contact the worker.
 
-Schedule unavailable can persist for up to 12 hours after an API restart while the worker sleeps. An enabled league absent from the report is awaiting discovery; a disabled league still present is awaiting confirmation. Check worker startup time before interpreting missing last-success values, which reset on worker restart.
+Schedule unavailable can persist for up to 6 hours after an API restart while the worker sleeps. An enabled league absent from the report is awaiting discovery; a disabled league still present is awaiting confirmation. Check worker startup time before interpreting missing last-success values, which reset on worker restart.
 
 If reports stay unavailable after worker activity, check `Schedule report delivery failed` and the matching recovery log, then verify the worker API URL/shared secret. During a release, confirm the API and worker use compatible schedule fields; see the [catalog cutover instructions](deployment.md#shared-catalog-schedule-cutover).
 
-`Catalog cycle queued` logs show the league count and next shared deadline. Verify that completion times do not move that deadline, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior. Use `worker:catalog_sync:<league>` counters to attribute database activity separately from live polling and site visits.
+`Catalog cycle queued` logs show the league count and UTC slot. Verify that completion times do not move the regular UTC schedule, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior. Use `worker:catalog_sync:<league>` counters to attribute database activity separately from live polling and site visits.
 
 ## Games Screen Is Stale
 

@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Alert, AlertDelivery, CompetitionSetting, User
+from app.db.models import Alert, AlertDelivery, CompetitionSetting, OddsApiDailyUsage, User
 from app.db.session import get_db
 from app.deps import require_admin_user
 from app.schemas.competition import CompetitionSettingOut, UpdateCompetitionSettingRequest
@@ -17,8 +17,10 @@ from app.schemas.ops import (
     OpsAdminDeliveryStatsOut,
     OpsAdminSummaryOut,
     OpsAdminSummaryOverviewOut,
+    OddsApiUsageOut,
     NeonUsageOut,
 )
+from app.worker.odds_sync import ODDS_DAILY_CREDIT_CAP
 from app.services import worker_schedule
 from app.services.competitions import get_alert_types, get_competition_profile, list_competition_settings, normalize_competition
 from app.services.game_feed import game_feed_cache
@@ -94,6 +96,7 @@ def admin_summary(
     email_counts = delivery_counts["email"]
     push_counts = delivery_counts["push"]
     alerts_created = db.scalar(select(func.count(Alert.id)).where(Alert.triggered_at >= start)) or 0
+    usage = db.get(OddsApiDailyUsage, now.date())
 
     return OpsAdminSummaryOut(
         overview=OpsAdminSummaryOverviewOut(
@@ -114,6 +117,12 @@ def admin_summary(
             ),
         ),
         schedule=worker_schedule.snapshot,
+        odds_api_usage=OddsApiUsageOut(
+            credits_used=usage.credits_used if usage else 0,
+            daily_credit_cap=ODDS_DAILY_CREDIT_CAP,
+            provider_credits_remaining=usage.provider_credits_remaining if usage else None,
+            provider_observed_at=usage.provider_observed_at if usage else None,
+        ),
         competition_settings=[_competition_setting_out(row) for row in list_competition_settings(db)],
     )
 

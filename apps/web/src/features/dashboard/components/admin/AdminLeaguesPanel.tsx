@@ -11,11 +11,20 @@ import { dashboardQueryKeys } from "../../hooks/dashboard-query-options";
 
 function countdown(scheduledAt: string, now: number): string {
   const seconds = Math.ceil((new Date(scheduledAt).getTime() - now) / 1000);
-  if (seconds <= 0) return "Scheduled time passed — refresh for status";
+  if (seconds <= 0) return "Scheduled time passed — reload for status";
   if (seconds < 60) return `In ${seconds}s`;
   const minutes = Math.ceil(seconds / 60);
   if (seconds < 3600) return `In ${minutes}m`;
   return `In ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function retryCountdown(scheduledAt: string, now: number): string {
+  const value = countdown(scheduledAt, now);
+  return value.startsWith("In ") ? `Retry ${value.replace("In ", "in ")}` : value;
+}
+
+function formatInterval(seconds: number): string {
+  return seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
 }
 
 export function AdminLeaguesPanel({
@@ -63,61 +72,14 @@ export function AdminLeaguesPanel({
     };
   }, [active]);
 
-  const catalogExceptions = enabled.flatMap((item) => {
-    const job = schedule?.jobs.find(
-      (job) => job.competition === item.competition && job.job_type === "catalog_sync",
-    );
-    return job && ["retry_scheduled", "queued", "awaiting_first_result"].includes(job.state)
-      ? [{ item, job }]
-      : [];
-  });
-  const catalogCountdown = schedule ? countdown(schedule.next_catalog_at, now) : null;
-
   return (
-    <section className="admin-leagues-workspace" aria-labelledby="admin-leagues-title">
+    <section className="admin-leagues-workspace" aria-label="League schedules">
       <div className="admin-league-panel surface">
-        <div className="surface-header">
-          <h2 id="admin-leagues-title">Leagues</h2>
-          <div className="admin-catalog-status" aria-label="Shared catalog schedule">
-            <div className="admin-catalog-summary">
-              <strong>
-                {!enabled.length
-                  ? "No enabled leagues"
-                  : catalogCountdown?.startsWith("In ")
-                    ? `Catalog sync ${catalogCountdown.replace("In ", "in ")}`
-                    : "Catalog sync"}
-              </strong>
-              {enabled.length > 0 && !schedule ? (
-                <span>Schedule unavailable — waiting for a worker report.</span>
-              ) : null}
-              {enabled.length > 0 && catalogCountdown && !catalogCountdown.startsWith("In ") ? (
-                <span>{catalogCountdown}</span>
-              ) : null}
-            </div>
-            {catalogExceptions.length ? (
-              <details className="admin-catalog-exceptions">
-                <summary>Catalog status ({catalogExceptions.length})</summary>
-                <ul
-                  className="admin-catalog-exception-list"
-                  tabIndex={0}
-                  aria-label="Catalog exceptions"
-                >
-                  {catalogExceptions.map(({ item, job }) => (
-                    <li key={item.competition}>
-                      <strong>{item.label}</strong>
-                      <span className={job.state === "retry_scheduled" ? "is-danger" : undefined}>
-                        {job.state === "retry_scheduled"
-                          ? `Catalog retry · ${countdown(job.next_run_at, now)}`
-                          : job.state === "queued"
-                            ? "Catalog pending"
-                            : "Awaiting first catalog refresh"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </div>
+        <div className="admin-league-table-header" aria-hidden="true">
+          <span>League</span>
+          <span>Live sync</span>
+          <span>Odds</span>
+          <span>Enabled</span>
         </div>
         <div className="admin-league-list-scroll" tabIndex={0} aria-label="League list">
           {ordered.length ? (
@@ -126,62 +88,117 @@ export function AdminLeaguesPanel({
                 const jobs =
                   schedule?.jobs.filter((job) => job.competition === item.competition) ?? [];
                 const live = jobs.find((job) => job.job_type === "live_sync");
+                const odds = jobs.find((job) => job.job_type === "odds_sync");
                 const updating = mutation.variables?.competition === item.competition;
+                const interval = formatInterval(item.live_sync_interval_seconds);
+
+                let liveValue: string;
+                let liveDetail = `Every ${interval}`;
+                let liveDanger = false;
+                if (!item.is_enabled) {
+                  liveValue = jobs.length ? "Worker confirmation pending" : "Not scheduled";
+                  liveDetail = `Every ${interval} when enabled`;
+                } else if (!schedule) {
+                  liveValue = "Schedule unavailable";
+                } else if (!live) {
+                  liveValue = "Awaiting worker discovery";
+                } else if (live.state === "no_upcoming") {
+                  liveValue = "No upcoming games";
+                  liveDetail = "Rechecked after catalog";
+                } else if (!live.next_run_at) {
+                  liveValue = "Schedule unavailable";
+                  liveDetail = "Reload for worker status";
+                } else if (live.state === "retry_scheduled") {
+                  liveValue = retryCountdown(live.next_run_at, now);
+                  liveDetail = `Every ${interval} after recovery`;
+                  liveDanger = true;
+                } else {
+                  liveValue = countdown(live.next_run_at, now);
+                }
+
+                let oddsValue: string;
+                let oddsDetail: string;
+                let oddsDanger = false;
+                if (!item.is_enabled) {
+                  oddsValue = "Odds disabled";
+                  oddsDetail = "Enable league to schedule";
+                } else if (!schedule) {
+                  oddsValue = "Schedule unavailable";
+                  oddsDetail = "Reload for worker status";
+                } else if (!odds) {
+                  oddsValue = "Awaiting worker discovery";
+                  oddsDetail = "No odds job reported";
+                } else if (odds.state === "awaiting_first_result") {
+                  oddsValue = "Awaiting catalog";
+                  oddsDetail = "Odds run follows catalog";
+                } else if (odds.state === "queued") {
+                  oddsValue = "Queued";
+                  oddsDetail = "Waiting to run";
+                } else if (odds.state === "no_upcoming") {
+                  oddsValue = "No pending odds";
+                  oddsDetail = "Rechecked after catalog";
+                } else if (!odds.next_run_at) {
+                  oddsValue = "Schedule unavailable";
+                  oddsDetail = "Reload for worker status";
+                } else if (odds.state === "budget_limited") {
+                  oddsValue = "Budget limited";
+                  oddsDetail = retryCountdown(odds.next_run_at, now);
+                } else if (odds.state === "retry_scheduled") {
+                  oddsValue = retryCountdown(odds.next_run_at, now);
+                  oddsDetail = "Previous attempt failed";
+                  oddsDanger = true;
+                } else {
+                  oddsValue = countdown(odds.next_run_at, now);
+                  oddsDetail = "Scheduled odds sync";
+                }
+
                 return (
-                  <li className="admin-league-row" key={item.competition} aria-label={item.label}>
+                  <li
+                    className={`admin-league-row${item.is_enabled ? "" : " is-disabled"}`}
+                    key={item.competition}
+                    aria-label={item.label}
+                  >
                     <div className="admin-league-name">
                       <CompetitionMark competition={item.competition} decorative />
-                      <div className="admin-league-identity">
-                        <strong>{item.label}</strong>
-                        <span
-                          className={`admin-league-status${item.is_enabled ? " is-enabled" : ""}`}
-                        >
-                          {item.is_enabled ? "Enabled" : "Disabled"}
-                        </span>
-                      </div>
+                      <strong>{item.label}</strong>
                     </div>
-                    <dl className="admin-league-metrics">
-                      <div>
-                        <dt>Next live sync</dt>
-                        <dd
-                          className={
-                            item.is_enabled && live?.state === "retry_scheduled"
-                              ? "is-danger"
-                              : undefined
-                          }
-                        >
-                          {!item.is_enabled
-                            ? jobs.length
-                              ? "Worker confirmation pending"
-                              : "Not scheduled"
-                            : !schedule
-                              ? "Schedule unavailable"
-                              : !live
-                                ? "Awaiting worker discovery"
-                                : countdown(live.next_run_at, now)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Live sync interval</dt>
-                        <dd>
-                          {item.live_sync_interval_seconds % 60 === 0
-                            ? `${item.live_sync_interval_seconds / 60}m`
-                            : `${item.live_sync_interval_seconds}s`}
-                        </dd>
-                      </div>
+                    <dl className="admin-league-metric admin-league-live">
+                      <dt>Live sync</dt>
+                      <dd>
+                        <strong className={liveDanger ? "is-danger" : undefined}>
+                          {liveValue}
+                        </strong>
+                        <span>{liveDetail}</span>
+                      </dd>
+                    </dl>
+                    <dl className="admin-league-metric admin-league-odds">
+                      <dt>Odds</dt>
+                      <dd>
+                        <strong className={oddsDanger ? "is-danger" : undefined}>
+                          {oddsValue}
+                        </strong>
+                        <span>{oddsDetail}</span>
+                      </dd>
                     </dl>
                     <button
-                      className="admin-secondary-button"
+                      className={`admin-league-switch${item.is_enabled ? " is-on" : ""}`}
                       type="button"
+                      role="switch"
+                      aria-checked={item.is_enabled}
                       disabled={mutation.isPending}
-                      aria-label={`${item.is_enabled ? "Disable" : "Enable"} ${item.label}`}
+                      aria-label={`${item.label} league enabled`}
                       onClick={() => mutation.mutate(item)}
                     >
-                      {updating && mutation.isPending
-                        ? "Saving…"
-                        : item.is_enabled
-                          ? "Disable"
-                          : "Enable"}
+                      <span className="admin-league-switch-label" aria-hidden="true">
+                        {updating && mutation.isPending
+                          ? "Saving…"
+                          : item.is_enabled
+                            ? "On"
+                            : "Off"}
+                      </span>
+                      <span className="admin-league-switch-track" aria-hidden="true">
+                        <span className="admin-league-switch-thumb" />
+                      </span>
                     </button>
                     {updating && mutation.error ? (
                       <p className="admin-league-error error" role="alert">

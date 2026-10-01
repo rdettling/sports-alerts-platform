@@ -8,13 +8,12 @@ from typing import Protocol
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import CompetitionTeam, Game, GameOddsCurrent, Team
+from app.db.models import CompetitionTeam, Game, Team
 from app.db.session import SessionLocal
 from app.services.competitions import competition_supports_odds, competition_teams_query, get_active_competitions, get_competition_profile, normalize_competition
-from app.worker import odds, soccer
+from app.worker import soccer
 from app.worker.alerts import evaluate_and_record_alerts
 from app.worker.cleanup import cleanup_games_outside_window
-from app.worker.config import settings
 from app.worker.planner import build_catalog_dates, build_live_requests
 from app.worker.score_events import ScoreChangeEvent, classify_score_change
 from app.worker.scoreboard import ScoreboardGame, TeamStrength
@@ -41,11 +40,8 @@ class CatalogSyncResult:
     games_checked: int
     games_updated: int
     alerts_created: int
-    odds_candidates: int
-    odds_snapshots_created: int
     games_removed: int
     next_live_sync_at: datetime | None
-    unmatched_odds: tuple["OddsCoverageIssue", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -56,25 +52,6 @@ class LiveSyncResult:
     alerts_created: int
     has_live_games: bool
     next_scheduled_start_at: datetime | None
-
-
-@dataclass(frozen=True)
-class PregameOddsCandidate:
-    external_game_id: str
-    scheduled_start_time: datetime
-    matchup_key: tuple[str, str] | None
-    matchup: str | None
-    competition_team_keys: tuple[str, ...]
-    is_neutral_site: bool
-
-
-@dataclass(frozen=True)
-class OddsCoverageIssue:
-    external_game_id: str
-    matchup: str | None
-    scheduled_start_time: datetime
-    reason: str
-    nearby_provider_matchups: tuple[str, ...] = ()
 
 
 def _assert_competition_enabled(db: Session, competition: str) -> None:
@@ -107,73 +84,6 @@ def _competition_team_maps(db: Session, competition: str) -> tuple[dict[str, int
         {team.external_team_id: team.id for team in rows},
         {team.id: team.name for team in rows},
     )
-
-
-def _existing_odds_external_ids(db: Session, competition: str) -> set[str]:
-    return set(
-        db.scalars(
-            select(Game.external_game_id)
-            .join(GameOddsCurrent, GameOddsCurrent.game_id == Game.id)
-            .where(Game.competition == competition)
-        ).all()
-    )
-
-
-def _pregame_odds_candidates(
-    games: list[ScoreboardGame],
-    competition: str,
-    now: datetime,
-    existing_odds_external_ids: set[str],
-    team_map: dict[str, int],
-    team_names: dict[int, str],
-) -> list[PregameOddsCandidate]:
-    if not settings.odds_api_key.strip() or not competition_supports_odds(competition):
-        return []
-    cutoff = now + odds.ODDS_PREGAME_WINDOW
-    candidates: list[PregameOddsCandidate] = []
-    seen: set[str] = set()
-    for game in games:
-        starts_at = _as_utc(game.scheduled_start_time)
-        if (
-            game.external_game_id in seen
-            or game.external_game_id in existing_odds_external_ids
-            or game.status != "scheduled"
-            or game.is_final
-            or starts_at is None
-            or starts_at < now
-            or starts_at > cutoff
-            or (competition == "NFL" and game.season_slug == "preseason")
-        ):
-            continue
-        seen.add(game.external_game_id)
-        home_name = game.home_team_name or team_names.get(
-            team_map.get(game.home_external_team_id, -1)
-        )
-        away_name = game.away_team_name or team_names.get(
-            team_map.get(game.away_external_team_id, -1)
-        )
-        candidates.append(
-            PregameOddsCandidate(
-                external_game_id=game.external_game_id,
-                scheduled_start_time=starts_at,
-                matchup_key=(
-                    odds.game_key(home_name, away_name)
-                    if home_name and away_name
-                    else None
-                ),
-                matchup=f"{away_name} @ {home_name}" if home_name and away_name else None,
-                competition_team_keys=tuple(
-                    odds.team_key(team_name)
-                    for external_team_id, team_name in (
-                        (game.home_external_team_id, home_name),
-                        (game.away_external_team_id, away_name),
-                    )
-                    if external_team_id in team_map and team_name
-                ),
-                is_neutral_site=game.is_neutral_site,
-            )
-        )
-    return candidates
 
 
 def _register_fbs_opponents(
@@ -286,6 +196,7 @@ def _upsert_game(
             existing.period,
             existing.clock,
             existing.is_final,
+            existing.is_neutral_site,
         )
         existing.scheduled_start_time = payload.scheduled_start_time
         existing.context_label = payload.context_label
@@ -296,6 +207,11 @@ def _upsert_game(
         existing.period = payload.period
         existing.clock = payload.clock
         existing.is_final = payload.is_final
+        existing.is_neutral_site = payload.is_neutral_site
+        existing.is_odds_eligible = (
+            competition_supports_odds(competition)
+            and not (competition == "NFL" and payload.season_slug == "preseason")
+        )
         existing.last_ingested_at = datetime.now(timezone.utc)
         state_after = (
             _as_utc(existing.scheduled_start_time),
@@ -307,6 +223,7 @@ def _upsert_game(
             existing.period,
             existing.clock,
             existing.is_final,
+            existing.is_neutral_site,
         )
         state_changed = state_before != state_after
         if previous_snapshot is not None and state_changed:
@@ -332,6 +249,11 @@ def _upsert_game(
         period=payload.period,
         clock=payload.clock,
         is_final=payload.is_final,
+        is_neutral_site=payload.is_neutral_site,
+        is_odds_eligible=(
+            competition_supports_odds(competition)
+            and not (competition == "NFL" and payload.season_slug == "preseason")
+        ),
         last_ingested_at=datetime.now(timezone.utc),
     )
     db.add(created)
@@ -383,27 +305,9 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
     now = datetime.now(timezone.utc)
     with SessionLocal() as planning_db:
         _assert_competition_enabled(planning_db, competition)
-        planning_team_map, planning_team_names = _competition_team_maps(
-            planning_db,
-            competition,
-        )
-        existing_odds_external_ids = (
-            _existing_odds_external_ids(planning_db, competition)
-            if settings.odds_api_key.strip() and competition_supports_odds(competition)
-            else set()
-        )
 
     requests = build_catalog_dates(now)
     all_games = provider.fetch_games(competition, requests)
-    odds_candidates = _pregame_odds_candidates(
-        all_games,
-        competition,
-        now,
-        existing_odds_external_ids,
-        planning_team_map,
-        planning_team_names,
-    )
-    odds_by_matchup = odds.fetch_odds_index(competition) if odds_candidates else {}
 
     db = SessionLocal()
     try:
@@ -413,85 +317,6 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
         )
         if all_games and not touched_game_ids:
             raise RuntimeError(f"No {competition} games could be mapped to catalog teams")
-
-        odds_snapshots_created = 0
-        unmatched_odds: list[OddsCoverageIssue] = []
-        if odds_candidates:
-            games_by_external_id = {
-                game.external_game_id: game
-                for game in db.scalars(
-                    select(Game).where(
-                        Game.competition == competition,
-                        Game.external_game_id.in_(
-                            [candidate.external_game_id for candidate in odds_candidates]
-                        ),
-                    )
-                ).all()
-            }
-            for candidate in odds_candidates:
-                game = games_by_external_id.get(candidate.external_game_id)
-                if game is None:
-                    unmatched_odds.append(
-                        OddsCoverageIssue(
-                            external_game_id=candidate.external_game_id,
-                            matchup=candidate.matchup,
-                            scheduled_start_time=candidate.scheduled_start_time,
-                            reason="game_not_persisted",
-                        )
-                    )
-                    continue
-                key = candidate.matchup_key
-                if key is None:
-                    home_name = team_names.get(game.home_team_id)
-                    away_name = team_names.get(game.away_team_id)
-                    if not home_name or not away_name:
-                        unmatched_odds.append(
-                            OddsCoverageIssue(
-                                external_game_id=candidate.external_game_id,
-                                matchup=candidate.matchup,
-                                scheduled_start_time=candidate.scheduled_start_time,
-                                reason="missing_team_name",
-                            )
-                        )
-                        continue
-                    key = odds.game_key(home_name, away_name)
-                matchup_odds = odds_by_matchup.get(key)
-                game_odds = odds.select_best_for_game(
-                    matchup_odds,
-                    candidate.scheduled_start_time,
-                )
-                if game_odds is None and candidate.is_neutral_site and key is not None:
-                    game_odds = odds.select_best_for_reversed_neutral_site_game(
-                        odds_by_matchup.get((key[1], key[0])),
-                        candidate.scheduled_start_time,
-                        home_team_key=key[0],
-                        away_team_key=key[1],
-                    )
-                if game_odds is None and competition == "FBS":
-                    game_odds = odds.select_best_for_single_team(
-                        odds_by_matchup,
-                        candidate.competition_team_keys,
-                        candidate.scheduled_start_time,
-                    )
-                if game_odds and odds.upsert_game_odds(db, game.id, game_odds):
-                    odds_snapshots_created += 1
-                elif game_odds is None:
-                    unmatched_odds.append(
-                        OddsCoverageIssue(
-                            external_game_id=candidate.external_game_id,
-                            matchup=candidate.matchup,
-                            scheduled_start_time=candidate.scheduled_start_time,
-                            reason=odds.match_failure_reason(
-                                matchup_odds,
-                                candidate.scheduled_start_time,
-                            ),
-                            nearby_provider_matchups=(
-                                odds.closest_provider_matchups(key, odds_by_matchup)
-                                if matchup_odds is None
-                                else ()
-                            ),
-                        )
-                    )
 
         db.flush()
         touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
@@ -520,11 +345,8 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             games_checked=len(all_games),
             games_updated=updated,
             alerts_created=alerts_created,
-            odds_candidates=len(odds_candidates),
-            odds_snapshots_created=odds_snapshots_created,
             games_removed=games_removed,
             next_live_sync_at=next_live_sync_at,
-            unmatched_odds=tuple(unmatched_odds),
         )
     except Exception:
         db.rollback()

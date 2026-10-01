@@ -29,6 +29,27 @@ def test_ingest_run_success(db_session):
     assert len(games) == 1
 
 
+def test_catalog_persists_neutral_site_and_odds_eligibility(db_session):
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="neutral-odds-game",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="scheduled",
+                is_neutral_site=True,
+            )
+        ]
+    )
+
+    run_catalog_sync(provider)
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "neutral-odds-game"))
+    assert game is not None
+    assert game.is_neutral_site is True
+    assert game.is_odds_eligible is True
+
+
 def test_ingest_run_failure(db_session):
     with pytest.raises(RuntimeError, match="boom"):
         run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
@@ -185,7 +206,6 @@ def test_catalog_sync_fails_when_no_provider_games_map_to_teams(db_session):
 
 
 def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     provider = StaticProvider(
         [
             make_game(
@@ -212,7 +232,6 @@ def test_catalog_sync_allows_partial_team_mapping(db_session, monkeypatch):
 
 
 def test_catalog_sync_maps_seeded_champions_league_clubs(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     provider = StaticProvider(
         [
             make_game(
@@ -237,7 +256,6 @@ def test_catalog_sync_maps_seeded_champions_league_clubs(db_session, monkeypatch
 
 
 def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     provider = StaticProvider(
         [
             make_game(
@@ -328,7 +346,6 @@ def test_ingest_persists_and_refreshes_context_label(db_session):
 
 
 def test_ingest_refreshes_scheduled_start_time_and_reschedules_live_sync(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     now = datetime.now(timezone.utc).replace(microsecond=0)
     initial = make_game(
         external_game_id="nba-rescheduled",
@@ -401,7 +418,6 @@ def test_ingest_persists_refreshes_and_clears_broadcast_names(db_session):
 
 
 def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeypatch, caplog):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     scheduled_start = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=3)
     initial = make_game(
         external_game_id="mls-records",
@@ -459,7 +475,6 @@ def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeyp
 
 
 def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, monkeypatch):
-    monkeypatch.setattr("app.worker.ingest.settings.odds_api_key", "")
     ranked = make_game(
         external_game_id="fbs-rank",
         home_external_team_id="333",

@@ -17,9 +17,7 @@ export function AdminView({ token }: { token: string }) {
   const {
     data: summary,
     isLoading,
-    isFetching,
     error,
-    refetch: refetchSummary,
   } = useQuery({
     queryKey: ["admin-page", token, windowValue],
     queryFn: () => getOpsAdminSummary(token, windowValue),
@@ -33,8 +31,6 @@ export function AdminView({ token }: { token: string }) {
     data: neonUsage,
     isLoading: neonLoading,
     error: neonQueryError,
-    isFetching: neonFetching,
-    refetch: refetchNeon,
   } = useQuery({
     queryKey: ["admin-neon", token],
     queryFn: () => getOpsNeonUsage(token),
@@ -53,22 +49,9 @@ export function AdminView({ token }: { token: string }) {
       : neonQueryError
         ? "Failed to load Neon usage"
         : null;
-  const isRefreshing = isFetching || (tab === "activity-tools" && neonFetching);
-
-  function refresh() {
-    void refetchSummary({ cancelRefetch: false });
-    if (tab === "activity-tools") void refetchNeon({ cancelRefetch: false });
-  }
-
   return (
     <div className={`admin-page${tab === "leagues" ? " admin-page-leagues" : ""}`}>
-      <AdminTabsHeader
-        tab={tab}
-        onTabChange={setTab}
-        isRefreshing={isRefreshing}
-        refreshFailed={Boolean(errorMessage || (tab === "activity-tools" && neonError))}
-        onRefresh={refresh}
-      />
+      <AdminTabsHeader tab={tab} onTabChange={setTab} />
 
       <div className="admin-content-scroll">
         {isLoading && !summary ? (
@@ -82,7 +65,7 @@ export function AdminView({ token }: { token: string }) {
           </p>
         ) : null}
         {errorMessage && summary ? (
-          <p className="admin-refresh-error" role="alert">
+          <p className="admin-data-error" role="alert">
             {errorMessage}
           </p>
         ) : null}

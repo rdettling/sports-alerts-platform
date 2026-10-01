@@ -104,8 +104,8 @@ def test_schedule_reports_replace_memory_without_sql_or_game_notifications(clien
     monkeypatch.setattr(game_updates, "publish", unexpected)
     payload = {"reported_at": "2026-09-04T16:00:00Z", "next_catalog_at": "2026-09-05T04:00:00Z", "jobs": [{
         "competition": "NBA", "job_type": "live_sync",
-        "next_run_at": "2026-09-04T16:02:00Z", "last_success_at": None,
-        "state": "retry_scheduled",
+        "next_run_at": None, "last_success_at": None,
+        "state": "no_upcoming",
     }]}
     event.listen(engine, "before_cursor_execute", track)
     try:
@@ -118,6 +118,7 @@ def test_schedule_reports_replace_memory_without_sql_or_game_notifications(clien
         headers = {"X-Live-Update-Secret": "secret"}
         assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
         assert worker_schedule.snapshot.model_dump(mode="json") == payload
+        assert worker_schedule.snapshot.jobs[0].next_run_at is None
         payload["jobs"][0].update(job_type="catalog_sync", state="queued")
         assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
         assert worker_schedule.snapshot.jobs[0].state == "queued"

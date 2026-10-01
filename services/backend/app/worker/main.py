@@ -6,7 +6,6 @@ from app.db.usage import database_usage_logging
 from app.services.competitions import get_competition_profile, list_supported_competitions
 
 from app.worker import scheduler
-from app.worker.config import settings
 from app.worker.delivery import run_delivery_loop
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -31,8 +30,7 @@ def main() -> None:
         for competition in list_supported_competitions()
     )
     logger.info(
-        "Worker started intervals(catalog=%ss live=%s)",
-        settings.catalog_sync_interval_seconds,
+        "Worker started intervals(catalog=utc-6h live=%s)",
         live_intervals,
     )
     delivery_thread = threading.Thread(

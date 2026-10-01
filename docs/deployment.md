@@ -81,13 +81,13 @@ Configure the worker API URL and matching shared secret before starting worker p
 2. Worker, so it publishes the expected game notifications and schedule reports
 3. Frontend, so it can consume the updated API
 
-Keep one worker and one Uvicorn process on one API instance. SSE, the game cache, and schedule reports are process-local; see [architecture](architecture.md#design-constraints). API restarts disconnect streams and discard schedule reports. Browsers must reconnect and fetch current games; Admin may show Schedule unavailable until the worker next reports, potentially 12 hours later. Worker restarts clear remembered success times, run an immediate catalog cycle, and reset the 12-hour catalog anchor.
+Keep one worker and one Uvicorn process on one API instance. SSE, the game cache, and schedule reports are process-local; see [architecture](architecture.md#design-constraints). API restarts disconnect streams and discard schedule reports. Browsers must reconnect and fetch current games; Admin may show Schedule unavailable until the worker next reports, potentially 6 hours later. Worker restarts clear remembered success times, run an immediate catalog cycle, and keep the regular UTC catalog clock unchanged.
 
 ### Shared Catalog Schedule Cutover
 
 When releasing the shared catalog schedule, follow API → worker → frontend. Reports require `next_catalog_at` and accept the `queued` job state. Old worker reports may be rejected during the API/worker cutover; temporary Schedule unavailable is expected. This cutover needs no new configuration, dependency, or database migration.
 
-Remove any obsolete `SCHEDULER_IDLE_MAX_SLEEP_SECONDS` override from the worker environment; the maximum wait uses `CATALOG_SYNC_INTERVAL_SECONDS` instead.
+Remove obsolete worker scheduler interval overrides; catalog timing is fixed at 00:00, 06:00, 12:00, and 18:00 UTC.
 
 ## Database
 
@@ -141,5 +141,5 @@ After a deploy:
 11. Confirm a desktop client reconnects and refreshes after a normal API deployment; opening the stream must also fetch state to cover updates missed during connection establishment
 12. In local testing, suppress a notification on a feed already showing a live game and confirm the visible fallback recovers within two minutes; confirm concurrent dashboard readers share one cache fill. Also verify a quiet screen does not read games every minute and checks at an upcoming scheduled start. Quiet-period missed events can take up to 30 minutes to recover. Do not change production scores or disable production publishing for this check
 13. Compare Admin's single Next catalog refresh deadline and per-league outcomes with `Catalog cycle queued` and `Job completed` logs; use the [schedule troubleshooting procedure](runbook.md#admin-league-sync-times) for missing or stale reports
-14. Verify Admin makes no automatic requests while idle, across tab changes, or on foreground/reconnect events, using the [Admin refresh checks](runbook.md#admin-data-is-stale-or-refreshing-unexpectedly)
+14. Verify Admin has no manual refresh control and makes no automatic requests while idle, across tab changes, or on foreground/reconnect events, using the [Admin request checks](runbook.md#admin-data-is-stale-or-requesting-unexpectedly)
 15. Review an overnight quiet period for worker scans between scheduled jobs and correlate activity with Neon wake/sleep history using the database usage runbook
