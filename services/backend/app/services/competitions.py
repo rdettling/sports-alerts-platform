@@ -241,9 +241,13 @@ def ensure_competition_settings(db: Session) -> None:
 
 def list_competition_settings(db: Session) -> list[CompetitionSetting]:
     ensure_competition_settings(db)
-    rows = db.scalars(select(CompetitionSetting).order_by(CompetitionSetting.competition.asc())).all()
+    rows = db.scalars(
+        select(CompetitionSetting).where(
+            CompetitionSetting.competition.in_(COMPETITION_ORDER)
+        )
+    ).all()
     order = {competition: index for index, competition in enumerate(COMPETITION_ORDER)}
-    return sorted(rows, key=lambda row: order.get(row.competition, len(order)))
+    return sorted(rows, key=lambda row: order[row.competition])
 
 
 def get_active_competitions(db: Session) -> list[str]:

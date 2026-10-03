@@ -5,6 +5,7 @@ from app.services.competitions import (
     ensure_competition_settings,
     get_alert_types,
     get_competition_profile,
+    list_competition_settings,
     list_supported_competitions,
 )
 
@@ -41,6 +42,16 @@ def test_new_profiles_start_inactive_without_changing_existing_values():
         for competition in list_supported_competitions()
         if competition not in {"NBA", "WNBA"}
     )
+
+
+def test_competition_settings_exclude_unsupported_database_rows():
+    with SessionLocal() as db:
+        db.add(CompetitionSetting(competition="RETIRED", is_enabled=True))
+        db.commit()
+
+        settings = list_competition_settings(db)
+
+    assert [setting.competition for setting in settings] == list_supported_competitions()
 
 
 def test_competition_profiles_are_the_single_source_of_sport_and_provider_configuration():

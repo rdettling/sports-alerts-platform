@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 from app.db.models import Base
 
@@ -39,3 +39,25 @@ def test_fresh_baseline_matches_current_schema(tmp_path):
 
     _alembic(database_url, "downgrade", "base")
     assert inspect(create_engine(database_url)).get_table_names() == ["alembic_version"]
+
+
+def test_latest_migration_removes_recreated_retired_setting(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'retired-setting.db'}"
+    engine = create_engine(database_url)
+    _alembic(database_url, "upgrade", "0008_remove_retired_competition")
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO competition_settings "
+                "(competition, is_enabled, created_at, updated_at) "
+                "VALUES ('WORLD_CUP', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+
+    _alembic(database_url, "upgrade", "head")
+
+    with engine.connect() as connection:
+        assert connection.scalar(
+            text("SELECT COUNT(*) FROM competition_settings WHERE competition = 'WORLD_CUP'")
+        ) == 0
