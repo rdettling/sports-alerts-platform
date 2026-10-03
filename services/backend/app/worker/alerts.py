@@ -130,7 +130,7 @@ def _load_close_game_notifications(
         select(Alert.user_id, Alert.game_id, Alert.alert_type, Alert.event_data).where(
             Alert.user_id.in_(sorted(user_ids)),
             Alert.game_id.in_(game_ids),
-            Alert.alert_type.in_(("close_game_late", "lead_change")),
+            Alert.alert_type.in_(("close_game_late", "lead_change", "score_changed")),
         )
     ).all()
     return {
@@ -138,7 +138,7 @@ def _load_close_game_notifications(
         for user_id, game_id, alert_type, event_data in rows
         if alert_type == "close_game_late"
         or (
-            alert_type == "lead_change"
+            alert_type in {"lead_change", "score_changed"}
             and isinstance(event_data, dict)
             and event_data.get("covers_close_game_late") is True
         )

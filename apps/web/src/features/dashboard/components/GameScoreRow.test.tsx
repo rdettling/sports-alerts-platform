@@ -27,8 +27,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     away_team: makeTeam(2, "ATL", "Atlanta Hawks"),
     scheduled_start_time: "2026-05-28T01:00:00Z",
     context_label: null,
-    home_team_strength: { wins: 48, losses: 31, ties: 0, rank: null },
-    away_team_strength: { wins: 39, losses: 40, ties: 0, rank: null },
+    home_team_strength: { wins: 48, losses: 31, ties: 0, overtime_losses: null, rank: null },
+    away_team_strength: { wins: 39, losses: 40, ties: 0, overtime_losses: null, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -80,8 +80,20 @@ describe("GameScoreRow", () => {
     render(
       <GameScoreRow
         game={makeGame({
-          home_team_strength: { wins: null, losses: null, ties: null, rank: null },
-          away_team_strength: { wins: null, losses: null, ties: null, rank: null },
+          home_team_strength: {
+            wins: null,
+            losses: null,
+            ties: null,
+            overtime_losses: null,
+            rank: null,
+          },
+          away_team_strength: {
+            wins: null,
+            losses: null,
+            ties: null,
+            overtime_losses: null,
+            rank: null,
+          },
         })}
         sport="basketball"
         home={home}
@@ -110,8 +122,8 @@ describe("GameScoreRow", () => {
       <GameScoreRow
         game={makeGame({
           competition: "FBS",
-          home_team_strength: { wins: 8, losses: 1, ties: 0, rank: 3 },
-          away_team_strength: { wins: 6, losses: 3, ties: 0, rank: null },
+          home_team_strength: { wins: 8, losses: 1, ties: 0, overtime_losses: null, rank: 3 },
+          away_team_strength: { wins: 6, losses: 3, ties: 0, overtime_losses: null, rank: null },
         })}
         sport="football"
         home={home}
@@ -481,21 +493,21 @@ describe("GameScoreRow", () => {
     render(
       <GameScoreRow
         game={makeGame({
-          competition: "WORLD_CUP",
+          competition: "CHAMPIONS_LEAGUE",
           odds: {
             bookmaker: null,
             last_update: null,
             outcomes: [
               {
-                outcome_key: "mexico",
-                outcome_label: "Mexico",
+                outcome_key: "arsenal",
+                outcome_label: "Arsenal",
                 price_american: 180,
                 team_side: "away",
               },
               { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
               {
-                outcome_key: "usa",
-                outcome_label: "United States",
+                outcome_key: "barcelona",
+                outcome_label: "Barcelona",
                 price_american: 160,
                 team_side: "home",
               },
@@ -503,8 +515,8 @@ describe("GameScoreRow", () => {
           },
         })}
         sport="soccer"
-        home={{ ...home, sport: "soccer", competitions: ["WORLD_CUP"] }}
-        away={{ ...away, sport: "soccer", competitions: ["WORLD_CUP"] }}
+        home={{ ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
+        away={{ ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
         isFollowed={false}
         statusLabel="7:00 PM"
       />,
@@ -512,14 +524,14 @@ describe("GameScoreRow", () => {
 
     expect(screen.getByText("Draw")).toBeInTheDocument();
     expect(screen.getByText("+210")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "WC logo" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "UCL logo" })).toBeInTheDocument();
   });
 
   it("shows the draw outcome only while a started soccer game displays pregame odds", () => {
     render(
       <GameScoreRow
         game={makeGame({
-          competition: "WORLD_CUP",
+          competition: "CHAMPIONS_LEAGUE",
           status: "in_progress",
           home_score: 1,
           away_score: 0,
@@ -528,15 +540,15 @@ describe("GameScoreRow", () => {
             last_update: null,
             outcomes: [
               {
-                outcome_key: "mexico",
-                outcome_label: "Mexico",
+                outcome_key: "arsenal",
+                outcome_label: "Arsenal",
                 price_american: 180,
                 team_side: "away",
               },
               { outcome_key: "draw", outcome_label: "Draw", price_american: 210, team_side: null },
               {
-                outcome_key: "usa",
-                outcome_label: "United States",
+                outcome_key: "barcelona",
+                outcome_label: "Barcelona",
                 price_american: 160,
                 team_side: "home",
               },
@@ -544,8 +556,8 @@ describe("GameScoreRow", () => {
           },
         })}
         sport="soccer"
-        home={{ ...home, sport: "soccer", competitions: ["WORLD_CUP"] }}
-        away={{ ...away, sport: "soccer", competitions: ["WORLD_CUP"] }}
+        home={{ ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
+        away={{ ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
         isFollowed={false}
         statusLabel="2H 74′"
       />,
@@ -732,6 +744,71 @@ describe("GameScoreRow", () => {
       "src",
       "https://a.espncdn.com/i/teamlogos/nfl/500/buf.png",
     );
+    expect(screen.queryByText("Draw")).not.toBeInTheDocument();
+  });
+
+  it("shows NHL records, identity, team logos, and two-way moneyline odds", () => {
+    const bruins = {
+      ...home,
+      external_team_id: "1",
+      sport: "hockey" as const,
+      competitions: ["NHL" as const],
+      name: "Boston Bruins",
+      abbreviation: "BOS",
+    };
+    const sabres = {
+      ...away,
+      external_team_id: "2",
+      sport: "hockey" as const,
+      competitions: ["NHL" as const],
+      name: "Buffalo Sabres",
+      abbreviation: "BUF",
+    };
+    render(
+      <GameScoreRow
+        game={makeGame({
+          competition: "NHL",
+          home_team: bruins,
+          away_team: sabres,
+          home_team_strength: {
+            wins: 40,
+            losses: 25,
+            ties: null,
+            overtime_losses: 7,
+            rank: null,
+          },
+          away_team_strength: {
+            wins: 35,
+            losses: 30,
+            ties: null,
+            overtime_losses: 7,
+            rank: null,
+          },
+        })}
+        sport="hockey"
+        home={bruins}
+        away={sabres}
+        isFollowed={false}
+        statusLabel="4:00 PM"
+      />,
+    );
+
+    expect(screen.getByText("35-30-7")).toBeInTheDocument();
+    expect(screen.getByText("40-25-7")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "NHL logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png",
+    );
+    expect(screen.getByRole("img", { name: "Buffalo Sabres logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/nhl/500/buf.png",
+    );
+    expect(screen.getByRole("img", { name: "Boston Bruins logo" })).toHaveAttribute(
+      "src",
+      "https://a.espncdn.com/i/teamlogos/nhl/500/bos.png",
+    );
+    expect(screen.getByText("+105")).toBeInTheDocument();
+    expect(screen.getByText("-120")).toBeInTheDocument();
     expect(screen.queryByText("Draw")).not.toBeInTheDocument();
   });
 

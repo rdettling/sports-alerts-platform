@@ -31,6 +31,13 @@ SUPPORTED_TEST_ALERTS = {
         "final_result",
     ),
     "MLB": ("game_start", "inning_start", "extra_innings_start", "final_result"),
+    "NHL": (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "final_result",
+    ),
     "MLS": (
         "game_start",
         "second_half_start",
@@ -42,14 +49,6 @@ SUPPORTED_TEST_ALERTS = {
     "LA_LIGA": ("game_start", "second_half_start", "score_changed", "final_result"),
     "PREMIER_LEAGUE": ("game_start", "second_half_start", "score_changed", "final_result"),
     "CHAMPIONS_LEAGUE": (
-        "game_start",
-        "second_half_start",
-        "extra_time_start",
-        "penalty_kicks",
-        "score_changed",
-        "final_result",
-    ),
-    "WORLD_CUP": (
         "game_start",
         "second_half_start",
         "extra_time_start",
@@ -139,6 +138,8 @@ def test_admin_test_alert_supports_every_competition_alert_combination(client, c
         ("NFL", "score_changed", ("in_progress", 10, 14, 3, "06:42")),
         ("NFL", "lead_change", ("in_progress", 24, 21, 4, "08:42")),
         ("MLB", "extra_innings_start", ("in_progress", 3, 3, 10, "Top 10th")),
+        ("NHL", "close_game_late", ("in_progress", 2, 1, 3, "04:30")),
+        ("NHL", "overtime_start", ("in_progress", 2, 2, 4, "03:00")),
         ("MLS", "final_result", ("final", 2, 1, 2, "FT")),
     ],
 )

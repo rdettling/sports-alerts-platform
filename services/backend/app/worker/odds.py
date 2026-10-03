@@ -31,12 +31,9 @@ TEAM_NAME_ALIASES = {
     "bournemouth": "afc bournemouth",
     "ca osasuna": "osasuna",
     "la clippers": "los angeles clippers",
-    "bosnia and herzegovina": "bosnia herzegovina",
     "chicago fire fc": "chicago fire",
     "columbus crew": "columbus crew sc",
-    "czech republic": "czechia",
     "deportivo la coruna": "deportivo",
-    "dr congo": "congo dr",
     "elche cf": "elche",
     "houston dynamo fc": "houston dynamo",
     "lafc": "los angeles fc",
@@ -45,9 +42,7 @@ TEAM_NAME_ALIASES = {
     "massachusetts minutemen": "umass minutemen",
     "sam houston bearkats": "sam houston state bearkats",
     "southern miss golden eagles": "southern mississippi golden eagles",
-    "turkey": "turkiye",
     "uconn huskies": "connecticut huskies",
-    "usa": "united states",
     "vancouver whitecaps": "vancouver whitecaps fc",
 }
 

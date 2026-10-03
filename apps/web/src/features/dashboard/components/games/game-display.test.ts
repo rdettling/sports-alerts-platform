@@ -33,8 +33,8 @@ function game(overrides: Partial<Game>): Game {
     },
     scheduled_start_time: "2026-06-12T20:40:00Z",
     context_label: null,
-    home_team_strength: { wins: null, losses: null, ties: null, rank: null },
-    away_team_strength: { wins: null, losses: null, ties: null, rank: null },
+    home_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
+    away_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -56,13 +56,32 @@ describe("game display utilities", () => {
   });
 
   it("formats structured records by sport", () => {
-    expect(formatTeamRecord({ wins: 8, losses: 2, ties: 1, rank: 4 }, "football")).toBe("8-2-1");
-    expect(formatTeamRecord({ wins: 12, losses: 5, ties: 3, rank: null }, "soccer")).toBe("12-3-5");
-    expect(formatTeamRecord({ wins: 48, losses: 31, ties: 0, rank: null }, "basketball")).toBe(
-      "48-31",
-    );
     expect(
-      formatTeamRecord({ wins: null, losses: null, ties: null, rank: null }, "baseball"),
+      formatTeamRecord({ wins: 8, losses: 2, ties: 1, overtime_losses: null, rank: 4 }, "football"),
+    ).toBe("8-2-1");
+    expect(
+      formatTeamRecord(
+        { wins: 12, losses: 5, ties: 3, overtime_losses: null, rank: null },
+        "soccer",
+      ),
+    ).toBe("12-3-5");
+    expect(
+      formatTeamRecord(
+        { wins: 48, losses: 31, ties: 0, overtime_losses: null, rank: null },
+        "basketball",
+      ),
+    ).toBe("48-31");
+    expect(
+      formatTeamRecord(
+        { wins: 42, losses: 25, ties: null, overtime_losses: 15, rank: null },
+        "hockey",
+      ),
+    ).toBe("42-25-15");
+    expect(
+      formatTeamRecord(
+        { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
+        "baseball",
+      ),
     ).toBeNull();
   });
 
@@ -99,13 +118,31 @@ describe("game display utilities", () => {
     ).toBe("OT1 08:42");
     expect(
       formatGameTime(
-        game({ competition: "WORLD_CUP", status: "live", period: 2, clock: "67'" }),
+        game({ competition: "CHAMPIONS_LEAGUE", status: "live", period: 2, clock: "67'" }),
         "soccer",
       ),
     ).toBe("67'");
     expect(formatGameTime(game({ competition: "MLS", status: "live", period: 5 }), "soccer")).toBe(
       "Penalties",
     );
+    expect(
+      formatGameTime(
+        game({ competition: "NHL", status: "live", period: 3, clock: "04:31" }),
+        "hockey",
+      ),
+    ).toBe("P3 04:31");
+    expect(
+      formatGameTime(
+        game({ competition: "NHL", status: "live", period: 4, clock: "03:00" }),
+        "hockey",
+      ),
+    ).toBe("OT 03:00");
+    expect(
+      formatGameTime(
+        game({ competition: "NHL", status: "live", period: 5, clock: "00:00" }),
+        "hockey",
+      ),
+    ).toBe("SO 00:00");
   });
 
   it("formats scheduled games as time only", () => {

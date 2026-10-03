@@ -16,6 +16,11 @@ def test_canonical_alert_settings():
         close_game_time_threshold_seconds=300,
     )
     assert default_alert_settings("football", "close_game_late").close_game_margin_threshold == 8
+    assert default_alert_settings("hockey", "close_game_late") == AlertSettings(
+        is_enabled=True,
+        close_game_margin_threshold=1,
+        close_game_time_threshold_seconds=300,
+    )
     assert default_alert_settings("baseball", "inning_start").inning_start_threshold == 7
     assert default_alert_settings("soccer", "penalty_kicks") == AlertSettings(is_enabled=True)
     assert default_alert_settings("soccer", "score_changed") == AlertSettings(is_enabled=True)

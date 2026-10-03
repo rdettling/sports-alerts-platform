@@ -597,6 +597,55 @@ def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_se
     ]
 
 
+def test_nhl_goal_covers_close_game_without_a_duplicate_on_the_next_sync(db_session):
+    user = User(email="nhl-goal-covers-close@example.com")
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    team = db_session.scalar(
+        competition_teams_query("NHL").where(Team.external_team_id == "1")
+    )
+    assert team is not None
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
+    db_session.add(
+        UserAlertPreference(
+            user_id=user.id,
+            sport="hockey",
+            alert_type="game_start",
+            is_enabled_override=False,
+        )
+    )
+    db_session.commit()
+
+    def provider(home_score: int, away_score: int, clock: str) -> StaticProvider:
+        return StaticProvider(
+            [
+                make_game(
+                    external_game_id="game-nhl-goal-covers-close",
+                    home_external_team_id="1",
+                    away_external_team_id="13",
+                    status="in_progress",
+                    home_score=home_score,
+                    away_score=away_score,
+                    period=3,
+                    clock=clock,
+                )
+            ]
+        )
+
+    run_catalog_sync(provider(1, 1, "06:00"), competition="NHL")
+    run_catalog_sync(provider(2, 1, "04:30"), competition="NHL")
+    run_catalog_sync(provider(2, 1, "04:00"), competition="NHL")
+
+    alerts = db_session.scalars(
+        select(Alert).where(Alert.user_id == user.id).order_by(Alert.id.asc())
+    ).all()
+    assert [alert.alert_type for alert in alerts] == ["score_changed"]
+    assert alerts[0].event_data["is_inferred_goal"] is True
+    assert alerts[0].event_data["covers_close_game_late"] is True
+
+
 def test_existing_close_game_alert_does_not_suppress_later_scoring_alerts(db_session):
     user = User(email="close-then-scoring@example.com")
     db_session.add(user)

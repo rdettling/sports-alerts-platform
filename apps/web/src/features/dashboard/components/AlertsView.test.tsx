@@ -88,10 +88,38 @@ const footballPreferences = [
   },
 ];
 
+const hockeyPreferences = [
+  {
+    sport: "hockey",
+    alert_type: "game_start",
+    is_enabled: true,
+    close_game_margin_threshold: null,
+    close_game_time_threshold_seconds: null,
+    inning_start_threshold: null,
+  },
+  {
+    sport: "hockey",
+    alert_type: "close_game_late",
+    is_enabled: true,
+    close_game_margin_threshold: 1,
+    close_game_time_threshold_seconds: 300,
+    inning_start_threshold: null,
+  },
+  {
+    sport: "hockey",
+    alert_type: "score_changed",
+    is_enabled: true,
+    close_game_margin_threshold: null,
+    close_game_time_threshold_seconds: null,
+    inning_start_threshold: null,
+  },
+];
+
 const preferenceGroups = [
   { sport: "basketball", preferences: basketballPreferences },
   { sport: "football", preferences: footballPreferences },
   { sport: "baseball", preferences: baseballPreferences },
+  { sport: "hockey", preferences: hockeyPreferences },
 ];
 
 const historyItems = [
@@ -206,6 +234,15 @@ describe("AlertsView", () => {
       "aria-checked",
       "false",
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Hockey" }));
+    expect(screen.getByRole("switch", { name: "Score update alerts" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByLabelText("Margin")).toHaveValue("1");
+    expect(screen.getByLabelText("Minutes")).toHaveValue("5");
+    expect(screen.queryByRole("switch", { name: "Lead change alerts" })).toBeNull();
   });
 
   it("updates a switch and local state without refetching alert data", async () => {

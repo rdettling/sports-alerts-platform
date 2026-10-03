@@ -40,16 +40,16 @@ def test_competition_visibility_replaces_and_canonicalizes_selection(client):
     response = client.put(
         "/competition-visibility",
         headers=headers,
-        json={"hidden_competitions": ["world_cup", "NBA", "WORLD_CUP", "fbs"]},
+        json={"hidden_competitions": ["nhl", "NBA", "NHL", "fbs"]},
     )
 
     assert response.status_code == 200
-    assert response.json() == {"hidden_competitions": ["NBA", "FBS", "WORLD_CUP"]}
+    assert response.json() == {"hidden_competitions": ["NBA", "FBS", "NHL"]}
     assert client.get("/competition-visibility", headers=headers).json() == response.json()
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.id == user_id))
         assert user is not None
-        assert user.hidden_competitions == ["NBA", "FBS", "WORLD_CUP"]
+        assert user.hidden_competitions == ["NBA", "FBS", "NHL"]
 
 
 def test_competition_visibility_is_scoped_to_current_user(client):

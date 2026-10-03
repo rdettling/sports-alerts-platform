@@ -135,7 +135,7 @@ After a deploy:
 5. Confirm worker logs show sync activity
 6. Verify email-only, push-only, combined, and no-delivery test states for the admin account
 7. Confirm a push notification opens the Games page and history shows channel-specific delivery chips
-8. If Neon integration is configured, confirm the admin DB stats view can load usage data
+8. Confirm Activity & tools shows the daily odds budget and provider balance; if configured, confirm the Admin toolbar opens the correct Neon project
 9. Observe a natural worker change and confirm `/updates/games` delivers it and the visible Games screen updates within five seconds under healthy networking
 10. On an actual iPhone Home Screen installation, check lock/unlock, app switching, and offline/online recovery. The stream should close while hidden/offline and reopen with a catch-up read on return
 11. Confirm a desktop client reconnects and refreshes after a normal API deployment; opening the stream must also fetch state to cover updates missed during connection establishment

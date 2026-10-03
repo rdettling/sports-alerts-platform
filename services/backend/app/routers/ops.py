@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -18,7 +17,6 @@ from app.schemas.ops import (
     OpsAdminSummaryOut,
     OpsAdminSummaryOverviewOut,
     OddsApiUsageOut,
-    NeonUsageOut,
 )
 from app.worker.odds_sync import ODDS_DAILY_CREDIT_CAP
 from app.services import worker_schedule
@@ -28,7 +26,6 @@ from app.services.game_feed import game_feed_cache
 router = APIRouter(prefix="/ops", tags=["ops"])
 
 WINDOW_TO_HOURS = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7}
-NEON_API_BASE_URL = "https://console.neon.tech/api/v2"
 
 
 def _window_start(window: str) -> datetime:
@@ -50,10 +47,12 @@ def _competition_setting_out(row: CompetitionSetting) -> CompetitionSettingOut:
     )
 
 
-def _resolve_neon_dashboard_url(project_id: str) -> str:
+def _resolve_neon_dashboard_url() -> str | None:
     if settings.neon_dashboard_url.strip():
         return settings.neon_dashboard_url.strip()
-    return f"https://console.neon.tech/app/projects/{project_id}"
+    if settings.neon_project_id.strip():
+        return f"https://console.neon.tech/app/projects/{settings.neon_project_id.strip()}"
+    return None
 
 
 @router.put("/competitions/{competition}", response_model=CompetitionSettingOut)
@@ -120,50 +119,10 @@ def admin_summary(
         odds_api_usage=OddsApiUsageOut(
             credits_used=usage.credits_used if usage else 0,
             daily_credit_cap=ODDS_DAILY_CREDIT_CAP,
+            provider_credits_used=usage.provider_credits_used if usage else None,
             provider_credits_remaining=usage.provider_credits_remaining if usage else None,
             provider_observed_at=usage.provider_observed_at if usage else None,
         ),
+        neon_dashboard_url=_resolve_neon_dashboard_url(),
         competition_settings=[_competition_setting_out(row) for row in list_competition_settings(db)],
-    )
-
-
-@router.get("/db/neon-usage", response_model=NeonUsageOut)
-def neon_usage(_: User = Depends(require_admin_user)) -> NeonUsageOut:
-    if not settings.neon_api_key.strip():
-        return NeonUsageOut(available=False, message="NEON_API_KEY is not configured.")
-    if not settings.neon_project_id.strip():
-        return NeonUsageOut(available=False, message="NEON_PROJECT_ID is not configured.")
-
-    headers = {"Authorization": f"Bearer {settings.neon_api_key.strip()}"}
-    project_id = settings.neon_project_id.strip()
-    org_id = settings.neon_org_id.strip()
-    params = {"org_id": org_id} if org_id else None
-
-    try:
-        with httpx.Client(timeout=8.0) as client:
-            response = client.get(f"{NEON_API_BASE_URL}/projects/{project_id}", headers=headers, params=params)
-            response.raise_for_status()
-            raw = response.json()
-    except Exception as exc:
-        return NeonUsageOut(available=False, message=f"Failed to load Neon stats: {exc}")
-
-    data = raw.get("project", raw) if isinstance(raw, dict) else {}
-
-    cpu_used_sec = data.get("cpu_used_sec")
-    active_time_sec = data.get("active_time_seconds")
-    avg_cu_while_active: float | None = None
-    if isinstance(cpu_used_sec, int) and isinstance(active_time_sec, int) and active_time_sec > 0:
-        avg_cu_while_active = round(cpu_used_sec / active_time_sec, 3)
-
-    return NeonUsageOut(
-        available=True,
-        project_id=data.get("id"),
-        project_name=data.get("name"),
-        dashboard_url=_resolve_neon_dashboard_url(project_id),
-        consumption_period_start=data.get("consumption_period_start"),
-        consumption_period_end=data.get("consumption_period_end"),
-        cpu_used_sec=cpu_used_sec,
-        active_time_sec=active_time_sec,
-        compute_last_active_at=data.get("compute_last_active_at"),
-        avg_cu_while_active=avg_cu_while_active,
     )

@@ -70,6 +70,18 @@ ADMIN_TEST_SPORT_OVERRIDES = {
     ("baseball", "final_result"): AdminTestGameState(
         "final", 5, 3, 9, "Final", -timedelta(hours=4), True
     ),
+    ("hockey", "close_game_late"): AdminTestGameState(
+        "in_progress", 2, 1, 3, "04:30", -timedelta(hours=2)
+    ),
+    ("hockey", "overtime_start"): AdminTestGameState(
+        "in_progress", 2, 2, 4, "03:00", -timedelta(hours=2)
+    ),
+    ("hockey", "score_changed"): AdminTestGameState(
+        "in_progress", 2, 1, 3, "04:30", -timedelta(hours=2)
+    ),
+    ("hockey", "final_result"): AdminTestGameState(
+        "final", 3, 2, 3, "0:00", -timedelta(hours=4), True
+    ),
     ("soccer", "final_result"): AdminTestGameState(
         "final", 2, 1, 2, "FT", -timedelta(hours=4), True
     ),

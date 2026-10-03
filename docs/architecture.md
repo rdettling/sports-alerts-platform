@@ -50,11 +50,11 @@ Current supported competitions:
 - `NFL`
 - `FBS`
 - `MLB`
+- `NHL`
 - `MLS`
 - `LA_LIGA`
 - `PREMIER_LEAGUE`
 - `CHAMPIONS_LEAGUE`
-- `WORLD_CUP`
 
 Competition availability has three independent layers:
 
@@ -64,7 +64,7 @@ Competition availability has three independent layers:
 
 Changing a competition to inactive preserves its games, teams, follows, alerts, and user visibility preferences. Reactivating it restores that state. A fresh database activates the current supported catalog, while profiles added to an initialized database start inactive until an admin activates them.
 
-Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as football season context, Champions League stage and leg labels, or World Cup stage labels remains explicit. NFL preseason games are ingested without odds; regular-season and postseason games use the standard NFL moneyline feed. FBS uses ESPN's FBS group and the NCAAF odds feed; schedule opponents outside FBS are discovered during ingest so those games remain mappable.
+Each supported competition has one code-owned profile containing its sport, provider identifiers, live cadence, display metadata, and any competition-specific alert restriction. Alert preferences are sport-wide; a competition profile determines which of that sport's alert types can apply to its games. La Liga and the Premier League omit extra-time and penalty alerts because their competition matches cannot enter those states. Presentation such as football season context, NHL playoff series context, or Champions League stage and leg labels remains explicit. NFL and NHL preseason games are ingested without odds; regular-season and postseason games use their standard moneyline feeds. FBS uses ESPN's FBS group and the NCAAF odds feed; schedule opponents outside FBS are discovered during ingest so those games remain mappable.
 
 ## Main API Areas
 
@@ -107,7 +107,7 @@ Main persisted tables:
 
 Notable modeling decisions:
 
-- Teams are canonical provider entities, including incidental opponents needed to render games; `competition_teams` contains only browseable and followable competition members
+- Teams are canonical provider entities, including incidental opponents needed to render games; `competition_teams` contains only browseable and followable competition members plus current record strength, including NHL overtime losses
 - FBS conference names come from the code-owned team catalog and are exposed as a secondary UI facet, not stored as standalone competitions or database state
 - Games retain their competition and can carry live/final state, scores, context labels, and odds associations
 - A team follow applies to that team's games in every active competition, with explicit game unfollows stored separately
@@ -156,16 +156,16 @@ The delivery thread drains once at worker startup and otherwise sleeps until a c
 Admin-only routes expose:
 
 - alert and delivery activity
-- DB health views
-- Neon usage when configured
+- daily odds usage and provider balance
+- a Neon project shortcut when configured
 - competition enable/disable controls
 - test tools
 
-Admin opens on Leagues and loads its summary. Neon usage loads on demand when Activity & tools is first opened and otherwise reuses cached data. Neither dataset has periodic, manual, focus, or reconnect refetching. Changing the activity window fetches that summary; switching internal tabs reuses cached data. Competition-setting changes still refresh the summary, and failed reads retain cached values with an error. Already-requested reads retain the normal bounded retry and can resume after an offline pause.
+Admin opens on Leagues and loads its summary. It has no periodic, manual, focus, or reconnect refetching. Changing the activity window fetches that summary; switching internal tabs reuses cached data. Competition-setting changes still refresh the summary, and failed reads retain cached values with an error. Already-requested reads retain the normal bounded retry and can resume after an offline pause.
 
 The Admin Leagues tab combines availability controls and sync schedules from the worker's actual in-memory schedule. The worker posts a complete snapshot to `/internal/updates/schedule` after startup competition discovery, changes to its scheduled leagues, each queued catalog cycle, and each successful or failed job. Jobs without scheduled work report no next deadline; the table renders their state instead of inventing a countdown. The API authenticates with the existing live-update secret and atomically replaces one memory-only report. The admin summary includes this snapshot without additional SQL. Reports never invalidate the game feed or broadcast SSE events. They use the same timeout, single transient retry, and failure/recovery log suppression as [game notifications](#game-sync); delivery failures do not change job outcomes or scheduling. There are no reporting-only wake-ups. Local countdowns run only while Leagues is selected and the page is visible and make no requests; passed times instruct the user to reload rather than implying a completed sync.
 
-Admin has two mounted panels, ordered Leagues then Activity & tools. Hidden panels retain selections and results. Leagues uses a compact schedule table with enabled leagues first, inline availability switches, and per-league live and odds status; its rows stack on smaller screens without hiding either schedule. Activity & tools combines alert activity, database usage, and the test-alert form; these appear side by side on desktop and stack on smaller screens. Test inputs are disabled while sending, duplicate submissions are blocked, and the response is displayed directly without a summary reload.
+Admin has two mounted panels, ordered Leagues then Activity & tools. Hidden panels retain selections and results. Leagues uses a compact schedule table with enabled leagues first, inline availability switches, and per-league live and odds status; its rows stack on smaller screens without hiding either schedule. Activity & tools places alert activity beside the current UTC day's odds budget and latest provider balance, with the test-alert form spanning below; all panels stack on smaller screens. The Admin toolbar links directly to Neon when configured. Test inputs are disabled while sending, duplicate submissions are blocked, and the response is displayed directly without a summary reload.
 
 Admin test alerts use transient sample objects to exercise the real Email and Push delivery paths. They return channel outcomes in Activity & tools without entering game, alert history, or activity tables.
 

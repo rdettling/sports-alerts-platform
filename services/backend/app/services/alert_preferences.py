@@ -19,9 +19,10 @@ def default_alert_settings(sport: str, alert_type: str) -> AlertSettings:
     if alert_type not in get_sport_alert_types(normalized_sport):
         raise ValueError(f"Unsupported alert type for {normalized_sport}: {alert_type}")
     if alert_type == "close_game_late":
+        margin = {"football": 8, "hockey": 1}.get(normalized_sport, 5)
         return AlertSettings(
             is_enabled=True,
-            close_game_margin_threshold=8 if normalized_sport == "football" else 5,
+            close_game_margin_threshold=margin,
             close_game_time_threshold_seconds=300,
         )
     if alert_type == "inning_start":

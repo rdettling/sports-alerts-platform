@@ -17,12 +17,13 @@ class TeamStrength:
     wins: int | None = None
     losses: int | None = None
     ties: int | None = None
+    overtime_losses: int | None = None
     rank: int | None = None
     rank_observed: bool = False
 
     @property
     def has_record(self) -> bool:
-        return self.wins is not None and self.losses is not None and self.ties is not None
+        return self.wins is not None and self.losses is not None
 
 
 @dataclass
@@ -61,7 +62,11 @@ def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> 
     records = competitor.get("records")
     total = (
         next(
-            (record for record in records if isinstance(record, dict) and record.get("type") == "total"),
+            (
+                record
+                for record in records
+                if isinstance(record, dict) and record.get("type") in {"total", "ytd"}
+            ),
             None,
         )
         if isinstance(records, list)
@@ -71,6 +76,7 @@ def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> 
     wins: int | None = None
     losses: int | None = None
     ties: int | None = None
+    overtime_losses: int | None = None
     if summary:
         parts = summary.split("-")
         if len(parts) in {2, 3} and all(part.isdigit() for part in parts):
@@ -80,6 +86,8 @@ def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> 
                 ties = 0
             elif sport == "soccer":
                 wins, ties, losses = values
+            elif sport == "hockey":
+                wins, losses, overtime_losses = values
             else:
                 wins, losses, ties = values
 
@@ -91,6 +99,7 @@ def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> 
         wins=wins,
         losses=losses,
         ties=ties,
+        overtime_losses=overtime_losses,
         rank=rank,
         rank_observed=rank_observed,
     )
@@ -127,21 +136,6 @@ def _broadcast_names(competition: dict[str, Any]) -> list[str]:
                 add(media.get("shortName"))
 
     return names
-
-
-def _format_world_cup_stage(slug: str | None) -> str | None:
-    if not slug:
-        return None
-    mapping = {
-        "group-stage": "Group Stage",
-        "round-of-32": "Round of 32",
-        "rd-of-16": "Round of 16",
-        "quarterfinals": "Quarterfinals",
-        "semifinals": "Semifinals",
-        "3rd-place-match": "3rd-Place Match",
-        "final": "Final",
-    }
-    return mapping.get(slug)
 
 
 def _format_champions_league_stage(slug: str | None) -> str | None:
@@ -226,7 +220,7 @@ class EspnScoreboardClient:
         raw_season_week = week.get("number") if isinstance(week, dict) else None
         season_week = int(raw_season_week) if isinstance(raw_season_week, int) else None
         context_label: str | None = None
-        if sport in {"baseball", "basketball"}:
+        if sport in {"baseball", "basketball", "hockey"}:
             round_label = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
             series_summary = _clean_text(((event_competition.get("series") or {}).get("summary")))
             context_label = f"{round_label} · {series_summary}" if round_label and series_summary else round_label or series_summary
@@ -238,10 +232,6 @@ class EspnScoreboardClient:
                 context_label = f"Preseason · Week {season_week}" if season_week is not None else "Preseason"
             elif season_slug == "post-season":
                 context_label = "Postseason"
-        elif normalized_competition == "WORLD_CUP":
-            season_type = season.get("type")
-            season_type_name = _clean_text(season_type.get("name")) if isinstance(season_type, dict) else None
-            context_label = _format_world_cup_stage(season_slug) or season_type_name
         elif normalized_competition == "CHAMPIONS_LEAGUE":
             stage = _format_champions_league_stage(season_slug)
             note = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))

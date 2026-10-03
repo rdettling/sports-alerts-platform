@@ -18,12 +18,26 @@
   z-index: 15;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-panel);
+}
+
+.admin-toolbar-link {
+  flex-shrink: 0;
+  padding: 0.45rem 0.625rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.admin-toolbar-link:hover {
+  text-decoration: underline;
 }
 
 .admin-tab-list {
@@ -109,16 +123,9 @@
   padding: 0.4rem;
 }
 
-.admin-activity-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 1rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.admin-activity-total strong {
-  font-size: 1.75rem;
+.admin-odds-budget span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
 }
 
 .admin-delivery-table {
@@ -144,35 +151,71 @@
   font-size: 0.675rem;
 }
 
-.admin-detail-list {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.admin-delivery-total th,
+.admin-delivery-total td {
+  border-top-color: var(--border-strong);
+  font-weight: 700;
 }
 
-.admin-detail-list > div {
+.admin-odds-budget {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  padding: 1rem 0.75rem 0.5rem;
+}
+
+.admin-odds-budget strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-odds-budget small {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.admin-odds-progress {
+  height: 0.5rem;
+  margin: 0 0.75rem 0.75rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-hover);
+}
+
+.admin-odds-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.admin-odds-details {
+  margin: 0;
   display: grid;
-  gap: 0.25rem;
+}
+
+.admin-odds-details > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.75rem;
   border-top: 1px solid var(--border);
 }
 
-.admin-detail-list dt {
+.admin-odds-details dt {
   color: var(--text-muted);
   font-size: 0.7rem;
 }
 
-.admin-detail-list dd {
+.admin-odds-details dd {
   margin: 0;
+  text-align: right;
   font-size: 0.85rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-}
-
-.admin-link {
-  flex-shrink: 0;
-  color: var(--accent);
-  font-size: 0.75rem;
 }
 
 .admin-leagues-workspace {
@@ -434,7 +477,7 @@
 
 .admin-test-panel {
   width: 100%;
-  max-width: 36rem;
+  grid-column: 1 / -1;
 }
 
 .admin-test-form {
@@ -474,13 +517,28 @@
 
 @media (min-width: 720px) {
   .admin-activity-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 3fr) minmax(17rem, 2fr);
+  }
+
+  .admin-test-form fieldset {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+    align-items: end;
   }
 }
 
 @media (min-width: 1024px) {
   .admin-activity-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .admin-test-panel {
+    grid-column: auto;
+  }
+
+  .admin-test-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
   }
 
   .admin-page {

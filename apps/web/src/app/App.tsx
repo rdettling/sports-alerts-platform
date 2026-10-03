@@ -16,14 +16,14 @@ const PAGE_METADATA: Record<string, PageMetadata> = {
   "/": {
     title: "Live Game Alerts",
     description:
-      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup games.",
+      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, NHL, MLS, La Liga, and Premier League games.",
     robots: "index, follow",
     canonical: "https://livegamealerts.com/",
   },
   "/teams": {
     title: "Teams | Live Game Alerts",
     description:
-      "Browse NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup teams and sign in to follow teams for live game email and push alerts.",
+      "Browse NBA, WNBA, NFL, MLB, NHL, MLS, La Liga, and Premier League teams and sign in to follow teams for live game email and push alerts.",
     robots: "index, follow",
     canonical: "https://livegamealerts.com/teams",
   },

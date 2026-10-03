@@ -67,6 +67,12 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
+def _is_odds_eligible(competition: str, payload: ScoreboardGame) -> bool:
+    return competition_supports_odds(competition) and not (
+        competition in {"NFL", "NHL"} and payload.season_slug == "preseason"
+    )
+
+
 def _next_scheduled_start(db: Session, competition: str, now: datetime) -> datetime | None:
     return db.scalar(
         select(func.min(Game.scheduled_start_time)).where(
@@ -130,14 +136,27 @@ def _register_fbs_opponents(
 
 
 def _update_team_strength(membership: CompetitionTeam, strength: TeamStrength) -> bool:
-    before = (membership.wins, membership.losses, membership.ties, membership.rank)
+    before = (
+        membership.wins,
+        membership.losses,
+        membership.ties,
+        membership.overtime_losses,
+        membership.rank,
+    )
     if strength.has_record:
         membership.wins = strength.wins
         membership.losses = strength.losses
         membership.ties = strength.ties
+        membership.overtime_losses = strength.overtime_losses
     if strength.rank_observed:
         membership.rank = strength.rank
-    after = (membership.wins, membership.losses, membership.ties, membership.rank)
+    after = (
+        membership.wins,
+        membership.losses,
+        membership.ties,
+        membership.overtime_losses,
+        membership.rank,
+    )
     if before == after:
         return False
     membership.strength_updated_at = datetime.now(timezone.utc)
@@ -184,7 +203,7 @@ def _upsert_game(
         previous_snapshot = soccer.snapshot_state(existing) if is_soccer else None
         soccer_events = soccer.classify_events(existing, payload) if is_soccer else None
         score_change = soccer_events.score_change if soccer_events else None
-        if sport == "football":
+        if sport in {"football", "hockey"}:
             score_change = classify_score_change(existing, payload, sport=sport)
         state_before = (
             _as_utc(existing.scheduled_start_time),
@@ -208,10 +227,7 @@ def _upsert_game(
         existing.clock = payload.clock
         existing.is_final = payload.is_final
         existing.is_neutral_site = payload.is_neutral_site
-        existing.is_odds_eligible = (
-            competition_supports_odds(competition)
-            and not (competition == "NFL" and payload.season_slug == "preseason")
-        )
+        existing.is_odds_eligible = _is_odds_eligible(competition, payload)
         existing.last_ingested_at = datetime.now(timezone.utc)
         state_after = (
             _as_utc(existing.scheduled_start_time),
@@ -250,10 +266,7 @@ def _upsert_game(
         clock=payload.clock,
         is_final=payload.is_final,
         is_neutral_site=payload.is_neutral_site,
-        is_odds_eligible=(
-            competition_supports_odds(competition)
-            and not (competition == "NFL" and payload.season_slug == "preseason")
-        ),
+        is_odds_eligible=_is_odds_eligible(competition, payload),
         last_ingested_at=datetime.now(timezone.utc),
     )
     db.add(created)

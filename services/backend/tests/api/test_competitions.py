@@ -50,11 +50,11 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
         "NFL",
         "FBS",
         "MLB",
+        "NHL",
         "MLS",
         "LA_LIGA",
         "PREMIER_LEAGUE",
         "CHAMPIONS_LEAGUE",
-        "WORLD_CUP",
     ]
 
     nba = get_competition_profile("NBA")
@@ -108,6 +108,21 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     )
     assert get_alert_types("MLB") == ("game_start", "inning_start", "extra_innings_start", "final_result")
 
+    nhl = get_competition_profile("NHL")
+    assert (nhl.sport, nhl.live_sync_interval_seconds, nhl.odds_sport_key) == (
+        "hockey",
+        60,
+        "icehockey_nhl",
+    )
+    assert nhl.scoreboard_url.endswith("/sports/hockey/nhl/scoreboard")
+    assert get_alert_types("NHL") == (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "final_result",
+    )
+
     mls = get_competition_profile("MLS")
     assert (mls.sport, mls.live_sync_interval_seconds, mls.odds_sport_key) == (
         "soccer",
@@ -148,13 +163,6 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     assert champions_league.scoreboard_url.endswith("/sports/soccer/uefa.champions/scoreboard")
     assert get_alert_types("CHAMPIONS_LEAGUE") == get_alert_types("MLS")
 
-    world_cup = get_competition_profile("WORLD_CUP")
-    assert (world_cup.sport, world_cup.live_sync_interval_seconds, world_cup.odds_sport_key) == (
-        "soccer",
-        90,
-        "soccer_fifa_world_cup",
-    )
-    assert get_alert_types("MLS") == get_alert_types("WORLD_CUP")
     assert "overtime_start" not in get_alert_types("MLB")
     assert "overtime_start" not in get_alert_types("MLS")
     assert "extra_innings_start" not in get_alert_types("NBA")
@@ -190,11 +198,11 @@ def test_public_competitions_include_sport_and_live_cadence(client):
         ("NFL", "football", 60),
         ("FBS", "football", 60),
         ("MLB", "baseball", 120),
+        ("NHL", "hockey", 60),
         ("MLS", "soccer", 90),
         ("LA_LIGA", "soccer", 90),
         ("PREMIER_LEAGUE", "soccer", 90),
         ("CHAMPIONS_LEAGUE", "soccer", 90),
-        ("WORLD_CUP", "soccer", 90),
     ]
 
 
@@ -217,6 +225,20 @@ def test_mls_team_catalog_contains_all_current_clubs(client):
 
     assert len(teams) == 30
     assert {"LA", "LAFC", "MIA", "RBNY", "SD"} <= {team.abbreviation for team in teams}
+
+
+def test_nhl_team_catalog_contains_all_current_clubs(client):
+    client.get("/competitions")
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("NHL")).all()
+
+    assert len(teams) == 32
+    assert {(team.external_team_id, team.abbreviation) for team in teams} >= {
+        ("1", "BOS"),
+        ("37", "VGK"),
+        ("124292", "SEA"),
+        ("129764", "UTAH"),
+    }
 
 
 def test_fbs_team_catalog_contains_all_current_programs(client):

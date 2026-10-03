@@ -18,6 +18,7 @@ export const SPORT_LABELS: Record<Sport, string> = {
   basketball: "Basketball",
   football: "Football",
   baseball: "Baseball",
+  hockey: "Hockey",
   soccer: "Soccer",
 };
 

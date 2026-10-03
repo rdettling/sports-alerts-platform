@@ -5,14 +5,14 @@ import { type Competition, type GameTeam, type Team } from "../api";
 function teamLogoUrl(team: Team | GameTeam, competition?: Competition): string {
   const abbreviation = team.abbreviation.toLowerCase();
   const competitions = "competitions" in team ? team.competitions : [];
-  if (competition === "WORLD_CUP" || competitions.includes("WORLD_CUP")) {
-    return `https://a.espncdn.com/i/teamlogos/countries/500/${abbreviation}.png`;
-  }
   if (team.sport === "soccer") {
     return `https://a.espncdn.com/i/teamlogos/soccer/500/${team.external_team_id}.png`;
   }
   if (team.sport === "baseball") {
     return `https://a.espncdn.com/i/teamlogos/mlb/500/${abbreviation}.png`;
+  }
+  if (team.sport === "hockey") {
+    return `https://a.espncdn.com/i/teamlogos/nhl/500/${abbreviation}.png`;
   }
   if (competition === "NBA" || competitions.includes("NBA")) {
     return `https://a.espncdn.com/i/teamlogos/nba/500/${abbreviation}.png`;

@@ -38,9 +38,6 @@ def _sport_for_competition(competition: str) -> str | None:
 
 
 def _team_logo_url(team: Team | None, fallback_abbr: str, competition: str) -> str:
-    if competition == "WORLD_CUP":
-        abbr = (team.abbreviation if team and team.abbreviation else fallback_abbr).strip().lower()
-        return f"https://a.espncdn.com/i/teamlogos/countries/500/{abbr}.png" if abbr else ""
     if _sport_for_competition(competition) == "soccer" and team and team.external_team_id:
         return f"https://a.espncdn.com/i/teamlogos/soccer/500/{team.external_team_id}.png"
     if competition == "FBS" and team and team.external_team_id:
@@ -54,6 +51,8 @@ def _team_logo_url(team: Team | None, fallback_abbr: str, competition: str) -> s
         return f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbr}.png"
     if competition == "NFL":
         return f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbr}.png"
+    if competition == "NHL":
+        return f"https://a.espncdn.com/i/teamlogos/nhl/500/{abbr}.png"
     return ""
 
 
@@ -165,6 +164,14 @@ def _format_period_value(period: int | None, sport: str | None) -> str:
         if period >= 5:
             return "Penalties"
         return f"ET {period - 2}"
+    if sport == "hockey":
+        if period <= 0:
+            return ""
+        if period <= 3:
+            return f"P{period}"
+        if period == 4:
+            return "OT"
+        return "SO"
     return ""
 
 
@@ -183,7 +190,7 @@ def _event_status_details(alert: Alert, game: Game, sport: str | None) -> str:
 
     normalized_clock = (clock or "").strip()
     if normalized_clock:
-        if sport in {"basketball", "football"}:
+        if sport in {"basketball", "football", "hockey"}:
             details_parts.append(f"{normalized_clock} left")
         else:
             details_parts.append(normalized_clock)
@@ -195,7 +202,7 @@ def _event_timing_details(alert: Alert, game: Game, sport: str | None) -> str:
     period = _snapshot_int(metadata, "period", game.period)
     clock = _snapshot_text(metadata, "clock", game.clock)
     details = [_format_period_value(period, sport)]
-    if clock and sport in {"basketball", "football"}:
+    if clock and sport in {"basketball", "football", "hockey"}:
         details.append(f"{clock} left")
     return " \u2022 ".join(detail for detail in details if detail)
 
@@ -233,6 +240,8 @@ def _primary_status_line(
             return "Kickoff is live now"
         if sport == "football":
             return "Kickoff is live now"
+        if sport == "hockey":
+            return "Puck drop is live now"
         return "Game start is live now"
     if alert.alert_type == "score_changed":
         _, _, new_away_score, new_home_score, is_inferred_goal, scoring_side = _score_event_values(alert, game)
@@ -290,6 +299,8 @@ def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team 
             return f"Kickoff · {away_abbr} @ {home_abbr}"
         if sport == "football":
             return f"Kickoff · {away_abbr} @ {home_abbr}"
+        if sport == "hockey":
+            return f"Puck drop · {away_abbr} @ {home_abbr}"
         return f"Game start · {away_abbr} @ {home_abbr}"
     if alert.alert_type == "score_changed":
         _, _, new_away_score, new_home_score, is_inferred_goal, _ = _score_event_values(alert, game)
@@ -343,14 +354,18 @@ def build_alert_email_content(alert: Alert, game: Game, home: Team | None, away:
     sport = _sport_for_competition(competition)
     away_logo = _team_logo_url(away, away_abbr, competition)
     home_logo = _team_logo_url(home, home_abbr, competition)
-    _, _, event_away_score, event_home_score, _, _ = _score_event_values(alert, game)
+    _, _, event_away_score, event_home_score, is_inferred_goal, _ = _score_event_values(alert, game)
     is_score_event = alert.alert_type in {"score_changed", "lead_change", "close_game_late"}
     snapshot_away_score, snapshot_home_score = _game_score_values(alert, game)
     resolved_away_score = event_away_score if is_score_event else snapshot_away_score
     resolved_home_score = event_home_score if is_score_event else snapshot_home_score
     away_score = "—" if resolved_away_score is None else str(resolved_away_score)
     home_score = "—" if resolved_home_score is None else str(resolved_home_score)
-    alert_label = ALERT_LABELS.get(alert.alert_type, alert.alert_type.replace("_", " ").title())
+    alert_label = (
+        "Goal"
+        if alert.alert_type == "score_changed" and is_inferred_goal
+        else ALERT_LABELS.get(alert.alert_type, alert.alert_type.replace("_", " ").title())
+    )
     primary_line = _primary_status_line(alert, game, away_abbr, home_abbr, sport)
 
     details_line = _event_status_details(alert, game, sport)

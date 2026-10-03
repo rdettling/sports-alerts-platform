@@ -1,37 +1,33 @@
-import {
-  type OpsAdminOverviewWindow,
-  type OpsAdminSummaryResponse,
-  type OpsNeonUsageResponse,
-} from "../../../../shared/api";
+import { type OpsAdminOverviewWindow, type OpsAdminSummaryResponse } from "../../../../shared/api";
 import { AdminTestAlertsPanel } from "../AdminTestAlertsPanel";
 import { formatAdminDateTime, formatNullableNumber } from "./admin-format";
-
-function formatHours(seconds: number | null | undefined, unit: string): string {
-  return seconds === null || seconds === undefined
-    ? "n/a"
-    : `${(seconds / 3600).toFixed(2)}${unit}`;
-}
 
 export function AdminActivitySection({
   token,
   summary,
   windowValue,
   onWindowChange,
-  neonUsage,
-  neonLoading,
-  neonError,
 }: {
   token: string;
   summary: OpsAdminSummaryResponse;
   windowValue: OpsAdminOverviewWindow;
   onWindowChange: (value: OpsAdminOverviewWindow) => void;
-  neonUsage: OpsNeonUsageResponse | undefined;
-  neonLoading: boolean;
-  neonError: string | null;
 }) {
+  const sent = summary.delivery.email_alerts.sent + summary.delivery.push_alerts.sent;
+  const attempted =
+    summary.delivery.email_alerts.attempted + summary.delivery.push_alerts.attempted;
+  const failed = summary.delivery.email_alerts.failed + summary.delivery.push_alerts.failed;
+  const oddsUsage = summary.odds_api_usage;
+  const oddsPercent = oddsUsage.daily_credit_cap
+    ? Math.min(100, Math.max(0, (oddsUsage.credits_used / oddsUsage.daily_credit_cap) * 100))
+    : 0;
+
   return (
     <div className="admin-activity-grid">
-      <section className="admin-panel surface" aria-labelledby="admin-activity-title">
+      <section
+        className="admin-panel admin-alert-activity-panel surface"
+        aria-labelledby="admin-activity-title"
+      >
         <div className="admin-panel-header surface-header">
           <h2 id="admin-activity-title">Alert activity</h2>
           <label className="admin-window-select">
@@ -47,10 +43,6 @@ export function AdminActivitySection({
               <option value="7d">7d</option>
             </select>
           </label>
-        </div>
-        <div className="admin-activity-total">
-          <span>Alerts created</span>
-          <strong>{formatNullableNumber(summary.overview.total_alerts_created)}</strong>
         </div>
         <table className="admin-delivery-table" aria-label="Alert delivery">
           <thead>
@@ -75,65 +67,54 @@ export function AdminActivitySection({
                 <td className={counts.failed ? "is-danger" : undefined}>{counts.failed}</td>
               </tr>
             ))}
+            <tr className="admin-delivery-total">
+              <th scope="row">Total</th>
+              <td>{formatNullableNumber(sent)}</td>
+              <td>{formatNullableNumber(attempted)}</td>
+              <td className={failed ? "is-danger" : undefined}>{formatNullableNumber(failed)}</td>
+            </tr>
           </tbody>
         </table>
       </section>
 
-      <section className="admin-panel surface" aria-labelledby="admin-neon-title">
+      <section className="admin-panel admin-odds-panel surface" aria-labelledby="admin-odds-title">
         <div className="admin-panel-header surface-header">
-          <h2 id="admin-neon-title">Database</h2>
-          {neonUsage?.dashboard_url ? (
-            <a
-              className="admin-link"
-              href={neonUsage.dashboard_url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open Neon
-            </a>
-          ) : null}
+          <h2 id="admin-odds-title">Odds usage</h2>
         </div>
-        {neonLoading ? (
-          <p className="admin-panel-message" role="status">
-            Loading Neon usage…
-          </p>
-        ) : null}
-        {neonError ? (
-          <p className="admin-panel-message error" role="alert">
-            {neonError}
-          </p>
-        ) : null}
-        {neonUsage ? (
-          neonUsage.available ? (
-            <dl className="admin-detail-list">
-              <div>
-                <dt>Compute used</dt>
-                <dd>{formatHours(neonUsage.cpu_used_sec, " CUh")}</dd>
-              </div>
-              <div>
-                <dt>Active time</dt>
-                <dd>{formatHours(neonUsage.active_time_sec, "h")}</dd>
-              </div>
-              <div>
-                <dt>Average CU</dt>
-                <dd>
-                  {neonUsage.avg_cu_while_active === null ||
-                  neonUsage.avg_cu_while_active === undefined
-                    ? "n/a"
-                    : `${neonUsage.avg_cu_while_active.toFixed(3)} CU`}
-                </dd>
-              </div>
-              <div>
-                <dt>Cycle end</dt>
-                <dd>{formatAdminDateTime(neonUsage.consumption_period_end)}</dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="admin-panel-message">
-              {neonUsage.message ?? "Neon usage is unavailable."}
-            </p>
-          )
-        ) : null}
+        <div className="admin-odds-budget">
+          <div>
+            <span>Daily budget</span>
+            <strong>
+              {formatNullableNumber(oddsUsage.credits_used)}
+              <small> / {formatNullableNumber(oddsUsage.daily_credit_cap)}</small>
+            </strong>
+          </div>
+          <span>{Math.round(oddsPercent)}%</span>
+        </div>
+        <div
+          className="admin-odds-progress"
+          role="progressbar"
+          aria-label="Daily odds budget used"
+          aria-valuemin={0}
+          aria-valuemax={oddsUsage.daily_credit_cap}
+          aria-valuenow={oddsUsage.credits_used}
+        >
+          <span style={{ width: `${oddsPercent}%` }} />
+        </div>
+        <dl className="admin-odds-details">
+          <div>
+            <dt>Provider used</dt>
+            <dd>{formatNullableNumber(oddsUsage.provider_credits_used)}</dd>
+          </div>
+          <div>
+            <dt>Provider remaining</dt>
+            <dd>{formatNullableNumber(oddsUsage.provider_credits_remaining)}</dd>
+          </div>
+          <div>
+            <dt>Last checked</dt>
+            <dd>{formatAdminDateTime(oddsUsage.provider_observed_at)}</dd>
+          </div>
+        </dl>
       </section>
       <AdminTestAlertsPanel token={token} items={summary.competition_settings} />
     </div>

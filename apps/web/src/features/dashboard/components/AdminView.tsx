@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  getOpsAdminSummary,
-  getOpsNeonUsage,
-  type OpsAdminOverviewWindow,
-} from "../../../shared/api";
+import { getOpsAdminSummary, type OpsAdminOverviewWindow } from "../../../shared/api";
 import { AdminLeaguesPanel } from "./admin/AdminLeaguesPanel";
 import { AdminActivitySection } from "./admin/AdminActivitySection";
 import { AdminTabsHeader } from "./admin/AdminTabsHeader";
@@ -27,31 +23,15 @@ export function AdminView({ token }: { token: string }) {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
-  const {
-    data: neonUsage,
-    isLoading: neonLoading,
-    error: neonQueryError,
-  } = useQuery({
-    queryKey: ["admin-neon", token],
-    queryFn: () => getOpsNeonUsage(token),
-    enabled: tab === "activity-tools",
-    staleTime: Infinity,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  });
-
   const errorMessage =
     error instanceof Error ? error.message : error ? "Failed to load admin data" : null;
-  const neonError =
-    neonQueryError instanceof Error
-      ? neonQueryError.message
-      : neonQueryError
-        ? "Failed to load Neon usage"
-        : null;
   return (
     <div className={`admin-page${tab === "leagues" ? " admin-page-leagues" : ""}`}>
-      <AdminTabsHeader tab={tab} onTabChange={setTab} />
+      <AdminTabsHeader
+        tab={tab}
+        onTabChange={setTab}
+        neonDashboardUrl={summary?.neon_dashboard_url}
+      />
 
       <div className="admin-content-scroll">
         {isLoading && !summary ? (
@@ -93,9 +73,6 @@ export function AdminView({ token }: { token: string }) {
                     summary={summary}
                     windowValue={windowValue}
                     onWindowChange={setWindowValue}
-                    neonUsage={neonUsage}
-                    neonLoading={neonLoading}
-                    neonError={neonError}
                   />
                 )}
               </section>

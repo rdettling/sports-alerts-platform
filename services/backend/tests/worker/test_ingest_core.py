@@ -50,6 +50,36 @@ def test_catalog_persists_neutral_site_and_odds_eligibility(db_session):
     assert game.is_odds_eligible is True
 
 
+def test_nhl_preseason_games_are_ingested_without_odds(db_session):
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="nhl-preseason",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="scheduled",
+                season_slug="preseason",
+            ),
+            make_game(
+                external_game_id="nhl-regular-season",
+                home_external_team_id="2",
+                away_external_team_id="1",
+                status="scheduled",
+                season_slug="regular-season",
+            ),
+        ]
+    )
+
+    run_catalog_sync(provider, competition="NHL")
+
+    games = {
+        game.external_game_id: game
+        for game in db_session.scalars(select(Game).where(Game.competition == "NHL"))
+    }
+    assert games["nhl-preseason"].is_odds_eligible is False
+    assert games["nhl-regular-season"].is_odds_eligible is True
+
+
 def test_ingest_run_failure(db_session):
     with pytest.raises(RuntimeError, match="boom"):
         run_catalog_sync(StaticProvider(error=RuntimeError("boom")))
@@ -472,6 +502,28 @@ def test_ingest_persists_refreshes_and_retains_team_strength(db_session, monkeyp
     assert result.games_updated == 0
     assert (home_strength.wins, home_strength.losses, home_strength.ties) == (7, 8, 7)
     assert (away_strength.wins, away_strength.losses, away_strength.ties) == (10, 7, 5)
+
+
+def test_ingest_persists_nhl_overtime_losses(db_session):
+    game_payload = make_game(
+        external_game_id="nhl-records",
+        home_external_team_id="1",
+        away_external_team_id="13",
+        status="scheduled",
+        home_team_strength=TeamStrength(wins=42, losses=25, overtime_losses=15),
+        away_team_strength=TeamStrength(wins=40, losses=30, overtime_losses=12),
+    )
+
+    run_catalog_sync(StaticProvider([game_payload]), competition="NHL")
+
+    game = db_session.scalar(select(Game).where(Game.external_game_id == "nhl-records"))
+    assert game is not None
+    home = db_session.get(CompetitionTeam, ("NHL", game.home_team_id))
+    away = db_session.get(CompetitionTeam, ("NHL", game.away_team_id))
+    assert home is not None
+    assert away is not None
+    assert (home.wins, home.losses, home.ties, home.overtime_losses) == (42, 25, None, 15)
+    assert (away.wins, away.losses, away.ties, away.overtime_losses) == (40, 30, None, 12)
 
 
 def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, monkeypatch):

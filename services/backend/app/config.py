@@ -14,9 +14,7 @@ class Settings(BaseSettings):
     web_base_url: str
     cors_allow_origins: str
     bootstrap_admin_email: str = "ryandettling1@gmail.com"
-    neon_api_key: str = ""
     neon_project_id: str = ""
-    neon_org_id: str = ""
     neon_dashboard_url: str = ""
     live_update_secret: str = ""
 

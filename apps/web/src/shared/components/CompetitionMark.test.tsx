@@ -9,6 +9,7 @@ describe("CompetitionMark", () => {
     ["WNBA", "WNBA", "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png"],
     ["NFL", "NFL", "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png"],
     ["MLB", "MLB", "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg"],
+    ["NHL", "NHL", "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png"],
     [
       "MLS",
       "MLS",
@@ -32,14 +33,6 @@ describe("CompetitionMark", () => {
       "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
     );
     expect(mark).not.toHaveTextContent("FBS");
-  });
-
-  it("renders the bundled World Cup artwork", () => {
-    render(<CompetitionMark competition="WORLD_CUP" />);
-
-    expect(screen.getByRole("img", { name: "WC logo" }).getAttribute("src")).toContain(
-      "world-cup-mark",
-    );
   });
 
   it("falls back to the league badge when artwork fails", () => {

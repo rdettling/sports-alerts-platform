@@ -47,7 +47,7 @@ def classify_score_change(
     live_statuses = {"in_progress", "live"}
     if payload.is_final or payload.status not in live_statuses:
         return None
-    if sport == "soccer" and (payload.period or 0) >= 5:
+    if sport in {"soccer", "hockey"} and (payload.period or 0) >= 5:
         return None
     if (
         previous.home_score is None
@@ -75,7 +75,7 @@ def classify_score_change(
         new_away_score=payload.away_score,
         scoring_side=scoring_side,
         is_inferred_goal=(
-            sport == "soccer"
+            sport in {"soccer", "hockey"}
             and ((home_delta == 1 and away_delta == 0) or (away_delta == 1 and home_delta == 0))
         ),
         previous_leader=_leader(previous.home_score, previous.away_score),

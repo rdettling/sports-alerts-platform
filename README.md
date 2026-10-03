@@ -2,7 +2,7 @@
 
 Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
 
-The current product surface supports ten competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, `CHAMPIONS_LEAGUE`, and `WORLD_CUP`.
+The current product surface supports ten competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `NHL`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `CHAMPIONS_LEAGUE`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -14,22 +14,25 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - FBS conference filtering on Games plus collapsible conference groups and followed-team prioritization in Teams.
 - Authenticated Games filter for direct and team-derived follows.
 - `Alerts` dashboard for sport-wide defaults plus alert history.
-- Admin-only operations area for alert delivery activity, DB stats, competition controls, and test tools.
+- Admin-only operations area for alert delivery activity, odds usage, competition controls, Neon access, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
-- Code-owned competition profiles pair competition-specific provider configuration with shared basketball, football, baseball, or soccer behavior.
+- Code-owned competition profiles pair competition-specific provider configuration with shared basketball, football, baseball, hockey, or soccer behavior.
 
 Alert types default by sport and can be restricted for a specific competition:
 
 - `NBA` and `WNBA`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
 - `NFL` and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
-- `MLS`, `CHAMPIONS_LEAGUE`, and `WORLD_CUP`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
+- `NHL`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `final_result`
+- `MLS` and `CHAMPIONS_LEAGUE`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
 
 Football score updates and lead changes are opt-in. Lead changes cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.
 
 When a football score also qualifies for a close-game alert, each user receives one alert based on their enabled rules: lead change first, then close game, then score update. A lead alert that covers the one-time close-game rule prevents that close alert from arriving on the next sync.
+
+NHL score updates identify single-goal changes as goals. Close-game alerts default to a one-goal margin in the final five minutes of the third period; a goal that first enters that window covers the one-time close-game rule so the same sync does not send two alerts. NHL preseason scores and alerts are supported, but preseason games do not consume odds requests.
 
 ## Repo Layout
 

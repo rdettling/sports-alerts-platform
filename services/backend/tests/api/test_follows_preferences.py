@@ -347,10 +347,17 @@ def test_alert_preferences_get_and_update(client):
     preferences_response = client.get("/alert-preferences", headers=headers)
     assert preferences_response.status_code == 200
     groups = preferences_response.json()
-    assert [group["sport"] for group in groups] == ["basketball", "football", "baseball", "soccer"]
+    assert [group["sport"] for group in groups] == [
+        "basketball",
+        "football",
+        "baseball",
+        "hockey",
+        "soccer",
+    ]
     basketball = next(group for group in groups if group["sport"] == "basketball")
     football = next(group for group in groups if group["sport"] == "football")
     baseball = next(group for group in groups if group["sport"] == "baseball")
+    hockey = next(group for group in groups if group["sport"] == "hockey")
     soccer = next(group for group in groups if group["sport"] == "soccer")
     assert {item["alert_type"] for item in basketball["preferences"]} == {
         "game_start",
@@ -378,6 +385,18 @@ def test_alert_preferences_get_and_update(client):
         "extra_innings_start",
         "final_result",
     }
+    assert {item["alert_type"] for item in hockey["preferences"]} == {
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "final_result",
+    }
+    hockey_close = next(
+        item for item in hockey["preferences"] if item["alert_type"] == "close_game_late"
+    )
+    assert hockey_close["close_game_margin_threshold"] == 1
+    assert hockey_close["close_game_time_threshold_seconds"] == 300
     assert {item["alert_type"] for item in soccer["preferences"]} == {
         "game_start",
         "second_half_start",

@@ -6,12 +6,15 @@ const FOOTBALL_COMPETITIONS = new Set<Competition>(["NFL", "FBS"]);
 
 const FOOTBALL_QUARTER_SECONDS = 15 * 60;
 const FOOTBALL_REGULATION_SECONDS = 4 * FOOTBALL_QUARTER_SECONDS;
+const HOCKEY_PERIOD_SECONDS = 20 * 60;
+const HOCKEY_REGULATION_SECONDS = 3 * HOCKEY_PERIOD_SECONDS;
 const BASEBALL_REGULATION_HALF_INNINGS = 18;
 
 const FOOTBALL_URGENCY_BASELINE = 0.45;
 const BASEBALL_URGENCY_BASELINE = 0.55;
 const BASKETBALL_URGENCY_BASELINE = 0.4;
 const SOCCER_URGENCY_BASELINE = 0.55;
+const HOCKEY_URGENCY_BASELINE = 0.5;
 
 const MATCHUP_AVERAGE_WEIGHT = 0.85;
 const MATCHUP_WEAKER_TEAM_WEIGHT = 0.15;
@@ -53,6 +56,14 @@ const SOCCER_MARGIN_BANDS: readonly MarginBand[] = [
   [0, 1],
   [1, 0.9],
   [2, 0.5],
+  [3, 0.25],
+  [Number.POSITIVE_INFINITY, 0],
+];
+
+const HOCKEY_MARGIN_BANDS: readonly MarginBand[] = [
+  [0, 1],
+  [1, 0.95],
+  [2, 0.6],
   [3, 0.25],
   [Number.POSITIVE_INFINITY, 0],
 ];
@@ -110,7 +121,7 @@ export function baseballWatchabilityScore(game: Game): number | null {
 }
 
 export function teamStrengthFactor(strength: TeamStrength, competition: Competition): number {
-  const record = recordStrengthFactor(strength);
+  const record = recordStrengthFactor(strength, competition);
   if (competition !== "FBS") return record;
 
   if (strength.rank !== null && strength.rank >= 1 && strength.rank <= 25) {
@@ -201,7 +212,7 @@ export function basketballRegulationSecondsRemaining(game: Game): number | null 
   if (game.period >= 5) return 0;
 
   const quarterSeconds = game.competition === "NBA" ? 12 * 60 : 10 * 60;
-  const clockSeconds = parseBasketballClock(game.clock, quarterSeconds);
+  const clockSeconds = parseTimedPeriodClock(game.clock, quarterSeconds);
   if (clockSeconds === null) return null;
   return (4 - game.period) * quarterSeconds + clockSeconds;
 }
@@ -225,9 +236,32 @@ export function basketballGameSecondsRemaining(game: Game): number | null {
     if ((game.competition !== "NBA" && game.competition !== "WNBA") || !isLiveGame(game)) {
       return null;
     }
-    return parseBasketballClock(game.clock, 5 * 60);
+    return parseTimedPeriodClock(game.clock, 5 * 60);
   }
   return basketballRegulationSecondsRemaining(game);
+}
+
+export function hockeyRegulationSecondsRemaining(game: Game): number | null {
+  if (game.competition !== "NHL" || !isLiveGame(game) || game.period === null || game.period < 1) {
+    return null;
+  }
+  if (game.period >= 4) return 0;
+
+  const clockSeconds = parseTimedPeriodClock(game.clock, HOCKEY_PERIOD_SECONDS);
+  if (clockSeconds === null) return null;
+  return (3 - game.period) * HOCKEY_PERIOD_SECONDS + clockSeconds;
+}
+
+export function hockeyWatchabilityScore(game: Game): number | null {
+  if (game.home_score === null || game.away_score === null) return null;
+  const remainingSeconds = hockeyRegulationSecondsRemaining(game);
+  if (remainingSeconds === null) return null;
+
+  return urgencyScore(
+    marginFactor(Math.abs(game.home_score - game.away_score), HOCKEY_MARGIN_BANDS),
+    1 - remainingSeconds / HOCKEY_REGULATION_SECONDS,
+    HOCKEY_URGENCY_BASELINE,
+  );
 }
 
 export function soccerRegulationMinutesRemaining(game: Game): number | null {
@@ -269,12 +303,20 @@ export function liveGameRemainingShare(game: Game): number | null {
     const regulationSeconds = (game.competition === "NBA" ? 12 : 10) * 60 * 4;
     return remaining === null ? null : remaining / regulationSeconds;
   }
+  if (game.competition === "NHL") {
+    const remaining = hockeyRegulationSecondsRemaining(game);
+    return remaining === null ? null : remaining / HOCKEY_REGULATION_SECONDS;
+  }
   const remaining = soccerRegulationMinutesRemaining(game);
   const regulationMinutes = game.period !== null && game.period >= 3 ? 120 : 90;
   return remaining === null ? null : remaining / regulationMinutes;
 }
 
 export function liveGameStagePriority(game: Game): number {
+  if (game.competition === "NHL" && game.period !== null) {
+    if (game.period >= 5) return 2;
+    return game.period >= 4 ? 1 : 0;
+  }
   if (!isSoccerGame(game) || game.period === null) return 0;
   if (game.period >= 5) return 2;
   return game.period >= 3 ? 1 : 0;
@@ -288,7 +330,9 @@ export function liveWatchabilityScore(game: Game): number | null {
         ? footballWatchabilityScore(game)
         : game.competition === "NBA" || game.competition === "WNBA"
           ? basketballWatchabilityScore(game)
-          : soccerWatchabilityScore(game);
+          : game.competition === "NHL"
+            ? hockeyWatchabilityScore(game)
+            : soccerWatchabilityScore(game);
   if (urgency === null) return null;
 
   const qualityAboveNeutral = Math.max(0, (matchupQualityFactor(game) - 0.5) / 0.5);
@@ -311,14 +355,14 @@ function parseFootballClock(clock: string | null): number | null {
   return minutes * 60 + Number(match[2]);
 }
 
-function parseBasketballClock(clock: string | null, quarterSeconds: number): number | null {
+function parseTimedPeriodClock(clock: string | null, periodSeconds: number): number | null {
   const value = clock?.trim();
   if (!value) return null;
 
   const minuteClock = value.match(/^(\d{1,2}):([0-5]\d)$/);
   if (minuteClock) {
     const seconds = Number(minuteClock[1]) * 60 + Number(minuteClock[2]);
-    return seconds <= quarterSeconds ? seconds : null;
+    return seconds <= periodSeconds ? seconds : null;
   }
 
   if (!/^\d{1,2}\.\d+$/.test(value)) return null;
@@ -332,8 +376,13 @@ function parseSoccerClock(clock: string | null): number | null {
   return Number(match[1]) + Number(match[2] ?? 0);
 }
 
-function recordStrengthFactor(strength: TeamStrength): number {
+function recordStrengthFactor(strength: TeamStrength, competition: Competition): number {
   if (strength.wins === null || strength.losses === null) return 0.5;
+  if (competition === "NHL") {
+    const overtimeLosses = strength.overtime_losses ?? 0;
+    const total = strength.wins + strength.losses + overtimeLosses;
+    return total > 0 ? (strength.wins + 0.5 * overtimeLosses) / total : 0.5;
+  }
   const ties = strength.ties ?? 0;
   const total = strength.wins + strength.losses + ties;
   return total > 0 ? (strength.wins + 0.5 * ties) / total : 0.5;

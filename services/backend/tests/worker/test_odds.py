@@ -29,15 +29,6 @@ def test_provider_failure_returns_no_odds(monkeypatch, caplog):
     assert "Odds API request failed: provider unavailable" in caplog.text
 
 
-def test_world_cup_name_aliases_match_seeded_names():
-    assert game_key("Canada", "Bosnia & Herzegovina") == game_key("Canada", "Bosnia-Herzegovina")
-    assert game_key("USA", "Paraguay") == game_key("United States", "Paraguay")
-    assert game_key("DR Congo", "Japan") == game_key("Congo DR", "Japan")
-    assert game_key("Turkey", "Mexico") == game_key("Turkiye", "Mexico")
-    assert game_key("Curaçao", "Germany") == game_key("Curacao", "Germany")
-    assert game_key("Czech Republic", "Egypt") == game_key("Czechia", "Egypt")
-
-
 def test_mls_name_aliases_match_seeded_names():
     assert game_key("Los Angeles FC", "LA Galaxy") == game_key("LAFC", "LA Galaxy")
     assert game_key("Columbus Crew SC", "Houston Dynamo") == game_key("Columbus Crew", "Houston Dynamo FC")
@@ -81,6 +72,14 @@ def test_nfl_uses_regular_season_odds_feed():
     assert game_key("Buffalo Bills", "Kansas City Chiefs") == (
         "buffalo bills",
         "kansas city chiefs",
+    )
+
+
+def test_nhl_uses_regular_season_odds_feed():
+    assert _odds_sport_key_for_competition("NHL") == "icehockey_nhl"
+    assert game_key("Boston Bruins", "Utah Mammoth") == (
+        "boston bruins",
+        "utah mammoth",
     )
 
 

@@ -1,6 +1,6 @@
 import { ADMIN_TABS, type AdminTabsHeaderProps } from "./admin-tabs";
 
-export function AdminTabsHeader({ tab, onTabChange }: AdminTabsHeaderProps) {
+export function AdminTabsHeader({ tab, onTabChange, neonDashboardUrl }: AdminTabsHeaderProps) {
   const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
     if (event.key === "ArrowRight") nextIndex = (index + 1) % ADMIN_TABS.length;
@@ -37,6 +37,11 @@ export function AdminTabsHeader({ tab, onTabChange }: AdminTabsHeaderProps) {
           </button>
         ))}
       </div>
+      {neonDashboardUrl ? (
+        <a className="admin-toolbar-link" href={neonDashboardUrl} target="_blank" rel="noreferrer">
+          Open Neon
+        </a>
+      ) : null}
     </section>
   );
 }

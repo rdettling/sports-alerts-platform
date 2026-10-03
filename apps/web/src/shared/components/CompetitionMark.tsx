@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import worldCupMark from "../../assets/world-cup-mark.png";
 import { type Competition } from "../api";
 
 const COMPETITION_MARKS = {
@@ -24,6 +23,10 @@ const COMPETITION_MARKS = {
     logoUrl: "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg",
     fallback: "MLB",
   },
+  NHL: {
+    logoUrl: "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png",
+    fallback: "NHL",
+  },
   MLS: {
     logoUrl: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Major_League_Soccer_logo.svg",
     fallback: "MLS",
@@ -39,10 +42,6 @@ const COMPETITION_MARKS = {
   CHAMPIONS_LEAGUE: {
     logoUrl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
     fallback: "UCL",
-  },
-  WORLD_CUP: {
-    logoUrl: worldCupMark,
-    fallback: "WC",
   },
 } satisfies Record<Competition, { logoUrl: string; fallback: string }>;
 

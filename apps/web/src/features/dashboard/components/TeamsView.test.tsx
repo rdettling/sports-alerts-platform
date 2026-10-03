@@ -222,6 +222,44 @@ describe("TeamsView", () => {
     expect(screen.getByText("Boston Celtics")).toBeInTheDocument();
   });
 
+  it("includes NHL teams in the league filter", async () => {
+    apiMocks.listTeams.mockResolvedValue([
+      ...teams,
+      {
+        id: 7,
+        external_team_id: "1",
+        sport: "hockey",
+        competitions: ["NHL"],
+        name: "Boston Bruins",
+        abbreviation: "BOS",
+      },
+    ]);
+    apiMocks.listCompetitions.mockResolvedValue([
+      ...competitions,
+      {
+        competition: "NHL",
+        sport: "hockey",
+        label: "NHL",
+        badge_label: "NHL",
+        alert_types: [
+          "game_start",
+          "close_game_late",
+          "overtime_start",
+          "score_changed",
+          "final_result",
+        ],
+        live_sync_interval_seconds: 60,
+        is_enabled: true,
+      },
+    ]);
+    renderTeamsView(null);
+
+    fireEvent.click(await screen.findByRole("button", { name: "NHL" }));
+
+    expect(screen.getByText("Boston Bruins")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "NHL" })).toHaveTextContent("1 team");
+  });
+
   it("omits the selected competition from team metadata", async () => {
     renderTeamsView(null);
 

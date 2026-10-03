@@ -19,12 +19,12 @@ export type Competition =
   | "NFL"
   | "FBS"
   | "MLB"
+  | "NHL"
   | "MLS"
   | "LA_LIGA"
   | "PREMIER_LEAGUE"
-  | "CHAMPIONS_LEAGUE"
-  | "WORLD_CUP";
-export type Sport = "basketball" | "football" | "baseball" | "soccer";
+  | "CHAMPIONS_LEAGUE";
+export type Sport = "basketball" | "football" | "baseball" | "hockey" | "soccer";
 
 export type Team = {
   id: number;
@@ -42,6 +42,7 @@ export type TeamStrength = {
   wins: number | null;
   losses: number | null;
   ties: number | null;
+  overtime_losses: number | null;
   rank: number | null;
 };
 
@@ -218,21 +219,9 @@ export type OpsAdminSummaryResponse = {
   odds_api_usage: {
     credits_used: number;
     daily_credit_cap: number;
+    provider_credits_used: number | null;
     provider_credits_remaining: number | null;
     provider_observed_at: string | null;
   };
-};
-
-export type OpsNeonUsageResponse = {
-  available: boolean;
-  project_id: string | null;
-  project_name: string | null;
-  dashboard_url: string | null;
-  consumption_period_start: string | null;
-  consumption_period_end: string | null;
-  cpu_used_sec: number | null;
-  active_time_sec: number | null;
-  compute_last_active_at: string | null;
-  avg_cu_while_active: number | null;
-  message: string | null;
+  neon_dashboard_url: string | null;
 };

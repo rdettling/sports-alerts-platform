@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CompetitionSetting, CompetitionTeam, Team
 
 
-Sport = Literal["basketball", "football", "baseball", "soccer"]
+Sport = Literal["basketball", "football", "baseball", "hockey", "soccer"]
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,13 @@ SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
         "final_result",
     ),
     "baseball": ("game_start", "inning_start", "extra_innings_start", "final_result"),
+    "hockey": (
+        "game_start",
+        "close_game_late",
+        "overtime_start",
+        "score_changed",
+        "final_result",
+    ),
     "soccer": (
         "game_start",
         "second_half_start",
@@ -102,6 +109,16 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         live_sync_interval_seconds=120,
         odds_sport_key="baseball_mlb",
     ),
+    "NHL": CompetitionProfile(
+        competition="NHL",
+        sport="hockey",
+        provider_team_scope="nhl",
+        label="NHL",
+        badge_label="NHL",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+        live_sync_interval_seconds=60,
+        odds_sport_key="icehockey_nhl",
+    ),
     "MLS": CompetitionProfile(
         competition="MLS",
         sport="soccer",
@@ -143,16 +160,6 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
         live_sync_interval_seconds=90,
         odds_sport_key="soccer_uefa_champs_league",
-    ),
-    "WORLD_CUP": CompetitionProfile(
-        competition="WORLD_CUP",
-        sport="soccer",
-        provider_team_scope="soccer",
-        label="World Cup",
-        badge_label="WC",
-        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard",
-        live_sync_interval_seconds=90,
-        odds_sport_key="soccer_fifa_world_cup",
     ),
 }
 

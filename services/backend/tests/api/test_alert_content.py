@@ -186,6 +186,56 @@ def test_nfl_alerts_use_football_copy_periods_and_logos():
     assert build_alert_subject(overtime, game, home, away) == "OT1 · KC 20–20 BUF"
 
 
+def test_nhl_alerts_use_hockey_copy_periods_goal_wording_and_logos():
+    away = Team(external_team_id="13", name="New York Rangers", abbreviation="NYR")
+    home = Team(external_team_id="1", name="Boston Bruins", abbreviation="BOS")
+    game = Game(
+        external_game_id="nhl-1",
+        competition="NHL",
+        home_team_id=1,
+        away_team_id=2,
+        scheduled_start_time=datetime.now(timezone.utc),
+        status="in_progress",
+        home_score=2,
+        away_score=1,
+        period=3,
+        clock="04:30",
+    )
+
+    start_subject = build_alert_subject(_mk_alert("game_start"), game, home, away)
+    goal = _mk_alert("score_changed")
+    goal.event_data = {
+        "status": "in_progress",
+        "period": 3,
+        "clock": "04:30",
+        "previous_home_score": 1,
+        "previous_away_score": 1,
+        "new_home_score": 2,
+        "new_away_score": 1,
+        "scoring_side": "home",
+        "is_inferred_goal": True,
+    }
+    goal_subject = build_alert_subject(goal, game, home, away)
+    goal_text, goal_html = build_alert_email_content(goal, game, home, away)
+
+    assert start_subject == "Puck drop · NYR @ BOS"
+    assert goal_subject == "Goal · NYR 1–2 BOS"
+    assert "Goal\n" in goal_text
+    assert "Goal for BOS · NYR 1–2 BOS" in goal_text
+    assert "In Progress • P3 • 04:30 left" in goal_text
+    assert "teamlogos/nhl/500/nyr.png" in goal_html
+    assert "teamlogos/nhl/500/bos.png" in goal_html
+
+    game.period = 4
+    overtime = _mk_alert("overtime_start")
+    overtime.event_data = {"status": "in_progress", "period": 4, "clock": "03:00"}
+    assert build_alert_subject(overtime, game, home, away) == "OT · NYR 1–2 BOS"
+
+    game.period = 5
+    overtime.event_data = {"status": "in_progress", "period": 5, "clock": "00:00"}
+    assert build_alert_subject(overtime, game, home, away) == "SO · NYR 1–2 BOS"
+
+
 def test_football_score_and_lead_alerts_use_event_time_scores():
     away = Team(external_team_id="12", name="Kansas City Chiefs", abbreviation="KC")
     home = Team(external_team_id="2", name="Buffalo Bills", abbreviation="BUF")
@@ -330,7 +380,7 @@ def test_unknown_competition_falls_back_to_generic_and_no_logo_urls():
     home = Team(external_team_id="X2", name="Home Team", abbreviation="HOM")
     game = Game(
         external_game_id="other-1",
-        competition="NHL",
+        competition="OTHER",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -346,32 +396,6 @@ def test_unknown_competition_falls_back_to_generic_and_no_logo_urls():
     assert subject.startswith("Game start · AWY @ HOM")
     assert "teamlogos/nba/500/" not in html_body
     assert "teamlogos/mlb/500/" not in html_body
-
-
-def test_world_cup_game_start_uses_country_logo_source_and_kickoff_copy():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
-    game = Game(
-        external_game_id="world-cup-1",
-        competition="WORLD_CUP",
-        home_team_id=1,
-        away_team_id=2,
-        scheduled_start_time=datetime.now(timezone.utc),
-        status="in_progress",
-        home_score=1,
-        away_score=0,
-        period=1,
-        clock="12'",
-    )
-    alert = _mk_alert("game_start")
-
-    subject = build_alert_subject(alert, game, home, away)
-    text_body, html_body = build_alert_email_content(alert, game, home, away)
-
-    assert subject.startswith("Kickoff · MEX @ USA")
-    assert "teamlogos/countries/500/mex.png" in html_body
-    assert "teamlogos/countries/500/usa.png" in html_body
-    assert "Kickoff is live now" in text_body
 
 
 def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
@@ -483,12 +507,12 @@ def test_premier_competition_game_start_uses_club_logos_and_kickoff_copy():
     assert "teamlogos/soccer/500/359.png" in html_body
 
 
-def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
+def test_champions_league_score_changed_uses_inferred_goal_copy_from_metadata():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
-        external_game_id="world-cup-2",
-        competition="WORLD_CUP",
+        external_game_id="champions-league-2",
+        competition="CHAMPIONS_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -514,17 +538,17 @@ def test_world_cup_score_changed_uses_inferred_goal_copy_from_metadata():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Goal · MEX 1–0 USA"
-    assert "Goal for MEX · MEX 1–0 USA" in text_body
+    assert subject == "Goal · ARS 1–0 BAR"
+    assert "Goal for ARS · ARS 1–0 BAR" in text_body
     assert "18'" in text_body
 
 
-def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
+def test_champions_league_score_changed_uses_generic_copy_for_ambiguous_update():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
-        external_game_id="world-cup-3",
-        competition="WORLD_CUP",
+        external_game_id="champions-league-3",
+        competition="CHAMPIONS_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -550,17 +574,17 @@ def test_world_cup_score_changed_uses_generic_copy_for_ambiguous_update():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Score update · MEX 2–2 USA"
-    assert "Score update · MEX 2–2 USA" in text_body
+    assert subject == "Score update · ARS 2–2 BAR"
+    assert "Score update · ARS 2–2 BAR" in text_body
     assert "68'" in text_body
 
 
-def test_world_cup_second_half_start_uses_resume_copy():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
+def test_champions_league_second_half_start_uses_resume_copy():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
-        external_game_id="world-cup-4",
-        competition="WORLD_CUP",
+        external_game_id="champions-league-4",
+        competition="CHAMPIONS_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -576,17 +600,17 @@ def test_world_cup_second_half_start_uses_resume_copy():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Second half · MEX 0–0 USA"
-    assert "Second half is live now · MEX 0–0 USA" in text_body
+    assert subject == "Second half · ARS 0–0 BAR"
+    assert "Second half is live now · ARS 0–0 BAR" in text_body
     assert "46'" in text_body
 
 
-def test_world_cup_extra_time_start_uses_literal_copy():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
+def test_champions_league_extra_time_start_uses_literal_copy():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
-        external_game_id="world-cup-extra-time",
-        competition="WORLD_CUP",
+        external_game_id="champions-league-extra-time",
+        competition="CHAMPIONS_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -602,17 +626,17 @@ def test_world_cup_extra_time_start_uses_literal_copy():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Extra time · MEX 2–2 USA"
-    assert "Extra time is live now · MEX 2–2 USA" in text_body
+    assert subject == "Extra time · ARS 2–2 BAR"
+    assert "Extra time is live now · ARS 2–2 BAR" in text_body
     assert "91'" in text_body
 
 
-def test_world_cup_penalty_kicks_uses_anticipatory_copy():
-    away = Team(external_team_id="203", name="Mexico", abbreviation="MEX")
-    home = Team(external_team_id="660", name="United States", abbreviation="USA")
+def test_champions_league_penalty_kicks_uses_anticipatory_copy():
+    away = Team(external_team_id="359", name="Arsenal", abbreviation="ARS")
+    home = Team(external_team_id="83", name="Barcelona", abbreviation="BAR")
     game = Game(
-        external_game_id="world-cup-5",
-        competition="WORLD_CUP",
+        external_game_id="champions-league-5",
+        competition="CHAMPIONS_LEAGUE",
         home_team_id=1,
         away_team_id=2,
         scheduled_start_time=datetime.now(timezone.utc),
@@ -628,6 +652,6 @@ def test_world_cup_penalty_kicks_uses_anticipatory_copy():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Penalty kicks likely soon · MEX 1–1 USA"
-    assert "Match is still tied deep in extra time · MEX 1–1 USA" in text_body
+    assert subject == "Penalty kicks likely soon · ARS 1–1 BAR"
+    assert "Match is still tied deep in extra time · ARS 1–1 BAR" in text_body
     assert "117'" in text_body

@@ -89,14 +89,14 @@ class StaticProvider:
         return list(self.games)
 
 
-class SequenceWorldCupProvider:
+class SequenceSoccerProvider:
     def __init__(
         self,
         snapshots,
         *,
-        external_game_id="game-world-cup-live",
-        home_external_team_id="660",
-        away_external_team_id="203",
+        external_game_id="game-soccer-live",
+        home_external_team_id="359",
+        away_external_team_id="83",
     ):
         self._snapshots = list(snapshots)
         self._index = 0

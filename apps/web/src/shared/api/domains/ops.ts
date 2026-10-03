@@ -1,10 +1,5 @@
 import { apiRequest } from "../client";
-import type {
-  CompetitionSetting,
-  OpsAdminSummaryResponse,
-  OpsAdminOverviewWindow,
-  OpsNeonUsageResponse,
-} from "../types";
+import type { CompetitionSetting, OpsAdminSummaryResponse, OpsAdminOverviewWindow } from "../types";
 
 export function getOpsAdminSummary(
   token: string,
@@ -14,10 +9,6 @@ export function getOpsAdminSummary(
     `/ops/admin/summary?window=${encodeURIComponent(window)}`,
     { token },
   );
-}
-
-export function getOpsNeonUsage(token: string): Promise<OpsNeonUsageResponse> {
-  return apiRequest<OpsNeonUsageResponse>("/ops/db/neon-usage", { token });
 }
 
 export function updateOpsCompetitionSetting(

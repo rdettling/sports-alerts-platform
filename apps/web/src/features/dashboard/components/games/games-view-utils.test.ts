@@ -12,7 +12,9 @@ function makeGame(overrides: Partial<Game> = {}): Game {
         ? "football"
         : competition === "MLB"
           ? "baseball"
-          : "soccer";
+          : competition === "NHL"
+            ? "hockey"
+            : "soccer";
   return {
     id: 1,
     external_game_id: "g-1",
@@ -37,8 +39,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     },
     scheduled_start_time: "2026-05-28T17:10:00Z",
     context_label: null,
-    home_team_strength: { wins: null, losses: null, ties: null, rank: null },
-    away_team_strength: { wins: null, losses: null, ties: null, rank: null },
+    home_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
+    away_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -241,6 +243,42 @@ describe("sortGames", () => {
     ]);
   });
 
+  it("sorts hockey by regulation time or watchability", () => {
+    const close = makeGame({
+      id: 35,
+      competition: "NHL",
+      status: "in_progress",
+      period: 3,
+      clock: "02:00",
+      home_score: 3,
+      away_score: 2,
+    });
+    const early = makeGame({
+      id: 36,
+      competition: "NHL",
+      status: "in_progress",
+      period: 1,
+      clock: "20:00",
+      home_score: 0,
+      away_score: 0,
+    });
+    const blowout = makeGame({
+      id: 37,
+      competition: "NHL",
+      status: "in_progress",
+      period: 3,
+      clock: "01:00",
+      home_score: 5,
+      away_score: 1,
+    });
+    expect(sortGames([blowout, early, close], "watchability").map(({ id }) => id)).toEqual([
+      35, 36, 37,
+    ]);
+    expect(sortGames([close, early, blowout], "ending_soon").map(({ id }) => id)).toEqual([
+      37, 35, 36,
+    ]);
+  });
+
   it("sorts soccer by time remaining or watchability", () => {
     const close = makeGame({
       id: 40,
@@ -291,15 +329,15 @@ describe("sortGames", () => {
       id: 51,
       competition: "WNBA",
       scheduled_start_time: "2026-05-28T18:00:00Z",
-      home_team_strength: { wins: 2, losses: 8, ties: null, rank: null },
-      away_team_strength: { wins: 3, losses: 7, ties: null, rank: null },
+      home_team_strength: { wins: 2, losses: 8, ties: null, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 3, losses: 7, ties: null, overtime_losses: null, rank: null },
     });
     const strongerLater = makeGame({
       id: 52,
       competition: "WNBA",
       scheduled_start_time: "2026-05-28T20:00:00Z",
-      home_team_strength: { wins: 9, losses: 1, ties: null, rank: null },
-      away_team_strength: { wins: 8, losses: 2, ties: null, rank: null },
+      home_team_strength: { wins: 9, losses: 1, ties: null, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 8, losses: 2, ties: null, overtime_losses: null, rank: null },
     });
     expect(
       sortGames([weakerEarlier, strongerLater, liveBlowout], "watchability").map(({ id }) => id),

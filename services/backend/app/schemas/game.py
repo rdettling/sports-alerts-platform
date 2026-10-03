@@ -16,6 +16,7 @@ class TeamStrengthOut(BaseModel):
     wins: int | None = None
     losses: int | None = None
     ties: int | None = None
+    overtime_losses: int | None = None
     rank: int | None = None
 
     model_config = {"from_attributes": True}

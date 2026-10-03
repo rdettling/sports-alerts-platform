@@ -11,6 +11,8 @@ import {
   combinedTeamStrengthFactor,
   footballRegulationSecondsRemaining,
   footballWatchabilityScore,
+  hockeyRegulationSecondsRemaining,
+  hockeyWatchabilityScore,
   liveWatchabilityScore,
   marketCompetitivenessFactor,
   matchupQualityFactor,
@@ -33,7 +35,9 @@ function makeGame(overrides: Partial<Game> = {}): Game {
         ? "football"
         : competition === "MLB"
           ? "baseball"
-          : "soccer";
+          : competition === "NHL"
+            ? "hockey"
+            : "soccer";
   return {
     id: 1,
     external_game_id: "g-1",
@@ -58,8 +62,8 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     },
     scheduled_start_time: "2026-05-28T17:10:00Z",
     context_label: null,
-    home_team_strength: { wins: null, losses: null, ties: null, rank: null },
-    away_team_strength: { wins: null, losses: null, ties: null, rank: null },
+    home_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
+    away_team_strength: { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
     broadcast_names: [],
     status: "scheduled",
     home_score: null,
@@ -180,8 +184,14 @@ describe("football live calculations", () => {
 });
 
 describe("football watchability calibration", () => {
-  const eliteStrength = { wins: 10, losses: 0, ties: 0, rank: null };
-  const neutralStrength = { wins: null, losses: null, ties: null, rank: null };
+  const eliteStrength = { wins: 10, losses: 0, ties: 0, overtime_losses: null, rank: null };
+  const neutralStrength = {
+    wins: null,
+    losses: null,
+    ties: null,
+    overtime_losses: null,
+    rank: null,
+  };
 
   function liveGame(
     id: number,
@@ -211,8 +221,8 @@ describe("football watchability calibration", () => {
       external_game_id: `football-pregame-${id}`,
       competition: "FBS",
       scheduled_start_time: start,
-      home_team_strength: { wins: 0, losses: 0, ties: 0, rank: homeRank },
-      away_team_strength: { wins: 0, losses: 0, ties: 0, rank: awayRank },
+      home_team_strength: { wins: 0, losses: 0, ties: 0, overtime_losses: null, rank: homeRank },
+      away_team_strength: { wins: 0, losses: 0, ties: 0, overtime_losses: null, rank: awayRank },
     });
   }
 
@@ -248,16 +258,75 @@ describe("football watchability calibration", () => {
     const twoNineAndOneTeams = makeGame({
       id: 111,
       competition: "NFL",
-      home_team_strength: { wins: 9, losses: 1, ties: 0, rank: null },
-      away_team_strength: { wins: 9, losses: 1, ties: 0, rank: null },
+      home_team_strength: { wins: 9, losses: 1, ties: 0, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 9, losses: 1, ties: 0, overtime_losses: null, rank: null },
     });
     const undefeatedMismatch = makeGame({
       id: 112,
       competition: "NFL",
-      home_team_strength: { wins: 10, losses: 0, ties: 0, rank: null },
-      away_team_strength: { wins: 4, losses: 6, ties: 0, rank: null },
+      home_team_strength: { wins: 10, losses: 0, ties: 0, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 4, losses: 6, ties: 0, overtime_losses: null, rank: null },
     });
     expect(sortGames([undefeatedMismatch, twoNineAndOneTeams], "watchability")[0].id).toBe(111);
+  });
+});
+
+describe("hockey live calculations", () => {
+  it("calculates three-period regulation time and treats overtime as complete regulation", () => {
+    expect(
+      hockeyRegulationSecondsRemaining(
+        makeGame({ competition: "NHL", status: "in_progress", period: 1, clock: "20:00" }),
+      ),
+    ).toBe(3600);
+    expect(
+      hockeyRegulationSecondsRemaining(
+        makeGame({ competition: "NHL", status: "in_progress", period: 3, clock: "05:00" }),
+      ),
+    ).toBe(300);
+    expect(
+      hockeyRegulationSecondsRemaining(
+        makeGame({ competition: "NHL", status: "in_progress", period: 4, clock: "03:00" }),
+      ),
+    ).toBe(0);
+  });
+
+  it("uses hockey margins and regulation progress for urgency", () => {
+    expect(
+      hockeyWatchabilityScore(
+        makeGame({
+          competition: "NHL",
+          status: "in_progress",
+          period: 1,
+          clock: "20:00",
+          home_score: 0,
+          away_score: 0,
+        }),
+      ),
+    ).toBe(50);
+    expect(
+      hockeyWatchabilityScore(
+        makeGame({
+          competition: "NHL",
+          status: "in_progress",
+          period: 3,
+          clock: "05:00",
+          home_score: 2,
+          away_score: 1,
+        }),
+      ),
+    ).toBe(91);
+    expect(
+      hockeyWatchabilityScore(
+        makeGame({
+          competition: "NHL",
+          status: "in_progress",
+          period: 4,
+          clock: "03:00",
+          home_score: 2,
+          away_score: 2,
+        }),
+      ),
+    ).toBe(100);
   });
 });
 
@@ -305,24 +374,46 @@ describe("baseball live calculations", () => {
 
 describe("team quality", () => {
   it("uses records with neutral missing or 0-0 strength", () => {
-    expect(teamStrengthFactor({ wins: 6, losses: 2, ties: 2, rank: null }, "NFL")).toBeCloseTo(0.7);
-    expect(teamStrengthFactor({ wins: null, losses: null, ties: null, rank: null }, "NBA")).toBe(
-      0.5,
-    );
-    expect(teamStrengthFactor({ wins: 0, losses: 0, ties: 0, rank: null }, "MLS")).toBe(0.5);
+    expect(
+      teamStrengthFactor({ wins: 6, losses: 2, ties: 2, overtime_losses: null, rank: null }, "NFL"),
+    ).toBeCloseTo(0.7);
+    expect(
+      teamStrengthFactor(
+        { wins: null, losses: null, ties: null, overtime_losses: null, rank: null },
+        "NBA",
+      ),
+    ).toBe(0.5);
+    expect(
+      teamStrengthFactor({ wins: 0, losses: 0, ties: 0, overtime_losses: null, rank: null }, "MLS"),
+    ).toBe(0.5);
+    expect(
+      teamStrengthFactor(
+        { wins: 10, losses: 5, ties: null, overtime_losses: 5, rank: null },
+        "NHL",
+      ),
+    ).toBe(0.625);
   });
 
   it("prioritizes FBS poll rankings and caps unranked strength", () => {
-    expect(teamStrengthFactor({ wins: 1, losses: 8, ties: 0, rank: 1 }, "FBS")).toBe(1);
-    expect(teamStrengthFactor({ wins: 1, losses: 8, ties: 0, rank: 25 }, "FBS")).toBe(0.75);
-    expect(teamStrengthFactor({ wins: 10, losses: 0, ties: 0, rank: null }, "FBS")).toBe(0.7);
+    expect(
+      teamStrengthFactor({ wins: 1, losses: 8, ties: 0, overtime_losses: null, rank: 1 }, "FBS"),
+    ).toBe(1);
+    expect(
+      teamStrengthFactor({ wins: 1, losses: 8, ties: 0, overtime_losses: null, rank: 25 }, "FBS"),
+    ).toBe(0.75);
+    expect(
+      teamStrengthFactor(
+        { wins: 10, losses: 0, ties: 0, overtime_losses: null, rank: null },
+        "FBS",
+      ),
+    ).toBe(0.7);
   });
 
   it("keeps live matchup quality distinct from combined pregame team strength", () => {
     const game = makeGame({
       competition: "NBA",
-      home_team_strength: { wins: 8, losses: 2, ties: null, rank: null },
-      away_team_strength: { wins: 6, losses: 4, ties: null, rank: null },
+      home_team_strength: { wins: 8, losses: 2, ties: null, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 6, losses: 4, ties: null, overtime_losses: null, rank: null },
     });
     expect(matchupQualityFactor(game)).toBeCloseTo(0.685);
     expect(combinedTeamStrengthFactor(game)).toBeCloseTo(0.7);
@@ -330,8 +421,8 @@ describe("team quality", () => {
 
     const rankedFbsMatchup = makeGame({
       competition: "FBS",
-      home_team_strength: { wins: 1, losses: 8, ties: 0, rank: 1 },
-      away_team_strength: { wins: 10, losses: 0, ties: 0, rank: null },
+      home_team_strength: { wins: 1, losses: 8, ties: 0, overtime_losses: null, rank: 1 },
+      away_team_strength: { wins: 10, losses: 0, ties: 0, overtime_losses: null, rank: null },
     });
     expect(combinedTeamStrengthFactor(rankedFbsMatchup)).toBeCloseTo(0.85);
     expect(pregameWatchabilityScore(rankedFbsMatchup)).toBeCloseTo(88);
@@ -625,8 +716,14 @@ describe("basketball live calculations", () => {
 });
 
 describe("basketball watchability calibration", () => {
-  const eliteStrength = { wins: 10, losses: 0, ties: null, rank: null };
-  const neutralStrength = { wins: null, losses: null, ties: null, rank: null };
+  const eliteStrength = { wins: 10, losses: 0, ties: null, overtime_losses: null, rank: null };
+  const neutralStrength = {
+    wins: null,
+    losses: null,
+    ties: null,
+    overtime_losses: null,
+    rank: null,
+  };
 
   function liveGame(
     id: number,
@@ -722,7 +819,7 @@ describe("soccer live calculations", () => {
     expect(
       soccerWatchabilityScore(
         makeGame({
-          competition: "WORLD_CUP",
+          competition: "CHAMPIONS_LEAGUE",
           status: "in_progress",
           period: 5,
           home_score: 4,
@@ -734,9 +831,15 @@ describe("soccer live calculations", () => {
 });
 
 describe("soccer watchability calibration", () => {
-  const neutralStrength = { wins: null, losses: null, ties: null, rank: null };
-  const eliteStrength = { wins: 10, losses: 0, ties: 0, rank: null };
-  const strongStrength = { wins: 8, losses: 2, ties: 0, rank: null };
+  const neutralStrength = {
+    wins: null,
+    losses: null,
+    ties: null,
+    overtime_losses: null,
+    rank: null,
+  };
+  const eliteStrength = { wins: 10, losses: 0, ties: 0, overtime_losses: null, rank: null };
+  const strongStrength = { wins: 8, losses: 2, ties: 0, overtime_losses: null, rank: null };
 
   function liveGame(
     id: number,
@@ -807,13 +910,13 @@ describe("unified live watchability", () => {
     const neutral = makeGame(liveGame);
     const elite = makeGame({
       ...liveGame,
-      home_team_strength: { wins: 10, losses: 0, ties: null, rank: null },
-      away_team_strength: { wins: 10, losses: 0, ties: null, rank: null },
+      home_team_strength: { wins: 10, losses: 0, ties: null, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 10, losses: 0, ties: null, overtime_losses: null, rank: null },
     });
     const weak = makeGame({
       ...liveGame,
-      home_team_strength: { wins: 2, losses: 8, ties: null, rank: null },
-      away_team_strength: { wins: 2, losses: 8, ties: null, rank: null },
+      home_team_strength: { wins: 2, losses: 8, ties: null, overtime_losses: null, rank: null },
+      away_team_strength: { wins: 2, losses: 8, ties: null, overtime_losses: null, rank: null },
     });
     expect(liveWatchabilityScore(neutral)).toBe(40);
     expect(liveWatchabilityScore(elite)).toBe(55);
@@ -827,6 +930,7 @@ function recordStrength(rate: number): Game["home_team_strength"] {
     wins: rate * 100,
     losses: (1 - rate) * 100,
     ties: null,
+    overtime_losses: null,
     rank: null,
   };
 }

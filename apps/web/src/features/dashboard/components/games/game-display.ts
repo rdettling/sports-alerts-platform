@@ -21,6 +21,13 @@ function formatSoccerPeriod(period: number | null): string {
   return `ET ${period - 2}`;
 }
 
+function formatHockeyPeriod(period: number | null): string {
+  if (period === null || period <= 0) return "";
+  if (period <= 3) return `P${period}`;
+  if (period === 4) return "OT";
+  return "SO";
+}
+
 function isClockAtZero(clock: string): boolean {
   return clock === "0" || clock === "0.0" || clock === "00:00" || clock === "0:00";
 }
@@ -32,7 +39,9 @@ export function formatGameTime(game: Game, sport: Sport): string {
         ? formatBaseballPeriod(game.period)
         : sport === "soccer"
           ? formatSoccerPeriod(game.period)
-          : formatPeriod(game.period);
+          : sport === "hockey"
+            ? formatHockeyPeriod(game.period)
+            : formatPeriod(game.period);
     const clock = (game.clock ?? "").trim();
     if (
       (sport === "basketball" || sport === "football") &&
@@ -68,6 +77,9 @@ export function formatTeamRecord(strength: TeamStrength, sport: Sport): string |
   if (strength.wins === null || strength.losses === null) return null;
   if (sport === "soccer") {
     return `${strength.wins}-${strength.ties ?? 0}-${strength.losses}`;
+  }
+  if (sport === "hockey") {
+    return `${strength.wins}-${strength.losses}-${strength.overtime_losses ?? 0}`;
   }
   return strength.ties
     ? `${strength.wins}-${strength.losses}-${strength.ties}`

@@ -468,36 +468,6 @@ def test_provider_uses_meaningful_nfl_context_and_leaves_standard_games_unlabele
     assert postseason.is_final is True
 
 
-def test_provider_builds_world_cup_stage_context_label():
-    payload = {
-        "events": [
-            {
-                "id": "760416",
-                "date": "2026-06-12T19:00Z",
-                "season": {"year": 2026, "type": 13802, "slug": "group-stage"},
-                "competitions": [
-                    {
-                        "status": {
-                            "period": 0,
-                            "displayClock": "0:00",
-                            "type": {"state": "pre", "name": "STATUS_SCHEDULED", "completed": False},
-                        },
-                        "competitors": [
-                            {"homeAway": "home", "score": "0", "team": {"id": "660", "abbreviation": "USA"}},
-                            {"homeAway": "away", "score": "0", "team": {"id": "203", "abbreviation": "MEX"}},
-                        ],
-                    }
-                ],
-            }
-        ]
-    }
-
-    provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
-    schedule = provider.fetch_games("WORLD_CUP", ["20260612"])
-    assert len(schedule) == 1
-    assert schedule[0].context_label == "Group Stage"
-
-
 def test_provider_builds_champions_league_stage_and_leg_context_label():
     payload = {
         "events": [
@@ -698,6 +668,67 @@ def test_provider_maps_status_postponed_payload_to_postponed():
     assert len(schedule) == 1
     assert schedule[0].status == "postponed"
     assert schedule[0].is_final is False
+
+
+def test_provider_parses_nhl_records_overtime_and_playoff_context():
+    payload = {
+        "events": [
+            {
+                "id": "401900001",
+                "date": "2026-05-20T00:00:00Z",
+                "season": {"slug": "post-season"},
+                "competitions": [
+                    {
+                        "notes": [{"headline": "Conference Finals - Game 2"}],
+                        "series": {"summary": "Series tied 1-1"},
+                        "broadcasts": [{"names": ["ESPN"]}],
+                        "status": {
+                            "period": 4,
+                            "displayClock": "04:21",
+                            "type": {
+                                "state": "in",
+                                "name": "STATUS_IN_PROGRESS",
+                                "completed": False,
+                            },
+                        },
+                        "competitors": [
+                            {
+                                "homeAway": "home",
+                                "score": "3",
+                                "team": {"id": "1", "abbreviation": "BOS"},
+                                "records": [{"type": "ytd", "summary": "12-5-3"}],
+                            },
+                            {
+                                "homeAway": "away",
+                                "score": "3",
+                                "team": {"id": "13", "abbreviation": "NYR"},
+                                "records": [{"type": "total", "summary": "10-8-1"}],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games(
+        "NHL", ["20260520"]
+    )[0]
+
+    assert game.status == "in_progress"
+    assert (game.period, game.clock) == (4, "04:21")
+    assert game.context_label == "Conference Finals - Game 2 · Series tied 1-1"
+    assert game.broadcast_names == ["ESPN"]
+    assert game.home_team_strength == TeamStrength(
+        wins=12,
+        losses=5,
+        overtime_losses=3,
+    )
+    assert game.away_team_strength == TeamStrength(
+        wins=10,
+        losses=8,
+        overtime_losses=1,
+    )
 
 
 def test_provider_skips_events_with_invalid_placeholder_team_ids():

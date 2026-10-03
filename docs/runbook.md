@@ -53,7 +53,7 @@ To verify idle sleep after a worker deploy, run the report for the post-deploy p
 
 Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
 
-If admin requests appear repeatedly during idle periods, use the [Admin request checks](#admin-data-is-stale-or-requesting-unexpectedly). Admin reads still authenticate against Postgres, including the Neon usage endpoint whose usage lookup itself uses the control plane.
+If admin requests appear repeatedly during idle periods, use the [Admin request checks](#admin-data-is-stale-or-requesting-unexpectedly). Admin summary reads authenticate against Postgres and include the current UTC day's odds usage.
 
 The report recursively splits queries that reach Render's 1,000-record limit and deduplicates overlapping results. Current partial windows and abruptly terminated processes can still be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for an on-demand weekly review.
 
@@ -63,8 +63,8 @@ Admin loads on demand; see the [request and panel rules](architecture.md#admin--
 
 To verify request behavior in browser network tools:
 
-1. Open Admin, then open Activity & tools once so both the summary and Neon usage have loaded.
-2. Leave it visible for ten minutes, switch tabs, return from another app, and restore networking. These actions must not start additional `/ops/admin/summary` or `/ops/db/neon-usage` requests; an already-requested offline load can resume.
+1. Open Admin, then open Activity & tools once so the summary-backed panels are visible.
+2. Leave it visible for ten minutes, switch tabs, return from another app, and restore networking. These actions must not start additional `/ops/admin/summary` requests; an already-requested offline load can resume.
 3. Confirm there is no manual refresh control on either tab.
 4. Change the activity window or a league setting: expect a summary request. Sending a test alert displays its delivery response without requesting another summary.
 
@@ -82,7 +82,7 @@ If reports stay unavailable after worker activity, check `Schedule report delive
 
 ## Games Screen Is Stale
 
-1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball/football use one minute, soccer 90 seconds, and MLB two minutes
+1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball, football, and NHL use one minute, soccer 90 seconds, and MLB two minutes
 2. Confirm `LIVE_UPDATE_API_URL` points to the API and both services have matching `LIVE_UPDATE_SECRET` values
 3. On a visible, online Games screen, inspect `/updates/games`: expect `text/event-stream`, periodic keep-alives, and `games` events after changed syncs
 4. An event should prompt a games read after about one second (at least two seconds between event-driven reads). The API invalidates its shared cache before sending the event
@@ -160,6 +160,8 @@ Push has no email fallback. Email alerts and per-device Push enrollment are inde
 Admin is the source of truth for which supported competitions are active. Inactive competitions remain listed in Admin but disappear from Games, Teams, follows, alert configuration, and each user's league picker. Their stored sports data and user choices are preserved for reactivation.
 
 New competition profiles added to an existing environment start inactive. Review their provider configuration and team catalog, then activate them from Admin when they are ready to consume sync resources and appear throughout the app. Seasonal activation is manual; the app does not infer availability from calendar dates or temporary gaps in scheduled games.
+
+For the NHL rollout, deploy the migration and API first so startup seeding creates the 32-team catalog and inactive `NHL` row. Confirm the Admin league entry and team catalog, deploy the worker and web app, then enable NHL manually. Preseason games should ingest normally with `is_odds_eligible = false`.
 
 ## Bad Local State
 

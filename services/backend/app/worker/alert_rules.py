@@ -58,11 +58,21 @@ def _should_trigger_close_game_late(game: Game, settings: AlertSettings) -> bool
         return False
     if game.home_score is None or game.away_score is None:
         return False
-    resolved_margin = settings.close_game_margin_threshold or 5
-    resolved_seconds = settings.close_game_time_threshold_seconds or 120
+    sport = get_competition_profile(game.competition).sport
+    resolved_margin = (
+        settings.close_game_margin_threshold
+        if settings.close_game_margin_threshold is not None
+        else 5
+    )
+    resolved_seconds = (
+        settings.close_game_time_threshold_seconds
+        if settings.close_game_time_threshold_seconds is not None
+        else 120
+    )
     if abs(game.home_score - game.away_score) > resolved_margin:
         return False
-    if (game.period or 0) < 4:
+    period = game.period or 0
+    if (sport == "hockey" and period != 3) or (sport != "hockey" and period < 4):
         return False
     seconds_left = _parse_clock_seconds(game.clock)
     return seconds_left is not None and seconds_left <= resolved_seconds
@@ -79,12 +89,14 @@ def _should_trigger_inning_start(game: Game, settings: AlertSettings) -> bool:
 
 
 def _should_trigger_overtime_start(game: Game, settings: AlertSettings) -> bool:
+    sport = get_competition_profile(game.competition).sport
+    overtime_period = 4 if sport == "hockey" else 5
     return (
         settings.is_enabled
-        and get_competition_profile(game.competition).sport in {"basketball", "football"}
+        and sport in {"basketball", "football", "hockey"}
         and not game.is_final
         and game.status in {"in_progress", "live"}
-        and (game.period or 0) >= 5
+        and (game.period or 0) >= overtime_period
     )
 
 
@@ -150,10 +162,10 @@ def detect_alerts(
         if score_change is not None
         else None
     )
-    is_football_score_change = (
-        score_change is not None
-        and get_competition_profile(game.competition).sport == "football"
-    )
+    sport = get_competition_profile(game.competition).sport
+    is_football_score_change = score_change is not None and sport == "football"
+    is_hockey_score_change = score_change is not None and sport == "hockey"
+    is_hockey_goal = is_hockey_score_change and score_change.is_inferred_goal
     is_football_lead_change = (
         is_football_score_change
         and score_change.lead_changed
@@ -170,6 +182,25 @@ def detect_alerts(
             )
         )
     elif is_football_score_change and fresh_close_game:
+        detected.append(
+            DetectedAlert(
+                "close_game_late",
+                "close_game_late",
+                score_event_data or {},
+            )
+        )
+    elif is_hockey_goal and score_changed and score_changed.is_enabled:
+        event_data = dict(score_event_data or {})
+        if fresh_close_game:
+            event_data["covers_close_game_late"] = True
+        detected.append(
+            DetectedAlert(
+                "score_changed",
+                f"score_changed:{score_change.new_away_score}-{score_change.new_home_score}",
+                event_data,
+            )
+        )
+    elif is_hockey_goal and fresh_close_game:
         detected.append(
             DetectedAlert(
                 "close_game_late",
@@ -222,7 +253,7 @@ def detect_alerts(
             )
         )
 
-    if fresh_close_game and not is_football_score_change:
+    if fresh_close_game and not is_football_score_change and not is_hockey_goal:
         detected.append(
             DetectedAlert(
                 "close_game_late",
@@ -237,7 +268,7 @@ def detect_alerts(
         detected.append(
             DetectedAlert(
                 "overtime_start",
-                f"overtime_start:{period}",
+                "overtime_start" if sport == "hockey" else f"overtime_start:{period}",
                 _event_snapshot(game),
             )
         )

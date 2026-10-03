@@ -27,12 +27,12 @@
 }
 
 .game-score-competition-mark .competition-wnba,
+.game-score-competition-mark .competition-nhl,
 .game-score-competition-mark .competition-fbs,
 .game-score-competition-mark .competition-mls,
 .game-score-competition-mark .competition-la_liga,
 .game-score-competition-mark .competition-premier_league,
-.game-score-competition-mark .competition-champions_league,
-.game-score-competition-mark .competition-world_cup {
+.game-score-competition-mark .competition-champions_league {
   max-width: 1.125rem;
 }
 
@@ -64,11 +64,11 @@
 }
 
 .league-visibility-mark .competition-mls,
+.league-visibility-mark .competition-nhl,
 .league-visibility-mark .competition-fbs,
 .league-visibility-mark .competition-la_liga,
 .league-visibility-mark .competition-premier_league,
-.league-visibility-mark .competition-champions_league,
-.league-visibility-mark .competition-world_cup {
+.league-visibility-mark .competition-champions_league {
   width: 28px;
   height: 28px;
 }
@@ -96,11 +96,11 @@
 }
 
 .admin-competition-setting-mark .competition-mls,
+.admin-competition-setting-mark .competition-nhl,
 .admin-competition-setting-mark .competition-fbs,
 .admin-competition-setting-mark .competition-la_liga,
 .admin-competition-setting-mark .competition-premier_league,
-.admin-competition-setting-mark .competition-champions_league,
-.admin-competition-setting-mark .competition-world_cup {
+.admin-competition-setting-mark .competition-champions_league {
   width: 1.2rem;
   height: 1.2rem;
 }

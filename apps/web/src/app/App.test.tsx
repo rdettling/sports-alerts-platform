@@ -38,7 +38,7 @@ describe("App page metadata", () => {
 
     await waitFor(() => expect(document.title).toBe("Live Game Alerts"));
     expect(metaContent('meta[name="description"]')).toBe(
-      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League, and World Cup games.",
+      "Live scores and customizable email and push alerts for NBA, WNBA, NFL, MLB, NHL, MLS, La Liga, and Premier League games.",
     );
     expect(metaContent('meta[name="robots"]')).toBe("index, follow");
     expect(metaContent('meta[property="og:title"]')).toBe("Live Game Alerts");
@@ -53,7 +53,7 @@ describe("App page metadata", () => {
 
     await waitFor(() => expect(document.title).toBe("Teams | Live Game Alerts"));
     expect(metaContent('meta[name="description"]')).toContain(
-      "Browse NBA, WNBA, NFL, MLB, MLS, La Liga, Premier League",
+      "Browse NBA, WNBA, NFL, MLB, NHL, MLS, La Liga, and Premier League",
     );
     expect(metaContent('meta[name="robots"]')).toBe("index, follow");
     expect(metaContent('meta[property="og:url"]')).toBe("https://livegamealerts.com/teams");

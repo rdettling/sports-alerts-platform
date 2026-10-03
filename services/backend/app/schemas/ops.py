@@ -28,6 +28,7 @@ class OpsAdminDeliveryOut(BaseModel):
 class OddsApiUsageOut(BaseModel):
     credits_used: int
     daily_credit_cap: int
+    provider_credits_used: int | None = None
     provider_credits_remaining: int | None = None
     provider_observed_at: datetime | None = None
 
@@ -38,17 +39,4 @@ class OpsAdminSummaryOut(BaseModel):
     competition_settings: list[CompetitionSettingOut]
     schedule: ScheduleSnapshot | None = None
     odds_api_usage: OddsApiUsageOut
-
-
-class NeonUsageOut(BaseModel):
-    available: bool
-    project_id: str | None = None
-    project_name: str | None = None
-    dashboard_url: str | None = None
-    consumption_period_start: datetime | None = None
-    consumption_period_end: datetime | None = None
-    cpu_used_sec: int | None = None
-    active_time_sec: int | None = None
-    compute_last_active_at: datetime | None = None
-    avg_cu_while_active: float | None = None
-    message: str | None = None
+    neon_dashboard_url: str | None = None

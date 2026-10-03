@@ -110,6 +110,137 @@ def test_football_score_change_ignores_non_events(payload):
     assert classify_score_change(_stored_game(14, 10), payload, sport="football") is None
 
 
+def _hockey_game(
+    home_score: int,
+    away_score: int,
+    *,
+    period: int = 3,
+    clock: str = "04:30",
+) -> Game:
+    game = _stored_game(home_score, away_score, period=period, clock=clock)
+    game.competition = "NHL"
+    return game
+
+
+def test_hockey_score_change_classifies_goals_and_ignores_shootouts():
+    goal = classify_score_change(
+        _hockey_game(1, 1),
+        _payload(2, 1, period=3, clock="04:30"),
+        sport="hockey",
+    )
+
+    assert goal is not None
+    assert goal.is_inferred_goal is True
+    assert goal.scoring_side == "home"
+    assert (
+        classify_score_change(
+            _hockey_game(3, 3, period=5),
+            _payload(4, 3, period=5),
+            sport="hockey",
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("period", "clock", "home_score", "away_score", "expected"),
+    [
+        (3, "05:00", 2, 1, ["close_game_late"]),
+        (3, "04:59", 3, 1, []),
+        (2, "01:00", 2, 1, []),
+        (4, "04:00", 2, 1, []),
+    ],
+)
+def test_hockey_close_game_only_triggers_in_the_final_five_minutes_of_period_three(
+    period,
+    clock,
+    home_score,
+    away_score,
+    expected,
+):
+    detected = detect_alerts(
+        _hockey_game(home_score, away_score, period=period, clock=clock),
+        None,
+        {
+            "close_game_late": AlertSettings(
+                is_enabled=True,
+                close_game_margin_threshold=1,
+                close_game_time_threshold_seconds=300,
+            )
+        },
+    )
+
+    assert [alert.alert_type for alert in detected] == expected
+
+
+@pytest.mark.parametrize("score_enabled", [True, False])
+def test_hockey_goal_takes_precedence_over_close_game_when_enabled(score_enabled):
+    game = _hockey_game(2, 1)
+    event = classify_score_change(
+        _hockey_game(1, 1),
+        _payload(2, 1, period=3, clock="04:30"),
+        sport="hockey",
+    )
+    assert event is not None
+
+    detected = detect_alerts(
+        game,
+        None,
+        {
+            "score_changed": AlertSettings(is_enabled=score_enabled),
+            "close_game_late": AlertSettings(
+                is_enabled=True,
+                close_game_margin_threshold=1,
+                close_game_time_threshold_seconds=300,
+            ),
+        },
+        event,
+    )
+
+    assert [alert.alert_type for alert in detected] == [
+        "score_changed" if score_enabled else "close_game_late"
+    ]
+    if score_enabled:
+        assert detected[0].event_data["covers_close_game_late"] is True
+
+
+def test_ambiguous_hockey_score_change_remains_separate_from_close_game():
+    event = classify_score_change(
+        _hockey_game(1, 1),
+        _payload(3, 2, period=3, clock="04:30"),
+        sport="hockey",
+    )
+    assert event is not None
+    assert event.is_inferred_goal is False
+
+    detected = detect_alerts(
+        _hockey_game(3, 2),
+        None,
+        {
+            "score_changed": AlertSettings(is_enabled=True),
+            "close_game_late": AlertSettings(
+                is_enabled=True,
+                close_game_margin_threshold=1,
+                close_game_time_threshold_seconds=300,
+            ),
+        },
+        event,
+    )
+
+    assert [alert.alert_type for alert in detected] == ["score_changed", "close_game_late"]
+    assert "covers_close_game_late" not in detected[0].event_data
+
+
+def test_hockey_overtime_uses_one_event_key_through_shootout():
+    settings = {"overtime_start": AlertSettings(is_enabled=True)}
+
+    overtime = detect_alerts(_hockey_game(2, 2, period=4), None, settings)
+    shootout = detect_alerts(_hockey_game(2, 2, period=5), None, settings)
+
+    assert [alert.event_key_suffix for alert in overtime] == ["overtime_start"]
+    assert [alert.event_key_suffix for alert in shootout] == ["overtime_start"]
+
+
 @pytest.mark.parametrize(
     ("score_enabled", "lead_enabled", "expected"),
     [

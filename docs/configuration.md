@@ -29,9 +29,7 @@ VAPID_SUBJECT=mailto:you@example.com
 
 VITE_API_BASE_URL=http://localhost:8000
 
-NEON_API_KEY=
 NEON_PROJECT_ID=
-NEON_ORG_ID=
 NEON_DASHBOARD_URL=
 ```
 
@@ -101,16 +99,15 @@ The frontend currently needs one required env var:
 
 Point it at the API origin the browser should call, for example `http://localhost:8000` locally.
 
-## Optional Neon Integration
+## Optional Neon Shortcut
 
-These values power the admin DB stats view when present:
+These values power the Admin toolbar link to the production Neon project:
 
-- `NEON_API_KEY`
 - `NEON_PROJECT_ID`
-- `NEON_ORG_ID`
 - `NEON_DASHBOARD_URL`
 
-If they are absent, the app still runs; the admin UI just shows Neon data as unavailable.
+`NEON_DASHBOARD_URL` takes precedence. When only `NEON_PROJECT_ID` is set, the API builds the
+standard Neon project URL. If both are absent, the app still runs and hides the shortcut.
 
 ## Secrets And Defaults
 

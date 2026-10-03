@@ -75,6 +75,7 @@ class CompetitionTeam(Base):
     wins: Mapped[int | None] = mapped_column(Integer, nullable=True)
     losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ties: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    overtime_losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     strength_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

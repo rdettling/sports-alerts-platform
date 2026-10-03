@@ -83,8 +83,20 @@ def test_games_include_odds_when_available(client):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["context_label"] is None
-    assert payload[0]["home_team_strength"] == {"wins": 48, "losses": 31, "ties": 0, "rank": None}
-    assert payload[0]["away_team_strength"] == {"wins": 57, "losses": 22, "ties": 0, "rank": None}
+    assert payload[0]["home_team_strength"] == {
+        "wins": 48,
+        "losses": 31,
+        "ties": 0,
+        "overtime_losses": None,
+        "rank": None,
+    }
+    assert payload[0]["away_team_strength"] == {
+        "wins": 57,
+        "losses": 22,
+        "ties": 0,
+        "overtime_losses": None,
+        "rank": None,
+    }
     assert payload[0]["home_team"]["id"] == payload[0]["home_team_id"]
     assert payload[0]["away_team"]["id"] == payload[0]["away_team_id"]
     assert payload[0]["home_team"]["name"]
@@ -149,18 +161,19 @@ def test_games_embed_incidental_fbs_opponents_without_catalog_membership(client)
         "wins": None,
         "losses": None,
         "ties": None,
+        "overtime_losses": None,
         "rank": None,
     }
     assert all(team["id"] != payload[0]["away_team_id"] for team in client.get("/teams").json())
 
 
-def test_games_include_world_cup_draw_odds(client):
+def test_games_include_champions_league_draw_odds(client):
     db = SessionLocal()
     try:
-        teams = db.scalars(competition_teams_query("WORLD_CUP").order_by(Team.id.asc()).limit(2)).all()
+        teams = db.scalars(competition_teams_query("CHAMPIONS_LEAGUE").order_by(Team.id.asc()).limit(2)).all()
         game = Game(
-            external_game_id="test-world-cup-odds",
-            competition="WORLD_CUP",
+            external_game_id="test-champions-league-odds",
+            competition="CHAMPIONS_LEAGUE",
             home_team_id=teams[0].id,
             away_team_id=teams[1].id,
             scheduled_start_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -177,9 +190,9 @@ def test_games_include_world_cup_draw_odds(client):
         )
         odds.outcomes.extend(
             [
-                GameOddsOutcomeCurrent(outcome_key="united_states", outcome_label="United States", outcome_order=0, price_american=160, team_side="away"),
+                GameOddsOutcomeCurrent(outcome_key="arsenal", outcome_label="Arsenal", outcome_order=0, price_american=160, team_side="away"),
                 GameOddsOutcomeCurrent(outcome_key="draw", outcome_label="Draw", outcome_order=1, price_american=210, team_side=None),
-                GameOddsOutcomeCurrent(outcome_key="mexico", outcome_label="Mexico", outcome_order=2, price_american=180, team_side="home"),
+                GameOddsOutcomeCurrent(outcome_key="barcelona", outcome_label="Barcelona", outcome_order=2, price_american=180, team_side="home"),
             ]
         )
         db.add(odds)
@@ -187,11 +200,11 @@ def test_games_include_world_cup_draw_odds(client):
     finally:
         db.close()
 
-    response = client.get("/games?competition=WORLD_CUP")
+    response = client.get("/games?competition=CHAMPIONS_LEAGUE")
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
-    assert [item["outcome_key"] for item in payload[0]["odds"]["outcomes"]] == ["united_states", "draw", "mexico"]
+    assert [item["outcome_key"] for item in payload[0]["odds"]["outcomes"]] == ["arsenal", "draw", "barcelona"]
 
 
 def test_games_excludes_rows_outside_retention_window(client):
