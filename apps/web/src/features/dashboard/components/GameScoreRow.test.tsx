@@ -1,3 +1,4 @@
+import { type ComponentProps } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -49,21 +50,25 @@ function makeGame(overrides: Partial<Game> = {}): Game {
   };
 }
 
-describe("GameScoreRow", () => {
-  const home = makeTeam(1, "BOS", "Boston Celtics");
-  const away = makeTeam(2, "ATL", "Atlanta Hawks");
+const home = makeTeam(1, "BOS", "Boston Celtics");
+const away = makeTeam(2, "ATL", "Atlanta Hawks");
 
+function gameScoreRow(overrides: Partial<ComponentProps<typeof GameScoreRow>> = {}) {
+  const props: ComponentProps<typeof GameScoreRow> = {
+    game: makeGame(),
+    sport: "basketball",
+    home,
+    away,
+    isFollowed: false,
+    statusLabel: "7:00 PM",
+    ...overrides,
+  };
+  return <GameScoreRow {...props} />;
+}
+
+describe("GameScoreRow", () => {
   it("shows full team names, records, raw odds, and competition identity", () => {
-    render(
-      <GameScoreRow
-        game={makeGame()}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
-    );
+    render(gameScoreRow());
 
     expect(screen.getByText("Atlanta Hawks")).toBeInTheDocument();
     expect(screen.getByText("Boston Celtics")).toBeInTheDocument();
@@ -78,8 +83,8 @@ describe("GameScoreRow", () => {
 
   it("omits the secondary team line when records are unavailable", () => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           home_team_strength: {
             wins: null,
             losses: null,
@@ -94,13 +99,8 @@ describe("GameScoreRow", () => {
             overtime_losses: null,
             rank: null,
           },
-        })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
+        }),
+      }),
     );
 
     expect(
@@ -119,18 +119,14 @@ describe("GameScoreRow", () => {
 
   it("shows an FBS poll rank immediately before the team name", () => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           competition: "FBS",
           home_team_strength: { wins: 8, losses: 1, ties: 0, overtime_losses: null, rank: 3 },
           away_team_strength: { wins: 6, losses: 3, ties: 0, overtime_losses: null, rank: null },
-        })}
-        sport="football"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
+        }),
+        sport: "football",
+      }),
     );
 
     const homeName = screen.getByText("Boston Celtics");
@@ -141,17 +137,7 @@ describe("GameScoreRow", () => {
 
   it("shows follow action for unfollowed non-final games", () => {
     const onFollow = vi.fn();
-    render(
-      <GameScoreRow
-        game={makeGame()}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-        onFollow={onFollow}
-      />,
-    );
+    render(gameScoreRow({ onFollow }));
 
     fireEvent.click(screen.getByRole("button", { name: "Follow" }));
     expect(onFollow).toHaveBeenCalledTimes(1);
@@ -161,16 +147,11 @@ describe("GameScoreRow", () => {
     const onUnfollow = vi.fn();
     const onOpenAlertSettings = vi.fn();
     render(
-      <GameScoreRow
-        game={makeGame()}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed
-        statusLabel="7:00 PM"
-        onUnfollow={onUnfollow}
-        onOpenAlertSettings={onOpenAlertSettings}
-      />,
+      gameScoreRow({
+        isFollowed: true,
+        onUnfollow,
+        onOpenAlertSettings,
+      }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -181,14 +162,11 @@ describe("GameScoreRow", () => {
 
   it("emphasizes the winner, de-emphasizes the loser, and hides final-game actions", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed
-        statusLabel="Final"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 }),
+        isFollowed: true,
+        statusLabel: "Final",
+      }),
     );
 
     expect(screen.getByRole("listitem")).toHaveClass("final");
@@ -200,14 +178,10 @@ describe("GameScoreRow", () => {
 
   it("marks live games and shows their score values", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ status: "in_progress", home_score: 82, away_score: 79 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Q4 2:14"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "in_progress", home_score: 82, away_score: 79 }),
+        statusLabel: "Q4 2:14",
+      }),
     );
 
     expect(screen.getByRole("listitem")).toHaveClass("live");
@@ -218,14 +192,10 @@ describe("GameScoreRow", () => {
 
   it("toggles a live game between its score and pregame odds", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ status: "in_progress", home_score: 82, away_score: 79 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Q4 2:14"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "in_progress", home_score: 82, away_score: 79 }),
+        statusLabel: "Q4 2:14",
+      }),
     );
 
     const toggle = screen.getByRole("button", { name: "Pregame odds" });
@@ -250,26 +220,18 @@ describe("GameScoreRow", () => {
 
   it("preserves the selected odds view across live game updates", () => {
     const { rerender } = render(
-      <GameScoreRow
-        game={makeGame({ status: "in_progress", home_score: 82, away_score: 79 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Q4 2:14"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "in_progress", home_score: 82, away_score: 79 }),
+        statusLabel: "Q4 2:14",
+      }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
     rerender(
-      <GameScoreRow
-        game={makeGame({ status: "in_progress", home_score: 84, away_score: 81 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Q4 1:42"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "in_progress", home_score: 84, away_score: 81 }),
+        statusLabel: "Q4 1:42",
+      }),
     );
 
     expect(screen.getByRole("button", { name: "Pregame odds" })).toHaveAttribute(
@@ -282,14 +244,10 @@ describe("GameScoreRow", () => {
 
   it("toggles final games while preserving winner and loser emphasis", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Final"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108 }),
+        statusLabel: "Final",
+      }),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
@@ -305,16 +263,7 @@ describe("GameScoreRow", () => {
     ["scheduled", makeGame()],
     ["postponed", makeGame({ status: "postponed" })],
   ])("does not show the pregame toggle for %s games", (_label, game) => {
-    render(
-      <GameScoreRow
-        game={game}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Game status"
-      />,
-    );
+    render(gameScoreRow({ game, statusLabel: "Game status" }));
 
     expect(screen.queryByRole("button", { name: "Pregame odds" })).toBeNull();
   });
@@ -326,16 +275,7 @@ describe("GameScoreRow", () => {
       makeGame({ status: "final", is_final: true, home_score: 110, away_score: 108, odds: null }),
     ],
   ])("shows placeholder odds for %s games without a snapshot", (_label, game) => {
-    render(
-      <GameScoreRow
-        game={game}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Game status"
-      />,
-    );
+    render(gameScoreRow({ game, statusLabel: "Game status" }));
 
     const toggle = screen.getByRole("button", { name: "Pregame odds" });
     fireEvent.click(toggle);
@@ -346,14 +286,10 @@ describe("GameScoreRow", () => {
 
   it("marks postponed games and uses em dashes when no values exist", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ status: "postponed", odds: null })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="Postponed"
-      />,
+      gameScoreRow({
+        game: makeGame({ status: "postponed", odds: null }),
+        statusLabel: "Postponed",
+      }),
     );
 
     expect(screen.getByRole("listitem")).toHaveClass("postponed");
@@ -361,37 +297,31 @@ describe("GameScoreRow", () => {
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
-  it("shows context text when present", () => {
+  it("reveals the full context from its compact header disclosure", () => {
     const context = "NBA Finals - Game 5 · Knicks lead series 3-1";
-    render(
-      <GameScoreRow
-        game={makeGame({ context_label: context })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
-    );
+    render(gameScoreRow({ game: makeGame({ context_label: context }) }));
 
-    expect(screen.getByText(context)).toHaveAttribute("title", context);
+    const summary = screen.getByLabelText(`Game context: ${context}`);
+    const disclosure = summary.closest("details");
+
+    expect(summary).toHaveAttribute("title", context);
+    expect(disclosure).not.toHaveAttribute("open");
+    fireEvent.click(summary);
+    expect(disclosure).toHaveAttribute("open");
+    expect(within(disclosure as HTMLElement).getAllByText(context)).toHaveLength(2);
   });
 
   it.each(["scheduled", "in_progress"])(
     "shows broadcasts to the right of the status for %s games",
     (status) => {
       render(
-        <GameScoreRow
-          game={makeGame({
+        gameScoreRow({
+          game: makeGame({
             status,
             broadcast_names: ["ESPN", "Peacock"],
-          })}
-          sport="basketball"
-          home={home}
-          away={away}
-          isFollowed={false}
-          statusLabel={status === "scheduled" ? "7:00 PM" : "Q2 4:12"}
-        />,
+          }),
+          statusLabel: status === "scheduled" ? "7:00 PM" : "Q2 4:12",
+        }),
       );
 
       const disclosure = screen.getByLabelText("Broadcasts: ESPN, Peacock");
@@ -418,18 +348,14 @@ describe("GameScoreRow", () => {
     ["postponed", false, "Postponed"],
   ])("hides broadcasts for %s games", (status, isFinal, statusLabel) => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           status,
           is_final: isFinal,
           broadcast_names: ["ESPN", "Peacock"],
-        })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel={statusLabel}
-      />,
+        }),
+        statusLabel,
+      }),
     );
 
     expect(screen.queryByLabelText("Broadcasts: ESPN, Peacock")).not.toBeInTheDocument();
@@ -437,36 +363,22 @@ describe("GameScoreRow", () => {
   });
 
   it("hides broadcast information when ESPN provides no names", () => {
-    render(
-      <GameScoreRow
-        game={makeGame()}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
-    );
+    render(gameScoreRow());
 
     expect(screen.queryByText("ESPN, Peacock")).not.toBeInTheDocument();
   });
 
   it("keeps context separate from the primary broadcast disclosure", () => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           context_label: "NBA Finals - Game 5",
           broadcast_names: ["ESPN", "ABC"],
-        })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
+        }),
+      }),
     );
 
-    const context = screen.getByText("NBA Finals - Game 5");
+    const context = screen.getByLabelText("Game context: NBA Finals - Game 5");
     expect(context.closest(".game-score-meta")).not.toBeNull();
     expect(
       screen.getByLabelText("Broadcasts: ESPN, ABC").closest(".game-score-header-end"),
@@ -474,16 +386,7 @@ describe("GameScoreRow", () => {
   });
 
   it("shows a single provider without a disclosure", () => {
-    render(
-      <GameScoreRow
-        game={makeGame({ broadcast_names: ["Peacock"] })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
-    );
+    render(gameScoreRow({ game: makeGame({ broadcast_names: ["Peacock"] }) }));
 
     expect(screen.getByText("Peacock")).toHaveClass("game-broadcast-single");
     expect(screen.queryByText("Where to watch")).not.toBeInTheDocument();
@@ -491,8 +394,8 @@ describe("GameScoreRow", () => {
 
   it("shows three-way soccer odds", () => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           competition: "CHAMPIONS_LEAGUE",
           odds: {
             bookmaker: null,
@@ -513,13 +416,11 @@ describe("GameScoreRow", () => {
               },
             ],
           },
-        })}
-        sport="soccer"
-        home={{ ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
-        away={{ ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
+        }),
+        sport: "soccer",
+        home: { ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] },
+        away: { ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] },
+      }),
     );
 
     expect(screen.getByText("Draw")).toBeInTheDocument();
@@ -529,8 +430,8 @@ describe("GameScoreRow", () => {
 
   it("shows the draw outcome only while a started soccer game displays pregame odds", () => {
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           competition: "CHAMPIONS_LEAGUE",
           status: "in_progress",
           home_score: 1,
@@ -554,13 +455,12 @@ describe("GameScoreRow", () => {
               },
             ],
           },
-        })}
-        sport="soccer"
-        home={{ ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
-        away={{ ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] }}
-        isFollowed={false}
-        statusLabel="2H 74′"
-      />,
+        }),
+        sport: "soccer",
+        home: { ...home, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] },
+        away: { ...away, sport: "soccer", competitions: ["CHAMPIONS_LEAGUE"] },
+        statusLabel: "2H 74′",
+      }),
     );
 
     expect(screen.queryByText("Draw")).toBeNull();
@@ -577,43 +477,32 @@ describe("GameScoreRow", () => {
   });
 
   it("uses a text fallback when a competition has no logo", () => {
-    render(
-      <GameScoreRow
-        game={makeGame({ competition: "UNKNOWN" as Game["competition"] })}
-        sport="basketball"
-        home={home}
-        away={away}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
-    );
+    render(gameScoreRow({ game: makeGame({ competition: "UNKNOWN" as Game["competition"] }) }));
 
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
   });
 
   it("keeps MLS competition and team logo URLs", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ competition: "MLS" })}
-        sport="soccer"
-        home={{
+      gameScoreRow({
+        game: makeGame({ competition: "MLS" }),
+        sport: "soccer",
+        home: {
           ...home,
           sport: "soccer",
           external_team_id: "187",
           competitions: ["MLS"],
           name: "LA Galaxy",
-        }}
-        away={{
+        },
+        away: {
           ...away,
           external_team_id: "18966",
           sport: "soccer",
           competitions: ["MLS"],
           name: "LAFC",
           abbreviation: "LAFC",
-        }}
-        isFollowed={false}
-        statusLabel="7:00 PM"
-      />,
+        },
+      }),
     );
 
     expect(screen.getByRole("img", { name: "MLS logo" })).toHaveAttribute(
@@ -628,28 +517,27 @@ describe("GameScoreRow", () => {
 
   it("shows La Liga identity and club logo URLs", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ competition: "LA_LIGA" })}
-        sport="soccer"
-        home={{
+      gameScoreRow({
+        game: makeGame({ competition: "LA_LIGA" }),
+        sport: "soccer",
+        home: {
           ...home,
           external_team_id: "83",
           sport: "soccer",
           competitions: ["LA_LIGA"],
           name: "Barcelona",
           abbreviation: "BAR",
-        }}
-        away={{
+        },
+        away: {
           ...away,
           external_team_id: "86",
           sport: "soccer",
           competitions: ["LA_LIGA"],
           name: "Real Madrid",
           abbreviation: "RMA",
-        }}
-        isFollowed={false}
-        statusLabel="12:00 PM"
-      />,
+        },
+        statusLabel: "12:00 PM",
+      }),
     );
 
     expect(screen.getByRole("img", { name: "LALIGA logo" })).toHaveAttribute(
@@ -668,28 +556,27 @@ describe("GameScoreRow", () => {
 
   it("shows Premier League identity and club logo URLs", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ competition: "PREMIER_LEAGUE" })}
-        sport="soccer"
-        home={{
+      gameScoreRow({
+        game: makeGame({ competition: "PREMIER_LEAGUE" }),
+        sport: "soccer",
+        home: {
           ...home,
           external_team_id: "359",
           sport: "soccer",
           competitions: ["PREMIER_LEAGUE"],
           name: "Arsenal",
           abbreviation: "ARS",
-        }}
-        away={{
+        },
+        away: {
           ...away,
           external_team_id: "364",
           sport: "soccer",
           competitions: ["PREMIER_LEAGUE"],
           name: "Liverpool",
           abbreviation: "LIV",
-        }}
-        isFollowed={false}
-        statusLabel="12:00 PM"
-      />,
+        },
+        statusLabel: "12:00 PM",
+      }),
     );
 
     expect(screen.getByRole("img", { name: "EPL logo" })).toHaveAttribute(
@@ -708,28 +595,27 @@ describe("GameScoreRow", () => {
 
   it("shows NFL identity, team logos, and two-way moneyline odds", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ competition: "NFL" })}
-        sport="football"
-        home={{
+      gameScoreRow({
+        game: makeGame({ competition: "NFL" }),
+        sport: "football",
+        home: {
           ...home,
           external_team_id: "2",
           sport: "football",
           competitions: ["NFL"],
           name: "Buffalo Bills",
           abbreviation: "BUF",
-        }}
-        away={{
+        },
+        away: {
           ...away,
           external_team_id: "12",
           sport: "football",
           competitions: ["NFL"],
           name: "Kansas City Chiefs",
           abbreviation: "KC",
-        }}
-        isFollowed={false}
-        statusLabel="5:20 PM"
-      />,
+        },
+        statusLabel: "5:20 PM",
+      }),
     );
 
     expect(screen.getByRole("img", { name: "NFL logo" })).toHaveAttribute(
@@ -765,8 +651,8 @@ describe("GameScoreRow", () => {
       abbreviation: "BUF",
     };
     render(
-      <GameScoreRow
-        game={makeGame({
+      gameScoreRow({
+        game: makeGame({
           competition: "NHL",
           home_team: bruins,
           away_team: sabres,
@@ -784,13 +670,12 @@ describe("GameScoreRow", () => {
             overtime_losses: 7,
             rank: null,
           },
-        })}
-        sport="hockey"
-        home={bruins}
-        away={sabres}
-        isFollowed={false}
-        statusLabel="4:00 PM"
-      />,
+        }),
+        sport: "hockey",
+        home: bruins,
+        away: sabres,
+        statusLabel: "4:00 PM",
+      }),
     );
 
     expect(screen.getByText("35-30-7")).toBeInTheDocument();
@@ -814,28 +699,27 @@ describe("GameScoreRow", () => {
 
   it("shows the FBS competition mark and team logos from the NCAA catalog", () => {
     render(
-      <GameScoreRow
-        game={makeGame({ competition: "FBS" })}
-        sport="football"
-        home={{
+      gameScoreRow({
+        game: makeGame({ competition: "FBS" }),
+        sport: "football",
+        home: {
           ...home,
           external_team_id: "333",
           sport: "football",
           competitions: ["FBS"],
           name: "Alabama Crimson Tide",
           abbreviation: "ALA",
-        }}
-        away={{
+        },
+        away: {
           ...away,
           external_team_id: "2",
           sport: "football",
           competitions: ["FBS"],
           name: "Auburn Tigers",
           abbreviation: "AUB",
-        }}
-        isFollowed={false}
-        statusLabel="4:30 PM"
-      />,
+        },
+        statusLabel: "4:30 PM",
+      }),
     );
 
     const competitionMark = screen.getByRole("img", { name: "FBS logo" });

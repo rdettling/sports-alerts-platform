@@ -83,9 +83,16 @@ export function GameScoreRow({
         <div className="game-score-meta">
           <CompetitionMark competition={game.competition} className="game-score-competition-mark" />
           {game.context_label ? (
-            <span className="game-score-context" title={game.context_label}>
-              {game.context_label}
-            </span>
+            <details className="game-context-disclosure">
+              <summary
+                className="game-score-context"
+                title={game.context_label}
+                aria-label={`Game context: ${game.context_label}`}
+              >
+                {game.context_label}
+              </summary>
+              <div className="game-context-popover">{game.context_label}</div>
+            </details>
           ) : null}
         </div>
 

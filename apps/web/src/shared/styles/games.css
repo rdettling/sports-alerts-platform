@@ -145,7 +145,6 @@
 .game-score-meta {
   flex: 1 1 auto;
   gap: 0.5rem;
-  overflow: hidden;
 }
 
 .game-score-header-end {
@@ -157,13 +156,51 @@
   gap: 0.125rem;
 }
 
-.game-score-context {
+.game-context-disclosure,
+.game-broadcast-disclosure {
+  position: relative;
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.game-score-context {
+  display: block;
   overflow: hidden;
   color: var(--text-muted);
   font-size: 0.7rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.game-score-context,
+.game-broadcast-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.game-score-context::-webkit-details-marker,
+.game-broadcast-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.game-context-popover,
+.game-broadcast-popover {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.4rem);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(16 24 40 / 14%);
+}
+
+.game-context-popover {
+  left: 0;
+  width: min(18rem, calc(100vw - 2rem));
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .game-status-broadcast-group {
@@ -233,24 +270,12 @@
   white-space: nowrap;
 }
 
-.game-broadcast-disclosure {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 .game-broadcast-disclosure > summary {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   min-width: 0;
   max-width: 9rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.game-broadcast-disclosure > summary::-webkit-details-marker {
-  display: none;
 }
 
 .game-broadcast-primary {
@@ -266,16 +291,8 @@
 }
 
 .game-broadcast-popover {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 0.4rem);
   right: 0;
   width: min(15rem, calc(100vw - 2rem));
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(16 24 40 / 14%);
 }
 
 .game-broadcast-popover strong {
