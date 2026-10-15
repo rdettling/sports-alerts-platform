@@ -26,6 +26,34 @@ type GameScoreRowProps = {
   onOpenAlertSettings?: () => void;
 };
 
+function PossessionIndicator({
+  teamName,
+  fieldPosition,
+  downDistance,
+}: {
+  teamName: string;
+  fieldPosition: string | null;
+  downDistance: string | null;
+}) {
+  const situationText = [downDistance, fieldPosition].filter(Boolean).join(" · ");
+
+  return (
+    <>
+      <svg
+        className="game-possession-indicator"
+        viewBox="0 0 24 16"
+        role="img"
+        aria-label={`${teamName} has possession`}
+      >
+        <title>{`${teamName} has possession`}</title>
+        <path d="M1 8Q5 1 12 1T23 8Q19 15 12 15T1 8Z" />
+        <path d="M7 8h10M9 6v4m3-4v4m3-4v4" />
+      </svg>
+      {situationText ? <span className="game-possession-detail">{situationText}</span> : null}
+    </>
+  );
+}
+
 export function GameScoreRow({
   game,
   sport,
@@ -47,6 +75,7 @@ export function GameScoreRow({
   const showScoreValues = (isLive || isFinal) && !isShowingPregameOdds;
   const awayWon = Boolean(hasScore && isFinal && game.away_score! > game.home_score!);
   const homeWon = Boolean(hasScore && isFinal && game.home_score! > game.away_score!);
+  const showPossession = sport === "football" && isLive && !isFinal && showScoreValues;
   const showThreeWayOdds = !showScoreValues && sport === "soccer" && isThreeWayOdds(game);
   const awayValueText = showScoreValues
     ? String(game.away_score ?? "—")
@@ -183,7 +212,16 @@ export function GameScoreRow({
             </strong>
             {awayRecord ? <span>{awayRecord}</span> : null}
           </span>
-          <span className="game-score-value">{awayValueText}</span>
+          <span className="game-score-result">
+            {showPossession && game.possession_side === "away" ? (
+              <PossessionIndicator
+                teamName={away.name}
+                fieldPosition={game.field_position}
+                downDistance={game.down_distance}
+              />
+            ) : null}
+            <span className="game-score-value">{awayValueText}</span>
+          </span>
         </div>
         <div className={`game-score-team ${homeWon ? "winner" : awayWon ? "loser" : ""}`.trim()}>
           <TeamLogo team={home} competition={game.competition} size={28} />
@@ -196,7 +234,16 @@ export function GameScoreRow({
             </strong>
             {homeRecord ? <span>{homeRecord}</span> : null}
           </span>
-          <span className="game-score-value">{homeValueText}</span>
+          <span className="game-score-result">
+            {showPossession && game.possession_side === "home" ? (
+              <PossessionIndicator
+                teamName={home.name}
+                fieldPosition={game.field_position}
+                downDistance={game.down_distance}
+              />
+            ) : null}
+            <span className="game-score-value">{homeValueText}</span>
+          </span>
         </div>
         {showThreeWayOdds ? (
           <div className="game-score-team game-score-draw" aria-label="Draw odds">

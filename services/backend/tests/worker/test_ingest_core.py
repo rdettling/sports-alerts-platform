@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -630,3 +631,42 @@ def test_alert_evaluation_failure_rolls_back_catalog_writes(db_session, monkeypa
         run_catalog_sync(make_success_provider())
 
     assert db_session.scalar(select(Game).where(Game.external_game_id == "game-1")) is None
+
+
+@pytest.mark.parametrize("competition", ["NFL", "FBS"])
+def test_football_situation_changes_and_clearing_count_as_game_updates(db_session, competition):
+    teams = db_session.scalars(competition_teams_query(competition).limit(2)).all()
+    payload = make_game(
+        external_game_id="football-possession",
+        home_external_team_id=teams[0].external_team_id,
+        away_external_team_id=teams[1].external_team_id,
+        status="in_progress",
+        home_score=7,
+        away_score=0,
+        period=1,
+        clock="10:00",
+    )
+    snapshots = [
+        ("home", "ODU 25", "1st & 10", 1),
+        ("away", "GASO 25", "1st & 10", 1),
+        ("away", "GASO 37", "1st & 10", 1),
+        ("away", "GASO 37", "2nd & 10", 1),
+        ("away", "GASO 37", None, 1),
+        ("away", None, None, 1),
+        (None, None, None, 1),
+        (None, None, None, 0),
+    ]
+    for index, (side, field_position, down_distance, expected_updates) in enumerate(snapshots):
+        sync = run_catalog_sync if index == 0 else run_live_sync
+        result = sync(
+            StaticProvider([replace(payload, possession_side=side, field_position=field_position, down_distance=down_distance)]),
+            competition=competition,
+        )
+        db_session.expire_all()
+        game = db_session.scalar(select(Game).where(Game.external_game_id == payload.external_game_id))
+
+        assert game.possession_side == side
+        assert game.field_position == field_position
+        assert game.down_distance == down_distance
+        assert result.games_updated == expected_updates
+        assert result.alerts_created == 0

@@ -31,6 +31,9 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     home_team_strength: { wins: 48, losses: 31, ties: 0, overtime_losses: null, rank: null },
     away_team_strength: { wins: 39, losses: 40, ties: 0, overtime_losses: null, rank: null },
     broadcast_names: [],
+    possession_side: null,
+    field_position: null,
+    down_distance: null,
     status: "scheduled",
     home_score: null,
     away_score: null,
@@ -67,6 +70,114 @@ function gameScoreRow(overrides: Partial<ComponentProps<typeof GameScoreRow>> = 
 }
 
 describe("GameScoreRow", () => {
+  it.each([
+    { down: "2nd & 8", position: "UAB 16", expected: "2nd & 8 · UAB 16" },
+    { down: "1st & Goal", position: "UAB 5", expected: "1st & Goal · UAB 5" },
+    { down: null, position: "UAB 16", expected: "UAB 16" },
+    { down: "3rd & 2", position: null, expected: "3rd & 2" },
+  ])("shows available football situation text: $expected", ({ down, position, expected }) => {
+    const game = makeGame({
+      competition: "FBS",
+      status: "in_progress",
+      possession_side: "home",
+      field_position: position,
+      down_distance: down,
+    });
+    const { rerender } = render(gameScoreRow({ sport: "football", game }));
+    expect(screen.getByText(expected).closest(".game-score-team")).toContainElement(
+      screen.getByText("Boston Celtics"),
+    );
+
+    rerender(
+      gameScoreRow({
+        sport: "football",
+        game: { ...game, down_distance: null, field_position: null },
+      }),
+    );
+    expect(screen.queryByText(expected)).toBeNull();
+    expect(screen.getByRole("img", { name: /has possession/ })).toBeInTheDocument();
+  });
+
+  it.each(["NFL", "FBS"] as const)("moves and clears live %s possession", (competition) => {
+    const props = { sport: "football" as const };
+    const game = makeGame({
+      competition,
+      status: "in_progress",
+      possession_side: "home",
+      field_position: "ODU 25",
+    });
+    const { rerender } = render(gameScoreRow({ ...props, game }));
+    expect(screen.getByRole("img", { name: "Boston Celtics has possession" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Atlanta Hawks has possession" })).toBeNull();
+    expect(screen.getByText("ODU 25").closest(".game-score-team")).toContainElement(
+      screen.getByText("Boston Celtics"),
+    );
+
+    rerender(
+      gameScoreRow({
+        ...props,
+        game: { ...game, possession_side: "away", field_position: "GASO 37" },
+      }),
+    );
+    expect(screen.getByRole("img", { name: "Atlanta Hawks has possession" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Boston Celtics has possession" })).toBeNull();
+    expect(screen.queryByText("ODU 25")).toBeNull();
+    expect(screen.getByText("GASO 37").closest(".game-score-team")).toContainElement(
+      screen.getByText("Atlanta Hawks"),
+    );
+
+    rerender(gameScoreRow({ ...props, game: { ...game, field_position: "ODU 40" } }));
+    expect(screen.getByText("ODU 40")).toBeInTheDocument();
+    expect(screen.queryByText("GASO 37")).toBeNull();
+
+    rerender(gameScoreRow({ ...props, game: { ...game, field_position: null } }));
+    expect(screen.queryByText("ODU 40")).toBeNull();
+    expect(screen.getByRole("img", { name: /has possession/ })).toBeInTheDocument();
+
+    rerender(gameScoreRow({ ...props, game: { ...game, possession_side: null } }));
+    expect(screen.queryByText(/1st & 10/)).toBeNull();
+    expect(screen.queryByText("ODU 25")).toBeNull();
+    expect(screen.queryByRole("img", { name: /has possession/ })).toBeNull();
+  });
+
+  it.each([
+    { sport: "football" as const, status: "scheduled", is_final: false },
+    { sport: "football" as const, status: "postponed", is_final: false },
+    { sport: "football" as const, status: "final", is_final: true },
+    { sport: "football" as const, status: "in_progress", is_final: true },
+    { sport: "basketball" as const, status: "in_progress", is_final: false },
+  ])("hides possession outside live football: %o", ({ sport, status, is_final }) => {
+    render(
+      gameScoreRow({
+        sport,
+        game: makeGame({
+          status,
+          is_final,
+          possession_side: "home",
+          field_position: "ODU 25",
+          down_distance: "1st & 10",
+        }),
+      }),
+    );
+    expect(screen.queryByText(/1st & 10/)).toBeNull();
+    expect(screen.queryByText("ODU 25")).toBeNull();
+    expect(screen.queryByRole("img", { name: /has possession/ })).toBeNull();
+  });
+
+  it("hides possession when viewing pregame odds", () => {
+    render(
+      gameScoreRow({
+        sport: "football",
+        game: makeGame({ status: "live", possession_side: "home", field_position: "ODU 25" }),
+      }),
+    );
+    expect(screen.getByRole("img", { name: /has possession/ })).toBeInTheDocument();
+    expect(screen.getByText("ODU 25")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
+    expect(screen.queryByRole("img", { name: /has possession/ })).toBeNull();
+    expect(screen.queryByText("ODU 25")).toBeNull();
+  });
+
   it("shows full team names, records, raw odds, and competition identity", () => {
     render(gameScoreRow());
 

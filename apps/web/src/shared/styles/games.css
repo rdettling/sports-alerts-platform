@@ -379,6 +379,37 @@
   letter-spacing: 0.035em;
 }
 
+.game-score-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.game-possession-detail {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.game-possession-indicator {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 0.75rem;
+  color: var(--accent);
+}
+
+.game-possession-indicator path:first-of-type {
+  fill: currentColor;
+}
+
+.game-possession-indicator path:last-of-type {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
 .game-score-value {
   min-width: 3.75ch;
   color: #1d2939;
@@ -575,6 +606,10 @@
   .game-broadcast-single,
   .game-broadcast-disclosure > summary {
     max-width: 7rem;
+  }
+
+  .game-score-team {
+    align-items: start;
   }
 
   .game-score-team-copy {

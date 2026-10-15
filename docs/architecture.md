@@ -110,6 +110,7 @@ Notable modeling decisions:
 - Teams are canonical provider entities, including incidental opponents needed to render games; `competition_teams` contains only browseable and followable competition members plus current record strength, including NHL overtime losses
 - FBS conference names come from the code-owned team catalog and are exposed as a secondary UI facet, not stored as standalone competitions or database state
 - Games retain their competition and can carry live/final state, scores, context labels, and odds associations
+- Live football possession is normalized from ESPN's scoreboard to `possession_side` (`home`, `away`, or `null`). ESPN’s `shortDownDistanceText` and `possessionText` supply optional down-and-distance and field-position text beside the indicator. Missing data clears the corresponding display; situation changes use the existing game-change notifications and refresh cadence
 - A team follow applies to that team's games in every active competition, with explicit game unfollows stored separately
 - Alert preference persistence stores sport-wide per-field differences from canonical defaults; competition profiles restrict which rules apply to each game
 - Alerts are deduped events; channel-specific attempts and outcomes are stored as alert deliveries

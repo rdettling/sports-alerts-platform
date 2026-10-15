@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models import CompetitionSetting, CompetitionTeam, Game, GameOddsCurrent, GameOddsOutcomeCurrent, Team
@@ -426,3 +427,32 @@ def test_dashboard_cache_is_not_used_for_other_query_shapes(client):
         response = client.get(f"/games?{query}")
         assert response.headers["cache-control"] == "no-store"
         assert response.json()[0]["status"] == "final"
+
+
+@pytest.mark.parametrize(
+    ("side", "field_position", "down_distance"),
+    [("home", "ODU 25", "2nd & 8"), ("away", "GASO 5", "1st & Goal"), ("home", None, None), (None, None, None)],
+)
+def test_games_expose_football_situation(client, side, field_position, down_distance):
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("NFL").limit(2)).all()
+        db.add(Game(
+            external_game_id="football-possession-api",
+            competition="NFL",
+            home_team_id=teams[0].id,
+            away_team_id=teams[1].id,
+            scheduled_start_time=datetime.now(timezone.utc),
+            status="in_progress",
+            possession_side=side,
+            field_position=field_position,
+            down_distance=down_distance,
+            is_final=False,
+        ))
+        db.commit()
+
+    for url in ["/games?competition=NFL", DASHBOARD_GAMES_URL]:
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.json()[0]["possession_side"] == side
+        assert response.json()[0]["field_position"] == field_position
+        assert response.json()[0]["down_distance"] == down_distance

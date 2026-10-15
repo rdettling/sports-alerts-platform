@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,6 +54,9 @@ class GameOut(BaseModel):
     away_score: int | None
     period: int | None
     clock: str | None
+    possession_side: Literal["home", "away"] | None
+    field_position: str | None
+    down_distance: str | None
     is_final: bool
     last_ingested_at: datetime | None
     odds: GameOddsOut | None = None

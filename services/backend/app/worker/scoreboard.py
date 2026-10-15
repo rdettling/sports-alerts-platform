@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import httpx
 
@@ -47,6 +47,9 @@ class ScoreboardGame:
     away_score: int | None = None
     period: int | None = None
     clock: str | None = None
+    possession_side: Literal["home", "away"] | None = None
+    field_position: str | None = None
+    down_distance: str | None = None
     is_final: bool = False
     broadcast_names: list[str] = field(default_factory=list)
 
@@ -237,6 +240,20 @@ class EspnScoreboardClient:
             note = _clean_text(((event_competition.get("notes") or [{}])[0]).get("headline"))
             context_label = " · ".join(part for part in (stage, note) if part) or None
 
+        possession_side = None
+        field_position = None
+        down_distance = None
+        if sport == "football" and status == "in_progress":
+            situation = event_competition.get("situation") or {}
+            possession = str(situation.get("possession") or "")
+            if possession == home_external_team_id:
+                possession_side = "home"
+            elif possession == away_external_team_id:
+                possession_side = "away"
+            if possession_side is not None:
+                field_position = _clean_text(situation.get("possessionText"))
+                down_distance = _clean_text(situation.get("shortDownDistanceText"))
+
         return ScoreboardGame(
             external_game_id=str(event.get("id")),
             home_external_team_id=home_external_team_id,
@@ -257,6 +274,9 @@ class EspnScoreboardClient:
             away_score=int(away.get("score")) if away.get("score") else None,
             period=int(period) if period else None,
             clock=clock if clock else None,
+            possession_side=possession_side,
+            field_position=field_position,
+            down_distance=down_distance,
             is_final=status == "final" and completed,
             broadcast_names=_broadcast_names(event_competition),
         )

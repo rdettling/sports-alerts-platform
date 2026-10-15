@@ -1,3 +1,5 @@
+import pytest
+
 from app.worker.scoreboard import EspnScoreboardClient, TeamStrength
 
 
@@ -757,3 +759,50 @@ def test_provider_skips_events_with_invalid_placeholder_team_ids():
     provider = EspnScoreboardClient(fetch_json=lambda _, __: payload)
     schedule = provider.fetch_games("NBA", ["20260528"])
     assert schedule == []
+
+
+@pytest.mark.parametrize("competition", ["NFL", "FBS"])
+@pytest.mark.parametrize(
+    ("situation", "state", "expected_side", "expected_position", "expected_down"),
+    [
+        ({"possession": "1", "possessionText": " ODU 25 ", "shortDownDistanceText": " 2nd & 8 "}, "in", "home", "ODU 25", "2nd & 8"),
+        ({"possession": "2", "possessionText": "GASO 5", "shortDownDistanceText": "1st & Goal"}, "in", "away", "GASO 5", "1st & Goal"),
+        ({"possession": 2, "possessionText": "50"}, "in", "away", "50", None),
+        ({"possession": "1", "shortDownDistanceText": "3rd & 2"}, "in", "home", None, "3rd & 2"),
+        ({"possession": "1", "shortDownDistanceText": " "}, "in", "home", None, None),
+        ({"possession": "1", "shortDownDistanceText": 3}, "in", "home", None, None),
+        ({"possession": "1", "possessionText": "  "}, "in", "home", None, None),
+        ({"possession": "1", "possessionText": 25}, "in", "home", None, None),
+        ({"possession": "999", "possessionText": "ODU 25", "shortDownDistanceText": "1st & 10"}, "in", None, None, None),
+        ({"possessionText": "ODU 25"}, "in", None, None, None),
+        ({}, "in", None, None, None),
+        (None, "in", None, None, None),
+        ({"lastPlay": {"team": {"id": "1"}}}, "in", None, None, None),
+        ({"possession": "1", "possessionText": "ODU 25", "shortDownDistanceText": "1st & 10"}, "pre", None, None, None),
+        ({"possession": "2", "possessionText": "GASO 37", "shortDownDistanceText": "1st & 10"}, "post", None, None, None),
+    ],
+)
+def test_provider_normalizes_live_football_situation(competition, situation, state, expected_side, expected_position, expected_down):
+    event = {
+        "id": "football-possession",
+        "date": "2026-10-15T23:00Z",
+        "competitions": [{
+            "status": {"type": {"state": state, "completed": state == "post"}},
+            "situation": situation,
+            "competitors": [
+                {"homeAway": "home", "team": {"id": "1"}},
+                {"homeAway": "away", "team": {"id": "2"}},
+            ],
+        }],
+    }
+    provider = EspnScoreboardClient(fetch_json=lambda *_: {"events": [event]})
+    game = provider.fetch_games(competition, ["20261015"])[0]
+
+    assert game.possession_side == expected_side
+    assert game.field_position == expected_position
+    assert game.down_distance == expected_down
+
+    other_sport = provider.fetch_games("NBA", ["20261015"])[0]
+    assert other_sport.possession_side is None
+    assert other_sport.field_position is None
+    assert other_sport.down_distance is None

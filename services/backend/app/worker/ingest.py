@@ -214,6 +214,9 @@ def _upsert_game(
             existing.away_score,
             existing.period,
             existing.clock,
+            existing.possession_side,
+            existing.field_position,
+            existing.down_distance,
             existing.is_final,
             existing.is_neutral_site,
         )
@@ -225,6 +228,9 @@ def _upsert_game(
         existing.away_score = payload.away_score
         existing.period = payload.period
         existing.clock = payload.clock
+        existing.possession_side = payload.possession_side
+        existing.field_position = payload.field_position
+        existing.down_distance = payload.down_distance
         existing.is_final = payload.is_final
         existing.is_neutral_site = payload.is_neutral_site
         existing.is_odds_eligible = _is_odds_eligible(competition, payload)
@@ -238,6 +244,9 @@ def _upsert_game(
             existing.away_score,
             existing.period,
             existing.clock,
+            existing.possession_side,
+            existing.field_position,
+            existing.down_distance,
             existing.is_final,
             existing.is_neutral_site,
         )
@@ -264,6 +273,9 @@ def _upsert_game(
         away_score=payload.away_score,
         period=payload.period,
         clock=payload.clock,
+        possession_side=payload.possession_side,
+        field_position=payload.field_position,
+        down_distance=payload.down_distance,
         is_final=payload.is_final,
         is_neutral_site=payload.is_neutral_site,
         is_odds_eligible=_is_odds_eligible(competition, payload),
