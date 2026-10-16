@@ -217,6 +217,10 @@ def _upsert_game(
             existing.possession_side,
             existing.field_position,
             existing.down_distance,
+            existing.outs,
+            existing.on_first,
+            existing.on_second,
+            existing.on_third,
             existing.is_final,
             existing.is_neutral_site,
         )
@@ -231,6 +235,10 @@ def _upsert_game(
         existing.possession_side = payload.possession_side
         existing.field_position = payload.field_position
         existing.down_distance = payload.down_distance
+        existing.outs = payload.outs
+        existing.on_first = payload.on_first
+        existing.on_second = payload.on_second
+        existing.on_third = payload.on_third
         existing.is_final = payload.is_final
         existing.is_neutral_site = payload.is_neutral_site
         existing.is_odds_eligible = _is_odds_eligible(competition, payload)
@@ -247,6 +255,10 @@ def _upsert_game(
             existing.possession_side,
             existing.field_position,
             existing.down_distance,
+            existing.outs,
+            existing.on_first,
+            existing.on_second,
+            existing.on_third,
             existing.is_final,
             existing.is_neutral_site,
         )
@@ -276,6 +288,10 @@ def _upsert_game(
         possession_side=payload.possession_side,
         field_position=payload.field_position,
         down_distance=payload.down_distance,
+        outs=payload.outs,
+        on_first=payload.on_first,
+        on_second=payload.on_second,
+        on_third=payload.on_third,
         is_final=payload.is_final,
         is_neutral_site=payload.is_neutral_site,
         is_odds_eligible=_is_odds_eligible(competition, payload),

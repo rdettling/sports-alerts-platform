@@ -3,6 +3,44 @@ import pytest
 from app.worker.scoreboard import EspnScoreboardClient, TeamStrength
 
 
+@pytest.mark.parametrize(
+    ("sport", "state", "detail", "situation", "expected"),
+    [
+        ("MLB", "in", "Top 1st", {"outs": 0, "onFirst": False, "onSecond": False, "onThird": False}, (0, False, False, False)),
+        ("MLB", "in", "Bot 7th", {"outs": 2, "onFirst": True, "onSecond": False, "onThird": True}, (2, True, False, True)),
+        ("MLB", "in", "Bottom 7th", {"outs": 1, "onFirst": True}, (1, True, None, None)),
+        ("MLB", "in", "Top 7th", {"outs": 3, "onFirst": 1, "onSecond": "false", "onThird": None}, (None, None, None, None)),
+        ("MLB", "in", "Top 7th", {"outs": True}, (None, None, None, None)),
+        ("MLB", "in", "Top 7th", {"outs": -1}, (None, None, None, None)),
+        ("MLB", "in", "Top 7th", {"outs": "2"}, (None, None, None, None)),
+        ("MLB", "in", "Top 7th", None, (None, None, None, None)),
+        ("MLB", "in", "Top 7th", "invalid", (None, None, None, None)),
+        ("MLB", "in", "Mid 7th", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+        ("MLB", "in", "End 7th", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+        ("MLB", "in", "Delayed", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+        ("MLB", "post", "Top 7th", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+        ("MLB", "pre", "Top 7th", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+        ("NBA", "in", "Top 7th", {"outs": 2, "onFirst": True}, (None, None, None, None)),
+    ],
+)
+def test_baseball_situation(sport, state, detail, situation, expected):
+    event = {
+        "id": "baseball-situation",
+        "date": "2026-10-15T23:00Z",
+        "competitions": [{
+            "status": {"type": {"state": state, "shortDetail": detail}},
+            "situation": situation,
+            "competitors": [
+                {"homeAway": "home", "team": {"id": "1"}},
+                {"homeAway": "away", "team": {"id": "2"}},
+            ],
+        }],
+    }
+    game = EspnScoreboardClient()._parse_event(sport, event)
+    assert game is not None
+    assert (game.outs, game.on_first, game.on_second, game.on_third) == expected
+
+
 def test_provider_failure_logs_compact_request_context(caplog):
     def fail_fetch(_competition, _params):
         raise RuntimeError("provider unavailable")

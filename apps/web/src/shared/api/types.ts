@@ -67,6 +67,10 @@ export type Game = {
   possession_side: "home" | "away" | null;
   field_position: string | null;
   down_distance: string | null;
+  outs: number | null;
+  on_first: boolean | null;
+  on_second: boolean | null;
+  on_third: boolean | null;
   is_final: boolean;
   last_ingested_at: string | null;
   odds: {

@@ -57,6 +57,10 @@ class GameOut(BaseModel):
     possession_side: Literal["home", "away"] | None
     field_position: str | None
     down_distance: str | None
+    outs: int | None
+    on_first: bool | None
+    on_second: bool | None
+    on_third: bool | None
     is_final: bool
     last_ingested_at: datetime | None
     odds: GameOddsOut | None = None

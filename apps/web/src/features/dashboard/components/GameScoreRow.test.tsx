@@ -34,6 +34,10 @@ function makeGame(overrides: Partial<Game> = {}): Game {
     possession_side: null,
     field_position: null,
     down_distance: null,
+    outs: null,
+    on_first: null,
+    on_second: null,
+    on_third: null,
     status: "scheduled",
     home_score: null,
     away_score: null,
@@ -70,6 +74,78 @@ function gameScoreRow(overrides: Partial<ComponentProps<typeof GameScoreRow>> = 
 }
 
 describe("GameScoreRow", () => {
+  it.each([0, 1, 2])("shows baseball outs and runners: %s outs", (outs) => {
+    const game = makeGame({
+      competition: "MLB",
+      status: "in_progress",
+      clock: "Bot 7th",
+      outs,
+      on_first: true,
+      on_second: false,
+      on_third: true,
+    });
+    const { rerender } = render(gameScoreRow({ game, sport: "baseball", statusLabel: "Bot 7th" }));
+    expect(screen.getByText(`${outs} ${outs === 1 ? "out" : "outs"}`)).toBeInTheDocument();
+    const diamond = screen.getByRole("img", { name: "Runners on first and third" });
+    expect(diamond.querySelectorAll(".occupied")).toHaveLength(2);
+    expect(diamond.closest(".game-score-situation")).toContainElement(screen.getByText("Bot 7th"));
+    fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
+    expect(screen.queryByRole("img", { name: /Runners on/ })).toBeNull();
+    expect(screen.queryByText(/^[012] outs?$/)).toBeNull();
+    expect(screen.getByText("Bot 7th")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pregame odds" }));
+    rerender(
+      gameScoreRow({
+        game: { ...game, outs: null, on_first: false, on_third: false },
+        sport: "baseball",
+      }),
+    );
+    expect(
+      screen.getByRole("img", { name: "Bases empty" }).querySelectorAll(".occupied"),
+    ).toHaveLength(0);
+    expect(screen.queryByText(/^[012] outs?$/)).toBeNull();
+    rerender(gameScoreRow({ game: { ...game, on_second: null }, sport: "baseball" }));
+    expect(screen.queryByRole("img", { name: /Runners on|Bases empty/ })).toBeNull();
+  });
+
+  it.each([
+    { sport: "baseball" as const, status: "in_progress", clock: "Mid 7th", is_final: false },
+    { sport: "baseball" as const, status: "in_progress", clock: "End 7th", is_final: false },
+    { sport: "baseball" as const, status: "scheduled", clock: "Top 7th", is_final: false },
+    { sport: "baseball" as const, status: "final", clock: "Bot 7th", is_final: true },
+    { sport: "basketball" as const, status: "in_progress", clock: "Top 7th", is_final: false },
+  ])("hides baseball details outside live half-innings: %o", ({ sport, ...state }) => {
+    render(
+      gameScoreRow({
+        sport,
+        game: makeGame({ ...state, outs: 2, on_first: true, on_second: true, on_third: true }),
+      }),
+    );
+    expect(screen.queryByText("2 outs")).toBeNull();
+    expect(screen.queryByRole("img", { name: /Runners on/ })).toBeNull();
+  });
+
+  it("omits an empty footer and places available actions in it", () => {
+    const { container, rerender } = render(gameScoreRow());
+    expect(container.querySelector("footer")).toBeNull();
+    const onFollow = vi.fn();
+    rerender(gameScoreRow({ onFollow }));
+    expect(container.querySelector("footer")).toContainElement(
+      screen.getByRole("button", { name: "Follow" }),
+    );
+    rerender(gameScoreRow({ isFollowed: true, actionsDisabled: true }));
+    const footer = container.querySelector("footer")!;
+    expect(within(footer).getByRole("button", { name: "Settings" })).toBeDisabled();
+    expect(within(footer).getByRole("button", { name: "Unfollow" })).toBeDisabled();
+    rerender(
+      gameScoreRow({ game: makeGame({ status: "final", is_final: true }), isFollowed: true }),
+    );
+    expect(
+      within(container.querySelector("footer")!).getByRole("button", { name: "Pregame odds" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unfollow" })).toBeNull();
+  });
+
   it.each([
     { down: "2nd & 8", position: "UAB 16", expected: "2nd & 8 · UAB 16" },
     { down: "1st & Goal", position: "UAB 5", expected: "1st & Goal · UAB 5" },
@@ -422,37 +498,31 @@ describe("GameScoreRow", () => {
     expect(within(disclosure as HTMLElement).getAllByText(context)).toHaveLength(2);
   });
 
-  it.each(["scheduled", "in_progress"])(
-    "shows broadcasts to the right of the status for %s games",
-    (status) => {
-      render(
-        gameScoreRow({
-          game: makeGame({
-            status,
-            broadcast_names: ["ESPN", "Peacock"],
-          }),
-          statusLabel: status === "scheduled" ? "7:00 PM" : "Q2 4:12",
+  it.each(["scheduled", "in_progress"])("shows broadcasts in the footer for %s games", (status) => {
+    render(
+      gameScoreRow({
+        game: makeGame({
+          status,
+          broadcast_names: ["ESPN", "Peacock"],
         }),
-      );
+        statusLabel: status === "scheduled" ? "7:00 PM" : "Q2 4:12",
+      }),
+    );
 
-      const disclosure = screen.getByLabelText("Broadcasts: ESPN, Peacock");
-      const group = disclosure.closest(".game-status-broadcast-group") as HTMLElement;
-      expect(group).not.toBeNull();
-      const statusPill = within(group).getByText(status === "scheduled" ? "7:00 PM" : "Q2 4:12");
-      expect(statusPill).toHaveClass("game-state-pill");
-      expect(statusPill.nextElementSibling).toHaveTextContent("·");
-      expect(statusPill.nextElementSibling?.nextElementSibling).toBe(disclosure.closest("details"));
-      if (status === "in_progress") {
-        expect(within(group).getByRole("button", { name: "Pregame odds" }).nextElementSibling).toBe(
-          statusPill,
-        );
-      }
-      expect(disclosure).toHaveAttribute("title", "ESPN, Peacock");
-      expect(within(disclosure).getByText("ESPN")).toBeInTheDocument();
-      expect(within(disclosure).getByText("+1")).toBeInTheDocument();
-      expect(screen.getByText("Where to watch")).toBeInTheDocument();
-    },
-  );
+    const disclosure = screen.getByLabelText("Broadcasts: ESPN, Peacock");
+    const footer = disclosure.closest("footer") as HTMLElement;
+    expect(footer).not.toBeNull();
+    const statusPill = screen.getByText(status === "scheduled" ? "7:00 PM" : "Q2 4:12");
+    expect(statusPill).toHaveClass("game-state-pill");
+    expect(footer).not.toContainElement(statusPill);
+    if (status === "in_progress") {
+      expect(within(footer).getByRole("button", { name: "Pregame odds" })).toBeInTheDocument();
+    }
+    expect(disclosure).toHaveAttribute("title", "ESPN, Peacock");
+    expect(within(disclosure).getByText("ESPN")).toBeInTheDocument();
+    expect(within(disclosure).getByText("+1")).toBeInTheDocument();
+    expect(screen.getByText("Where to watch")).toBeInTheDocument();
+  });
 
   it.each([
     ["final", true, "Final"],
@@ -492,7 +562,7 @@ describe("GameScoreRow", () => {
     const context = screen.getByLabelText("Game context: NBA Finals - Game 5");
     expect(context.closest(".game-score-meta")).not.toBeNull();
     expect(
-      screen.getByLabelText("Broadcasts: ESPN, ABC").closest(".game-score-header-end"),
+      screen.getByLabelText("Broadcasts: ESPN, ABC").closest(".game-score-footer-end"),
     ).not.toBeNull();
   });
 

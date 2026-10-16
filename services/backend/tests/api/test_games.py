@@ -8,6 +8,24 @@ from app.db.session import SessionLocal
 from app.services.competitions import competition_teams_query
 
 
+@pytest.mark.parametrize("situation", [(0, False, False, False), (2, True, False, True), (None, None, None, None)])
+def test_games_expose_baseball_situation(client, situation):
+    fields = ("outs", "on_first", "on_second", "on_third")
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("MLB").limit(2)).all()
+        db.add(Game(
+            external_game_id="baseball-situation-api", competition="MLB",
+            home_team_id=teams[0].id, away_team_id=teams[1].id,
+            scheduled_start_time=datetime.now(timezone.utc), status="in_progress",
+            **dict(zip(fields, situation)),
+        ))
+        db.commit()
+    for url in ("/games?competition=MLB", DASHBOARD_GAMES_URL):
+        response = client.get(url)
+        assert response.status_code == 200
+        assert {field: response.json()[0][field] for field in fields} == dict(zip(fields, situation))
+
+
 def _create_game(*, broadcast_names: list[str] | None = None) -> Game:
     db = SessionLocal()
     try:

@@ -54,6 +54,40 @@ function PossessionIndicator({
   );
 }
 
+function BaseballSituation({ game }: { game: Game }) {
+  const bases = [game.on_first, game.on_second, game.on_third];
+  const hasBases = bases.every((occupied) => occupied !== null);
+  const occupiedBases = ["first", "second", "third"].filter((_, index) => bases[index]);
+  const basesLabel = occupiedBases.length
+    ? `Runners on ${occupiedBases.join(" and ")}`
+    : "Bases empty";
+
+  return (
+    <>
+      {game.outs !== null ? (
+        <span className="game-baseball-outs">
+          {game.outs} {game.outs === 1 ? "out" : "outs"}
+        </span>
+      ) : null}
+      {hasBases ? (
+        <span
+          className="game-baseball-diamond"
+          role="img"
+          aria-label={basesLabel}
+          title={basesLabel}
+        >
+          {bases.map((occupied, index) => (
+            <span
+              key={index}
+              className={`game-baseball-base base-${index + 1}${occupied ? " occupied" : ""}`}
+            />
+          ))}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 export function GameScoreRow({
   game,
   sport,
@@ -76,6 +110,12 @@ export function GameScoreRow({
   const awayWon = Boolean(hasScore && isFinal && game.away_score! > game.home_score!);
   const homeWon = Boolean(hasScore && isFinal && game.home_score! > game.away_score!);
   const showPossession = sport === "football" && isLive && !isFinal && showScoreValues;
+  const showBaseballSituation =
+    sport === "baseball" &&
+    isLive &&
+    !isFinal &&
+    showScoreValues &&
+    /^(Top|Bot|Bottom)\b/.test(game.clock ?? "");
   const showThreeWayOdds = !showScoreValues && sport === "soccer" && isThreeWayOdds(game);
   const awayValueText = showScoreValues
     ? String(game.away_score ?? "—")
@@ -94,6 +134,7 @@ export function GameScoreRow({
   const awayRecord = formatTeamRecord(game.away_team_strength, sport);
   const homeRecord = formatTeamRecord(game.home_team_strength, sport);
   const canFollow = !isFollowed && !isFinal && Boolean(onFollow);
+  const showFooter = canTogglePregameOdds || showBroadcast || (isFollowed && !isFinal) || canFollow;
   const statusTone: GameStateTone = isLive
     ? "live"
     : isFinal
@@ -125,78 +166,9 @@ export function GameScoreRow({
           ) : null}
         </div>
 
-        <div className="game-score-header-end">
-          <div className="game-status-broadcast-group">
-            {canTogglePregameOdds ? (
-              <button
-                className="game-score-action game-score-odds-toggle text-action"
-                type="button"
-                aria-pressed={isShowingPregameOdds}
-                onClick={() => setShowPregameOdds((current) => !current)}
-              >
-                Pregame odds
-              </button>
-            ) : null}
-            <span className={`game-state-pill ${statusTone}`}>{statusLabel}</span>
-            {showBroadcast ? (
-              <>
-                <span className="game-broadcast-divider" aria-hidden>
-                  ·
-                </span>
-                {additionalBroadcastCount > 0 ? (
-                  <details className="game-broadcast-disclosure">
-                    <summary title={broadcastText} aria-label={`Broadcasts: ${broadcastText}`}>
-                      <span className="game-broadcast-primary">{primaryBroadcast}</span>
-                      <span className="game-broadcast-count">+{additionalBroadcastCount}</span>
-                    </summary>
-                    <div className="game-broadcast-popover">
-                      <strong>Where to watch</strong>
-                      <ul>
-                        {game.broadcast_names.map((name) => (
-                          <li key={name}>{name}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </details>
-                ) : (
-                  <span className="game-broadcast-single" title={primaryBroadcast}>
-                    {primaryBroadcast}
-                  </span>
-                )}
-              </>
-            ) : null}
-          </div>
-          <div className="game-score-actions">
-            {isFollowed && !isFinal ? (
-              <>
-                <button
-                  className="game-score-action text-action"
-                  type="button"
-                  onClick={onOpenAlertSettings}
-                  disabled={actionsDisabled || !onOpenAlertSettings}
-                >
-                  Settings
-                </button>
-                <button
-                  className="game-score-action text-action"
-                  type="button"
-                  onClick={onUnfollow}
-                  disabled={actionsDisabled || !onUnfollow}
-                >
-                  Unfollow
-                </button>
-              </>
-            ) : canFollow ? (
-              <button
-                className="game-score-action text-action"
-                type="button"
-                disabled={actionsDisabled}
-                onClick={onFollow}
-              >
-                Follow
-              </button>
-            ) : null}
-          </div>
+        <div className="game-score-situation">
+          <span className={`game-state-pill ${statusTone}`}>{statusLabel}</span>
+          {showBaseballSituation ? <BaseballSituation game={game} /> : null}
         </div>
       </div>
 
@@ -255,6 +227,77 @@ export function GameScoreRow({
           </div>
         ) : null}
       </div>
+      {showFooter ? (
+        <footer className="game-score-footer">
+          <div className="game-score-footer-odds">
+            {canTogglePregameOdds ? (
+              <button
+                className="game-score-action game-score-odds-toggle text-action"
+                type="button"
+                aria-pressed={isShowingPregameOdds}
+                onClick={() => setShowPregameOdds((current) => !current)}
+              >
+                Pregame odds
+              </button>
+            ) : null}
+          </div>
+          <div className="game-score-footer-end">
+            {showBroadcast ? (
+              additionalBroadcastCount > 0 ? (
+                <details className="game-broadcast-disclosure">
+                  <summary title={broadcastText} aria-label={`Broadcasts: ${broadcastText}`}>
+                    <span className="game-broadcast-primary">{primaryBroadcast}</span>
+                    <span className="game-broadcast-count">+{additionalBroadcastCount}</span>
+                  </summary>
+                  <div className="game-broadcast-popover">
+                    <strong>Where to watch</strong>
+                    <ul>
+                      {game.broadcast_names.map((name) => (
+                        <li key={name}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </details>
+              ) : (
+                <span className="game-broadcast-single" title={primaryBroadcast}>
+                  {primaryBroadcast}
+                </span>
+              )
+            ) : null}
+            <div className="game-score-actions">
+              {isFollowed && !isFinal ? (
+                <>
+                  <button
+                    className="game-score-action text-action"
+                    type="button"
+                    onClick={onOpenAlertSettings}
+                    disabled={actionsDisabled || !onOpenAlertSettings}
+                  >
+                    Settings
+                  </button>
+                  <button
+                    className="game-score-action text-action"
+                    type="button"
+                    onClick={onUnfollow}
+                    disabled={actionsDisabled || !onUnfollow}
+                  >
+                    Unfollow
+                  </button>
+                </>
+              ) : canFollow ? (
+                <button
+                  className="game-score-action text-action"
+                  type="button"
+                  disabled={actionsDisabled}
+                  onClick={onFollow}
+                >
+                  Follow
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </footer>
+      ) : null}
     </article>
   );
 }

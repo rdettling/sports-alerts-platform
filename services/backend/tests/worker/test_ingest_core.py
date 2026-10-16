@@ -18,6 +18,35 @@ from ingest_support import (
 )
 
 
+def test_baseball_situation_updates_and_clears(db_session):
+    teams = db_session.scalars(competition_teams_query("MLB").limit(2)).all()
+    payload = make_game(
+        external_game_id="baseball-situation",
+        home_external_team_id=teams[0].external_team_id,
+        away_external_team_id=teams[1].external_team_id,
+        status="in_progress", period=7, clock="Bot 7th",
+    )
+    snapshots = [
+        (0, False, False, False, 1),
+        (1, False, False, False, 1),
+        (1, True, False, False, 1),
+        (1, True, True, False, 1),
+        (1, True, True, True, 1),
+        (None, None, None, None, 1),
+        (None, None, None, None, 0),
+    ]
+    for index, (outs, first, second, third, updates) in enumerate(snapshots):
+        sync = run_catalog_sync if index == 0 else run_live_sync
+        result = sync(StaticProvider([replace(
+            payload, outs=outs, on_first=first, on_second=second, on_third=third,
+        )]), competition="MLB")
+        db_session.expire_all()
+        game = db_session.scalar(select(Game).where(Game.external_game_id == payload.external_game_id))
+        assert (game.outs, game.on_first, game.on_second, game.on_third) == (outs, first, second, third)
+        assert result.games_updated == updates
+        assert result.alerts_created == 0
+
+
 def test_ingest_run_success(db_session):
     provider = make_success_provider()
     result = run_catalog_sync(provider)

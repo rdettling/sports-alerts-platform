@@ -111,6 +111,7 @@ Notable modeling decisions:
 - FBS conference names come from the code-owned team catalog and are exposed as a secondary UI facet, not stored as standalone competitions or database state
 - Games retain their competition and can carry live/final state, scores, context labels, and odds associations
 - Live football possession is normalized from ESPN's scoreboard to `possession_side` (`home`, `away`, or `null`). ESPN’s `shortDownDistanceText` and `possessionText` supply optional down-and-distance and field-position text beside the indicator. Missing data clears the corresponding display; situation changes use the existing game-change notifications and refresh cadence
+- Live baseball outs and base occupancy are normalized from ESPN's existing scoreboard situation into nullable `outs`, `on_first`, `on_second`, and `on_third` fields. Only active Top/Bottom half-innings retain situation data; missing values and inning breaks clear it. Situation changes use the existing notifications and 120-second MLB cadence. Cards show outs and a base diamond beside the inning, with shared odds, broadcast, and follow controls in a compact footer.
 - A team follow applies to that team's games in every active competition, with explicit game unfollows stored separately
 - Alert preference persistence stores sport-wide per-field differences from canonical defaults; competition profiles restrict which rules apply to each game
 - Alerts are deduped events; channel-specific attempts and outcomes are stored as alert deliveries

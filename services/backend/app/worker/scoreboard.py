@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable, Literal
@@ -50,6 +51,10 @@ class ScoreboardGame:
     possession_side: Literal["home", "away"] | None = None
     field_position: str | None = None
     down_distance: str | None = None
+    outs: int | None = None
+    on_first: bool | None = None
+    on_second: bool | None = None
+    on_third: bool | None = None
     is_final: bool = False
     broadcast_names: list[str] = field(default_factory=list)
 
@@ -254,6 +259,16 @@ class EspnScoreboardClient:
                 field_position = _clean_text(situation.get("possessionText"))
                 down_distance = _clean_text(situation.get("shortDownDistanceText"))
 
+        outs = on_first = on_second = on_third = None
+        if sport == "baseball" and status == "in_progress" and re.match(r"^(Top|Bot|Bottom)\b", short_detail):
+            situation = event_competition.get("situation")
+            if isinstance(situation, dict):
+                raw_outs = situation.get("outs")
+                outs = raw_outs if type(raw_outs) is int and 0 <= raw_outs <= 2 else None
+                on_first = situation.get("onFirst") if type(situation.get("onFirst")) is bool else None
+                on_second = situation.get("onSecond") if type(situation.get("onSecond")) is bool else None
+                on_third = situation.get("onThird") if type(situation.get("onThird")) is bool else None
+
         return ScoreboardGame(
             external_game_id=str(event.get("id")),
             home_external_team_id=home_external_team_id,
@@ -277,6 +292,10 @@ class EspnScoreboardClient:
             possession_side=possession_side,
             field_position=field_position,
             down_distance=down_distance,
+            outs=outs,
+            on_first=on_first,
+            on_second=on_second,
+            on_third=on_third,
             is_final=status == "final" and completed,
             broadcast_names=_broadcast_names(event_competition),
         )
