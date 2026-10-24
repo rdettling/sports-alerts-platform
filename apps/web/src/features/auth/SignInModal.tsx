@@ -1,9 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
-import { warmAuthDb } from "../../shared/api";
 import { useAuth } from "./auth-context";
 
-const AUTH_WARM_SESSION_KEY = "sports_alerts_auth_warm_v1";
 const SLOW_HINT_THRESHOLD_MS = 1200;
 
 type SignInModalProps = {
@@ -29,11 +27,6 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setBusy(false);
       setShowSlowHint(false);
       return;
-    }
-
-    if (sessionStorage.getItem(AUTH_WARM_SESSION_KEY) !== "1") {
-      sessionStorage.setItem(AUTH_WARM_SESSION_KEY, "1");
-      warmAuthDb().catch(() => undefined);
     }
 
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -171,7 +164,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
             ) : null}
             {busy && showSlowHint ? (
               <p className="muted" role="status">
-                Waking database, this may take a few seconds.
+                Sending sign-in instructions. This may take a few seconds.
               </p>
             ) : null}
           </form>

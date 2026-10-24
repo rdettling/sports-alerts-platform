@@ -5,7 +5,6 @@ import { SignInModal } from "./SignInModal";
 
 const sendMagicLinkMock = vi.fn(async () => ({ message: "Check your email." }));
 const verifyMagicCodeMock = vi.fn(async () => {});
-const warmAuthDbMock = vi.fn(async () => {});
 let currentUser: { email: string } | null = null;
 
 vi.mock("./auth-context", () => ({
@@ -16,9 +15,7 @@ vi.mock("./auth-context", () => ({
   }),
 }));
 
-vi.mock("../../shared/api", () => ({
-  warmAuthDb: () => warmAuthDbMock(),
-}));
+vi.mock("../../shared/api", () => ({}));
 
 describe("SignInModal", () => {
   beforeEach(() => {
@@ -27,11 +24,10 @@ describe("SignInModal", () => {
     sendMagicLinkMock.mockClear();
     verifyMagicCodeMock.mockReset();
     verifyMagicCodeMock.mockResolvedValue(undefined);
-    warmAuthDbMock.mockClear();
     Object.defineProperty(navigator, "standalone", { configurable: true, value: false });
   });
 
-  it("warms once and shows the check-email state after submitting", async () => {
+  it("shows the check-email state after submitting", async () => {
     const onClose = vi.fn();
     const { rerender } = render(<SignInModal isOpen onClose={onClose} />);
 
@@ -39,7 +35,6 @@ describe("SignInModal", () => {
       "aria-describedby",
       "sign-in-description",
     );
-    expect(warmAuthDbMock).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "user@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Send sign-in email" }));
 
@@ -50,7 +45,6 @@ describe("SignInModal", () => {
 
     rerender(<SignInModal isOpen={false} onClose={onClose} />);
     rerender(<SignInModal isOpen onClose={onClose} />);
-    expect(warmAuthDbMock).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes a pasted code and verifies it for the submitted email", async () => {

@@ -8,7 +8,6 @@ from app.db.models import Game, User, UserAlertPreference, UserGameAlertOverride
 from app.db.session import get_db
 from app.deps import get_current_user
 from app.schemas.preference import (
-    SUPPORTED_SPORTS,
     AlertPreferenceGroupOut,
     AlertPreferenceOut,
     GameAlertPreferenceItemOut,
@@ -25,31 +24,22 @@ from app.services.competitions import (
     get_active_competitions,
     get_alert_types,
     get_competition_profile,
-    get_sport_alert_types,
+    normalize_competition,
 )
 
 router = APIRouter(prefix="/alert-preferences", tags=["alert-preferences"])
 
 
-def _validate_sport(sport: str) -> str:
-    normalized = sport.lower()
-    if normalized not in SUPPORTED_SPORTS:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found"
-        )
-    return normalized
-
-
 def _load_preference(
     db: Session,
     user_id: int,
-    sport: str,
+    competition: str,
     alert_type: str,
 ) -> UserAlertPreference | None:
     return db.scalar(
         select(UserAlertPreference).where(
             UserAlertPreference.user_id == user_id,
-            UserAlertPreference.sport == sport,
+            UserAlertPreference.competition == competition,
             UserAlertPreference.alert_type == alert_type,
         )
     )
@@ -72,10 +62,10 @@ def _validate_game_alert_type(game: Game, alert_type: str) -> None:
 
 
 def _preference_out(
-    sport: str, alert_type: str, preference: UserAlertPreference | None
+    competition: str, alert_type: str, preference: UserAlertPreference | None
 ) -> AlertPreferenceOut:
-    settings = resolve_alert_settings(sport, alert_type, preference)
-    return AlertPreferenceOut(sport=sport, alert_type=alert_type, **settings.__dict__)
+    settings = resolve_alert_settings(competition, alert_type, preference)
+    return AlertPreferenceOut(competition=competition, alert_type=alert_type, **settings.__dict__)
 
 
 def _settings_from_request(
@@ -129,13 +119,13 @@ def _settings_from_request(
 def _resolve_game_alert_items(
     db: Session, user_id: int, game: Game
 ) -> list[GameAlertPreferenceItemOut]:
-    sport = get_competition_profile(game.competition).sport
+    competition = game.competition
     preferences = {
         row.alert_type: row
         for row in db.scalars(
             select(UserAlertPreference).where(
                 UserAlertPreference.user_id == user_id,
-                UserAlertPreference.sport == sport,
+                UserAlertPreference.competition == competition,
             )
         ).all()
     }
@@ -153,13 +143,13 @@ def _resolve_game_alert_items(
     for alert_type in get_alert_types(game.competition):
         override = overrides.get(alert_type)
         settings = resolve_alert_settings(
-            sport, alert_type, preferences.get(alert_type), override
+            competition, alert_type, preferences.get(alert_type), override
         )
         items.append(
             GameAlertPreferenceItemOut(
-                sport=sport,
+                competition=competition,
                 alert_type=alert_type,
-                uses_sport_defaults=override is None,
+                uses_league_defaults=override is None,
                 **settings.__dict__,
             )
         )
@@ -171,65 +161,61 @@ def list_alert_preferences(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[AlertPreferenceGroupOut]:
-    active_sports = list(
-        dict.fromkeys(
-            get_competition_profile(competition).sport
-            for competition in get_active_competitions(db)
-        )
-    )
+    active_competitions = get_active_competitions(db)
     rows = db.scalars(
         select(UserAlertPreference).where(
             UserAlertPreference.user_id == current_user.id,
-            UserAlertPreference.sport.in_(active_sports),
+            UserAlertPreference.competition.in_(active_competitions),
         )
     ).all()
-    preferences = {(row.sport, row.alert_type): row for row in rows}
+    preferences = {(row.competition, row.alert_type): row for row in rows}
     return [
         AlertPreferenceGroupOut(
-            sport=sport,
+            competition=competition,
+            label=get_competition_profile(competition).label,
             preferences=[
-                _preference_out(sport, alert_type, preferences.get((sport, alert_type)))
-                for alert_type in get_sport_alert_types(sport)
+                _preference_out(competition, alert_type, preferences.get((competition, alert_type)))
+                for alert_type in get_alert_types(competition)
             ],
         )
-        for sport in active_sports
+        for competition in active_competitions
     ]
 
 
-@router.put("/sports/{sport}/{alert_type}", response_model=AlertPreferenceOut)
+@router.put("/competitions/{competition}/{alert_type}", response_model=AlertPreferenceOut)
 def update_alert_preference(
-    sport: str,
+    competition: str,
     alert_type: str,
     payload: UpdateAlertSettingsRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AlertPreferenceOut:
-    normalized_sport = _validate_sport(sport)
-    active_sports = {
-        get_competition_profile(competition).sport
-        for competition in get_active_competitions(db)
-    }
-    if normalized_sport not in active_sports:
+    try:
+        normalized_competition = normalize_competition(competition)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Competition not found")
+    active_competitions = get_active_competitions(db)
+    if normalized_competition not in active_competitions:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Sport not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Competition not found"
         )
-    if alert_type not in get_sport_alert_types(normalized_sport):
+    if alert_type not in get_alert_types(normalized_competition):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Alert type not found"
         )
 
-    preference = _load_preference(db, current_user.id, normalized_sport, alert_type)
+    preference = _load_preference(db, current_user.id, normalized_competition, alert_type)
     settings = _settings_from_request(alert_type, payload)
     now = datetime.now(timezone.utc)
     if preference is None:
         preference = UserAlertPreference(
             user_id=current_user.id,
-            sport=normalized_sport,
+            competition=normalized_competition,
             alert_type=alert_type,
             created_at=now,
         )
     if apply_sparse_overrides(
-        preference, settings, default_alert_settings(normalized_sport, alert_type)
+        preference, settings, default_alert_settings(normalized_competition, alert_type)
     ):
         preference.updated_at = now
         db.add(preference)
@@ -239,7 +225,7 @@ def update_alert_preference(
         preference = None
 
     db.commit()
-    return _preference_out(normalized_sport, alert_type, preference)
+    return _preference_out(normalized_competition, alert_type, preference)
 
 
 @router.get("/games/{game_id}", response_model=GameAlertPreferencesOut)
@@ -249,11 +235,9 @@ def get_game_alert_preferences(
     db: Session = Depends(get_db),
 ) -> GameAlertPreferencesOut:
     game = _load_active_game(db, game_id)
-    sport = get_competition_profile(game.competition).sport
     return GameAlertPreferencesOut(
         game_id=game.id,
         competition=game.competition,
-        sport=sport,
         items=_resolve_game_alert_items(db, current_user.id, game),
     )
 
@@ -269,9 +253,9 @@ def update_game_alert_settings(
     game = _load_active_game(db, game_id)
     _validate_game_alert_type(game, alert_type)
 
-    sport = get_competition_profile(game.competition).sport
-    preference = _load_preference(db, current_user.id, sport, alert_type)
-    sport_settings = resolve_alert_settings(sport, alert_type, preference)
+    competition = game.competition
+    preference = _load_preference(db, current_user.id, competition, alert_type)
+    competition_settings = resolve_alert_settings(competition, alert_type, preference)
     settings = _settings_from_request(alert_type, payload)
     row = db.scalar(
         select(UserGameAlertOverride).where(
@@ -290,7 +274,7 @@ def update_game_alert_settings(
             updated_at=now,
         )
 
-    if apply_sparse_overrides(row, settings, sport_settings):
+    if apply_sparse_overrides(row, settings, competition_settings):
         row.updated_at = now
         db.add(row)
     elif row in db:

@@ -1,117 +1,56 @@
 # Configuration
 
-Required environment values fail fast at startup. Because every service reads the shared root `.env`, unrelated keys are ignored.
-
-The local stack expects a single `.env` at the repo root.
+The local Docker stack reads one root `.env`. Unrelated keys are ignored. Missing required secrets fail at startup.
 
 ## Minimal Local `.env`
 
 ```env
-POSTGRES_USER=sports
-POSTGRES_PASSWORD=sports
-POSTGRES_DB=sports_alerts
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql+psycopg://sports:sports@db:5432/sports_alerts
-
 JWT_SECRET_KEY=replace-with-long-random-string
 WEB_BASE_URL=http://localhost:5173
 CORS_ALLOW_ORIGINS=http://localhost:5173
-LIVE_UPDATE_SECRET=replace-with-live-update-secret
-LIVE_UPDATE_API_URL=http://api:8000
-
-ODDS_API_KEY=
-
 RESEND_API_KEY=replace-with-resend-api-key
 DELIVERY_MODE=log
-VAPID_PUBLIC_KEY=replace-with-public-vapid-key
-VAPID_PRIVATE_KEY=replace-with-private-vapid-key
+ODDS_API_KEY=
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:you@example.com
-
 VITE_API_BASE_URL=http://localhost:8000
-
-NEON_PROJECT_ID=
-NEON_DASHBOARD_URL=
 ```
 
-Optional local overrides you may want to add:
+Compose overrides the database URL to `sqlite:////var/data/sports-alerts.db` on its named persistent volume. Outside Docker, the default database is `~/.local/share/sports-alerts/sports-alerts.db`, outside the source checkout and cloud-synced folders. Only local, file-backed SQLite databases are supported.
 
-```env
-FROM_EMAIL=alerts@example.com
-BOOTSTRAP_ADMIN_EMAIL=you@example.com
-```
+## Backend
 
-## API Config
+API, odds, email, and push settings live in `app/config.py`. Database location and connection setup live in `app/db/session.py`, so schema and backup commands do not require unrelated API secrets.
 
-The API service reads auth, app, delivery, and admin bootstrap settings.
+Required:
 
-Common values:
+- `JWT_SECRET_KEY`: signs API sessions and hashes login codes.
+- `WEB_BASE_URL`: frontend origin used in sign-in links.
+- `CORS_ALLOW_ORIGINS`: comma-separated frontend origins.
+- `RESEND_API_KEY`: required even in log mode; a placeholder is sufficient locally.
 
-- `DATABASE_URL`
-- `JWT_SECRET_KEY`
-- `WEB_BASE_URL`
-- `CORS_ALLOW_ORIGINS`
-- `RESEND_API_KEY`
-- `DELIVERY_MODE`
-- `FROM_EMAIL`
-- `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT`
-- `BOOTSTRAP_ADMIN_EMAIL`
-- `LIVE_UPDATE_SECRET`
+Database and identity:
 
-Notes:
+- `DATABASE_URL`: SQLite file URL. Production must use a persistent disk path.
+- `BOOTSTRAP_ADMIN_EMAIL`: administrator ensured on startup; defaults to the project owner's address. Blank disables bootstrap administration.
+- `JWT_ALGORITHM`: defaults to `HS256`.
+- `JWT_EXPIRE_MINUTES`: defaults to 86400.
+- `MAGIC_LINK_TTL_MINUTES`: defaults to 15.
+- `MAGIC_LINK_COOLDOWN_SECONDS`: defaults to 60.
+- `MAGIC_LINK_MAX_REQUESTS_PER_HOUR`: defaults to 5.
 
-- `BOOTSTRAP_ADMIN_EMAIL` defaults to `ryandettling1@gmail.com` in code if not overridden.
-- `DELIVERY_MODE` supports `live` and `log`.
-- The API needs both VAPID keys so it can report whether Push is available and return the public key to authenticated browsers.
-- The VAPID private key remains server-only. `VAPID_SUBJECT` must be an HTTPS URL or `mailto:` contact.
-- Email sign-in expiry and request limits are configurable through `MAGIC_LINK_*` settings if the defaults are not suitable.
-- `LIVE_UPDATE_SECRET` authenticates worker-to-API game update notifications. A blank value disables the internal publish endpoint.
+Delivery:
 
-## Worker Config
+- `DELIVERY_MODE`: `live` or `log`; defaults to `live`.
+- `FROM_EMAIL`: defaults to `alerts@livegamealerts.com`.
+- `RESEND_API_URL`: defaults to `https://api.resend.com/emails`.
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: Web Push credentials. Keep the same keys across deploys to preserve browser subscriptions.
 
-The worker reads odds and live-update settings; catalog and odds timing are fixed UTC schedules.
+`ODDS_API_KEY` enables optional moneyline snapshots. Blank skips odds fetching. The daily credit cap is shared across competitions.
 
-Common values:
+The scheduler and delivery dispatcher start with the API. They need no separate URL, shared internal secret, or worker service. Catalog sync runs every six hours, odds sweeps twice daily when needed, and live intervals come from competition profiles.
 
-- `DATABASE_URL`
-- `ODDS_API_KEY`
-- `DELIVERY_MODE`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT`
-- `LIVE_UPDATE_API_URL`
-- `LIVE_UPDATE_SECRET`
+## Frontend
 
-Notes:
-
-- Odds fetching is enabled when `ODDS_API_KEY` is nonblank and disabled when it is blank.
-- Competition-specific live cadences and odds provider sport keys are stable values in the competition registry, not environment settings.
-- Catalog runs immediately at worker startup, then at 00:00, 06:00, 12:00, and 18:00 UTC. Odds sweeps run at 00:00 and 12:00 UTC for competitions with unpriced games in the next 48 hours.
-- The provider, moneyline market, region, format, request timeout, and odds window are fixed implementation details.
-- Disabling odds does not disable schedule ingest or alert evaluation.
-- Live update delivery is best-effort and disabled unless both live update values are nonblank. Locally, use `http://api:8000`; on Render, use the API's HTTPS origin.
-
-## Frontend Config
-
-The frontend currently needs one required env var:
-
-- `VITE_API_BASE_URL`
-
-Point it at the API origin the browser should call, for example `http://localhost:8000` locally.
-
-## Optional Neon Shortcut
-
-These values power the Admin toolbar link to the production Neon project:
-
-- `NEON_PROJECT_ID`
-- `NEON_DASHBOARD_URL`
-
-`NEON_DASHBOARD_URL` takes precedence. When only `NEON_PROJECT_ID` is set, the API builds the
-standard Neon project URL. If both are absent, the app still runs and hides the shortcut.
-
-## Secrets And Defaults
-
-- Do not commit real secrets.
-- Use local placeholders when a value is required structurally but not used in your current mode.
-- Keep local and deployed secrets separate.
-- For local development, `DELIVERY_MODE=log` simulates both email and Push delivery. Browser subscription still requires a valid VAPID key pair.
+`VITE_API_BASE_URL` is required at build time and must point to the browser-accessible backend origin. Run a single backend process on one instance; game notifications and cache invalidation are in memory.

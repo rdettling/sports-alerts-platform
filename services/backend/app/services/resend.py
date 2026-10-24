@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.services.delivery_settings import delivery_settings
+from app.config import settings
 
 
 @dataclass(frozen=True)
@@ -22,12 +22,12 @@ def send_resend_email(
     text_body: str,
     html_body: str,
 ) -> ResendResult:
-    if not delivery_settings.resend_api_key:
+    if not settings.resend_api_key:
         return ResendResult(sent=False, metadata={"error": "missing_resend_api_key"})
 
     payload = json.dumps(
         {
-            "from": delivery_settings.from_email,
+            "from": settings.from_email,
             "to": [to_email],
             "subject": subject,
             "text": text_body,
@@ -35,11 +35,11 @@ def send_resend_email(
         }
     ).encode("utf-8")
     request = Request(
-        delivery_settings.resend_api_url,
+        settings.resend_api_url,
         method="POST",
         data=payload,
         headers={
-            "Authorization": f"Bearer {delivery_settings.resend_api_key}",
+            "Authorization": f"Bearer {settings.resend_api_key}",
             "Content-Type": "application/json",
             "User-Agent": "sports-alerts-api/1.0",
         },

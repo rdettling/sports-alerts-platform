@@ -16,8 +16,8 @@ def test_champions_league_score_changed_creates_inferred_goal_alert(db_session):
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -46,8 +46,8 @@ def test_champions_league_score_changed_creates_generic_alert_for_ambiguous_jump
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -74,8 +74,8 @@ def test_champions_league_score_changed_ignores_score_decreases(db_session):
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="score_changed", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="score_changed", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -100,8 +100,8 @@ def test_champions_league_second_half_start_alert_triggers_once_on_resume(db_ses
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="second_half_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="second_half_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -132,8 +132,8 @@ def test_champions_league_second_half_start_does_not_trigger_at_halftime(db_sess
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="second_half_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="second_half_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -158,8 +158,8 @@ def test_champions_league_extra_time_start_alert_triggers_once_on_period_three_t
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="extra_time_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="extra_time_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -190,8 +190,8 @@ def test_champions_league_extra_time_start_does_not_trigger_before_period_three(
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="extra_time_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="extra_time_start", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -237,8 +237,8 @@ def test_champions_league_penalty_kicks_alert_triggers_once_in_late_tied_extra_t
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="penalty_kicks", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="penalty_kicks", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -267,8 +267,8 @@ def test_champions_league_penalty_kicks_alert_does_not_trigger_before_threshold_
     team = db_session.scalar(competition_teams_query("CHAMPIONS_LEAGUE").where(Team.external_team_id == "359"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="penalty_kicks", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="CHAMPIONS_LEAGUE", alert_type="penalty_kicks", is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -312,9 +312,9 @@ def test_mls_direct_shootout_triggers_penalties_without_extra_time_or_score_chan
     team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("extra_time_start", "penalty_kicks", "score_changed"):
-        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -344,9 +344,9 @@ def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
     team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("extra_time_start", "penalty_kicks"):
-        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -378,9 +378,9 @@ def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
     team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type="game_start", is_enabled_override=False))
     for alert_type in ("second_half_start", "score_changed"):
-        db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type=alert_type, is_enabled_override=True))
+        db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type=alert_type, is_enabled_override=True))
     db_session.commit()
 
     provider = SequenceSoccerProvider(
@@ -412,8 +412,8 @@ def test_mls_final_result_uses_shared_soccer_alert_set(db_session):
     team = db_session.scalar(competition_teams_query("MLS").where(Team.external_team_id == "187"))
     assert team is not None
     db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="game_start", is_enabled_override=False))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="soccer", alert_type="final_result", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type="game_start", is_enabled_override=False))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="MLS", alert_type="final_result", is_enabled_override=True))
     db_session.commit()
 
     provider = StaticProvider(

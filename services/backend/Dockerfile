@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV UV_LINK_MODE=copy
+ENV DATABASE_URL=sqlite:////var/data/sports-alerts.db
+ENV PORT=8000
 
 COPY --from=ghcr.io/astral-sh/uv:0.6.16 /uv /uvx /bin/
 
@@ -18,4 +20,4 @@ RUN uv sync --frozen --no-dev
 
 COPY services/backend /app/services/backend
 
-CMD ["sh", "-c", "/opt/venv/bin/alembic upgrade head && exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "/opt/venv/bin/alembic upgrade head && exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --timeout-graceful-shutdown 5"]

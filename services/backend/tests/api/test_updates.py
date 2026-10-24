@@ -1,48 +1,12 @@
 import asyncio
 
-from fastapi.routing import APIRoute
-
-from app.config import settings
-from app.main import app
 from app.routers.updates import stream_game_updates
 from app.schemas.update import GameUpdateEvent
-from app.services.live_updates import LiveUpdateBroadcaster, game_updates
+from app.services.live_updates import LiveUpdateBroadcaster
 
 
-def test_internal_update_requires_configuration_and_valid_secret(client, monkeypatch):
-    monkeypatch.setattr(settings, "live_update_secret", "")
-    response = client.post("/internal/updates/games", json={"competition": "NBA"})
-    assert response.status_code == 503
-
-    monkeypatch.setattr(settings, "live_update_secret", "expected-secret")
-    response = client.post(
-        "/internal/updates/games",
-        headers={"X-Live-Update-Secret": "wrong-secret"},
-        json={"competition": "NBA"},
-    )
-    assert response.status_code == 401
 
 
-def test_internal_update_broadcasts_without_database_dependencies(client, monkeypatch):
-    monkeypatch.setattr(settings, "live_update_secret", "expected-secret")
-    queue = game_updates.subscribe()
-    try:
-        response = client.post(
-            "/internal/updates/games",
-            headers={"X-Live-Update-Secret": "expected-secret"},
-            json={"competition": "NBA"},
-        )
-        assert response.status_code == 204
-        assert queue.get_nowait() == GameUpdateEvent(competition="NBA")
-    finally:
-        game_updates.unsubscribe(queue)
-
-    route = next(
-        route
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path == "/internal/updates/games"
-    )
-    assert route.dependant.dependencies == []
 
 
 def test_stream_response_has_sse_headers():
@@ -85,49 +49,3 @@ def test_broadcaster_coalesces_bursts_per_subscriber():
         assert queue.empty()
     finally:
         broadcaster.unsubscribe(queue)
-
-
-def test_schedule_reports_replace_memory_without_sql_or_game_notifications(client, monkeypatch):
-    from sqlalchemy import event
-    from app.db.session import engine
-    from app.services import worker_schedule
-    from app.services.game_feed import game_feed_cache
-
-    sql = []
-    def track(*args):
-        sql.append(args[2])
-
-    def unexpected(*args):
-        raise AssertionError("schedule reports must not affect the game feed")
-
-    monkeypatch.setattr(game_feed_cache, "invalidate", unexpected)
-    monkeypatch.setattr(game_updates, "publish", unexpected)
-    payload = {"reported_at": "2026-09-04T16:00:00Z", "next_catalog_at": "2026-09-05T04:00:00Z", "jobs": [{
-        "competition": "NBA", "job_type": "live_sync",
-        "next_run_at": None, "last_success_at": None,
-        "state": "no_upcoming",
-    }]}
-    event.listen(engine, "before_cursor_execute", track)
-    try:
-        monkeypatch.setattr(settings, "live_update_secret", "")
-        assert client.post("/internal/updates/schedule", json=payload).status_code == 503
-        monkeypatch.setattr(settings, "live_update_secret", "secret")
-        for headers in ({}, {"X-Live-Update-Secret": "wrong"}):
-            assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 401
-        assert worker_schedule.snapshot is None
-        headers = {"X-Live-Update-Secret": "secret"}
-        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
-        assert worker_schedule.snapshot.model_dump(mode="json") == payload
-        assert worker_schedule.snapshot.jobs[0].next_run_at is None
-        payload["jobs"][0].update(job_type="catalog_sync", state="queued")
-        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
-        assert worker_schedule.snapshot.jobs[0].state == "queued"
-        assert worker_schedule.snapshot.next_catalog_at.isoformat() == "2026-09-05T04:00:00+00:00"
-        payload["jobs"] = []
-        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 204
-        assert worker_schedule.snapshot.jobs == []
-        payload["reported_at"] = "2026-09-04T16:00:00"
-        assert client.post("/internal/updates/schedule", json=payload, headers=headers).status_code == 422
-        assert sql == []
-    finally:
-        event.remove(engine, "before_cursor_execute", track)

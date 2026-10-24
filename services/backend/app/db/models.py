@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from app.db.types import UTCDateTime
 
 
 class Base(DeclarativeBase):
@@ -18,8 +20,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(Enum("user", "admin", name="user_role"), default="user", index=True)
     email_alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     hidden_competitions: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     team_follows = relationship("UserTeamFollow", back_populates="user")
     game_follows = relationship("UserGameFollow", back_populates="user")
@@ -37,11 +39,11 @@ class EmailLoginToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     code_hash: Mapped[str] = mapped_column(String(64))
     failed_code_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True, index=True)
     requested_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), index=True)
 
 
 class Team(Base):
@@ -63,8 +65,8 @@ class CompetitionSetting(Base):
 
     competition: Mapped[str] = mapped_column(String(32), primary_key=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
 
 class CompetitionTeam(Base):
@@ -77,7 +79,7 @@ class CompetitionTeam(Base):
     ties: Mapped[int | None] = mapped_column(Integer, nullable=True)
     overtime_losses: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    strength_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    strength_updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     team = relationship("Team", back_populates="competition_memberships")
 
@@ -94,7 +96,7 @@ class Game(Base):
     competition: Mapped[str] = mapped_column(ForeignKey("competition_settings.competition"))
     home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-    scheduled_start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scheduled_start_time: Mapped[datetime] = mapped_column(UTCDateTime())
     context_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     broadcast_names: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     status: Mapped[str] = mapped_column(String(32), default="scheduled")
@@ -112,9 +114,9 @@ class Game(Base):
     is_final: Mapped[bool] = mapped_column(Boolean, default=False)
     is_neutral_site: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_odds_eligible: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    last_ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_ingested_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
 
 class OddsApiDailyUsage(Base):
@@ -124,8 +126,8 @@ class OddsApiDailyUsage(Base):
     credits_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     provider_credits_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     provider_credits_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    provider_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    provider_observed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
 
 class GameOddsCurrent(Base):
@@ -135,9 +137,9 @@ class GameOddsCurrent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
     bookmaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
     outcomes = relationship("GameOddsOutcomeCurrent", back_populates="odds", cascade="all, delete-orphan", order_by="GameOddsOutcomeCurrent.outcome_order")
 
 
@@ -155,8 +157,8 @@ class GameOddsOutcomeCurrent(Base):
     outcome_order: Mapped[int] = mapped_column(Integer)
     price_american: Mapped[int | None] = mapped_column(Integer, nullable=True)
     team_side: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     odds = relationship("GameOddsCurrent", back_populates="outcomes")
 
@@ -168,7 +170,7 @@ class UserTeamFollow(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     user = relationship("User", back_populates="team_follows")
     team = relationship("Team")
@@ -181,7 +183,7 @@ class UserGameFollow(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     user = relationship("User", back_populates="game_follows")
     game = relationship("Game")
@@ -194,7 +196,7 @@ class UserGameUnfollow(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
 
     user = relationship("User", back_populates="game_unfollows")
     game = relationship("Game")
@@ -202,18 +204,18 @@ class UserGameUnfollow(Base):
 
 class UserAlertPreference(Base):
     __tablename__ = "user_alert_preferences"
-    __table_args__ = (UniqueConstraint("user_id", "sport", "alert_type", name="uq_user_alert_preferences_user_sport_type"),)
+    __table_args__ = (UniqueConstraint("user_id", "competition", "alert_type", name="uq_user_alert_preferences_user_competition_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    sport: Mapped[str] = mapped_column(String(16))
+    competition: Mapped[str] = mapped_column(String(32))
     alert_type: Mapped[str] = mapped_column(String(32))
     is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     inning_start_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="alert_preferences")
 
@@ -233,8 +235,8 @@ class UserGameAlertOverride(Base):
     close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     inning_start_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="game_alert_overrides")
     game = relationship("Game")
@@ -249,7 +251,7 @@ class Alert(Base):
     alert_type: Mapped[str] = mapped_column(String(32))
     event_key: Mapped[str] = mapped_column(String(255), unique=True)
     event_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    triggered_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), index=True)
 
     deliveries = relationship("AlertDelivery", back_populates="alert", cascade="all, delete-orphan")
 
@@ -265,7 +267,7 @@ class AlertDelivery(Base):
     alert_id: Mapped[int] = mapped_column(ForeignKey("alerts.id", ondelete="CASCADE"), index=True)
     channel: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="pending")
-    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -280,7 +282,7 @@ class PushSubscription(Base):
     endpoint: Mapped[str] = mapped_column(Text, unique=True)
     p256dh: Mapped[str] = mapped_column(String(255))
     auth: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="push_subscriptions")

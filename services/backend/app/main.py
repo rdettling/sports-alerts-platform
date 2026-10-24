@@ -1,3 +1,4 @@
+import fcntl
 import logging
 from contextlib import asynccontextmanager
 from time import monotonic
@@ -8,8 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.db.session import SessionLocal
-from app.db.usage import DatabaseUsageMiddleware, database_source, database_usage_logging
+from app.db.session import SessionLocal, database_path, engine
 from app.routers.auth import router as auth_router
 from app.routers.alerts import router as alerts_router
 from app.routers.follows import router as follows_router
@@ -23,6 +23,7 @@ from app.routers.updates import router as updates_router
 from app.routers.ops import router as ops_router
 from app.routers.notifications import router as notifications_router
 from app.logging_filters import SuppressLowSignalAccessLogsFilter
+from app.worker.runtime import running_worker
 from app.services.seed import ensure_bootstrap_admin, ensure_seeded_teams
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -35,20 +36,27 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    with database_usage_logging():
-        started_at = monotonic()
-        logger.info("Startup seed begin")
-        with database_source("api:startup"), SessionLocal() as db:
-            ensure_seeded_teams(db)
-            ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
-        elapsed_ms = int((monotonic() - started_at) * 1000)
-        logger.info("Startup seed complete elapsed_ms=%s", elapsed_ms)
-        yield
+async def lifespan(app: FastAPI):
+    with database_path.with_name(database_path.name + ".lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("Another backend already owns this SQLite database") from None
+        try:
+            started_at = monotonic()
+            logger.info("Startup seed begin")
+            with SessionLocal() as db:
+                ensure_seeded_teams(db)
+                ensure_bootstrap_admin(db, settings.bootstrap_admin_email)
+            logger.info("Startup seed complete elapsed_ms=%s", int((monotonic() - started_at) * 1000))
+            async with running_worker() as threads:
+                app.state.worker_threads = threads
+                yield
+        finally:
+            engine.dispose()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
-app.add_middleware(DatabaseUsageMiddleware)
 allowed_origins = [origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,

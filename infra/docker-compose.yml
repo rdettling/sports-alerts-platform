@@ -1,22 +1,4 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: sports-alerts-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "127.0.0.1:${POSTGRES_PORT}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
       context: ..
@@ -26,47 +8,19 @@ services:
     env_file:
       - ../.env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      API_HOST: ${API_HOST:-0.0.0.0}
-      API_PORT: ${API_PORT:-8000}
-      UV_LINK_MODE: copy
-      UV_PROJECT_ENVIRONMENT: /opt/venv
+      DATABASE_URL: sqlite:////var/data/sports-alerts.db
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ../services/backend:/app/services/backend
+      - sqlite_data:/var/data
     working_dir: /app/services/backend
-    depends_on:
-      db:
-        condition: service_healthy
-    command: sh -c "/opt/venv/bin/alembic upgrade head && exec /opt/venv/bin/uvicorn app.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()"]
       interval: 10s
       timeout: 5s
       retries: 10
-
-  worker:
-    build:
-      context: ..
-      dockerfile: services/backend/Dockerfile
-    container_name: sports-alerts-worker
-    restart: unless-stopped
-    env_file:
-      - ../.env
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      UV_LINK_MODE: copy
-      UV_PROJECT_ENVIRONMENT: /opt/venv
-    volumes:
-      - ../services/backend:/app/services/backend
-    working_dir: /app/services/backend
-    depends_on:
-      db:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-    command: /opt/venv/bin/python -m app.worker.main
+    stop_grace_period: 180s
 
   web:
     build:
@@ -90,5 +44,5 @@ services:
     command: sh -c "rm -rf /app/apps/web/node_modules/.vite && npm ci --include=optional && npm run dev -- --host 0.0.0.0 --port 5173"
 
 volumes:
-  postgres_data:
+  sqlite_data:
   web_node_modules:

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import CompetitionTeam, Game, Team
 from app.schemas.game import GameOut, GameTeamOut, TeamStrengthOut
-from app.services.team_catalog import FBS_TEAM_CONFERENCES
+from app.services.team_catalog import TEAM_CONFERENCES_BY_SCOPE
 
 
 def build_game_outs(db: Session, games: Sequence[Game]) -> list[GameOut]:
@@ -33,9 +33,7 @@ def build_game_outs(db: Session, games: Sequence[Game]) -> list[GameOut]:
             name=team.name,
             abbreviation=team.abbreviation,
             conference=(
-                FBS_TEAM_CONFERENCES.get(team.external_team_id)
-                if team.provider_scope == "cfb"
-                else None
+                TEAM_CONFERENCES_BY_SCOPE.get(team.provider_scope, {}).get(team.external_team_id)
             ),
         )
 

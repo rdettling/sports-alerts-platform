@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from app.db.models import Alert, AlertDelivery, OddsApiDailyUsage, User
+from app.db.models import Alert, AlertDelivery, OddsApiDailyUsage, User, Game
 from app.db.session import SessionLocal
 from app.schemas.schedule import ScheduleSnapshot
 from app.services import worker_schedule
+from app.services.competitions import competition_teams_query
 
 
 def _issue_token(client, monkeypatch, email: str) -> str:
@@ -31,10 +32,14 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         assert user is not None
         user.role = "admin"
         now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        teams = db.scalars(competition_teams_query("NBA").limit(2)).all()
+        game = Game(external_game_id="ops-test", competition="NBA", home_team_id=teams[0].id, away_team_id=teams[1].id, scheduled_start_time=now, status="scheduled")
+        db.add(game)
+        db.flush()
         db.add(
             Alert(
                 user_id=user.id,
-                game_id=1,
+                game_id=game.id,
                 alert_type="game_start",
                 event_key="alert-1",
                 triggered_at=now,
@@ -52,7 +57,7 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         db.add(
             Alert(
                 user_id=user.id,
-                game_id=1,
+                game_id=game.id,
                 alert_type="final_result",
                 event_key="alert-2",
                 triggered_at=now,
@@ -73,7 +78,6 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         db.close()
 
     headers = {"Authorization": f"Bearer {token}"}
-    monkeypatch.setattr("app.routers.ops.settings.neon_dashboard_url", "https://example.com/neon")
     summary = client.get("/ops/admin/summary?window=24h", headers=headers)
     assert summary.status_code == 200
     summary_json = summary.json()
@@ -83,16 +87,14 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "competition_settings",
         "schedule",
         "odds_api_usage",
-        "neon_dashboard_url",
     }
     assert summary_json["odds_api_usage"] == {
         "credits_used": 5,
         "daily_credit_cap": 16,
         "provider_credits_used": 10,
         "provider_credits_remaining": 490,
-        "provider_observed_at": now.replace(tzinfo=None).isoformat(),
+        "provider_observed_at": now.isoformat().replace("+00:00", "Z"),
     }
-    assert summary_json["neon_dashboard_url"] == "https://example.com/neon"
     assert summary_json["schedule"] is None
     worker_schedule.snapshot = ScheduleSnapshot(reported_at=now, next_catalog_at=now, jobs=[])
     assert client.get("/ops/admin/summary", headers=headers).json()["schedule"] == worker_schedule.snapshot.model_dump(mode="json")
@@ -104,6 +106,7 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     assert [item["competition"] for item in summary_json["competition_settings"]] == [
         "NBA",
         "WNBA",
+        "NCAAB",
         "NFL",
         "FBS",
         "MLB",
@@ -115,13 +118,6 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
     ]
     assert "runtime" not in summary_json
     assert client.get("/ops/admin/summary?window=bad", headers=headers).status_code == 422
-
-    monkeypatch.setattr("app.routers.ops.settings.neon_dashboard_url", "")
-    monkeypatch.setattr("app.routers.ops.settings.neon_project_id", "project-123")
-    fallback_summary = client.get("/ops/admin/summary", headers=headers).json()
-    assert fallback_summary["neon_dashboard_url"] == "https://console.neon.tech/app/projects/project-123"
-    monkeypatch.setattr("app.routers.ops.settings.neon_project_id", "")
-    assert client.get("/ops/admin/summary", headers=headers).json()["neon_dashboard_url"] is None
 
     competition_update = client.put(
         "/ops/competitions/MLB",

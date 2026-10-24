@@ -315,7 +315,8 @@ def test_catalog_sync_maps_seeded_champions_league_clubs(db_session, monkeypatch
     assert game is not None
 
 
-def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monkeypatch):
+@pytest.mark.parametrize("competition,scope", [("FBS", "cfb"), ("NCAAB", "ncaab")])
+def test_college_catalog_sync_registers_and_maps_lower_division_opponents(db_session, competition, scope):
     provider = StaticProvider(
         [
             make_game(
@@ -331,20 +332,29 @@ def test_fbs_catalog_sync_registers_and_maps_non_fbs_opponents(db_session, monke
         ]
     )
 
-    result = run_catalog_sync(provider, competition="FBS")
+    provider.games.append(make_game(
+        external_game_id="lower-vs-lower",
+        home_external_team_id="999998", home_team_name="Lower Home", home_team_abbreviation="LOWH",
+        away_external_team_id="999997", away_team_name="Lower Away", away_team_abbreviation="LOWA",
+        status="scheduled",
+    ))
+    result = run_catalog_sync(provider, competition=competition)
+    assert result.games_checked == 2
+    assert db_session.scalar(select(Game).where(Game.external_game_id == "lower-vs-lower")) is None
+    assert db_session.scalar(select(Team).where(Team.provider_scope == scope, Team.external_team_id == "999998")) is None
 
     opponent = db_session.scalar(
         select(Team).where(
-            Team.provider_scope == "cfb", Team.external_team_id == "999999"
+            Team.provider_scope == scope, Team.external_team_id == "999999"
         )
     )
     game = db_session.scalar(
-        select(Game).where(Game.competition == "FBS", Game.external_game_id == "fbs-vs-fcs")
+        select(Game).where(Game.competition == competition, Game.external_game_id == "fbs-vs-fcs")
     )
     assert result.games_updated == 1
     assert opponent is not None
     assert (opponent.name, opponent.abbreviation) == ("Example State Bears", "EXST")
-    assert db_session.get(CompetitionTeam, ("FBS", opponent.id)) is None
+    assert db_session.get(CompetitionTeam, (competition, opponent.id)) is None
     assert game is not None
     assert game.away_team_id == opponent.id
 
@@ -556,7 +566,8 @@ def test_ingest_persists_nhl_overtime_losses(db_session):
     assert (away.wins, away.losses, away.ties, away.overtime_losses) == (40, 30, None, 12)
 
 
-def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, monkeypatch):
+@pytest.mark.parametrize("competition", ["FBS", "NCAAB"])
+def test_ingest_clears_college_rank_when_provider_marks_team_unranked(db_session, competition):
     ranked = make_game(
         external_game_id="fbs-rank",
         home_external_team_id="333",
@@ -569,11 +580,11 @@ def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, mo
         home_team_strength=TeamStrength(rank=3, rank_observed=True),
         away_team_strength=TeamStrength(rank=None, rank_observed=True),
     )
-    run_catalog_sync(StaticProvider([ranked]), competition="FBS")
+    run_catalog_sync(StaticProvider([ranked]), competition=competition)
 
     game = db_session.scalar(select(Game).where(Game.external_game_id == "fbs-rank"))
     assert game is not None
-    home_membership = db_session.get(CompetitionTeam, ("FBS", game.home_team_id))
+    home_membership = db_session.get(CompetitionTeam, (competition, game.home_team_id))
     assert home_membership is not None
     assert home_membership.rank == 3
 
@@ -589,7 +600,7 @@ def test_ingest_clears_fbs_rank_when_provider_marks_team_unranked(db_session, mo
         home_team_strength=TeamStrength(rank=None, rank_observed=True),
         away_team_strength=TeamStrength(rank=None, rank_observed=True),
     )
-    result = run_catalog_sync(StaticProvider([unranked]), competition="FBS")
+    result = run_catalog_sync(StaticProvider([unranked]), competition=competition)
 
     db_session.refresh(home_membership)
     assert result.games_updated == 1
@@ -699,3 +710,33 @@ def test_football_situation_changes_and_clearing_count_as_game_updates(db_sessio
         assert game.down_distance == down_distance
         assert result.games_updated == expected_updates
         assert result.alerts_created == 0
+
+
+def test_game_read_queries_do_not_grow_with_slate_size(db_session):
+    def count_reads(size):
+        provider = StaticProvider([
+            make_game(
+                external_game_id=f"batch-{size}-{index}",
+                home_external_team_id="1",
+                away_external_team_id="2",
+                status="scheduled",
+            )
+            for index in range(size)
+        ])
+        run_catalog_sync(provider)
+        reads = []
+
+        def record_read(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT") and "FROM games" in statement:
+                reads.append(statement)
+
+        event.listen(engine, "before_cursor_execute", record_read)
+        try:
+            result = run_catalog_sync(provider)
+        finally:
+            event.remove(engine, "before_cursor_execute", record_read)
+        assert result.games_checked == size
+        assert result.games_updated == 0
+        return len(reads)
+
+    assert count_reads(20) == count_reads(1)

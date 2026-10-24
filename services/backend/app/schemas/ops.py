@@ -39,4 +39,3 @@ class OpsAdminSummaryOut(BaseModel):
     competition_settings: list[CompetitionSettingOut]
     schedule: ScheduleSnapshot | None = None
     odds_api_usage: OddsApiUsageOut
-    neon_dashboard_url: str | None = None

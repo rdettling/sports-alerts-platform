@@ -14,48 +14,6 @@ Checks:
 3. Confirm `CORS_ALLOW_ORIGINS` includes the frontend origin
 4. Check `make logs SERVICE=api` for startup or config failures
 
-## Reviewing Database Awake Time And Waste
-
-Neon control-plane counters measure actual project compute consumption; Render application logs explain which app activity contributed to keeping the database busy. Render's own API/worker CPU charts describe those containers, not the Neon database.
-
-Run the read-only production report from the repo root:
-
-```sh
-make production-usage DAYS=7
-```
-
-The report checks Render and Neon authentication, discovers the production API and worker, splits capped log queries, and combines Neon control-plane data with Render's existing database-usage summaries. It writes no files and never connects to Postgres. If authentication has expired, follow the exact login command in the report and rerun it.
-
-Interpret each measurement according to its label:
-
-- **Neon counter** values are exact billing-cycle totals as reported by Neon, though counters may lag.
-- **Lifecycle-derived** awake time is reconstructed from Neon `start_compute` and `suspend_compute` operations.
-- **Estimated** interval CU-hours multiply lifecycle-derived awake time by the billing cycle's average CU while active. Neon does not expose exact historical interval CU-hours on the Free plan.
-- **Render-observed** values attribute application activity found in retained logs. Missing summaries can mean an idle process, an abrupt shutdown, or unavailable logs.
-
-The command accepts any positive number of days. Requests beyond Render's seven-day retention still return available Neon and Render evidence, but are explicitly marked partial. A nonzero exit means at least one source was partial or unavailable; the printed evidence remains usable.
-
-The API and worker emit `Database usage {…}` JSON summaries every five minutes when activity exists, plus a partial summary on graceful shutdown. Each includes the deployed revision and bounded source groups:
-
-- `api:GET /games` and other API route templates: connections, statement executions, commits, rollbacks, and errors
-- `worker:competition_scan`: scheduler reads outside ingest jobs
-- `worker:live_sync:FBS`, `worker:catalog_sync:MLB`, etc.: database work attributed to each job; correlate with existing `Job completed` logs for games checked/changed and next-run timing
-- `api:startup`: startup seed work
-- Game cache hits, fills, and discarded fills: cache hits should require no connection; repeated fills without changed worker data can expose excessive refreshes
-
-`db_minutes` identifies UTC minutes containing observed database activity, including failed calls. The report unions these across services, ranks sources by connection count, and shows daily activity in Pacific time to help locate quiet-period polling. These minutes are **not** actual awake hours: Neon can remain awake after the last query, and external clients can cause activity absent from these logs. SQL statement counts represent execution calls, not rows, database CPU time, or all internal driver traffic. Read-only session cleanup also produces rollbacks; a rollback count alone does not mean failed work.
-
-To judge waste, compare lifecycle-derived awake hours and estimated CU-hours, identify activity during periods without live games, then check whether it came from game-feed fills, admin polling, startup, or worker scans. Look for repeated unchanged worker syncs and many discarded cache fills. Keep the old and new deployment revisions separate. Fast reconnects or many staggered viewers may still keep Neon awake even with the quiet fallback.
-
-Check the [worker schedule rules](architecture.md#worker-scheduling) and the next reported job time before treating a quiet interval or delayed league discovery as a failure. Catalog clustering may reduce scattered activity, but compute-hour savings must be measured.
-
-To verify idle sleep after a worker deploy, run the report for the post-deploy period and confirm the startup log reports the UTC catalog schedule. Review an overnight period without live games: `worker:competition_scan` should not appear hourly between scheduled jobs. The report correlates those logs with Neon lifecycle operations without waking Postgres. Attribute site visits, admin polling, scheduled catalog jobs, twice-daily odds sweeps, and failure recovery separately; fewer application queries alone do not establish fewer awake hours.
-
-Logging only counts existing operations in memory and flushes to stdout. It issues no SQL, stores no rows, keeps no database connection, and logs no SQL text, parameters, credentials, user IDs, or raw request URLs. SSE traffic passes through without buffering and causes no DB activity by itself.
-
-If admin requests appear repeatedly during idle periods, use the [Admin request checks](#admin-data-is-stale-or-requesting-unexpectedly). Admin summary reads authenticate against Postgres and include the current UTC day's odds usage.
-
-The report recursively splits queries that reach Render's 1,000-record limit and deduplicates overlapping results. Current partial windows and abruptly terminated processes can still be missing. Empty windows are not emitted, so no logs alone cannot prove the process was healthy or Neon was asleep. [Render retains Hobby logs for seven days](https://render.com/docs/logging), enough for an on-demand weekly review.
 
 ## Admin Data Is Stale Or Requesting Unexpectedly
 
@@ -74,25 +32,25 @@ If requests exceed those expectations, check the frontend revision and distingui
 
 For the [reported schedule](architecture.md#admin--ops), compare scheduled league deadlines with worker logs. `No upcoming games` means the live job is dormant until catalog discovers eligible work; it does not have a hidden live-sync deadline. A passed time is not proof of completion: reload Admin, then inspect logs if the report remains old. Reloading reads API memory and does not contact the worker.
 
-Schedule unavailable can persist for up to 6 hours after an API restart while the worker sleeps. An enabled league absent from the report is awaiting discovery; a disabled league still present is awaiting confirmation. Check worker startup time before interpreting missing last-success values, which reset on worker restart.
+Backend startup immediately starts the scheduler and publishes its first plan. An enabled league absent from the report is awaiting discovery; a disabled league still present is awaiting confirmation. Check worker startup time before interpreting missing last-success values, which reset on worker restart.
 
-If reports stay unavailable after worker activity, check `Schedule report delivery failed` and the matching recovery log, then verify the worker API URL/shared secret. During a release, confirm the API and worker use compatible schedule fields; see the [catalog cutover instructions](deployment.md#shared-catalog-schedule-cutover).
+If reports stay unavailable, check `/healthz` and backend startup logs. Schedule reports are shared in process; there is no internal HTTP endpoint or shared secret to configure.
 
-`Catalog cycle queued` logs show the league count and UTC slot. Verify that completion times do not move the regular UTC schedule, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior. Use `worker:catalog_sync:<league>` counters to attribute database activity separately from live polling and site visits.
+`Catalog cycle queued` logs show the league count and UTC slot. Verify that completion times do not move the regular UTC schedule, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior.
 
 ## Games Screen Is Stale
 
 1. Check worker `Job completed` logs for changed games. Upstream fetch cadence is separate from display latency: basketball, football, and NHL use one minute, soccer 90 seconds, and MLB two minutes
-2. Confirm `LIVE_UPDATE_API_URL` points to the API and both services have matching `LIVE_UPDATE_SECRET` values
+2. Confirm the backend started one scheduler and one delivery thread; `/healthz` reports a stopped thread
 3. On a visible, online Games screen, inspect `/updates/games`: expect `text/event-stream`, periodic keep-alives, and `games` events after changed syncs
 4. An event should prompt a games read after about one second (at least two seconds between event-driven reads). The API invalidates its shared cache before sending the event
 5. Without events, expect a fallback read after 60 seconds for a live feed, or after 30 minutes for a quiet feed. An earlier future scheduled start brings the quiet check forward. Initial load failures use 60 seconds; subsequent failures use the last known feed. Cache entries expire after 30 seconds even if a worker notification was lost
-6. Look for `Live update delivery failed` and `Live update delivery recovered` in worker logs. Transient failures get one retry; repeated failures are log-suppressed
+6. Game changes invalidate the local cache and schedule an SSE broadcast on the API event loop; no worker-to-API network request is involved
 7. Verify the API still uses one process on one instance. Process-local notifications and invalidation do not span replicas
 
 Hidden/offline screens intentionally stop SSE and refresh timers. On an iPhone, reopen the Home Screen app and verify a catch-up request and a new stream connection. Render deployments also interrupt existing streams; reconnection must fetch the latest state. Existing displayed games remain visible during background refreshes. Failed reads use the existing error display and retry/fallback behavior.
 
-The five-second normal update target assumes healthy services/networking and a visible app. Two-minute missed-notification recovery applies when the feed already shows live games; quiet feeds trade recovery time (up to 30 minutes) for opportunities to suspend Neon. A delayed or overdue scheduled game does not by itself trigger minute-by-minute reads. Other viewers, worker jobs, and reconnects can still prevent suspension. Display refreshes cannot accelerate upstream sports data or keep iOS running in the background.
+The five-second normal update target assumes healthy services/networking and a visible app. Two-minute missed-notification recovery applies when the feed already shows live games; quiet feeds use a fallback of up to 30 minutes. A delayed or overdue scheduled game does not by itself trigger minute-by-minute reads. Display refreshes cannot accelerate upstream sports data or keep iOS running in the background.
 
 ## Frontend Route 404 On Hard Refresh
 
@@ -202,3 +160,9 @@ Fix:
 
 - make sure required values exist in `.env` or your deployed service environment
 - use [configuration.md](configuration.md) as the source of truth
+
+## SQLite Storage and Recovery
+
+Confirm `DATABASE_URL` points into the persistent disk, check free disk space, and verify only one backend process is running. WAL permits concurrent readers but serializes writers; an unusually long write transaction can exhaust the 30-second lock wait. Provider requests should not hold write transactions open.
+
+Daily snapshots are under the database directory's `backups` folder. Follow [backup and recovery](deployment.md#backups-and-recovery) to create an additional consistent snapshot, copy it off the service, or restore while stopped. Do not remove WAL sidecars while the backend is running.

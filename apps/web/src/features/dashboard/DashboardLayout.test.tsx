@@ -25,7 +25,7 @@ vi.mock("../auth/SignInModal", () => ({
     isOpen ? <div role="dialog">Sign-in modal</div> : null,
 }));
 
-vi.mock("./components/GamesView", () => ({
+vi.mock("../games/GamesView", () => ({
   GamesView: ({ onSignInRequired }: { onSignInRequired: () => void }) => (
     <div>
       Games view<button onClick={onSignInRequired}>Guest follow</button>
@@ -33,20 +33,20 @@ vi.mock("./components/GamesView", () => ({
   ),
 }));
 
-vi.mock("./components/TeamsView", () => ({
+vi.mock("../teams/TeamsView", () => ({
   TeamsView: () => <div>Teams view</div>,
 }));
 
-vi.mock("./components/AlertsView", () => ({
+vi.mock("../alerts/AlertsView", () => ({
   AlertsView: () => <div>Alerts view</div>,
 }));
 
-vi.mock("./components/CompetitionVisibilityModal", () => ({
+vi.mock("./CompetitionVisibilityModal", () => ({
   CompetitionVisibilityModal: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? <div role="dialog">League visibility modal</div> : null,
 }));
 
-vi.mock("./components/AdminView", () => ({
+vi.mock("../admin/AdminView", () => ({
   AdminView: () => <div>Admin view</div>,
 }));
 

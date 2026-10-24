@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from sqlalchemy import select
 
 from app.db.models import (
@@ -58,11 +60,11 @@ def test_ingest_creates_deduped_live_alerts(db_session):
 
     teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
     db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.add(
         UserAlertPreference(
             user_id=user.id,
-            sport="basketball",
+            competition="NBA",
             alert_type="close_game_late",
             is_enabled_override=True,
             close_game_margin_threshold_override=5,
@@ -110,7 +112,7 @@ def test_ingest_supports_every_email_and_push_combination(db_session):
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="basketball",
+                competition="NBA",
                 alert_type="game_start",
                 is_enabled_override=True,
             )
@@ -158,15 +160,15 @@ def test_nba_overtime_start_alerts_once_per_overtime_period(db_session):
     for user, overtime_enabled in ((enabled_user, True), (disabled_user, False)):
         db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
         db_session.add(
-            UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=False)
+            UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=False)
         )
         db_session.add(
-            UserAlertPreference(user_id=user.id, sport="basketball", alert_type="close_game_late", is_enabled_override=False)
+            UserAlertPreference(user_id=user.id, competition="NBA", alert_type="close_game_late", is_enabled_override=False)
         )
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="basketball",
+                competition="NBA",
                 alert_type="overtime_start",
                 is_enabled_override=overtime_enabled,
             )
@@ -230,7 +232,7 @@ def test_ingest_creates_final_result_alert(db_session):
     assert game is not None
 
     db_session.add(UserGameFollow(user_id=user.id, game_id=game.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="final_result", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="final_result", is_enabled_override=True))
     db_session.commit()
 
     run_catalog_sync(make_final_provider())
@@ -262,7 +264,7 @@ def test_wnba_reuses_deduped_basketball_alerts(db_session):
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="basketball",
+                competition="WNBA",
                 alert_type=alert_type,
                 is_enabled_override=True,
                 close_game_margin_threshold_override=5 if alert_type == "close_game_late" else None,
@@ -351,7 +353,7 @@ def test_nfl_creates_deduped_football_alerts(db_session):
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="NFL",
                 alert_type=alert_type,
                 is_enabled_override=True,
                 close_game_margin_threshold_override=8 if alert_type == "close_game_late" else None,
@@ -439,7 +441,7 @@ def test_fbs_score_and_lead_alerts_use_transition_precedence_and_dedupe(db_sessi
     db_session.add(
         UserAlertPreference(
             user_id=user.id,
-            sport="football",
+            competition="FBS",
             alert_type="game_start",
             is_enabled_override=False,
         )
@@ -448,7 +450,7 @@ def test_fbs_score_and_lead_alerts_use_transition_precedence_and_dedupe(db_sessi
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="FBS",
                 alert_type=alert_type,
                 is_enabled_override=True,
             )
@@ -512,7 +514,7 @@ def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_se
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="FBS",
                 alert_type="game_start",
                 is_enabled_override=False,
             )
@@ -520,7 +522,7 @@ def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_se
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="FBS",
                 alert_type="close_game_late",
                 is_enabled_override=True,
                 close_game_margin_threshold_override=8,
@@ -530,7 +532,7 @@ def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_se
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="FBS",
                 alert_type="score_changed",
                 is_enabled_override=True,
             )
@@ -538,7 +540,7 @@ def test_lead_alert_covers_close_game_without_delaying_it_to_the_next_sync(db_se
     db_session.add(
         UserAlertPreference(
             user_id=lead_user.id,
-            sport="football",
+            competition="FBS",
             alert_type="lead_change",
             is_enabled_override=True,
         )
@@ -611,9 +613,17 @@ def test_nhl_goal_covers_close_game_without_a_duplicate_on_the_next_sync(db_sess
     db_session.add(
         UserAlertPreference(
             user_id=user.id,
-            sport="hockey",
+            competition="NHL",
             alert_type="game_start",
             is_enabled_override=False,
+        )
+    )
+    db_session.add(
+        UserAlertPreference(
+            user_id=user.id,
+            competition="NHL",
+            alert_type="score_changed",
+            is_enabled_override=True,
         )
     )
     db_session.commit()
@@ -659,7 +669,7 @@ def test_existing_close_game_alert_does_not_suppress_later_scoring_alerts(db_ses
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="football",
+                competition="NFL",
                 alert_type=alert_type,
                 is_enabled_override=True,
             )
@@ -667,7 +677,7 @@ def test_existing_close_game_alert_does_not_suppress_later_scoring_alerts(db_ses
     db_session.add(
         UserAlertPreference(
             user_id=user.id,
-            sport="football",
+            competition="NFL",
             alert_type="game_start",
             is_enabled_override=False,
         )
@@ -735,7 +745,7 @@ def test_following_live_game_after_start_does_not_send_game_start_alert(db_sessi
     assert game is not None
 
     db_session.add(UserGameFollow(user_id=user.id, game_id=game.id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
     run_catalog_sync(provider)
@@ -752,7 +762,7 @@ def test_ingest_queues_delivery_without_calling_provider(db_session, monkeypatch
 
     teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
     db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
     monkeypatch.setattr(
@@ -814,7 +824,7 @@ def test_ingest_respects_game_override_over_competition_default(db_session):
 
     teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
     db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
     run_catalog_sync(make_live_close_provider())
@@ -848,7 +858,7 @@ def test_ingest_excludes_user_game_unfollows_for_team_follows(db_session):
 
     teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
     db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
-    db_session.add(UserAlertPreference(user_id=user.id, sport="basketball", alert_type="game_start", is_enabled_override=True))
+    db_session.add(UserAlertPreference(user_id=user.id, competition="NBA", alert_type="game_start", is_enabled_override=True))
     db_session.commit()
 
     run_catalog_sync(make_live_close_provider())
@@ -878,7 +888,7 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
     db_session.add(
         UserAlertPreference(
             user_id=user.id,
-            sport="baseball",
+            competition="MLB",
             alert_type="inning_start",
             is_enabled_override=True,
             inning_start_threshold_override=7,
@@ -905,15 +915,15 @@ def test_mlb_extra_innings_alerts_once_per_inning(db_session):
     for user, extra_innings_enabled in ((enabled_user, True), (disabled_user, False)):
         db_session.add(UserTeamFollow(user_id=user.id, team_id=team.id))
         db_session.add(
-            UserAlertPreference(user_id=user.id, sport="baseball", alert_type="game_start", is_enabled_override=False)
+            UserAlertPreference(user_id=user.id, competition="MLB", alert_type="game_start", is_enabled_override=False)
         )
         db_session.add(
-            UserAlertPreference(user_id=user.id, sport="baseball", alert_type="inning_start", is_enabled_override=False)
+            UserAlertPreference(user_id=user.id, competition="MLB", alert_type="inning_start", is_enabled_override=False)
         )
         db_session.add(
             UserAlertPreference(
                 user_id=user.id,
-                sport="baseball",
+                competition="MLB",
                 alert_type="extra_innings_start",
                 is_enabled_override=extra_innings_enabled,
             )
@@ -972,3 +982,74 @@ def test_mlb_extra_innings_alerts_once_per_inning(db_session):
         )
     ).all()
     assert disabled_alerts == []
+
+
+def test_ncaab_team_follow_delivers_start_close_overtimes_and_final_once(db_session):
+    from dataclasses import replace
+
+    now = datetime.now(timezone.utc)
+    home = db_session.scalar(competition_teams_query("NCAAB").where(Team.external_team_id == "333"))
+    user = User(email="college-basketball@example.com")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=home.id, created_at=now - timedelta(days=1)))
+    db_session.commit()
+    payload = make_game(
+        external_game_id="ncaab-follow", home_external_team_id="333", away_external_team_id="145",
+        scheduled_start_time=now - timedelta(minutes=10), status="in_progress",
+        home_score=70, away_score=69, period=2, clock="01:00",
+    )
+    for snapshot in [payload, payload, replace(payload, period=3, clock="05:00"), replace(payload, period=4, clock="05:00"), replace(payload, status="final", is_final=True)]:
+        run_catalog_sync(StaticProvider([snapshot]), competition="NCAAB")
+    alerts = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
+    assert sorted(alert.alert_type for alert in alerts) == ["close_game_late", "final_result", "game_start", "overtime_start", "overtime_start"]
+
+
+@pytest.mark.parametrize(
+    "competition,disabled_peer",
+    [
+        ("NBA", "WNBA"),
+        ("WNBA", "NCAAB"),
+        ("NCAAB", "NBA"),
+        ("NFL", "FBS"),
+        ("FBS", "NFL"),
+    ],
+)
+def test_ingest_does_not_apply_another_leagues_preferences(
+    db_session, competition, disabled_peer
+):
+    user = User(email="league-isolation@example.com")
+    db_session.add(user)
+    db_session.flush()
+    teams = db_session.scalars(
+        competition_teams_query(competition).order_by(Team.id).limit(2)
+    ).all()
+    db_session.add(UserTeamFollow(user_id=user.id, team_id=teams[0].id))
+    db_session.add(
+        UserAlertPreference(
+            user_id=user.id,
+            competition=disabled_peer,
+            alert_type="game_start",
+            is_enabled_override=False,
+        )
+    )
+    db_session.commit()
+    provider = StaticProvider(
+        [
+            make_game(
+                external_game_id="league-isolation",
+                home_external_team_id=teams[0].external_team_id,
+                away_external_team_id=teams[1].external_team_id,
+                status="in_progress",
+                period=1,
+                clock="10:00",
+                home_score=0,
+                away_score=0,
+            )
+        ]
+    )
+    assert run_catalog_sync(provider, competition=competition).alerts_created == 1
+    assert (
+        db_session.scalar(select(Alert.alert_type).where(Alert.user_id == user.id))
+        == "game_start"
+    )

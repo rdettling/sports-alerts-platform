@@ -9,7 +9,6 @@ from sqlalchemy import delete, select
 
 from app.db.models import AlertDelivery, Game, PushSubscription, Team, User
 from app.db.session import SessionLocal
-from app.db.usage import database_source
 from app.services.alert_delivery import (
     DeliveryOutcome,
     EmailAlertPayload,
@@ -210,8 +209,7 @@ def run_delivery_loop(stop_event: threading.Event, wake_event: threading.Event) 
     logger.info("Alert delivery loop started")
     while not stop_event.is_set():
         try:
-            with database_source("worker:alert_delivery"):
-                drain_pending_deliveries(stop_event)
+            drain_pending_deliveries(stop_event)
         except Exception:
             logger.exception("Unexpected alert delivery drain failure")
         if stop_event.is_set():

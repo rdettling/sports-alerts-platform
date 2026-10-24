@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Game, GameOddsCurrent
 from app.db.session import SessionLocal
-from app.db.usage import record_activity
 from app.schemas.game import GameOddsOut, GameOddsOutcomeOut, GameOut
 from app.services.competitions import get_active_competitions, normalize_competition
 from app.services.game_views import build_game_outs
@@ -91,24 +90,20 @@ class GameFeedCache:
     def get(self) -> list[GameOut]:
         with self._state_lock:
             if self._games is not None and monotonic() < self._expires_at:
-                record_activity("game_cache_hits")
                 return self._games
 
         with self._fill_lock:
             while True:
                 with self._state_lock:
                     if self._games is not None and monotonic() < self._expires_at:
-                        record_activity("game_cache_hits")
                         return self._games
                     generation = self._generation
-                record_activity("game_cache_fills")
                 started_at = monotonic()
                 with SessionLocal() as db:
                     games = load_games(db, include_finals=True, limit=500)
                 with self._state_lock:
                     # Invalidation can arrive while the database read is in flight.
                     if generation != self._generation:
-                        record_activity("game_cache_discarded_fills")
                         continue
                     self._games = games
                     self._expires_at = started_at + 30

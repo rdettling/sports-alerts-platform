@@ -381,7 +381,8 @@ DASHBOARD_GAMES_URL = "/games?include_finals=true&limit=500"
 
 
 def test_dashboard_cache_invalidates_before_worker_broadcast(client, monkeypatch):
-    from app.config import settings
+    import asyncio
+    from app.worker import updates
     from app.services.live_updates import game_updates
 
     game = _create_game()
@@ -394,7 +395,6 @@ def test_dashboard_cache_invalidates_before_worker_broadcast(client, monkeypatch
     assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] is None
     assert client.get("/games?competition=NBA").json()[0]["home_score"] == 12
 
-    monkeypatch.setattr(settings, "live_update_secret", "test-secret")
     seen = []
 
     def publish(event):
@@ -402,17 +402,12 @@ def test_dashboard_cache_invalidates_before_worker_broadcast(client, monkeypatch
         seen.append(game_feed_cache.get()[0].home_score)
 
     monkeypatch.setattr(game_updates, "publish", publish)
-    assert client.post(
-        "/internal/updates/games",
-        headers={"X-Live-Update-Secret": "wrong"},
-        json={"competition": "NBA"},
-    ).status_code == 401
-    assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] is None
-    assert client.post(
-        "/internal/updates/games",
-        headers={"X-Live-Update-Secret": "test-secret"},
-        json={"competition": "NBA"},
-    ).status_code == 204
+    async def notify():
+        monkeypatch.setattr(updates, "event_loop", asyncio.get_running_loop())
+        assert updates.notify_games_changed("NBA")
+        await asyncio.sleep(0)
+
+    asyncio.run(notify())
     assert seen == [12]
     assert client.get(DASHBOARD_GAMES_URL).json()[0]["home_score"] == 12
 
@@ -474,3 +469,36 @@ def test_games_expose_football_situation(client, side, field_position, down_dist
         assert response.json()[0]["possession_side"] == side
         assert response.json()[0]["field_position"] == field_position
         assert response.json()[0]["down_distance"] == down_distance
+
+
+def test_conferences_use_provider_scope_in_games_and_teams(client, monkeypatch):
+    from app.services.team_catalog import TEAM_CONFERENCES_BY_SCOPE
+
+    monkeypatch.setitem(TEAM_CONFERENCES_BY_SCOPE, "nba", {"1": "Basketball conference"})
+    _create_game()
+
+    game = client.get("/games?competition=NBA").json()[0]
+    assert game["home_team"]["conference"] == "Basketball conference"
+    assert game["away_team"]["conference"] is None
+
+    teams = client.get("/teams").json()
+    basketball = next(team for team in teams if "NBA" in team["competitions"] and team["external_team_id"] == "1")
+    football = next(team for team in teams if "FBS" in team["competitions"] and team["external_team_id"] == "2")
+    assert basketball["conference"] == "Basketball conference"
+    assert football["conference"] == "SEC"
+
+
+def test_game_api_timestamps_include_utc_timezone(client):
+    game = _create_game()
+    ingested_at = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        stored = db.get(Game, game.id)
+        stored.last_ingested_at = ingested_at
+        db.commit()
+    for url in ("/games?competition=NBA", DASHBOARD_GAMES_URL):
+        response = client.get(url)
+        assert response.status_code == 200
+        payload = next(item for item in response.json() if item["id"] == game.id)
+        for field, expected in [("scheduled_start_time", game.scheduled_start_time), ("last_ingested_at", ingested_at)]:
+            assert payload[field].endswith("Z")
+            assert datetime.fromisoformat(payload[field].replace("Z", "+00:00")) == expected

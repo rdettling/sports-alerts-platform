@@ -58,6 +58,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     assert list_supported_competitions() == [
         "NBA",
         "WNBA",
+        "NCAAB",
         "NFL",
         "FBS",
         "MLB",
@@ -206,6 +207,7 @@ def test_public_competitions_include_sport_and_live_cadence(client):
     ] == [
         ("NBA", "basketball", 60),
         ("WNBA", "basketball", 60),
+        ("NCAAB", "basketball", 60),
         ("NFL", "football", 60),
         ("FBS", "football", 60),
         ("MLB", "baseball", 120),
@@ -342,3 +344,22 @@ def test_nfl_team_catalog_contains_all_teams(client):
         ("34", "HOU"),
         ("33", "BAL"),
     }
+
+
+def test_ncaab_profile_and_complete_conference_catalog():
+    from app.services.team_catalog import NCAAB_TEAMS_BY_CONFERENCE, TEAM_CONFERENCES_BY_SCOPE, TEAM_SEEDS_BY_COMPETITION
+
+    profile = get_competition_profile("NCAAB")
+    assert profile.sport == "basketball"
+    assert profile.provider_team_scope == "ncaab"
+    assert profile.basketball_regulation_periods == 2
+    assert profile.odds_sport_key == "basketball_ncaab"
+    assert dict(profile.scoreboard_params) == {"groups": "50", "limit": "1000"}
+    assert get_alert_types("NCAAB") == get_alert_types("NBA")
+    teams = TEAM_SEEDS_BY_COMPETITION["NCAAB"]
+    assert len(teams) == len({team[0] for team in teams}) == 365
+    assert len(NCAAB_TEAMS_BY_CONFERENCE) == 32
+    assert set(TEAM_CONFERENCES_BY_SCOPE["ncaab"]) == {team[0] for team in teams}
+    assert TEAM_CONFERENCES_BY_SCOPE["ncaab"]["2250"] == "Pac-12"
+    # These programs are absent from ESPN's teams endpoint but present in D1 standings.
+    assert {"88", "2815", "2511"} <= {team[0] for team in teams}

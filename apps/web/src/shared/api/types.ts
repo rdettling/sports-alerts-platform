@@ -16,6 +16,7 @@ export type UserProfile = {
 export type Competition =
   | "NBA"
   | "WNBA"
+  | "NCAAB"
   | "NFL"
   | "FBS"
   | "MLB"
@@ -111,25 +112,25 @@ export type AlertSettings = {
 export type AlertSettingsUpdate = AlertSettings;
 
 export type AlertPreference = AlertSettings & {
-  sport: Sport;
+  competition: Competition;
   alert_type: string;
 };
 
 export type AlertPreferenceGroup = {
-  sport: Sport;
+  competition: Competition;
+  label: string;
   preferences: AlertPreference[];
 };
 
 export type GameAlertPreferenceItem = AlertSettings & {
-  sport: Sport;
+  competition: Competition;
   alert_type: string;
-  uses_sport_defaults: boolean;
+  uses_league_defaults: boolean;
 };
 
 export type GameAlertPreferences = {
   game_id: number;
   competition: Competition;
-  sport: Sport;
   items: GameAlertPreferenceItem[];
 };
 
@@ -230,5 +231,4 @@ export type OpsAdminSummaryResponse = {
     provider_credits_remaining: number | null;
     provider_observed_at: string | null;
   };
-  neon_dashboard_url: string | null;
 };

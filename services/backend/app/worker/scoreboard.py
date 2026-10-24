@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from threading import Event
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable, Literal
@@ -101,7 +102,7 @@ def _team_strength(competitor: dict[str, Any], sport: str, competition: str) -> 
 
     curated_rank = competitor.get("curatedRank")
     raw_rank = curated_rank.get("current") if isinstance(curated_rank, dict) else None
-    rank_observed = competition == "FBS" and isinstance(raw_rank, int)
+    rank_observed = competition in {"FBS", "NCAAB"} and isinstance(raw_rank, int)
     rank = raw_rank if rank_observed and 1 <= raw_rank <= 25 else None
     return TeamStrength(
         wins=wins,
@@ -161,7 +162,8 @@ def _format_champions_league_stage(slug: str | None) -> str | None:
 
 
 class EspnScoreboardClient:
-    def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None):
+    def __init__(self, fetch_json: Callable[[str, dict[str, str]], dict[str, Any]] | None = None, *, stop_event: Event | None = None):
+        self._stop_event = stop_event
         self._fetch_json = fetch_json or self._default_fetch_json
 
     def _default_fetch_json(self, competition: str, params: dict[str, str]) -> dict[str, Any]:
@@ -304,6 +306,8 @@ class EspnScoreboardClient:
         by_id: dict[str, dict[str, Any]] = {}
         profile = get_competition_profile(competition)
         for date in dates:
+            if self._stop_event is not None and self._stop_event.is_set():
+                break
             try:
                 payload = self._fetch_json(
                     competition,

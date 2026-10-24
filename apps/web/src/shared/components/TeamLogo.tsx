@@ -20,7 +20,12 @@ function teamLogoUrl(team: Team | GameTeam, competition?: Competition): string {
   if (competition === "WNBA" || competitions.includes("WNBA")) {
     return `https://a.espncdn.com/i/teamlogos/wnba/500/${abbreviation}.png`;
   }
-  if (competition === "FBS" || competitions.includes("FBS")) {
+  if (
+    competition === "FBS" ||
+    competition === "NCAAB" ||
+    competitions.includes("FBS") ||
+    competitions.includes("NCAAB")
+  ) {
     return `https://a.espncdn.com/i/teamlogos/ncaa/500/${team.external_team_id}.png`;
   }
   if (team.sport === "football") {

@@ -11,13 +11,17 @@ const COMPETITION_MARKS = {
     logoUrl: "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png",
     fallback: "WNBA",
   },
+  NCAAB: {
+    logoUrl: "/basketball.svg",
+    fallback: "CBB",
+  },
   NFL: {
     logoUrl: "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
     fallback: "NFL",
   },
   FBS: {
     logoUrl: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
-    fallback: "FBS",
+    fallback: "CFB",
   },
   MLB: {
     logoUrl: "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg",

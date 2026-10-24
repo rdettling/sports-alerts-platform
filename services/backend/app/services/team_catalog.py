@@ -1,3 +1,5 @@
+from app.services.ncaab_teams import NCAAB_TEAMS_BY_CONFERENCE
+
 TeamSeed = tuple[str, str, str]
 
 
@@ -215,6 +217,7 @@ TEAM_SEEDS_BY_COMPETITION: dict[str, tuple[TeamSeed, ...]] = {
         ("131935", "Toronto Tempo", "TOR"),
         ("16", "Washington Mystics", "WSH"),
     ),
+    "NCAAB": tuple(team for teams in NCAAB_TEAMS_BY_CONFERENCE.values() for team in teams),
     "NFL": (
         ("22", "Arizona Cardinals", "ARI"),
         ("1", "Atlanta Falcons", "ATL"),
@@ -441,4 +444,14 @@ FBS_TEAM_CONFERENCES = {
     external_team_id: conference
     for conference, teams in FBS_TEAMS_BY_CONFERENCE.items()
     for external_team_id, _, _ in teams
+}
+
+
+TEAM_CONFERENCES_BY_SCOPE = {
+    "cfb": FBS_TEAM_CONFERENCES,
+    "ncaab": {
+        external_team_id: conference
+        for conference, teams in NCAAB_TEAMS_BY_CONFERENCE.items()
+        for external_team_id, _, _ in teams
+    },
 }

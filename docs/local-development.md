@@ -28,7 +28,7 @@ The generated `.env` template and required config groups are documented in [conf
 - Rebuild and restart app containers: `make rebuild`
 - Stop the stack: `make down`
 - Tail all logs: `make logs`
-- Tail one service: `make logs SERVICE=worker`
+- Tail one service: `make logs SERVICE=api`
 - Wipe local DB volumes: `make reset`
 
 Use `make reset` only when you intentionally want to discard local database state.
@@ -43,15 +43,9 @@ If you want narrower service checks:
 
 - API: `cd services/backend && uv run pytest -q tests/api`
 - Worker: `cd services/backend && uv run pytest -q tests/worker`
-- Web build: `cd apps/web && npm run build`
+- Web build: `cd apps/web && VITE_API_BASE_URL=http://localhost:8000 npm run build`
 
-The destructive reset path has an opt-in Postgres integration test. It only accepts a local Postgres URL whose database name contains `reset_test`:
-
-```sh
-cd services/backend
-POSTGRES_RESET_TEST_DATABASE_URL=postgresql+psycopg://sports:sports@127.0.0.1:5432/sports_reset_test \
-  uv run pytest -q tests/api/test_postgres_reset.py
-```
+All backend tests share one configuration and a temporary SQLite database outside the checkout. Run `cd services/backend && uv run pytest -q tests` for the complete backend suite; narrower API and worker runs use the same fixtures. `make reset` removes the local Compose volume; the next startup creates a fresh baseline and seeds the catalogs. Existing Postgres volumes are not reused.
 
 ## Local Verification Checklist
 
@@ -70,3 +64,5 @@ POSTGRES_RESET_TEST_DATABASE_URL=postgresql+psycopg://sports:sports@127.0.0.1:54
 - The API seeds teams and ensures the bootstrap admin user on startup
 - If `ODDS_API_KEY` is blank, games still ingest and alerts still evaluate; only odds fetches are skipped
 - Local development is safest with `DELIVERY_MODE=log` unless you explicitly want real email delivery
+
+The API owns scheduler and delivery threads. Run it with one Uvicorn process. Local SQLite files, WAL files, and backups are ignored by Git.

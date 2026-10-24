@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,9 +16,15 @@ class Settings(BaseSettings):
     web_base_url: str
     cors_allow_origins: str
     bootstrap_admin_email: str = "ryandettling1@gmail.com"
-    neon_project_id: str = ""
-    neon_dashboard_url: str = ""
-    live_update_secret: str = ""
+
+    odds_api_key: str = ""
+    delivery_mode: Literal["live", "log"] = "live"
+    from_email: str = "alerts@livegamealerts.com"
+    resend_api_key: str
+    resend_api_url: str = "https://api.resend.com/emails"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "https://livegamealerts.com"
 
 
 settings = Settings()

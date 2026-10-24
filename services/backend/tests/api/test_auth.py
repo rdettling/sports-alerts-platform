@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from time import monotonic
 
 from app.config import settings
 from app.db.models import EmailLoginToken
@@ -192,7 +191,7 @@ def test_sign_in_email_contains_link_code_expiry_and_home_screen_guidance():
 
 
 def test_sign_in_email_live_failure_is_swallowed(monkeypatch, caplog):
-    monkeypatch.setattr(sign_in_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(sign_in_delivery.settings, "delivery_mode", "live")
     monkeypatch.setattr(
         sign_in_delivery,
         "send_resend_email",
@@ -217,23 +216,8 @@ def test_magic_link_start_always_returns_neutral_message_for_unknown_email(clien
     assert response.json()["message"] == "If that address can receive email, sign-in instructions have been sent."
 
 
-def test_auth_warm_returns_204(client):
-    response = client.post("/auth/warm")
-    assert response.status_code == 204
-    assert response.text == ""
 
 
-def test_auth_warm_failure_is_fast(client, monkeypatch):
-    def fail_warm(_db):
-        raise RuntimeError("simulated timeout")
-
-    monkeypatch.setattr("app.routers.auth._run_warm_query", fail_warm)
-    started = monotonic()
-    response = client.post("/auth/warm")
-    elapsed = monotonic() - started
-    assert response.status_code == 503
-    assert response.json()["detail"] == "Database warmup failed"
-    assert elapsed < 1.0
 
 
 def test_magic_link_is_one_time_use(client, monkeypatch):

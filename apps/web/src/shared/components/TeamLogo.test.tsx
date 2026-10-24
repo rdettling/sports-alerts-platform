@@ -25,3 +25,23 @@ describe("TeamLogo", () => {
     );
   });
 });
+
+it("uses NCAA logos for college basketball in the team directory and games", () => {
+  render(
+    <TeamLogo
+      team={{
+        id: 1,
+        sport: "basketball",
+        external_team_id: "150",
+        name: "Duke Blue Devils",
+        abbreviation: "DUKE",
+        competitions: ["NCAAB"],
+        conference: "ACC",
+      }}
+    />,
+  );
+  expect(screen.getByRole("img", { name: "Duke Blue Devils logo" })).toHaveAttribute(
+    "src",
+    "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+  );
+});

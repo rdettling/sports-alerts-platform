@@ -1,145 +1,65 @@
 # Deployment
 
-This repo deploys cleanly as four parts:
+Deploy a static frontend and one always-on backend. The backend runs one Uvicorn process plus the scheduler and alert-delivery threads, sharing a local SQLite database.
 
-- a web frontend
-- an API service
-- a background worker
-- a Postgres database
+## Backend on Render
 
-The current reference deployment style is static frontend hosting plus two containerized Python services backed by managed Postgres. Render + Neon is a reasonable fit, but the repo is not coupled to those providers.
+- Build `services/backend/Dockerfile` from the repository root.
+- Attach a persistent disk at `/var/data` to the paid web service.
+- Set `DATABASE_URL=sqlite:////var/data/sports-alerts.db` and the secrets listed in [configuration.md](configuration.md).
+- Use the Dockerfile's default command. It runs `alembic upgrade head` before starting Uvicorn.
+- Set the health check to `/healthz`. A stopped scheduler or delivery thread makes it return 503.
+- Run exactly one service instance and one Uvicorn process. Do not use `--workers`, replicas, or a separate worker service.
+- Uvicorn gives active requests and SSE streams five seconds to drain, then signals the background threads to stop. The scheduler skips remaining scoreboard dates after the current request finishes. Disk-backed Render services have a fixed platform shutdown allowance; see [Render shutdown behavior](https://render.com/docs/deploys#graceful-shutdown). Interrupted alert attempts are marked failed on restart rather than resent.
 
-## Reference Topology
+Only files under `/var/data` survive deploys. Render disks cannot be shared across services, and disk-backed deploys briefly interrupt service. The browser reconnects its update stream after restart.
 
-- Frontend: static hosting for `apps/web`
-- API: containerized FastAPI service
-- Worker: containerized long-running background process
-- Database: Postgres
+## Fresh SQLite Cutover
 
-The worker and API should point at the same database and the same logical environment.
+This branch deliberately starts fresh; it does not import or upgrade the old Postgres database.
 
-## API Service
+1. Stop the old background worker before starting this backend, preventing duplicate alerts.
+2. Add the persistent disk and replace the backend's `DATABASE_URL` with the SQLite URL above.
+3. Remove obsolete `POSTGRES_*`, `NEON_*`, `LIVE_UPDATE_API_URL`, and `LIVE_UPDATE_SECRET` settings.
+4. Deploy the backend. Its fresh schema, competition catalogs, and bootstrap admin are created automatically. Fresh databases enable all supported competitions; disable unwanted leagues in Admin.
+5. Deploy the frontend with `VITE_API_BASE_URL` pointing at this backend.
+6. Sign in again, recreate follows and preferences, and resubscribe notification devices.
+7. Retire the old worker and database after verifying the new service. This code does not delete the remote database.
 
-Deploy the API from `services/backend/Dockerfile` using its default command.
+## Frontend
 
-Requirements:
-
-- Run `alembic upgrade head` before serving traffic
-- Expose the app on the configured host/port
-- Provide all required API env vars from [configuration.md](configuration.md)
-- Set `LIVE_UPDATE_SECRET` to the same generated secret used by the worker
-
-Health checks:
-
-- `GET /healthz` should return `200`
-- `GET /docs` should load the OpenAPI docs
-
-## Worker Service
-
-Deploy the worker from `services/backend/Dockerfile`.
-
-Run:
-
-```sh
-/opt/venv/bin/python -m app.worker.main
-```
-
-Requirements:
-
-- Point at the same database as the API
-- Provide worker env vars from [configuration.md](configuration.md)
-- Keep it running continuously; this is not a scheduled job container
-- Set `LIVE_UPDATE_API_URL` to the API origin and `LIVE_UPDATE_SECRET` to the API's value
-
-Behavior notes:
-
-- If `ODDS_API_KEY` is blank, the worker still ingests games and evaluates alerts
-- Competition enable/disable state is read from the database, so runtime scope can change without redeploying
-
-## Frontend Service
-
-Build and publish `apps/web`.
-
-Reference build:
+Build `apps/web` with Node.js 24:
 
 ```sh
 npm ci --include=optional
-npm run build
+VITE_API_BASE_URL=https://your-backend.example npm run build
 ```
 
-Required env:
+Publish `dist` and configure SPA fallback for nested routes.
 
-- `VITE_API_BASE_URL=https://<api-origin>`
+## Backups and Recovery
 
-If you host the frontend as a single-page app, configure route fallback so browser refreshes on nested routes keep working.
+At startup and each six-hour catalog cycle, the backend creates a snapshot if that UTC day's backup is missing. It keeps the latest seven snapshots in `/var/data/backups`. Snapshots use SQLite's online backup API, include committed WAL writes, and pass an integrity check before publication. Backup failures are logged and do not block game synchronization.
 
-## Service Release Order
+Take an additional snapshot before a significant change:
 
-Configure the worker API URL and matching shared secret before starting worker publication. Release changes to worker/API/frontend contracts in this order:
+```sh
+/opt/venv/bin/python -m app.db.backup /var/data/backups/before-change.db
+```
 
-1. API, so worker update endpoints and frontend response fields are available
-2. Worker, so it publishes the expected game notifications and schedule reports
-3. Frontend, so it can consume the updated API
+Download snapshots to storage outside the service's disk. Local snapshots protect against application mistakes; they do not protect against losing the entire volume. Snapshots contain user and authentication data and must stay private.
 
-Keep one worker and one Uvicorn process on one API instance. SSE, the game cache, and schedule reports are process-local; see [architecture](architecture.md#design-constraints). API restarts disconnect streams and discard schedule reports. Browsers must reconnect and fetch current games; Admin may show Schedule unavailable until the worker next reports, potentially 6 hours later. Worker restarts clear remembered success times, run an immediate catalog cycle, and keep the regular UTC catalog clock unchanged.
+To restore, stop the backend, move the current database and any matching `-wal`/`-shm` files aside, and copy the chosen snapshot to the configured database path. Restart the backend and verify sign-in, follows, and alert history. Never copy only the live `.db` file as a backup while the backend is running.
 
-### Shared Catalog Schedule Cutover
+## Verification
 
-When releasing the shared catalog schedule, follow API → worker → frontend. Reports require `next_catalog_at` and accept the `queued` job state. Old worker reports may be rejected during the API/worker cutover; temporary Schedule unavailable is expected. This cutover needs no new configuration, dependency, or database migration.
+- Confirm `/healthz`, `/docs`, Games, Teams, sign-in, and follows.
+- Confirm scheduler and delivery loops start once and Admin reports their schedule.
+- Verify an enabled league ingests games and a committed change reaches `/updates/games`.
+- Verify a test alert through the intended email and push channels.
+- Check that a daily backup exists and can be opened with `PRAGMA integrity_check`.
+- Restart the service and confirm persisted users and follows remain.
 
-Remove obsolete worker scheduler interval overrides; catalog timing is fixed at 00:00, 06:00, 12:00, and 18:00 UTC.
+## League preference cutover
 
-## Database
-
-Use Postgres 16 or a compatible managed Postgres offering.
-
-Requirements:
-
-- A persistent database shared by API and worker
-- Network access from both services
-- A connection string compatible with SQLAlchemy / psycopg
-
-The repo stores both user data and disposable sports-domain state in Postgres. The current migration chain starts from the self-contained `0001_baseline`; databases already on that baseline upgrade normally through later revisions. Databases created from an older copy of `0001_baseline` still have no compatibility path and require the reset procedure below.
-
-Runtime code supports only the latest Alembic revision. Apply `alembic upgrade head` before serving the new release rather than adding application code that handles both old and new schema shapes.
-
-### Clean-Baseline Cutover
-
-Use this procedure only when replacing an incompatible pre-baseline or older-baseline database. Normal upgrades from the current `0001_baseline` must use `alembic upgrade head` and preserve existing data.
-
-1. Put the application into a maintenance window and pause the worker.
-2. Build the new release or check out the new commit without starting its API or worker.
-3. Verify that `DATABASE_URL` points to the intended production database.
-4. From `services/backend` in the new release, run:
-
-   ```sh
-   uv run python scripts/reset_database.py --yes
-   ```
-
-5. Start the new API. Its automatic Alembic command upgrades the reset database to the latest revision.
-6. Deploy the worker and frontend. Deploy the frontend with the API because the old `/leagues` contract no longer exists.
-7. Sign in with the bootstrap admin email, resubscribe notification devices, and complete the checks below.
-
-Do not deploy the new API first and plan to reset afterward: its startup migration will fail before the service can become healthy.
-
-## Post-Deploy Checks
-
-Capture a fresh Neon usage baseline using the [database usage runbook](runbook.md#reviewing-database-awake-time-and-waste). Confirm API and worker log `Database usage logging started`, then check for nonempty summaries after five minutes of activity. Compare at least a day of logs from the same deployed revision before judging database savings.
-
-After a deploy:
-
-1. Open the frontend
-2. Confirm `GET /healthz` is healthy
-3. Confirm magic-link and one-time-code sign-in work
-4. Confirm public games and teams load, then verify authenticated follow controls
-5. Confirm worker logs show sync activity
-6. Verify email-only, push-only, combined, and no-delivery test states for the admin account
-7. Confirm a push notification opens the Games page and history shows channel-specific delivery chips
-8. Confirm Activity & tools shows the daily odds budget and provider balance; if configured, confirm the Admin toolbar opens the correct Neon project
-9. Observe a natural worker change and confirm `/updates/games` delivers it and the visible Games screen updates within five seconds under healthy networking
-10. On an actual iPhone Home Screen installation, check lock/unlock, app switching, and offline/online recovery. The stream should close while hidden/offline and reopen with a catch-up read on return
-11. Confirm a desktop client reconnects and refreshes after a normal API deployment; opening the stream must also fetch state to cover updates missed during connection establishment
-12. In local testing, suppress a notification on a feed already showing a live game and confirm the visible fallback recovers within two minutes; confirm concurrent dashboard readers share one cache fill. Also verify a quiet screen does not read games every minute and checks at an upcoming scheduled start. Quiet-period missed events can take up to 30 minutes to recover. Do not change production scores or disable production publishing for this check
-13. Compare Admin's single Next catalog refresh deadline and per-league outcomes with `Catalog cycle queued` and `Job completed` logs; use the [schedule troubleshooting procedure](runbook.md#admin-league-sync-times) for missing or stale reports
-14. Verify Admin has no manual refresh control and makes no automatic requests while idle, across tab changes, or on foreground/reconnect events, using the [Admin request checks](runbook.md#admin-data-is-stale-or-requesting-unexpectedly)
-15. Review an overnight quiet period for worker scans between scheduled jobs and correlate activity with Neon wake/sleep history using the database usage runbook
+Deploy the frontend and backend together for the league-based alert preference API. Backend startup applies `0002_league_preferences`, which replaces only the user alert preference table and intentionally resets sport-wide settings to built-in league defaults. Users, authentication, follows, delivery settings, history, and game overrides remain intact. Explicit game overrides survive; inherited fields use the league settings. Downgrading this revision also clears preferences. Take an online backup before deployment; no full database reset is needed.

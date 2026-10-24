@@ -112,8 +112,8 @@ def test_email_sender_returns_success_without_mutating_database(db_session, monk
         assert timeout == 15.0
         return Response()
 
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "test-key")
     monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
     outcome = send_email_alert(_email_payload(db_session, alert, delivery))
@@ -143,8 +143,8 @@ def test_email_sender_returns_provider_failure_metadata(db_session, monkeypatch,
             fp=ErrorResponse(),
         )
 
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "resend_api_key", "bad-key")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.settings, "resend_api_key", "bad-key")
     monkeypatch.setattr(resend, "urlopen", fake_urlopen)
 
     outcome = send_email_alert(_email_payload(db_session, alert, delivery))
@@ -157,7 +157,7 @@ def test_email_sender_returns_provider_failure_metadata(db_session, monkeypatch,
 
 def test_email_sender_log_mode_skips_provider(db_session, monkeypatch):
     alert, delivery = _seed_alert(db_session)
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "log")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "log")
     monkeypatch.setattr(
         resend,
         "urlopen",
@@ -173,7 +173,7 @@ def test_email_sender_log_mode_skips_provider(db_session, monkeypatch):
 
 
 def test_resend_network_failure_returns_metadata(monkeypatch):
-    monkeypatch.setattr(resend.delivery_settings, "resend_api_key", "test-key")
+    monkeypatch.setattr(resend.settings, "resend_api_key", "test-key")
     monkeypatch.setattr(
         resend,
         "urlopen",
@@ -223,8 +223,8 @@ def test_push_sender_aggregates_devices_without_mutating_subscriptions(db_sessio
         assert kwargs["timeout"] == 10
         assert kwargs["ttl"] == 300
 
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "private")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.settings, "vapid_private_key", "private")
     monkeypatch.setattr(alert_delivery, "webpush", fake_webpush)
 
     outcome = send_push_alert(_push_payload(db_session, alert))

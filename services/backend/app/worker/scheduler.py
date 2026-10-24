@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from time import monotonic
 
+from app.db.backup import create_daily_backup
 from app.db.session import SessionLocal
-from app.db.usage import database_source
 from app.schemas.schedule import JobState, JobType, ScheduledJobOut, ScheduleSnapshot
 from app.services.competitions import get_active_competitions, get_competition_profile
 from app.worker import odds_sync, updates
@@ -96,6 +96,10 @@ def _queue_catalog_cycle(
     *,
     odds_slot: bool,
 ) -> None:
+    try:
+        create_daily_backup()
+    except Exception:
+        logger.exception("Daily SQLite backup failed")
     count = 0
     for job in jobs.values():
         if job.job_type == CATALOG_SYNC_JOB:
@@ -237,8 +241,8 @@ def _log_job_success(
     )
 
 
-def _run_catalog_sync_job(jobs: JobSchedule, competition: str) -> CatalogSyncResult:
-    result = run_catalog_sync(provider=EspnScoreboardClient(), competition=competition)
+def _run_catalog_sync_job(jobs: JobSchedule, competition: str, stop_event: threading.Event | None = None) -> CatalogSyncResult:
+    result = run_catalog_sync(provider=EspnScoreboardClient(stop_event=stop_event), competition=competition)
     _reconcile_live_sync(jobs, result.competition, result.next_live_sync_at)
     _notify_game_changes(result)
     return result
@@ -267,8 +271,8 @@ def _live_mode(result: LiveSyncResult) -> JobState:
     return "no_upcoming"
 
 
-def _run_live_sync_job(competition: str) -> tuple[int | None, LiveSyncResult]:
-    result = run_live_sync(provider=EspnScoreboardClient(), competition=competition)
+def _run_live_sync_job(competition: str, stop_event: threading.Event | None = None) -> tuple[int | None, LiveSyncResult]:
+    result = run_live_sync(provider=EspnScoreboardClient(stop_event=stop_event), competition=competition)
     _notify_game_changes(result)
     if result.has_live_games:
         return _competition_live_interval_seconds(competition), result
@@ -333,8 +337,7 @@ def run(stop_event: threading.Event, delivery_wake_event: threading.Event | None
 
     while not stop_event.is_set():
         now = _utcnow()
-        with database_source("worker:competition_scan"):
-            changed = _sync_jobs(jobs, _load_active_competitions(), now)
+        changed = _sync_jobs(jobs, _load_active_competitions(), now)
         if startup_catalog_pending:
             _queue_catalog_cycle(jobs, now, odds_slot=False)
             startup_catalog_pending = False
@@ -356,24 +359,23 @@ def run(stop_event: threading.Event, delivery_wake_event: threading.Event | None
 
         try:
             started_at = monotonic()
-            with database_source(f"worker:{due_job.job_type}:{due_job.competition}"):
-                if due_job.job_type == CATALOG_SYNC_JOB:
-                    result = _run_catalog_sync_job(jobs, due_job.competition)
-                    if due_job.odds_after_catalog:
-                        _schedule_odds_after_catalog(jobs, due_job.competition, now, odds_slot=True)
-                        due_job.odds_after_catalog = False
-                    else:
-                        _schedule_odds_after_catalog(jobs, due_job.competition, now, odds_slot=False)
-                    next_run = None
-                elif due_job.job_type == LIVE_SYNC_JOB:
-                    next_run, result = _run_live_sync_job(due_job.competition)
+            if due_job.job_type == CATALOG_SYNC_JOB:
+                result = _run_catalog_sync_job(jobs, due_job.competition, stop_event)
+                if due_job.odds_after_catalog:
+                    _schedule_odds_after_catalog(jobs, due_job.competition, now, odds_slot=True)
+                    due_job.odds_after_catalog = False
                 else:
-                    result = _run_odds_sync_job(due_job.competition, now)
-                    next_run = (
-                        max(1, int((_next_utc_midnight(now) - now).total_seconds()))
-                        if result.budget_limited
-                        else None
-                    )
+                    _schedule_odds_after_catalog(jobs, due_job.competition, now, odds_slot=False)
+                next_run = None
+            elif due_job.job_type == LIVE_SYNC_JOB:
+                next_run, result = _run_live_sync_job(due_job.competition, stop_event)
+            else:
+                result = _run_odds_sync_job(due_job.competition, now)
+                next_run = (
+                    max(1, int((_next_utc_midnight(now) - now).total_seconds()))
+                    if result.budget_limited
+                    else None
+                )
             if delivery_wake_event is not None and getattr(result, "alerts_created", 0):
                 delivery_wake_event.set()
             completed_at = _utcnow()

@@ -69,14 +69,14 @@ def ensure_seeded_teams(db: Session) -> None:
         (membership.competition, membership.team_id)
         for membership in existing_memberships
     }
-    stale_fbs_team_ids = {
+    stale_college_team_ids = {
         membership.team_id
         for membership in existing_memberships
-        if membership.competition == "FBS"
+        if membership.competition in {"FBS", "NCAAB"}
         and (membership.competition, membership.team_id) not in desired_memberships
     }
     for follow in db.scalars(
-        select(UserTeamFollow).where(UserTeamFollow.team_id.in_(stale_fbs_team_ids))
+        select(UserTeamFollow).where(UserTeamFollow.team_id.in_(stale_college_team_ids))
     ):
         db.delete(follow)
     for membership in existing_memberships:

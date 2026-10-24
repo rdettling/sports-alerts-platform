@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal, cast
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ class CompetitionProfile:
     scoreboard_url: str
     live_sync_interval_seconds: int
     odds_sport_key: str | None
+    basketball_regulation_periods: int | None = None
     scoreboard_params: tuple[tuple[str, str], ...] = ()
     supported_alert_types: tuple[str, ...] | None = None
 
@@ -54,7 +55,6 @@ SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
         "final_result",
     ),
 }
-SPORT_ORDER = tuple(SPORT_ALERT_TYPES)
 
 
 COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
@@ -67,6 +67,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
         live_sync_interval_seconds=60,
         odds_sport_key="basketball_nba",
+        basketball_regulation_periods=4,
     ),
     "WNBA": CompetitionProfile(
         competition="WNBA",
@@ -77,6 +78,19 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
         live_sync_interval_seconds=60,
         odds_sport_key="basketball_wnba",
+        basketball_regulation_periods=4,
+    ),
+    "NCAAB": CompetitionProfile(
+        competition="NCAAB",
+        sport="basketball",
+        provider_team_scope="ncaab",
+        label="CBB",
+        badge_label="CBB",
+        scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
+        scoreboard_params=(("groups", "50"), ("limit", "1000")),
+        live_sync_interval_seconds=60,
+        odds_sport_key="basketball_ncaab",
+        basketball_regulation_periods=2,
     ),
     "NFL": CompetitionProfile(
         competition="NFL",
@@ -92,8 +106,8 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         competition="FBS",
         sport="football",
         provider_team_scope="cfb",
-        label="College Football",
-        badge_label="FBS",
+        label="CFB",
+        badge_label="CFB",
         scoreboard_url="https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
         scoreboard_params=(("groups", "80"),),
         live_sync_interval_seconds=60,
@@ -179,21 +193,6 @@ def normalize_competition(competition: str) -> str:
 
 def get_competition_profile(competition: str) -> CompetitionProfile:
     return COMPETITION_PROFILES[normalize_competition(competition)]
-
-
-def list_supported_sports() -> list[str]:
-    return list(SPORT_ORDER)
-
-
-def normalize_sport(sport: str) -> Sport:
-    value = sport.strip().lower()
-    if value not in SPORT_ALERT_TYPES:
-        raise ValueError(f"Unsupported sport: {sport}")
-    return cast(Sport, value)
-
-
-def get_sport_alert_types(sport: str) -> tuple[str, ...]:
-    return SPORT_ALERT_TYPES[normalize_sport(sport)]
 
 
 def get_alert_types(competition: str) -> tuple[str, ...]:

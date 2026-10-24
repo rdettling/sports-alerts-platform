@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from app.db.models import Alert, Game, Team
 from app.services.alert_content import (
     build_alert_email_content,
@@ -37,7 +39,7 @@ def test_mlb_inning_start_uses_mlb_logos_and_non_nba_details():
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
 
-    assert subject.startswith("Inning start · MIA @ TOR")
+    assert subject == "Middle of the 7th · MIA 1–2 TOR"
     assert "teamlogos/mlb/500/mia.png" in html_body
     assert "teamlogos/mlb/500/tor.png" in html_body
     assert "OT" not in text_body
@@ -293,8 +295,8 @@ def test_football_score_and_lead_alerts_use_event_time_scores():
     assert "BUF takes the lead · KC 21–24 BUF" in text_body
     assert "In Progress • Q4 • 08:42 left" in text_body
     assert build_alert_push_content(lead_change, game, home, away) == (
-        "BUF takes the lead · KC 21–24 BUF",
-        "BUF takes the lead · KC 21–24 BUF • Q4 • 08:42 left",
+        "NFL · BUF takes the lead · KC 21–24 BUF",
+        "Q4 • 08:42 left",
     )
 
     close_game = _mk_alert("close_game_late")
@@ -419,7 +421,7 @@ def test_mls_penalty_kicks_uses_club_logos_and_live_shootout_copy():
     subject = build_alert_subject(alert, game, home, away)
     text_body, html_body = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Penalty kicks · LAFC 1–1 LA"
+    assert subject == "Shootout · LAFC 1–1 LA"
     assert "Penalty kicks are underway · LAFC 1–1 LA" in text_body
     assert "Penalties" in text_body
     assert "teamlogos/soccer/500/18966.png" in html_body
@@ -652,6 +654,121 @@ def test_champions_league_penalty_kicks_uses_anticipatory_copy():
     subject = build_alert_subject(alert, game, home, away)
     text_body, _ = build_alert_email_content(alert, game, home, away)
 
-    assert subject == "Penalty kicks likely soon · ARS 1–1 BAR"
+    assert subject == "Shootout possible · ARS 1–1 BAR"
     assert "Match is still tied deep in extra time · ARS 1–1 BAR" in text_body
     assert "117'" in text_body
+
+
+def test_two_half_basketball_notification_periods():
+    home = Team(external_team_id="1", name="Home", abbreviation="HOME")
+    away = Team(external_team_id="2", name="Away", abbreviation="AWAY")
+    game = Game(
+        competition="NCAAB", status="in_progress", home_score=70, away_score=69,
+        period=2, clock="01:00",
+    )
+    alert = _mk_alert("close_game_late")
+    text, _ = build_alert_email_content(alert, game, home, away)
+    assert "2H" in text
+    assert "Q2" not in text
+    _, html = build_alert_email_content(alert, game, home, away)
+    assert "teamlogos/ncaa/500/1.png" in html
+
+    game.period = 3
+    alert = _mk_alert("overtime_start")
+    assert "OT1" in build_alert_subject(alert, game, home, away)
+
+
+def test_cfb_score_push_uses_event_time_instead_of_repeating_the_headline():
+    away = Team(abbreviation="UAB")
+    home = Team(abbreviation="USF")
+    game = Game(competition="FBS", period=4, clock="01:00", away_score=21, home_score=20)
+    alert = _mk_alert("score_changed")
+    alert.event_data = {"period": 3, "clock": "06:42", "new_away_score": 14, "new_home_score": 10}
+
+    assert build_alert_push_content(alert, game, home, away) == (
+        "CFB · Score update · UAB 14–10 USF",
+        "Q3 • 06:42 left",
+    )
+
+
+def test_score_push_handles_soccer_time_and_missing_timing():
+    game = Game(competition="MLS", period=2, clock="75'", away_score=2, home_score=1)
+    alert = _mk_alert("score_changed")
+    assert build_alert_push_content(alert, game, None, None)[1] == "2H • 75'"
+    alert.event_data = {"period": None, "clock": None}
+    assert build_alert_push_content(alert, game, None, None)[1] == "Live score updated"
+
+
+def test_lead_change_push_includes_time_without_requiring_close_game_coverage():
+    game = Game(competition="FBS", period=3, clock="07:30", away_score=14, home_score=10)
+    alert = _mk_alert("lead_change")
+    alert.event_data = {"new_leader": "away"}
+    assert build_alert_push_content(alert, game, None, None)[1] == "Q3 • 07:30 left"
+
+
+def test_goal_push_keeps_the_scorer_with_match_time():
+    away = Team(abbreviation="ARS")
+    home = Team(abbreviation="BAR")
+    game = Game(competition="MLS", period=2, clock="75'", away_score=2, home_score=1)
+    alert = _mk_alert("score_changed")
+    alert.event_data = {"is_inferred_goal": True, "scoring_side": "away"}
+    assert build_alert_push_content(alert, game, home, away) == (
+        "MLS · Goal · ARS 2–1 BAR",
+        "Goal for ARS • 2H • 75'",
+    )
+
+
+@pytest.mark.parametrize("competition,period,label", [
+    ("NBA", 4, "NBA · Final"),
+    ("NBA", 5, "NBA · Final/OT"),
+    ("WNBA", 6, "WNBA · Final/2OT"),
+    ("NCAAB", 3, "CBB · Final/OT"),
+    ("FBS", 6, "CFB · Final/2OT"),
+    ("NFL", 5, "NFL · Final/OT"),
+    ("NHL", 4, "NHL · Final/OT"),
+    ("MLB", 11, "MLB · Final/11"),
+    ("CHAMPIONS_LEAGUE", 4, "UCL · Final/AET"),
+    ("MLS", 5, "MLS · Final/Pens"),
+])
+def test_final_push_identifies_league_and_extra_periods(competition, period, label):
+    game = Game(competition=competition, period=20, clock="0:00", away_score=4, home_score=5)
+    alert = _mk_alert("final_result")
+    alert.event_data = {"period": period, "away_score": 2, "home_score": 3}
+    away = Team(name="Away Team", abbreviation="AWY")
+    home = Team(name="Home Team", abbreviation="HOM")
+    assert build_alert_push_content(alert, game, home, away) == (f"{label} · AWY 2–3 HOM", "Away Team at Home Team")
+
+
+@pytest.mark.parametrize("alert_type,event", [("close_game_late", "Close game"), ("overtime_start", "OT1"), ("second_half_start", "Second half"), ("extra_time_start", "Extra time")])
+def test_push_milestones_keep_score_in_title_and_timing_in_body(alert_type, event):
+    competition, period = ("NCAAB", 3) if alert_type in {"close_game_late", "overtime_start"} else ("MLS", 2)
+    game = Game(competition=competition, period=period, clock="04:00" if competition == "NCAAB" else "46'", away_score=2, home_score=3)
+    title, body = build_alert_push_content(_mk_alert(alert_type), game, None, None)
+    assert f"{event} · AWAY 2–3 HOME" in title
+    assert body == ("OT1 • 04:00 left" if competition == "NCAAB" else "2H • 46'")
+    assert "2–3" not in body
+
+
+@pytest.mark.parametrize("clock,expected", [("Top 8th", "Top of the 8th"), ("Bottom 11th", "Bottom of the 11th"), (None, "11th inning")])
+def test_inning_push_names_the_half_when_known(clock, expected):
+    game = Game(competition="MLB", period=11, clock=clock, away_score=2, home_score=3)
+    alert = _mk_alert("inning_start")
+    if clock == "Top 8th":
+        alert.event_data = {"period": 8, "clock": clock}
+    assert build_alert_push_content(alert, game, None, None) == (f"MLB · {expected} · AWAY 2–3 HOME", "AWAY at HOME")
+
+
+def test_shootout_push_distinguishes_warning_from_confirmed_play():
+    game = Game(competition="CHAMPIONS_LEAGUE", period=5, clock="Pens", away_score=1, home_score=1)
+    alert = _mk_alert("penalty_kicks")
+    alert.event_data = {"period": 4, "clock": "117'"}
+    assert build_alert_push_content(alert, game, None, None) == ("UCL · Shootout possible · AWAY 1–1 HOME", "ET 2 • 117'")
+    alert.event_data = {"period": 5, "clock": "Pens"}
+    assert build_alert_push_content(alert, game, None, None) == ("UCL · Shootout · AWAY 1–1 HOME", "Penalty shootout underway")
+
+
+def test_final_push_does_not_invent_overtime_when_snapshot_period_is_missing():
+    game = Game(competition="NBA", period=6, away_score=1, home_score=2)
+    alert = _mk_alert("final_result")
+    alert.event_data = {"period": None}
+    assert build_alert_push_content(alert, game, None, None)[0] == "NBA · Final · AWAY 1–2 HOME"

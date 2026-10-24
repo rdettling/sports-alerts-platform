@@ -73,17 +73,11 @@ Operational observability is useful only when it helps debug real issues. Keep t
 
 ## Production Access
 
-This repo often uses the Render CLI and Neon CLI for production inspection.
+The SQLite deployment uses one Render backend with a file-backed SQLite database on its persistent disk. Do not start a separate worker service, multiple Uvicorn processes, or replicas. Never put the live SQLite file on a network filesystem.
 
-When a task may involve production logs, deploy state, runtime debugging, or production database inspection:
+When production inspection is relevant, check Render CLI authentication first and initiate `render login` if needed. Do not request production authentication for local-only tasks.
 
-- First check whether Render CLI and Neon CLI are already authenticated.
-- If Render auth is missing or expired, run `render login` so the browser or device authorization flow opens for the user.
-- If Neon auth is missing, initiate the Neon login flow rather than asking the user to type auth commands manually.
-- Prefer setting up CLI auth proactively once production access is relevant, instead of waiting for a failed command later.
-- Do not ask the user to authenticate up front for tasks that do not require production access.
-
-For a request to review production database usage over the last X days, run `make production-usage DAYS=X` first. Treat its Neon counters, lifecycle-derived awake time, estimated interval CU-hours, and Render-observed attribution according to the confidence labels in the report. Follow up with narrower log inspection only when the report flags incomplete evidence or a source that needs diagnosis.
+Use SQLite's online backup API for live snapshots. Keep backups private, copy them off the service's disk, and stop the backend before restoring. See `docs/deployment.md` for the fresh cutover and recovery procedure.
 
 ## Verification
 

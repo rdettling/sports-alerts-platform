@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.models import Alert, AlertDelivery, CompetitionSetting, OddsApiDailyUsage, User
 from app.db.session import get_db
 from app.deps import require_admin_user
@@ -45,14 +44,6 @@ def _competition_setting_out(row: CompetitionSetting) -> CompetitionSettingOut:
         live_sync_interval_seconds=profile.live_sync_interval_seconds,
         is_enabled=row.is_enabled,
     )
-
-
-def _resolve_neon_dashboard_url() -> str | None:
-    if settings.neon_dashboard_url.strip():
-        return settings.neon_dashboard_url.strip()
-    if settings.neon_project_id.strip():
-        return f"https://console.neon.tech/app/projects/{settings.neon_project_id.strip()}"
-    return None
 
 
 @router.put("/competitions/{competition}", response_model=CompetitionSettingOut)
@@ -123,6 +114,5 @@ def admin_summary(
             provider_credits_remaining=usage.provider_credits_remaining if usage else None,
             provider_observed_at=usage.provider_observed_at if usage else None,
         ),
-        neon_dashboard_url=_resolve_neon_dashboard_url(),
         competition_settings=[_competition_setting_out(row) for row in list_competition_settings(db)],
     )

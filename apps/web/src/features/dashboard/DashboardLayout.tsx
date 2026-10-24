@@ -3,11 +3,11 @@ import { NavLink, Navigate, Route, Routes } from "react-router";
 
 import { useAuth } from "../auth/auth-context";
 import { SignInModal } from "../auth/SignInModal";
-import { AdminView } from "./components/AdminView";
-import { AlertsView } from "./components/AlertsView";
-import { CompetitionVisibilityModal } from "./components/CompetitionVisibilityModal";
-import { GamesView } from "./components/GamesView";
-import { TeamsView } from "./components/TeamsView";
+import { AdminView } from "../admin/AdminView";
+import { AlertsView } from "../alerts/AlertsView";
+import { CompetitionVisibilityModal } from "./CompetitionVisibilityModal";
+import { GamesView } from "../games/GamesView";
+import { TeamsView } from "../teams/TeamsView";
 
 type DashboardRouteKey = "games" | "teams" | "alerts" | "admin";
 

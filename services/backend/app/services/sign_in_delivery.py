@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 from app.config import settings
-from app.services.delivery_settings import delivery_settings
 from app.services.resend import send_resend_email
 from app.services.sign_in_email import build_sign_in_email
 
@@ -21,7 +20,7 @@ def send_sign_in_email(
         settings.magic_link_ttl_minutes,
     )
 
-    if delivery_settings.delivery_mode == "log":
+    if settings.delivery_mode == "log":
         logger.info(
             "Sign-in email to=%s subject=%s code=%s link=%s",
             to_email,
@@ -29,10 +28,6 @@ def send_sign_in_email(
             magic_code,
             magic_link,
         )
-        return
-
-    if delivery_settings.delivery_mode != "live":
-        logger.warning("Unsupported delivery mode=%s while sending sign-in email", delivery_settings.delivery_mode)
         return
 
     result = send_resend_email(

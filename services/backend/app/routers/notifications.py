@@ -14,7 +14,7 @@ from app.schemas.notification import (
     PushSubscriptionStatusOut,
     UpdateNotificationSettingsRequest,
 )
-from app.services.delivery_settings import delivery_settings
+from app.config import settings
 
 router = APIRouter(tags=["notifications"])
 
@@ -23,11 +23,11 @@ def _settings_out(db: Session, user: User) -> NotificationSettingsOut:
     subscription_count = db.scalar(
         select(func.count(PushSubscription.id)).where(PushSubscription.user_id == user.id)
     ) or 0
-    public_key = delivery_settings.vapid_public_key.strip()
+    public_key = settings.vapid_public_key.strip()
     return NotificationSettingsOut(
         email_alerts_enabled=user.email_alerts_enabled,
         push_subscription_count=subscription_count,
-        push_configured=bool(public_key and delivery_settings.vapid_private_key.strip()),
+        push_configured=bool(public_key and settings.vapid_private_key.strip()),
         vapid_public_key=public_key or None,
     )
 
@@ -73,7 +73,7 @@ def save_push_subscription(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    if not delivery_settings.vapid_public_key.strip() or not delivery_settings.vapid_private_key.strip():
+    if not settings.vapid_public_key.strip() or not settings.vapid_private_key.strip():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Push delivery is not configured.")
 
     endpoint = str(payload.endpoint)

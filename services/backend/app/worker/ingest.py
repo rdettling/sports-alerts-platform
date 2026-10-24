@@ -92,12 +92,14 @@ def _competition_team_maps(db: Session, competition: str) -> tuple[dict[str, int
     )
 
 
-def _register_fbs_opponents(
+def _register_college_opponents(
     db: Session,
+    competition: str,
     scoreboard_games: list[ScoreboardGame],
     team_map: dict[str, int],
     team_names: dict[int, str],
 ) -> None:
+    profile = get_competition_profile(competition)
     for game in scoreboard_games:
         provider_teams = (
             (
@@ -116,14 +118,14 @@ def _register_fbs_opponents(
                 continue
             team = db.scalar(
                 select(Team).where(
-                    Team.provider_scope == "cfb",
+                    Team.provider_scope == profile.provider_team_scope,
                     Team.external_team_id == external_team_id,
                 )
             )
             if team is None:
                 team = Team(
-                    sport="football",
-                    provider_scope="cfb",
+                    sport=profile.sport,
+                    provider_scope=profile.provider_team_scope,
                     external_team_id=external_team_id,
                     name=name,
                     abbreviation=abbreviation,
@@ -169,6 +171,7 @@ def _upsert_game(
     payload: ScoreboardGame,
     team_map: dict[str, int],
     memberships: dict[int, CompetitionTeam],
+    existing: Game | None,
 ) -> GameUpdateResult:
     home_id = team_map.get(payload.home_external_team_id)
     away_id = team_map.get(payload.away_external_team_id)
@@ -191,12 +194,6 @@ def _upsert_game(
         away_membership and _update_team_strength(away_membership, payload.away_team_strength)
     )
     strength_changed = home_strength_changed or away_strength_changed
-    existing = db.scalar(
-        select(Game).where(
-            Game.external_game_id == payload.external_game_id,
-            Game.competition == competition,
-        )
-    )
     if existing:
         sport = get_competition_profile(competition).sport
         is_soccer = sport == "soccer"
@@ -316,11 +313,24 @@ def _upsert_games_and_collect(
     dict[int, ScoreChangeEvent],
     dict[int, soccer.SoccerDerivedEvents],
 ]:
-    if competition == "FBS":
-        _register_fbs_opponents(db, scoreboard_games, team_map, team_names)
+    if competition in {"FBS", "NCAAB"}:
+        scoreboard_games = [
+            game for game in scoreboard_games
+            if game.home_external_team_id in team_map or game.away_external_team_id in team_map
+        ]
+        _register_college_opponents(db, competition, scoreboard_games, team_map, team_names)
     memberships = {
         membership.team_id: membership
         for membership in db.scalars(select(CompetitionTeam).where(CompetitionTeam.competition == competition)).all()
+    }
+    existing_games = {
+        game.external_game_id: game
+        for game in db.scalars(
+            select(Game).where(
+                Game.competition == competition,
+                Game.external_game_id.in_([game.external_game_id for game in scoreboard_games]),
+            )
+        ).all()
     }
     updated = 0
     touched_game_ids: list[int] = []
@@ -329,7 +339,10 @@ def _upsert_games_and_collect(
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
-        result = _upsert_game(db, competition, scoreboard_game, team_map, memberships)
+        result = _upsert_game(
+            db, competition, scoreboard_game, team_map, memberships,
+            existing_games.get(scoreboard_game.external_game_id),
+        )
         if result.did_update:
             updated += 1
         if result.game_id:
@@ -360,7 +373,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             raise RuntimeError(f"No {competition} games could be mapped to catalog teams")
 
         db.flush()
-        touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
+        touched_games = db.scalars(select(Game).where(Game.id.in_(touched_game_ids))).all()
         alerts_created = evaluate_and_record_alerts(
             db,
             touched_games,
@@ -437,7 +450,7 @@ def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> Live
             only_external_ids=candidate_ids,
         )
         db.flush()
-        touched_games = [game for game in (db.get(Game, game_id) for game_id in touched_game_ids) if game is not None]
+        touched_games = db.scalars(select(Game).where(Game.id.in_(touched_game_ids))).all()
         alerts_created = evaluate_and_record_alerts(
             db,
             touched_games,

@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from sqlalchemy import select
 
 from app.db.models import Game, GameOddsCurrent, OddsApiDailyUsage, Team
+from app.services.competitions import competition_teams_query
 from app.worker import odds, odds_sync
 
 
 def _game(db_session, *, competition="NBA", start, eligible=True):
-    teams = db_session.scalars(select(Team).order_by(Team.id.asc())).all()
+    teams = db_session.scalars(competition_teams_query(competition).order_by(Team.id.asc()).limit(2)).all()
     game = Game(
         external_game_id=f"odds-sync-{competition}-{start.timestamp()}-{eligible}",
         competition=competition,
@@ -22,10 +25,11 @@ def _game(db_session, *, competition="NBA", start, eligible=True):
     return game, teams[0], teams[1]
 
 
-def test_odds_sync_prices_all_eligible_games_with_one_feed(db_session, monkeypatch):
+@pytest.mark.parametrize("competition", ["NBA", "NCAAB"])
+def test_odds_sync_prices_all_eligible_games_with_one_feed(db_session, monkeypatch, competition):
     now = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
-    first, home, away = _game(db_session, start=now + timedelta(hours=4))
-    second, _, _ = _game(db_session, start=now + timedelta(hours=4, minutes=30))
+    first, home, away = _game(db_session, competition=competition, start=now + timedelta(hours=4))
+    second, _, _ = _game(db_session, competition=competition, start=now + timedelta(hours=4, minutes=30))
     calls = []
     monkeypatch.setattr(odds_sync, "_reserve_credit", lambda *_: (True, False))
     snapshot = odds.OddsSnapshot(outcomes=(), bookmaker="Test", last_update=now)
@@ -37,9 +41,9 @@ def test_odds_sync_prices_all_eligible_games_with_one_feed(db_session, monkeypat
         ),
     )
 
-    result = odds_sync.run_odds_sync("NBA", now)
+    result = odds_sync.run_odds_sync(competition, now)
 
-    assert calls == ["NBA"]
+    assert calls == [competition]
     assert result.games_checked == 2
     assert result.odds_snapshots_created == 2
     assert db_session.scalar(select(GameOddsCurrent).where(GameOddsCurrent.game_id == first.id))
@@ -97,4 +101,29 @@ def test_daily_cap_blocks_paid_requests_until_rollover(db_session):
     db_session.add(OddsApiDailyUsage(usage_date=now.date(), credits_used=16))
     db_session.commit()
 
-    assert odds_sync._reserve_credit(db_session, now) == (False, True)
+    assert odds_sync._reserve_credit(now) == (False, True)
+
+
+def test_provider_requests_do_not_hold_database_connections(db_session, monkeypatch):
+    from app.db.session import engine
+
+    now = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    _game(db_session, start=now + timedelta(hours=2))
+    db_session.close()
+    calls = []
+
+    def quota():
+        assert engine.pool.checkedout() == 0
+        calls.append("quota")
+        return odds.OddsProviderResult({}, credits_used=10, credits_remaining=100)
+
+    def prices(competition):
+        assert engine.pool.checkedout() == 0
+        calls.append(competition)
+        return odds.OddsProviderResult({})
+
+    monkeypatch.setattr(odds, "fetch_quota_status", quota)
+    monkeypatch.setattr(odds, "fetch_odds_with_usage", prices)
+    odds_sync.run_odds_sync("NBA", now)
+    assert calls == ["quota", "NBA"]
+    assert db_session.get(OddsApiDailyUsage, now.date()).credits_used == 1

@@ -5,6 +5,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Alert, AlertDelivery, Team, User, UserTeamFollow
 from app.db.session import SessionLocal
+from app.services.competitions import ensure_competition_settings
+
+
+@pytest.fixture(autouse=True)
+def seed_competitions():
+    with SessionLocal() as db:
+        ensure_competition_settings(db)
 
 
 def _team(external_team_id: str, name: str, abbreviation: str) -> Team:

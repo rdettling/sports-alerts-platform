@@ -1,8 +1,8 @@
 # Sports Alerts Platform
 
-Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a small multi-service system: a React web app, a FastAPI API, a background worker, and a Postgres database.
+Sports Alerts is a personal project for following live games and sending rule-based email and Web Push alerts. The repo is organized as a static React web app and one FastAPI backend with scheduler and delivery threads backed by SQLite.
 
-The current product surface supports ten competitions: `NBA`, `WNBA`, `NFL`, `FBS`, `MLB`, `NHL`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `CHAMPIONS_LEAGUE`.
+The current product surface supports eleven competitions: `NBA`, `WNBA`, `NCAAB`, `NFL`, `FBS`, `MLB`, `NHL`, `MLS`, `LA_LIGA`, `PREMIER_LEAGUE`, and `CHAMPIONS_LEAGUE`.
 
 The live production site is [livegamealerts.com](https://livegamealerts.com).
 
@@ -11,24 +11,27 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Email magic-link and one-time-code sign-in with JWT-backed API sessions.
 - Public `Games` dashboard with competition/day filters, live status, follow/unfollow actions, and game-level alert settings.
 - Public canonical `Teams` directory with competition/search filters, membership badges, and one follow state per team across every competition.
+- D1 men’s college basketball with conference and Top 25 filters, plus a default Major conferences view (ACC, Big 12, Big East, Big Ten, Pac-12, SEC; either team qualifies).
 - FBS conference filtering on Games plus collapsible conference groups and followed-team prioritization in Teams.
 - Authenticated Games filter for direct and team-derived follows.
-- `Alerts` dashboard for sport-wide defaults plus alert history.
-- Admin-only operations area for alert delivery activity, odds usage, competition controls, Neon access, and test tools.
+- `Alerts` dashboard for league defaults plus alert history.
+- Admin-only operations area for alert delivery activity, odds usage, competition controls, and test tools.
 - Background ingest and alert evaluation worker with persisted game state and alert delivery history.
 - Optional moneyline odds display when odds snapshots are available.
 - Code-owned competition profiles pair competition-specific provider configuration with shared basketball, football, baseball, hockey, or soccer behavior.
 
 Alert types default by sport and can be restricted for a specific competition:
 
-- `NBA` and `WNBA`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NBA`, `WNBA`, and `NCAAB`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
 - `NFL` and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
 - `NHL`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `final_result`
 - `MLS` and `CHAMPIONS_LEAGUE`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
 
-Football score updates and lead changes are opt-in. Lead changes cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.
+Default alerts cover game starts, close games, overtime or extra innings, soccer extra time and penalties, and final results where supported. Score updates, lead changes, second-half starts, and regular inning starts are opt-in. Defaults are defined centrally in `services/backend/app/services/alert_preferences.py`; league preferences and game overrides take precedence.
+
+Football lead-change alerts cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.
 
 When a football score also qualifies for a close-game alert, each user receives one alert based on their enabled rules: lead change first, then close game, then score update. A lead alert that covers the one-time close-game rule prevents that close alert from arriving on the next sync.
 
@@ -38,10 +41,12 @@ NHL score updates identify single-goal changes as goals. Close-game alerts defau
 
 - `apps/web` — React + Vite frontend
 - `services/backend/app` — FastAPI API, auth, reads/writes, admin endpoints, and delivery helpers
-- `services/backend/app/worker` — schedule ingest, odds snapshots, alert evaluation, and delivery
-- `services/backend/alembic` — database migrations shared by both backend processes
+- `services/backend/app/worker` — in-process schedule ingest, odds snapshots, alert evaluation, and delivery
+- `services/backend/alembic` — the fresh SQLite schema baseline
 - `infra/docker-compose.yml` — local multi-service stack
 - `docs` — focused support docs for architecture, local development, configuration, deployment, and troubleshooting
+
+Frontend code in `apps/web/src/features` is grouped by screen: `games`, `teams`, `alerts`, and `admin` own their views, supporting code, and colocated tests. `dashboard` owns navigation and account-level league visibility; `auth` owns sign-in. Shared components and utilities live in `shared/components` and `shared/lib`, and shared query options live in `shared/api/query-options.ts`. Styles remain in `shared/styles`.
 
 ## Quick Start
 
@@ -66,12 +71,14 @@ For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 - `make logs SERVICE=api` — tail a single service
 - `make test` — run API and worker tests plus web formatting, lint, tests, and build
 
+The SQLite baseline is `0001_sqlite`; apply all Alembic revisions through head. Existing Postgres data is not imported. The `0002_league_preferences` migration resets only sport-wide alert preferences; users, follows, and game overrides are preserved. Run one backend instance and one Uvicorn process. Daily SQLite snapshots are retained locally; copy backups off the persistent disk for recovery from volume loss.
+
 ## Architecture At A Glance
 
 - The web app talks only to the API.
 - The API owns auth, user-facing reads/writes, admin endpoints, and startup seeding.
-- The worker owns schedule sync, odds snapshots, alert evaluation, and delivery execution.
-- Postgres stores users, teams, games, follows, alert settings, sent alerts, odds snapshots, and lightweight ops data.
+- Scheduler and delivery threads run inside the backend and own ingest, odds, alerts, and delivery.
+- SQLite on a persistent disk stores users, teams, games, follows, alert settings, sent alerts, odds snapshots, and lightweight ops data.
 - Competition availability is DB-backed through `competition_settings`: supported leagues remain manageable in Admin, active leagues consume worker resources and appear throughout the app, and signed-in users can hide active leagues for themselves.
 
 ## Canonical Docs
@@ -84,4 +91,6 @@ For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 
 ## Deployment Note
 
-The project has a production-style deployment shape and can be hosted on services like Render plus a managed Postgres provider such as Neon. See [docs/deployment.md](docs/deployment.md) for the reference model.
+The project has a production-style deployment shape and can be hosted on one paid Render web service with a persistent disk plus static frontend hosting. See [docs/deployment.md](docs/deployment.md) for the reference model.
+
+The NCAAB team and conference catalog is a code-owned snapshot of ESPN’s 2026–27 Division I standings. Refresh `services/backend/app/services/ncaab_teams.py` when membership changes. Lower-division opponents appear in games without joining the D1 team directory. Newly added competitions start disabled on existing databases and can be enabled in Admin.

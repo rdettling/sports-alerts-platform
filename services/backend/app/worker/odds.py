@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import GameOddsCurrent, GameOddsOutcomeCurrent
 from app.services.competitions import get_competition_profile
-from app.worker.config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"

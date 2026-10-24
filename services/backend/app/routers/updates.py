@@ -1,13 +1,6 @@
-import secrets
-
-from fastapi import APIRouter, Header, HTTPException, Response, status
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from app.config import settings
-from app.schemas.schedule import ScheduleSnapshot
-from app.schemas.update import GameUpdateEvent
-from app.services import worker_schedule
-from app.services.game_feed import game_feed_cache
 from app.services.live_updates import game_updates
 
 router = APIRouter(tags=["updates"])
@@ -19,47 +12,5 @@ async def stream_game_updates() -> StreamingResponse:
     return StreamingResponse(
         game_updates.events(queue),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-
-@router.post("/internal/updates/games", status_code=status.HTTP_204_NO_CONTENT)
-async def publish_game_update(
-    event: GameUpdateEvent,
-    live_update_secret: str | None = Header(default=None, alias="X-Live-Update-Secret"),
-) -> Response:
-    _require_worker_secret(live_update_secret)
-
-    game_feed_cache.invalidate()
-    game_updates.publish(event)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-def _require_worker_secret(live_update_secret: str | None) -> None:
-    configured_secret = settings.live_update_secret
-    if not configured_secret:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Live updates are not configured",
-        )
-    if live_update_secret is None or not secrets.compare_digest(
-        live_update_secret,
-        configured_secret,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid live update secret",
-        )
-
-
-@router.post("/internal/updates/schedule", status_code=status.HTTP_204_NO_CONTENT)
-async def publish_schedule(
-    snapshot: ScheduleSnapshot,
-    live_update_secret: str | None = Header(default=None, alias="X-Live-Update-Secret"),
-) -> Response:
-    _require_worker_secret(live_update_secret)
-    worker_schedule.snapshot = snapshot
-    return Response(status_code=status.HTTP_204_NO_CONTENT)

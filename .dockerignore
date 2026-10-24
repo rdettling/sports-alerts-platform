@@ -11,3 +11,9 @@
 **/node_modules
 **/dist
 **/*.pyc
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.db.lock
+services/backend/data
+**/backups

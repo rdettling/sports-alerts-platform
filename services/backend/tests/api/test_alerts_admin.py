@@ -266,7 +266,7 @@ def test_admin_test_sends_after_releasing_database_checkout(client, monkeypatch)
 
 def test_admin_test_alert_returns_expected_delivery_failure(client, monkeypatch):
     headers = _auth_headers(client)
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "live")
     monkeypatch.setattr(
         alert_delivery,
         "send_resend_email",
@@ -308,8 +308,8 @@ def test_admin_test_push_commits_expired_subscription_cleanup(client, monkeypatc
     def expired_push(**_kwargs):
         raise alert_delivery.WebPushException("gone", response=GoneResponse())
 
-    monkeypatch.setattr(alert_delivery.delivery_settings, "delivery_mode", "live")
-    monkeypatch.setattr(alert_delivery.delivery_settings, "vapid_private_key", "test-private-key")
+    monkeypatch.setattr(alert_delivery.settings, "delivery_mode", "live")
+    monkeypatch.setattr(alert_delivery.settings, "vapid_private_key", "test-private-key")
     monkeypatch.setattr(alert_delivery, "webpush", expired_push)
 
     response = client.post(

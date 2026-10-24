@@ -8,7 +8,7 @@ from pywebpush import WebPushException, webpush
 
 from app.db.models import Alert, Game, PushSubscription, Team, User
 from app.services.alert_content import build_alert_email_content, build_alert_push_content, build_alert_subject
-from app.services.delivery_settings import delivery_settings
+from app.config import settings
 from app.services.resend import send_resend_email
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def _log_email_failure(*, payload: EmailAlertPayload, metadata: dict[str, object
 
 
 def send_email_alert(payload: EmailAlertPayload) -> DeliveryOutcome:
-    if delivery_settings.delivery_mode == "log":
+    if settings.delivery_mode == "log":
         logger.info(
             "Simulated alert delivery service=%s to=%s subject=%s alert_id=%s body=%s",
             payload.service,
@@ -121,11 +121,6 @@ def send_email_alert(payload: EmailAlertPayload) -> DeliveryOutcome:
             payload.text_body.replace("\n", " | "),
         )
         return DeliveryOutcome(status="sent", provider_message_id=f"log-{payload.delivery_id}")
-
-    if delivery_settings.delivery_mode != "live":
-        metadata = {"error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"}
-        _log_email_failure(payload=payload, metadata=metadata)
-        return DeliveryOutcome(status="failed", provider_data=metadata)
 
     result = send_resend_email(
         to_email=payload.to_email,
@@ -152,7 +147,7 @@ def send_push_alert(payload: PushAlertPayload) -> DeliveryOutcome:
             provider_data={"error": "no_active_subscriptions", "attempted": 0, "sent": 0, "expired": 0},
         )
 
-    if delivery_settings.delivery_mode == "log":
+    if settings.delivery_mode == "log":
         logger.info(
             "Simulated push delivery service=%s alert_id=%s subscriptions=%s",
             payload.service,
@@ -168,15 +163,7 @@ def send_push_alert(payload: PushAlertPayload) -> DeliveryOutcome:
             },
         )
 
-    if delivery_settings.delivery_mode != "live":
-        return DeliveryOutcome(
-            status="failed",
-            provider_data={
-                "error": f"unsupported_delivery_mode={delivery_settings.delivery_mode}"
-            },
-        )
-
-    if not delivery_settings.vapid_private_key.strip():
+    if not settings.vapid_private_key.strip():
         return DeliveryOutcome(status="failed", provider_data={"error": "missing_vapid_private_key"})
 
     data = json.dumps(
@@ -198,8 +185,8 @@ def send_push_alert(payload: PushAlertPayload) -> DeliveryOutcome:
                     "keys": {"p256dh": subscription.p256dh, "auth": subscription.auth},
                 },
                 data=data,
-                vapid_private_key=delivery_settings.vapid_private_key,
-                vapid_claims={"sub": delivery_settings.vapid_subject},
+                vapid_private_key=settings.vapid_private_key,
+                vapid_claims={"sub": settings.vapid_subject},
                 ttl=300,
                 timeout=10,
             )

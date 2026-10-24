@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from time import monotonic
 from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import func, select, text, update
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -29,7 +29,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 NEUTRAL_START_MESSAGE = "If that address can receive email, sign-in instructions have been sent."
 INVALID_LOGIN_MESSAGE = "Invalid or expired sign-in credential"
 MAX_CODE_ATTEMPTS = 5
-WARM_QUERY_TIMEOUT_MS = 2500
 logger = logging.getLogger(__name__)
 
 
@@ -74,26 +73,8 @@ def _complete_sign_in(token_row: EmailLoginToken, now: datetime, db: Session) ->
     return AuthTokenResponse(access_token=token, user=user)
 
 
-def _run_warm_query(db: Session) -> None:
-    # Keep warmup fail-fast so auth page load never hangs on a suspended compute.
-    dialect_name = db.get_bind().dialect.name
-    if dialect_name == "postgresql":
-        db.execute(text(f"SET LOCAL statement_timeout = {WARM_QUERY_TIMEOUT_MS}"))
-    db.execute(select(1))
 
 
-@router.post("/warm", status_code=status.HTTP_204_NO_CONTENT)
-def warm_auth_db(db: Session = Depends(get_db)) -> Response:
-    started_at = monotonic()
-    try:
-        _run_warm_query(db)
-    except Exception as exc:
-        elapsed_ms = int((monotonic() - started_at) * 1000)
-        logger.warning("auth_warm_failed latency_ms=%s error=%s", elapsed_ms, exc.__class__.__name__)
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database warmup failed")
-    elapsed_ms = int((monotonic() - started_at) * 1000)
-    logger.info("auth_warm_ok latency_ms=%s", elapsed_ms)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/magic-link/start", response_model=MagicLinkStartResponse)

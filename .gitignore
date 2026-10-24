@@ -22,3 +22,6 @@ alembic.log
 .cache/
 .neon
 /package-lock.json
+*.db-wal
+*.db-shm
+*.db.lock

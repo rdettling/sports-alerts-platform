@@ -170,7 +170,8 @@ def test_provider_parses_soccer_record_and_allows_missing_record():
     assert game.broadcast_names == []
 
 
-def test_fbs_provider_normalizes_top_25_and_unranked_teams():
+@pytest.mark.parametrize("competition", ["FBS", "NCAAB"])
+def test_college_provider_normalizes_top_25_and_unranked_teams(competition):
     payload = {
         "events": [
             {
@@ -203,7 +204,7 @@ def test_fbs_provider_normalizes_top_25_and_unranked_teams():
         ]
     }
 
-    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games("FBS", ["20260829"])[0]
+    game = EspnScoreboardClient(fetch_json=lambda _, __: payload).fetch_games(competition, ["20260829"])[0]
 
     assert game.home_team_strength == TeamStrength(wins=1, losses=0, ties=0, rank=3, rank_observed=True)
     assert game.away_team_strength == TeamStrength(wins=0, losses=1, ties=0, rank=None, rank_observed=True)
@@ -844,3 +845,23 @@ def test_provider_normalizes_live_football_situation(competition, situation, sta
     assert other_sport.possession_side is None
     assert other_sport.field_position is None
     assert other_sport.down_distance is None
+
+
+
+def test_ncaab_provider_requests_all_d1_games_without_default_result_limit():
+    requests = []
+    client = EspnScoreboardClient(fetch_json=lambda competition, params: requests.append((competition, params)) or {"events": []})
+    assert client.fetch_games("NCAAB", ["20261102"]) == []
+    assert requests == [("NCAAB", {"groups": "50", "limit": "1000", "dates": "20261102"})]
+
+
+def test_shutdown_does_not_start_remaining_scoreboard_requests():
+    from threading import Event
+    stop = Event()
+    dates = []
+    def fetch(competition, params):
+        dates.append(params["dates"])
+        stop.set()
+        return {"events": []}
+    assert EspnScoreboardClient(fetch_json=fetch, stop_event=stop).fetch_games("NCAAB", ["20261102", "20261103"]) == []
+    assert dates == ["20261102"]

@@ -58,7 +58,8 @@ def _should_trigger_close_game_late(game: Game, settings: AlertSettings) -> bool
         return False
     if game.home_score is None or game.away_score is None:
         return False
-    sport = get_competition_profile(game.competition).sport
+    profile = get_competition_profile(game.competition)
+    sport = profile.sport
     resolved_margin = (
         settings.close_game_margin_threshold
         if settings.close_game_margin_threshold is not None
@@ -72,7 +73,8 @@ def _should_trigger_close_game_late(game: Game, settings: AlertSettings) -> bool
     if abs(game.home_score - game.away_score) > resolved_margin:
         return False
     period = game.period or 0
-    if (sport == "hockey" and period != 3) or (sport != "hockey" and period < 4):
+    regulation_periods = profile.basketball_regulation_periods or 4
+    if (sport == "hockey" and period != 3) or (sport != "hockey" and period < regulation_periods):
         return False
     seconds_left = _parse_clock_seconds(game.clock)
     return seconds_left is not None and seconds_left <= resolved_seconds
@@ -89,8 +91,10 @@ def _should_trigger_inning_start(game: Game, settings: AlertSettings) -> bool:
 
 
 def _should_trigger_overtime_start(game: Game, settings: AlertSettings) -> bool:
-    sport = get_competition_profile(game.competition).sport
-    overtime_period = 4 if sport == "hockey" else 5
+    profile = get_competition_profile(game.competition)
+    sport = profile.sport
+    regulation_periods = profile.basketball_regulation_periods or 4
+    overtime_period = 4 if sport == "hockey" else regulation_periods + 1
     return (
         settings.is_enabled
         and sport in {"basketball", "football", "hockey"}

@@ -27,12 +27,12 @@ describe("CompetitionMark", () => {
   it("renders the ESPN college football artwork without text", () => {
     render(<CompetitionMark competition="FBS" />);
 
-    const mark = screen.getByRole("img", { name: "FBS logo" });
+    const mark = screen.getByRole("img", { name: "CFB logo" });
     expect(mark).toHaveAttribute(
       "src",
       "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football-college.png",
     );
-    expect(mark).not.toHaveTextContent("FBS");
+    expect(mark).not.toHaveTextContent("CFB");
   });
 
   it("falls back to the league badge when artwork fails", () => {
