@@ -70,7 +70,6 @@ def test_league_migration_resets_only_preferences(tmp_path):
         PushSubscription,
         Team,
         User,
-        UserGameAlertOverride,
         UserGameFollow,
         UserTeamFollow,
     )
@@ -103,12 +102,6 @@ def test_league_migration_resets_only_preferences(tmp_path):
             [
                 UserTeamFollow(user_id=user.id, team_id=teams[0].id),
                 UserGameFollow(user_id=user.id, game_id=game.id),
-                UserGameAlertOverride(
-                    user_id=user.id,
-                    game_id=game.id,
-                    alert_type="close_game_late",
-                    close_game_margin_threshold_override=2,
-                ),
                 EmailLoginToken(
                     email=user.email,
                     token_hash="a" * 64,
@@ -123,6 +116,10 @@ def test_league_migration_resets_only_preferences(tmp_path):
                 ),
             ]
         )
+        db.execute(text(
+            "INSERT INTO user_game_alert_overrides (user_id, game_id, alert_type, close_game_margin_threshold_override) "
+            "VALUES (:user, :game, 'close_game_late', 2)"
+        ), {"user": user.id, "game": game.id})
         alert = Alert(
             user_id=user.id,
             game_id=game.id,
@@ -146,7 +143,7 @@ def test_league_migration_resets_only_preferences(tmp_path):
             name: connection.execute(text(f'SELECT * FROM "{name}"')).all()
             for name in preserved_tables
         }
-    _alembic(database_url, "upgrade", "head")
+    _alembic(database_url, "upgrade", "0002_league_preferences")
     with engine.connect() as connection:
         for name in preserved_tables:
             assert (
@@ -168,4 +165,101 @@ def test_league_migration_resets_only_preferences(tmp_path):
         for column in inspect(engine).get_columns("user_alert_preferences")
     }
     _alembic(database_url, "upgrade", "head")
+    engine.dispose()
+
+
+def test_quarter_migration_preserves_existing_enabled_preferences(tmp_path):
+    from sqlalchemy import text
+    from app.db.models import User, UserAlertPreference
+    from app.services.alert_preferences import resolve_alert_settings
+
+    database_url = f"sqlite:///{tmp_path / 'quarter-migration.db'}"
+    _alembic(database_url, "upgrade", "0002_league_preferences")
+    engine = create_engine(database_url)
+    with Session(engine) as db:
+        db.add(User(id=1, email="periods@example.com"))
+        db.commit()
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO user_alert_preferences (user_id, competition, alert_type, is_enabled_override) "
+            "VALUES (1, 'NBA', 'quarter_start', 1)"
+        ))
+    _alembic(database_url, "upgrade", "head")
+    with Session(engine) as db:
+        preference = db.scalar(select(UserAlertPreference))
+        settings = resolve_alert_settings("NBA", "quarter_start", preference)
+        assert settings.is_enabled is True
+        assert settings.periods == [2, 3, 4]
+        preference.periods_override = [2, 4]
+        db.commit()
+        db.expire_all()
+        assert resolve_alert_settings("NBA", "quarter_start", db.scalar(select(UserAlertPreference))).periods == [2, 4]
+    _alembic(database_url, "downgrade", "0002_league_preferences")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT is_enabled_override FROM user_alert_preferences")).scalar() == 1
+    engine.dispose()
+
+
+
+def test_shared_period_migration_preserves_quarter_selection(tmp_path):
+    from sqlalchemy import text
+    from app.db.models import User, UserAlertPreference
+
+    database_url = f"sqlite:///{tmp_path / 'shared-periods.db'}"
+    _alembic(database_url, "upgrade", "0003_quarter_selection")
+    engine = create_engine(database_url)
+    with Session(engine) as db:
+        db.add(User(id=1, email="selection@example.com"))
+        db.commit()
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO user_alert_preferences (user_id, competition, alert_type, is_enabled_override, quarters_override) "
+            "VALUES (1, 'NBA', 'quarter_start', 1, '[2, 4]')"
+        ))
+    _alembic(database_url, "upgrade", "head")
+    with Session(engine) as db:
+        preference = db.scalar(select(UserAlertPreference))
+        assert preference.is_enabled_override is True
+        assert preference.periods_override == [2, 4]
+    _alembic(database_url, "downgrade", "0003_quarter_selection")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT quarters_override FROM user_alert_preferences")).scalar() == "[2, 4]"
+    engine.dispose()
+
+
+def test_inning_migration_preserves_preferences_and_game_overrides(tmp_path):
+    from datetime import datetime, timezone
+    from sqlalchemy import text
+    from app.db.models import Game, Team, User, UserAlertPreference, UserGameAlertOverride
+    from app.services.seed import ensure_seeded_teams
+
+    database_url = f"sqlite:///{tmp_path / 'inning-selection.db'}"
+    _alembic(database_url, "upgrade", "0004_period_selection")
+    engine = create_engine(database_url)
+    with Session(engine) as db:
+        ensure_seeded_teams(db)
+        teams = db.scalars(select(Team).order_by(Team.id).limit(2)).all()
+        db.add(User(id=1, email="innings@example.com"))
+        db.add(Game(id=1, external_game_id="inning-migration", competition="MLB",
+                    home_team_id=teams[0].id, away_team_id=teams[1].id,
+                    scheduled_start_time=datetime.now(timezone.utc), status="scheduled"))
+        db.commit()
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO user_alert_preferences (user_id, competition, alert_type, is_enabled_override, inning_start_threshold_override) "
+            "VALUES (1, 'MLB', 'inning_start', 1, 5)"
+        ))
+        connection.execute(text(
+            "INSERT INTO user_game_alert_overrides (user_id, game_id, alert_type, inning_start_threshold_override) "
+            "VALUES (1, 1, 'inning_start', 9)"
+        ))
+    _alembic(database_url, "upgrade", "head")
+    with Session(engine) as db:
+        assert db.scalar(select(UserAlertPreference)).periods_override == [5]
+        assert db.scalar(select(UserGameAlertOverride)).periods_override == [9]
+        assert db.get(User, 1).email == "innings@example.com"
+    _alembic(database_url, "downgrade", "0004_period_selection")
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT inning_start_threshold_override FROM user_alert_preferences")).scalar() == 5
+        assert connection.execute(text("SELECT inning_start_threshold_override FROM user_game_alert_overrides")).scalar() == 9
     engine.dispose()

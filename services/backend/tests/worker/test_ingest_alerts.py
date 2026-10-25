@@ -891,12 +891,16 @@ def test_ingest_creates_mlb_inning_start_alert(db_session):
             competition="MLB",
             alert_type="inning_start",
             is_enabled_override=True,
-            inning_start_threshold_override=7,
+            periods_override=[7],
         )
     )
     db_session.commit()
 
-    run_catalog_sync(make_mlb_inning_provider(), competition="MLB")
+    provider = make_mlb_inning_provider()
+    provider.games[0].period, provider.games[0].clock = 6, "End 6th"
+    run_catalog_sync(provider, competition="MLB")
+    provider.games[0].period, provider.games[0].clock = 7, "Top 7th"
+    run_catalog_sync(provider, competition="MLB")
 
     sent = db_session.scalars(select(Alert).where(Alert.user_id == user.id)).all()
     assert any(row.alert_type == "inning_start" for row in sent)

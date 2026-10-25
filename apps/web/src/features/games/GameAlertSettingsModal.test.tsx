@@ -46,7 +46,7 @@ describe("GameAlertSettingsModal", () => {
               is_enabled: true,
               close_game_margin_threshold: null,
               close_game_time_threshold_seconds: null,
-              inning_start_threshold: null,
+              periods: null,
             },
           ],
         }}
@@ -66,12 +66,56 @@ describe("GameAlertSettingsModal", () => {
       is_enabled: false,
       close_game_margin_threshold: null,
       close_game_time_threshold_seconds: null,
-      inning_start_threshold: null,
+      periods: null,
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Use league settings" }));
     expect(onResetGameAlertSettings).toHaveBeenCalledWith(12, "game_start");
   });
+
+  it.each([
+    ["NBA", "quarter_start", "Q", [2, 4]],
+    ["NHL", "period_start", "P", [2]],
+    ["MLB", "inning_start", "Inning ", [2, 9]],
+  ] as const)(
+    "selects starts for a %s game override",
+    (competition, alertType, prefix, periods) => {
+      const onUpdate = vi.fn(async () => undefined);
+      render(
+        <GameAlertSettingsModal
+          isOpen
+          matchupLabel="Away at Home"
+          alertsBusy={false}
+          gameAlertState={{
+            game_id: 12,
+            competition,
+            items: [
+              {
+                competition,
+                alert_type: alertType,
+                uses_league_defaults: true,
+                is_enabled: true,
+                close_game_margin_threshold: null,
+                close_game_time_threshold_seconds: null,
+                periods: [...periods],
+              },
+            ],
+          }}
+          onClose={vi.fn()}
+          onUpdateGameAlertSettings={onUpdate}
+          onResetGameAlertSettings={vi.fn(async () => undefined)}
+        />,
+      );
+      expect(screen.getByRole("checkbox", { name: `${prefix}2` })).toBeChecked();
+      expect(screen.getByRole("checkbox", { name: `${prefix}3` })).not.toBeChecked();
+      fireEvent.click(screen.getByRole("checkbox", { name: `${prefix}2` }));
+      expect(onUpdate).toHaveBeenCalledWith(
+        12,
+        alertType,
+        expect.objectContaining({ periods: periods.filter((period) => period !== 2) }),
+      );
+    },
+  );
 
   it("hides reset for game alerts already using league settings", () => {
     render(
@@ -90,7 +134,7 @@ describe("GameAlertSettingsModal", () => {
               is_enabled: true,
               close_game_margin_threshold: null,
               close_game_time_threshold_seconds: null,
-              inning_start_threshold: null,
+              periods: null,
             },
           ],
         }}
@@ -119,7 +163,7 @@ describe("GameAlertSettingsModal", () => {
             is_enabled: false,
             close_game_margin_threshold: null,
             close_game_time_threshold_seconds: null,
-            inning_start_threshold: null,
+            periods: null,
           })),
         }}
         onClose={vi.fn()}

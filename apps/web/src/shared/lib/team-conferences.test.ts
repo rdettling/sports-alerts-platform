@@ -1,7 +1,11 @@
 import { expect, it } from "vitest";
 
-import { type Competition, type Team } from "../api";
-import { gameConferenceOptions, teamConferenceOptions } from "./team-conferences";
+import { type Competition, type Game, type Team } from "../api";
+import {
+  gameConferenceOptions,
+  matchesGameConference,
+  teamConferenceOptions,
+} from "./team-conferences";
 
 it("keeps conference options scoped to the selected competition", () => {
   const teams: Team[] = [
@@ -51,5 +55,36 @@ it.each<Competition>(["FBS", "NCAAB"])(
   "keeps the %s preset filters available without scheduled games",
   (competition) => {
     expect(gameConferenceOptions([], competition)).toEqual(["Top 25", "Power Conferences"]);
+  },
+);
+
+it.each<Competition>(["FBS", "NCAAB"])(
+  "matches either power-conference participant in %s and excludes Pac-12-only games",
+  (competition) => {
+    const matchup = (homeConference: string | null, awayConference: string | null) =>
+      ({
+        competition,
+        home_team: { conference: homeConference },
+        away_team: { conference: awayConference },
+      }) as Game;
+    for (const conference of ["ACC", "Big 12", "Big Ten", "SEC"]) {
+      expect(matchesGameConference(matchup(conference, "American"), "Power Conferences")).toBe(
+        true,
+      );
+      expect(matchesGameConference(matchup("American", conference), "Power Conferences")).toBe(
+        true,
+      );
+    }
+    expect(matchesGameConference(matchup("Pac-12", "Pac-12"), "Power Conferences")).toBe(false);
+    expect(matchesGameConference(matchup("Pac-12", "Mountain West"), "Power Conferences")).toBe(
+      false,
+    );
+    expect(matchesGameConference(matchup("Sun Belt", "American"), "Power Conferences")).toBe(false);
+    expect(matchesGameConference(matchup(null, null), "Power Conferences")).toBe(false);
+    expect(matchesGameConference(matchup("Big East", "West Coast"), "Power Conferences")).toBe(
+      competition === "NCAAB",
+    );
+    expect(matchesGameConference(matchup("Pac-12", "Mountain West"), "Pac-12")).toBe(true);
+    expect(matchesGameConference(matchup("Pac-12", "Mountain West"), "all")).toBe(true);
   },
 );

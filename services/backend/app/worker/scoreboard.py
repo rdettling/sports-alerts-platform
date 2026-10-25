@@ -223,6 +223,8 @@ class EspnScoreboardClient:
         sport = get_competition_profile(normalized_competition).sport
         if sport in {"baseball", "soccer"} and short_detail:
             clock = short_detail
+        elif any(marker in status_name.upper() for marker in ("HALFTIME", "END_PERIOD", "END_OF_PERIOD", "INTERMISSION")):
+            clock = short_detail or str(status_type.get("description") or status_name)
         completed = bool(status_type.get("completed"))
         season = event.get("season") or {}
         season_slug = _clean_text(season.get("slug"))

@@ -213,7 +213,7 @@ class UserAlertPreference(Base):
     is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    inning_start_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    periods_override: Mapped[list[int] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 
@@ -234,7 +234,7 @@ class UserGameAlertOverride(Base):
     is_enabled_override: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     close_game_margin_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     close_game_time_threshold_seconds_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    inning_start_threshold_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    periods_override: Mapped[list[int] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), server_default=func.now(), onupdate=func.now())
 

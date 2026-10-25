@@ -357,12 +357,14 @@ def test_alert_preferences_get_and_update(client):
     soccer = next(group for group in groups if group["competition"] == "MLS")
     assert {item["alert_type"] for item in basketball["preferences"]} == {
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "final_result",
     }
     assert {item["alert_type"] for item in football["preferences"]} == {
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -383,6 +385,7 @@ def test_alert_preferences_get_and_update(client):
     }
     assert {item["alert_type"] for item in hockey["preferences"]} == {
         "game_start",
+        "period_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -511,7 +514,7 @@ def test_game_alert_override_flow(client):
     payload = get_response.json()
     assert payload["game_id"] == game_id
     assert payload["competition"] == "NBA"
-    assert len(payload["items"]) == 4
+    assert len(payload["items"]) == 5
     close_item = next(item for item in payload["items"] if item["alert_type"] == "close_game_late")
     assert close_item["uses_league_defaults"] is True
     assert "override" not in close_item
@@ -753,12 +756,12 @@ def test_inning_settings_use_the_shared_concrete_shape(client):
     response = client.put(
         f"/alert-preferences/games/{game_id}/inning_start",
         headers=headers,
-        json={"is_enabled": True, "inning_start_threshold": 5},
+        json={"is_enabled": True, "periods": [2, 5, 9]},
     )
 
     assert response.status_code == 200
     assert response.json()["uses_league_defaults"] is False
-    assert response.json()["inning_start_threshold"] == 5
+    assert response.json()["periods"] == [2, 5, 9]
 
 
 @pytest.mark.parametrize(
@@ -875,3 +878,66 @@ def test_soccer_preference_types_follow_each_league_profile(client):
             ).status_code
             == 404
         )
+
+
+@pytest.mark.parametrize("competition", ["NBA", "WNBA", "NFL", "FBS", "NHL", "MLB"])
+def test_start_selections_round_trip_and_game_override(client, competition):
+    alert_type = "inning_start" if competition == "MLB" else "period_start" if competition == "NHL" else "quarter_start"
+    selected = [1, 5, 9] if competition == "MLB" else [2] if competition == "NHL" else [2, 4]
+    headers = _auth_headers(client, email="periods@example.com")
+    groups = client.get("/alert-preferences", headers=headers).json()
+    group = next(group for group in groups if group["competition"] == competition)
+    default = next(item for item in group["preferences"] if item["alert_type"] == alert_type)
+    assert default["periods"] == ([7] if competition == "MLB" else [2, 3] if competition == "NHL" else [2, 3, 4])
+    response = client.put(f"/alert-preferences/competitions/{competition}/{alert_type}", headers=headers,
+                          json={"is_enabled": True, "periods": selected + selected})
+    assert response.status_code == 200
+    assert response.json()["periods"] == selected
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query(competition).order_by(Team.id).limit(2)).all()
+        game = Game(external_game_id="periods", competition=competition, home_team_id=teams[0].id,
+                    away_team_id=teams[1].id, scheduled_start_time=datetime.now(timezone.utc), status="scheduled")
+        db.add(game)
+        db.commit()
+        game_id = game.id
+    items = client.get(f"/alert-preferences/games/{game_id}", headers=headers).json()["items"]
+    assert next(item for item in items if item["alert_type"] == alert_type)["periods"] == selected
+    response = client.put(f"/alert-preferences/games/{game_id}/{alert_type}", headers=headers,
+                          json={"is_enabled": True, "periods": [3]})
+    assert response.status_code == 200
+    assert response.json()["periods"] == [3]
+    assert response.json()["uses_league_defaults"] is False
+    response = client.delete(f"/alert-preferences/games/{game_id}/{alert_type}", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["periods"] == selected
+
+
+@pytest.mark.parametrize("periods", [None, [1], [5], ["2"], [2.5]])
+def test_invalid_quarter_selection_is_rejected(client, periods):
+    headers = _auth_headers(client)
+    response = client.put("/alert-preferences/competitions/NBA/quarter_start", headers=headers,
+                          json={"is_enabled": True, "periods": periods})
+    assert response.status_code == 422
+
+
+def test_other_alerts_reject_quarter_selection(client):
+    headers = _auth_headers(client)
+    response = client.put("/alert-preferences/competitions/NBA/game_start", headers=headers,
+                          json={"is_enabled": True, "periods": [2]})
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("periods", [None, [1], [4], [2, 4], ["2"]])
+def test_invalid_hockey_period_selection_is_rejected(client, periods):
+    headers = _auth_headers(client)
+    response = client.put("/alert-preferences/competitions/NHL/period_start", headers=headers,
+                          json={"is_enabled": True, "periods": periods})
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("periods", [None, [0], [10], [1.5], ["3"]])
+def test_invalid_inning_selection_is_rejected(client, periods):
+    headers = _auth_headers(client)
+    response = client.put("/alert-preferences/competitions/MLB/inning_start", headers=headers,
+                          json={"is_enabled": True, "periods": periods})
+    assert response.status_code == 422

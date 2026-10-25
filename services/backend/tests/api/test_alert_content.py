@@ -772,3 +772,35 @@ def test_final_push_does_not_invent_overtime_when_snapshot_period_is_missing():
     alert = _mk_alert("final_result")
     alert.event_data = {"period": None}
     assert build_alert_push_content(alert, game, None, None)[0] == "NBA · Final · AWAY 1–2 HOME"
+
+
+@pytest.mark.parametrize("competition,alert_type,period,label,timing", [
+    ("NBA", "quarter_start", 2, "Quarter 2", "Q2"),
+    ("WNBA", "quarter_start", 4, "Quarter 4", "Q4"),
+    ("NFL", "quarter_start", 3, "Second half", "Q3"),
+    ("FBS", "quarter_start", 4, "Quarter 4", "Q4"),
+    ("NCAAB", "second_half_start", 2, "Second half", "2H"),
+    ("NHL", "period_start", 3, "Period 3", "P3"),
+])
+def test_period_start_content_uses_event_snapshot(competition, alert_type, period, label, timing):
+    game = Game(competition=competition, period=5, clock="03:00", status="in_progress",
+                home_team_id=1, away_team_id=2, scheduled_start_time=datetime.now(timezone.utc),
+                home_score=50, away_score=45)
+    alert = _mk_alert(alert_type)
+    alert.event_data = {"period": period, "clock": "11:45", "away_score": 7, "home_score": 10}
+    assert build_alert_subject(alert, game, None, None) == f"{label} · AWAY 7–10 HOME"
+    title, body = build_alert_push_content(alert, game, None, None)
+    assert f"{label} · AWAY 7–10 HOME" in title
+    assert body == f"{timing} • 11:45 left"
+    text, html = build_alert_email_content(alert, game, None, None)
+    assert label in text
+    assert label in html
+    assert "7–10" in text
+
+
+@pytest.mark.parametrize("clock", ["Halftime", "End of 1st", "Intermission"])
+def test_alert_timing_displays_break_labels_without_time_remaining(clock):
+    game = Game(competition="NBA", status="in_progress", period=2, clock=clock,
+                home_score=10, away_score=7)
+    _, body = build_alert_push_content(_mk_alert("close_game_late"), game, None, None)
+    assert body == f"Q2 • {clock}"

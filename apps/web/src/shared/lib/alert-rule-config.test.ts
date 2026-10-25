@@ -15,7 +15,7 @@ describe("alert rule settings", () => {
           is_enabled: true,
           close_game_margin_threshold: null,
           close_game_time_threshold_seconds: null,
-          inning_start_threshold: null,
+          periods: null,
         },
         { is_enabled: false },
       ),
@@ -23,7 +23,7 @@ describe("alert rule settings", () => {
       is_enabled: false,
       close_game_margin_threshold: null,
       close_game_time_threshold_seconds: null,
-      inning_start_threshold: null,
+      periods: null,
     });
   });
 
@@ -33,7 +33,7 @@ describe("alert rule settings", () => {
       is_enabled: true,
       close_game_margin_threshold: 5,
       close_game_time_threshold_seconds: 300,
-      inning_start_threshold: null,
+      periods: null,
     };
     const minutes = ALERT_RULE_CONFIG.close_game_late.fields[1];
 
@@ -47,11 +47,11 @@ describe("alert rule settings", () => {
       is_enabled: true,
       close_game_margin_threshold: 5,
       close_game_time_threshold_seconds: 600,
-      inning_start_threshold: null,
+      periods: null,
     });
   });
 
-  it("updates the concrete inning threshold", () => {
+  it("updates selected innings", () => {
     expect(
       buildAlertSettingsPayload(
         {
@@ -59,15 +59,15 @@ describe("alert rule settings", () => {
           is_enabled: true,
           close_game_margin_threshold: null,
           close_game_time_threshold_seconds: null,
-          inning_start_threshold: 7,
+          periods: [7],
         },
-        { fieldKey: "inning_start_threshold", fieldValue: 5 },
+        { periods: [2, 5, 9] },
       ),
     ).toEqual({
       is_enabled: true,
       close_game_margin_threshold: null,
       close_game_time_threshold_seconds: null,
-      inning_start_threshold: 5,
+      periods: [2, 5, 9],
     });
   });
 });

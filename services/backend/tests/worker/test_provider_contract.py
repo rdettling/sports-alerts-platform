@@ -865,3 +865,28 @@ def test_shutdown_does_not_start_remaining_scoreboard_requests():
         return {"events": []}
     assert EspnScoreboardClient(fetch_json=fetch, stop_event=stop).fetch_games("NCAAB", ["20261102", "20261103"]) == []
     assert dates == ["20261102"]
+
+
+@pytest.mark.parametrize("competition,name,detail", [
+    ("NBA", "STATUS_END_PERIOD", "End of 1st"),
+    ("WNBA", "STATUS_HALFTIME", "Halftime"),
+    ("NCAAB", "STATUS_HALFTIME", "Halftime"),
+    ("NFL", "STATUS_HALFTIME", "Halftime"),
+    ("FBS", "STATUS_END_PERIOD", "End of 3rd"),
+    ("NHL", "STATUS_END_PERIOD", "End of 2nd"),
+])
+def test_provider_preserves_breaks_when_display_clock_has_reset(competition, name, detail):
+    event = {
+        "id": "break", "date": "2026-10-15T23:00Z",
+        "competitions": [{
+            "status": {"period": 2, "displayClock": "15:00",
+                       "type": {"state": "in", "name": name, "shortDetail": detail}},
+            "competitors": [
+                {"homeAway": "home", "team": {"id": "1"}},
+                {"homeAway": "away", "team": {"id": "2"}},
+            ],
+        }],
+    }
+    game = EspnScoreboardClient()._parse_event(competition, event)
+    assert game is not None
+    assert game.clock == detail

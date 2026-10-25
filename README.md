@@ -11,7 +11,7 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 - Email magic-link and one-time-code sign-in with JWT-backed API sessions.
 - Public `Games` dashboard with competition/day filters, live status, follow/unfollow actions, and game-level alert settings.
 - Public canonical `Teams` directory with competition/search filters, membership badges, and one follow state per team across every competition.
-- D1 men’s college basketball with conference and Top 25 filters, plus a default Major conferences view (ACC, Big 12, Big East, Big Ten, Pac-12, SEC; either team qualifies).
+- D1 men’s college basketball with conference and Top 25 filters, plus a default Power Conferences view (ACC, Big 12, Big East, Big Ten, SEC; either team qualifies).
 - FBS conference filtering on Games plus collapsible conference groups and followed-team prioritization in Teams.
 - Authenticated Games filter for direct and team-derived follows.
 - `Alerts` dashboard for league defaults plus alert history.
@@ -22,14 +22,19 @@ The live production site is [livegamealerts.com](https://livegamealerts.com).
 
 Alert types default by sport and can be restricted for a specific competition:
 
-- `NBA`, `WNBA`, and `NCAAB`: `game_start`, `close_game_late`, `overtime_start`, `final_result`
-- `NFL` and `FBS`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
+- `NBA` and `WNBA`: `game_start`, `quarter_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NCAAB`: `game_start`, `second_half_start`, `close_game_late`, `overtime_start`, `final_result`
+- `NFL` and `FBS`: `game_start`, `quarter_start`, `close_game_late`, `overtime_start`, `score_changed`, `lead_change`, `final_result`
 - `MLB`: `game_start`, `inning_start`, `extra_innings_start`, `final_result`
-- `NHL`: `game_start`, `close_game_late`, `overtime_start`, `score_changed`, `final_result`
+- `NHL`: `game_start`, `period_start`, `close_game_late`, `overtime_start`, `score_changed`, `final_result`
 - `MLS` and `CHAMPIONS_LEAGUE`: `game_start`, `second_half_start`, `extra_time_start`, `penalty_kicks`, `score_changed`, `final_result`
 - `LA_LIGA` and `PREMIER_LEAGUE`: `game_start`, `second_half_start`, `score_changed`, `final_result`
 
-Default alerts cover game starts, close games, overtime or extra innings, soccer extra time and penalties, and final results where supported. Score updates, lead changes, second-half starts, and regular inning starts are opt-in. Defaults are defined centrally in `services/backend/app/services/alert_preferences.py`; league preferences and game overrides take precedence.
+Default alerts cover game starts, close games, overtime or extra innings, soccer extra time and penalties, and final results where supported. Score updates, lead changes, quarter/period/second-half starts, and regular inning starts are opt-in. Defaults are defined centrally in `services/backend/app/services/alert_preferences.py`; league preferences and game overrides take precedence.
+
+Quarter and period starts cover regulation periods after the first; game-start and overtime alerts cover the remaining starts. Quarter-start settings let users choose Q2, Q3, Q4, or any combination; NHL period-start settings offer P2, P3, or both. MLB inning-start settings offer any combination of innings 1–9. All use inline controls with league defaults and game overrides. Selected innings notify once at the top of the inning; extra innings retain their separate alert. Football Q3 notifications say “Second half.” Starts require an observed transition into play, skip breaks and catch-up snapshots, and notify each user once per period. Regulation starts and soccer extra-time transitions share one classifier and alert path and require following before the previous observation; live polling and provider delays still apply.
+
+The CFB Power Conferences filter includes ACC, Big 12, Big Ten, and SEC; CBB also includes Big East. A matchup qualifies when either team belongs to one of those conferences. Pac-12-only matchups remain available under All or the Pac-12 conference filter.
 
 Football lead-change alerts cover transitions into or out of a tie and direct reversals, but not the opening score; when both rules are enabled, a qualifying lead change replaces the generic score update.
 

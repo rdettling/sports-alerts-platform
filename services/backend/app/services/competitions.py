@@ -29,9 +29,10 @@ class CompetitionProfile:
 
 
 SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
-    "basketball": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "basketball": ("game_start", "quarter_start", "close_game_late", "overtime_start", "final_result"),
     "football": (
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -41,6 +42,7 @@ SPORT_ALERT_TYPES: dict[Sport, tuple[str, ...]] = {
     "baseball": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "hockey": (
         "game_start",
+        "period_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -91,6 +93,7 @@ COMPETITION_PROFILES: dict[str, CompetitionProfile] = {
         live_sync_interval_seconds=60,
         odds_sport_key="basketball_ncaab",
         basketball_regulation_periods=2,
+        supported_alert_types=("game_start", "second_half_start", "close_game_late", "overtime_start", "final_result"),
     ),
     "NFL": CompetitionProfile(
         competition="NFL",

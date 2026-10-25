@@ -21,7 +21,7 @@ def test_canonical_alert_settings():
         close_game_margin_threshold=1,
         close_game_time_threshold_seconds=300,
     )
-    assert default_alert_settings("MLB", "inning_start").inning_start_threshold == 7
+    assert default_alert_settings("MLB", "inning_start").periods == [7]
     assert default_alert_settings("MLS", "penalty_kicks") == AlertSettings(is_enabled=True)
     assert default_alert_settings("MLS", "score_changed") == AlertSettings(is_enabled=False)
 
@@ -74,7 +74,6 @@ def test_sparse_overrides_store_only_values_different_from_baseline():
     assert preference.is_enabled_override is False
     assert preference.close_game_margin_threshold_override is None
     assert preference.close_game_time_threshold_seconds_override == 90
-    assert preference.inning_start_threshold_override is None
 
 
 def test_sparse_overrides_remove_values_equal_to_league_settings():
@@ -112,3 +111,26 @@ def test_explicit_preferences_override_quiet_defaults():
     assert resolve_alert_settings("MLS", "score_changed", preference).is_enabled is True
     override = UserGameAlertOverride(user_id=1, game_id=1, alert_type="score_changed", is_enabled_override=False)
     assert resolve_alert_settings("MLS", "score_changed", preference, override).is_enabled is False
+
+
+@pytest.mark.parametrize("competition,alert_type", [
+    ("NBA", "quarter_start"), ("WNBA", "quarter_start"),
+    ("NFL", "quarter_start"), ("FBS", "quarter_start"),
+    ("NCAAB", "second_half_start"), ("NHL", "period_start"),
+])
+def test_period_starts_default_to_disabled(competition, alert_type):
+    assert default_alert_settings(competition, alert_type) == AlertSettings(
+        is_enabled=False, periods=[2, 3, 4] if alert_type == "quarter_start" else [2, 3] if alert_type == "period_start" else None
+    )
+
+
+def test_quarter_selection_inherits_and_stores_sparse_overrides():
+    preference = UserAlertPreference(user_id=1, competition="NBA", alert_type="quarter_start", periods_override=[2, 4], is_enabled_override=True)
+    override = UserGameAlertOverride(user_id=1, game_id=1, alert_type="quarter_start", periods_override=[3])
+    assert resolve_alert_settings("NBA", "quarter_start", preference).periods == [2, 4]
+    assert resolve_alert_settings("NBA", "quarter_start", preference, override).periods == [3]
+    baseline = resolve_alert_settings("NBA", "quarter_start", preference)
+    assert apply_sparse_overrides(override, baseline, baseline) is False
+    assert override.periods_override is None
+    override.periods_override = []
+    assert resolve_alert_settings("NBA", "quarter_start", preference, override).periods == []

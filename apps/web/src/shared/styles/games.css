@@ -528,7 +528,7 @@
 }
 
 .game-alert-rule-header {
-  display: grid;
+  display: flex;
   gap: 0.75rem;
 }
 
@@ -566,13 +566,6 @@
 .game-alert-reset:disabled {
   cursor: default;
   opacity: 0.55;
-}
-
-@media (min-width: 900px) {
-  .game-alert-rule-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-  }
 }
 
 @media (min-width: 1024px) {
@@ -709,7 +702,6 @@
   }
 
   .game-alert-rule-header {
-    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.5rem;
   }
@@ -719,11 +711,6 @@
     justify-content: flex-end;
     flex-wrap: nowrap;
     gap: 0.5rem;
-  }
-
-  .game-alert-row .alert-inline-field {
-    gap: 0.3rem;
-    font-size: 0.85rem;
   }
 
   .game-alert-row select {

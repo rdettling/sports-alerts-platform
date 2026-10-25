@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { PREFERENCE_LABELS } from "../../shared/lib/dashboard-ui";
 import { type AlertSettingsUpdate, type GameAlertPreferences } from "../../shared/api";
+import { PeriodSelection } from "../../shared/components/PeriodSelection";
 import { AlertRuleCard } from "../../shared/components/AlertRuleCard";
 import {
   buildAlertSettingsPayload,
@@ -72,7 +73,6 @@ export function GameAlertSettingsModal({
           <ul className="game-alert-list">
             {gameAlertState.items.map((item) => {
               const fields = ruleFieldsFor(item.alert_type, item.is_enabled);
-              const inlineField = fields.length === 1 ? fields[0] : null;
               return (
                 <AlertRuleCard
                   key={item.alert_type}
@@ -96,31 +96,7 @@ export function GameAlertSettingsModal({
                           Use league settings
                         </button>
                       ) : null}
-                      {inlineField ? (
-                        <label className="alert-inline-field">
-                          {inlineField.label}
-                          <select
-                            value={getRuleFieldValue(item, inlineField)}
-                            disabled={alertsBusy}
-                            onChange={(event) => {
-                              onUpdateGameAlertSettings(
-                                gameAlertState.game_id,
-                                item.alert_type,
-                                buildAlertSettingsPayload(item, {
-                                  fieldKey: inlineField.key,
-                                  fieldValue: Number(event.target.value),
-                                }),
-                              ).catch(() => undefined);
-                            }}
-                          >
-                            {inlineField.options.map((value) => (
-                              <option key={value} value={value}>
-                                {value}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
+
                       <button
                         className={`alert-toggle ${item.is_enabled ? "on" : "off"}`}
                         type="button"
@@ -149,33 +125,47 @@ export function GameAlertSettingsModal({
                   }
                   controls={
                     <>
-                      {fields
-                        .filter((field) => field !== inlineField)
-                        .map((field) => (
-                          <label key={field.key}>
-                            {field.label}
-                            <select
-                              value={getRuleFieldValue(item, field)}
-                              disabled={alertsBusy}
-                              onChange={(event) => {
-                                onUpdateGameAlertSettings(
-                                  gameAlertState.game_id,
-                                  item.alert_type,
-                                  buildAlertSettingsPayload(item, {
-                                    fieldKey: field.key,
-                                    fieldValue: Number(event.target.value),
-                                  }),
-                                ).catch(() => undefined);
-                              }}
-                            >
-                              {field.options.map((value) => (
-                                <option key={value} value={value}>
-                                  {value}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ))}
+                      {item.alert_type === "quarter_start" ||
+                      item.alert_type === "period_start" ||
+                      item.alert_type === "inning_start" ? (
+                        <PeriodSelection
+                          alertType={item.alert_type}
+                          periods={item.periods ?? []}
+                          disabled={alertsBusy || !item.is_enabled}
+                          onChange={(periods) => {
+                            onUpdateGameAlertSettings(
+                              gameAlertState.game_id,
+                              item.alert_type,
+                              buildAlertSettingsPayload(item, { periods }),
+                            ).catch(() => undefined);
+                          }}
+                        />
+                      ) : null}
+                      {fields.map((field) => (
+                        <label key={field.key}>
+                          {field.label}
+                          <select
+                            value={getRuleFieldValue(item, field)}
+                            disabled={alertsBusy}
+                            onChange={(event) => {
+                              onUpdateGameAlertSettings(
+                                gameAlertState.game_id,
+                                item.alert_type,
+                                buildAlertSettingsPayload(item, {
+                                  fieldKey: field.key,
+                                  fieldValue: Number(event.target.value),
+                                }),
+                              ).catch(() => undefined);
+                            }}
+                          >
+                            {field.options.map((value) => (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
                     </>
                   }
                 />

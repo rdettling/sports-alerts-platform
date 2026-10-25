@@ -56,6 +56,15 @@ function game(overrides: Partial<Game>): Game {
 }
 
 describe("game display utilities", () => {
+  it.each(["Halftime", "End of 1st", "Intermission"])(
+    "displays the provider break label %s",
+    (clock) => {
+      expect(formatGameTime(game({ status: "in_progress", period: 2, clock }), "basketball")).toBe(
+        clock,
+      );
+    },
+  );
+
   it("formats moneyline values", () => {
     expect(formatMoneyline(120)).toBe("+120");
     expect(formatMoneyline(-105)).toBe("-105");

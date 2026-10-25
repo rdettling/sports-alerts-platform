@@ -369,7 +369,7 @@ def test_mls_extra_time_then_shootout_triggers_each_phase_once(db_session):
     assert [alert.alert_type for alert in alerts] == ["extra_time_start", "penalty_kicks"]
 
 
-def test_mls_second_half_and_goal_use_shared_soccer_events(db_session):
+def test_mls_second_half_and_goal_use_shared_event_pipeline(db_session):
     user = User(email="mls-shared-soccer-events@example.com")
     db_session.add(user)
     db_session.commit()

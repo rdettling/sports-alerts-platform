@@ -22,7 +22,7 @@ const basketballPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NBA",
@@ -30,7 +30,7 @@ const basketballPreferences = [
     is_enabled: true,
     close_game_margin_threshold: 5,
     close_game_time_threshold_seconds: 300,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NBA",
@@ -38,7 +38,7 @@ const basketballPreferences = [
     is_enabled: false,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NBA",
@@ -46,7 +46,7 @@ const basketballPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
 ];
 
@@ -57,7 +57,7 @@ const baseballPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "MLB",
@@ -65,7 +65,7 @@ const baseballPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: 7,
+    periods: [7],
   },
 ];
 
@@ -76,7 +76,7 @@ const footballPreferences = [
     is_enabled: false,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NFL",
@@ -84,7 +84,7 @@ const footballPreferences = [
     is_enabled: false,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
 ];
 
@@ -95,7 +95,7 @@ const hockeyPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NHL",
@@ -103,7 +103,7 @@ const hockeyPreferences = [
     is_enabled: true,
     close_game_margin_threshold: 1,
     close_game_time_threshold_seconds: 300,
-    inning_start_threshold: null,
+    periods: null,
   },
   {
     competition: "NHL",
@@ -111,7 +111,7 @@ const hockeyPreferences = [
     is_enabled: true,
     close_game_margin_threshold: null,
     close_game_time_threshold_seconds: null,
-    inning_start_threshold: null,
+    periods: null,
   },
 ];
 
@@ -239,6 +239,131 @@ describe("AlertsView", () => {
     expect(screen.queryByRole("switch", { name: "Lead change alerts" })).toBeNull();
   });
 
+  it.each([
+    ["NBA", "basketball", "quarter_start", "Quarter starts"],
+    ["NHL", "hockey", "period_start", "Period starts"],
+    ["NCAAB", "basketball", "second_half_start", "Second half start"],
+  ])(
+    "enables %s start alerts through the existing preferences",
+    async (competition, sport, alertType, label) => {
+      const preference = {
+        competition,
+        alert_type: alertType,
+        is_enabled: false,
+        close_game_margin_threshold: null,
+        close_game_time_threshold_seconds: null,
+        periods:
+          alertType === "quarter_start" ? [2, 3, 4] : alertType === "period_start" ? [2, 3] : null,
+      };
+      apiMocks.listAlertPreferences.mockResolvedValue([
+        { competition, sport, label: competition, preferences: [preference] },
+      ]);
+      apiMocks.updateAlertPreference.mockResolvedValue({ ...preference, is_enabled: true });
+      render(<AlertsView token="token" />);
+      const toggle = await screen.findByRole("switch", { name: `${label} alerts` });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      fireEvent.click(toggle);
+      await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+      expect(apiMocks.updateAlertPreference).toHaveBeenCalledWith("token", competition, alertType, {
+        is_enabled: true,
+        close_game_margin_threshold: null,
+        close_game_time_threshold_seconds: null,
+        periods:
+          alertType === "quarter_start" ? [2, 3, 4] : alertType === "period_start" ? [2, 3] : null,
+      });
+    },
+  );
+
+  it("saves a combination of periods and preserves it when switched off", async () => {
+    const preference = {
+      competition: "NBA",
+      alert_type: "quarter_start",
+      is_enabled: true,
+      close_game_margin_threshold: null,
+      close_game_time_threshold_seconds: null,
+      periods: [2, 3, 4],
+    };
+    apiMocks.listAlertPreferences.mockResolvedValue([
+      { competition: "NBA", label: "NBA", preferences: [preference] },
+    ]);
+    render(<AlertsView token="token" />);
+    const q3 = await screen.findByRole("checkbox", { name: "Q3" });
+    fireEvent.click(q3);
+    await waitFor(() => expect(q3).not.toBeChecked());
+    expect(screen.getByRole("checkbox", { name: "Q2" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Q4" })).toBeChecked();
+    expect(apiMocks.updateAlertPreference).toHaveBeenLastCalledWith(
+      "token",
+      "NBA",
+      "quarter_start",
+      expect.objectContaining({ is_enabled: true, periods: [2, 4] }),
+    );
+    fireEvent.click(screen.getByRole("switch", { name: "Quarter starts alerts" }));
+    await waitFor(() => expect(q3).toBeDisabled());
+    expect(apiMocks.updateAlertPreference).toHaveBeenLastCalledWith(
+      "token",
+      "NBA",
+      "quarter_start",
+      expect.objectContaining({ is_enabled: false, periods: [2, 4] }),
+    );
+  });
+
+  it("saves any combination of hockey period starts", async () => {
+    const preference = {
+      competition: "NHL",
+      alert_type: "period_start",
+      is_enabled: true,
+      close_game_margin_threshold: null,
+      close_game_time_threshold_seconds: null,
+      periods: [2, 3],
+    };
+    apiMocks.listAlertPreferences.mockResolvedValue([
+      { competition: "NHL", label: "NHL", preferences: [preference] },
+    ]);
+    render(<AlertsView token="token" />);
+    const p2 = await screen.findByRole("checkbox", { name: "P2" });
+    const p3 = screen.getByRole("checkbox", { name: "P3" });
+    expect(screen.queryByRole("checkbox", { name: "P4" })).toBeNull();
+    fireEvent.click(p2);
+    await waitFor(() => expect(p2).not.toBeChecked());
+    expect(p3).toBeChecked();
+    expect(apiMocks.updateAlertPreference).toHaveBeenLastCalledWith(
+      "token",
+      "NHL",
+      "period_start",
+      expect.objectContaining({ periods: [3] }),
+    );
+    fireEvent.click(p2);
+    await waitFor(() => expect(p2).toBeChecked());
+    fireEvent.click(p3);
+    await waitFor(() => expect(p3).not.toBeChecked());
+    expect(apiMocks.updateAlertPreference).toHaveBeenLastCalledWith(
+      "token",
+      "NHL",
+      "period_start",
+      expect.objectContaining({ periods: [2] }),
+    );
+  });
+
+  it("saves a combination of MLB innings inline", async () => {
+    render(<AlertsView token="token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "MLB" }));
+    expect(screen.getByRole("checkbox", { name: "Inning 7" })).toBeChecked();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(9);
+    const inning2 = screen.getByRole("checkbox", { name: "Inning 2" });
+    fireEvent.click(inning2);
+    await waitFor(() => expect(inning2).toBeChecked());
+    const inning9 = screen.getByRole("checkbox", { name: "Inning 9" });
+    fireEvent.click(inning9);
+    await waitFor(() => expect(inning9).toBeChecked());
+    expect(apiMocks.updateAlertPreference).toHaveBeenLastCalledWith(
+      "token",
+      "MLB",
+      "inning_start",
+      expect.objectContaining({ periods: [2, 7, 9] }),
+    );
+  });
+
   it("updates a switch and local state without refetching alert data", async () => {
     let finishUpdate: (() => void) | undefined;
     apiMocks.updateAlertPreference.mockImplementation(
@@ -257,7 +382,7 @@ describe("AlertsView", () => {
         is_enabled: false,
         close_game_margin_threshold: null,
         close_game_time_threshold_seconds: null,
-        inning_start_threshold: null,
+        periods: null,
       }),
     );
 
@@ -281,7 +406,7 @@ describe("AlertsView", () => {
           is_enabled: true,
           close_game_margin_threshold: 5,
           close_game_time_threshold_seconds: 600,
-          inning_start_threshold: null,
+          periods: null,
         },
       ),
     );

@@ -38,6 +38,8 @@ class AdminTestGameState:
 
 
 ADMIN_TEST_GAME_STATES = {
+    "quarter_start": AdminTestGameState("in_progress", 28, 25, 2, "11:45", -timedelta(minutes=30)),
+    "period_start": AdminTestGameState("in_progress", 1, 1, 2, "19:45", -timedelta(hours=1)),
     "game_start": AdminTestGameState("scheduled", None, None, None, None, timedelta(minutes=30)),
     "close_game_late": AdminTestGameState("in_progress", 102, 100, 4, "01:42", -timedelta(hours=2)),
     "overtime_start": AdminTestGameState("in_progress", 112, 112, 5, "05:00", -timedelta(hours=2)),
@@ -52,6 +54,12 @@ ADMIN_TEST_GAME_STATES = {
 }
 
 ADMIN_TEST_SPORT_OVERRIDES = {
+    ("basketball", "second_half_start"): AdminTestGameState(
+        "in_progress", 35, 32, 2, "19:45", -timedelta(hours=1)
+    ),
+    ("football", "quarter_start"): AdminTestGameState(
+        "in_progress", 14, 10, 3, "14:45", -timedelta(hours=1)
+    ),
     ("football", "close_game_late"): AdminTestGameState(
         "in_progress", 20, 17, 4, "04:30", -timedelta(hours=2)
     ),

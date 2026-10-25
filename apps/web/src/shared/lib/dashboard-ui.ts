@@ -2,6 +2,8 @@ import { type Sport } from "../api";
 
 export const PREFERENCE_LABELS: Record<string, string> = {
   game_start: "Game start",
+  quarter_start: "Quarter starts",
+  period_start: "Period starts",
   close_game_late: "Close game late",
   overtime_start: "Overtime start",
   inning_start: "Inning start",

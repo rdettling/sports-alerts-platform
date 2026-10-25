@@ -84,7 +84,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     )
     assert wnba.scoreboard_url.endswith("/sports/basketball/wnba/scoreboard")
     assert get_alert_types("WNBA") == get_alert_types("NBA")
-    assert get_alert_types("NBA") == ("game_start", "close_game_late", "overtime_start", "final_result")
+    assert get_alert_types("NBA") == ("game_start", "quarter_start", "close_game_late", "overtime_start", "final_result")
 
     nfl = get_competition_profile("NFL")
     assert (nfl.sport, nfl.live_sync_interval_seconds, nfl.odds_sport_key) == (
@@ -95,6 +95,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     assert nfl.scoreboard_url.endswith("/sports/football/nfl/scoreboard")
     assert get_alert_types("NFL") == (
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -129,6 +130,7 @@ def test_competition_profiles_are_the_single_source_of_sport_and_provider_config
     assert nhl.scoreboard_url.endswith("/sports/hockey/nhl/scoreboard")
     assert get_alert_types("NHL") == (
         "game_start",
+        "period_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -355,7 +357,7 @@ def test_ncaab_profile_and_complete_conference_catalog():
     assert profile.basketball_regulation_periods == 2
     assert profile.odds_sport_key == "basketball_ncaab"
     assert dict(profile.scoreboard_params) == {"groups": "50", "limit": "1000"}
-    assert get_alert_types("NCAAB") == get_alert_types("NBA")
+    assert get_alert_types("NCAAB") == ("game_start", "second_half_start", "close_game_late", "overtime_start", "final_result")
     teams = TEAM_SEEDS_BY_COMPETITION["NCAAB"]
     assert len(teams) == len({team[0] for team in teams}) == 365
     assert len(NCAAB_TEAMS_BY_CONFERENCE) == 32

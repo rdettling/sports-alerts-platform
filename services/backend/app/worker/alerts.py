@@ -20,8 +20,8 @@ from app.db.models import (
 from app.services.alert_preferences import AlertSettings, resolve_alert_settings
 from app.services.competitions import get_alert_types
 from app.worker.alert_rules import detect_alerts
+from app.worker.period_events import PeriodStartEvent
 from app.worker.score_events import ScoreChangeEvent
-from app.worker.soccer import SoccerDerivedEvents
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -173,12 +173,12 @@ def evaluate_and_record_alerts(
     games: list[Game],
     *,
     score_changes: dict[int, ScoreChangeEvent] | None = None,
-    soccer_events: dict[int, SoccerDerivedEvents] | None = None,
+    period_starts: dict[int, PeriodStartEvent] | None = None,
 ) -> int:
     if not games:
         return 0
     score_changes = score_changes or {}
-    soccer_events = soccer_events or {}
+    period_starts = period_starts or {}
     watch_times_by_game = _load_game_watch_times(db, games)
     all_user_ids = {user_id for users in watch_times_by_game.values() for user_id in users}
     competitions = {game.competition for game in games}
@@ -203,7 +203,7 @@ def evaluate_and_record_alerts(
                 followed_at,
                 settings_by_type,
                 score_change=score_changes.get(game.id),
-                soccer_events=soccer_events.get(game.id),
+                period_start=period_starts.get(game.id),
                 close_game_already_notified=(user_id, game.id) in close_game_notifications,
             ):
                 _append_candidate_alert(

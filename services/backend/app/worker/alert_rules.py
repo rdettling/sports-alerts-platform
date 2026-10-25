@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from app.db.models import Game
 from app.services.alert_preferences import AlertSettings
 from app.services.competitions import get_competition_profile
+from app.worker.period_events import PeriodStartEvent
 from app.worker.score_events import ScoreChangeEvent
-from app.worker.soccer import SoccerDerivedEvents, is_penalty_kicks_window
+from app.worker.soccer import is_penalty_kicks_window
 
 
 @dataclass(frozen=True)
@@ -80,16 +81,6 @@ def _should_trigger_close_game_late(game: Game, settings: AlertSettings) -> bool
     return seconds_left is not None and seconds_left <= resolved_seconds
 
 
-def _should_trigger_inning_start(game: Game, settings: AlertSettings) -> bool:
-    if not settings.is_enabled:
-        return False
-    if game.is_final or game.status not in {"in_progress", "live"}:
-        return False
-    if game.period is None:
-        return False
-    return game.period >= (settings.inning_start_threshold or 7)
-
-
 def _should_trigger_overtime_start(game: Game, settings: AlertSettings) -> bool:
     profile = get_competition_profile(game.competition)
     sport = profile.sport
@@ -119,9 +110,9 @@ def detect_alerts(
     followed_at: datetime | None,
     settings_by_type: dict[str, AlertSettings],
     score_change: ScoreChangeEvent | None = None,
-    soccer_events: SoccerDerivedEvents | None = None,
     *,
     close_game_already_notified: bool = False,
+    period_start: PeriodStartEvent | None = None,
 ) -> list[DetectedAlert]:
     detected: list[DetectedAlert] = []
 
@@ -221,25 +212,22 @@ def detect_alerts(
             )
         )
 
-    second_half = settings_by_type.get("second_half_start")
-    if soccer_events and soccer_events.second_half_started and second_half and second_half.is_enabled:
-        detected.append(
-            DetectedAlert(
-                "second_half_start",
-                "second_half_start",
-                _event_snapshot(game),
-            )
+    if period_start and followed_at is not None:
+        settings = settings_by_type.get(period_start.alert_type)
+        observed_at = period_start.previous_observed_at
+        if observed_at.tzinfo is None:
+            observed_at = observed_at.replace(tzinfo=timezone.utc)
+        period_selected = (
+            period_start.alert_type not in {"quarter_start", "period_start", "inning_start"}
+            or (settings is not None and game.period in (settings.periods or []))
         )
-
-    extra_time = settings_by_type.get("extra_time_start")
-    if soccer_events and soccer_events.extra_time_started and extra_time and extra_time.is_enabled:
-        detected.append(
-            DetectedAlert(
-                "extra_time_start",
-                "extra_time_start",
-                _event_snapshot(game),
+        if settings and settings.is_enabled and period_selected and followed_at <= observed_at:
+            event_key = period_start.alert_type
+            if period_start.alert_type in {"quarter_start", "period_start", "inning_start"}:
+                event_key = f"{event_key}:{game.period}"
+            detected.append(
+                DetectedAlert(period_start.alert_type, event_key, _event_snapshot(game))
             )
-        )
 
     penalty_kicks = settings_by_type.get("penalty_kicks")
     if penalty_kicks and penalty_kicks.is_enabled and is_penalty_kicks_window(
@@ -284,16 +272,6 @@ def detect_alerts(
             DetectedAlert(
                 "extra_innings_start",
                 f"extra_innings_start:{inning}",
-                _event_snapshot(game),
-            )
-        )
-
-    inning_start = settings_by_type.get("inning_start")
-    if inning_start and _should_trigger_inning_start(game, inning_start):
-        detected.append(
-            DetectedAlert(
-                "inning_start",
-                "inning_start",
                 _event_snapshot(game),
             )
         )

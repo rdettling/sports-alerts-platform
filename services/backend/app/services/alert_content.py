@@ -9,6 +9,8 @@ from app.services.competitions import get_competition_profile
 
 ALERT_LABELS = {
     "game_start": "Game start",
+    "quarter_start": "Quarter start",
+    "period_start": "Period start",
     "close_game_late": "Close game late",
     "overtime_start": "Overtime start",
     "inning_start": "Inning start",
@@ -192,7 +194,7 @@ def _event_status_details(alert: Alert, game: Game, sport: str | None) -> str:
 
     normalized_clock = (clock or "").strip()
     if normalized_clock:
-        if sport in {"basketball", "football", "hockey"}:
+        if sport in {"basketball", "football", "hockey"} and normalized_clock[0].isdigit():
             details_parts.append(f"{normalized_clock} left")
         else:
             details_parts.append(normalized_clock)
@@ -205,7 +207,7 @@ def _event_timing_details(alert: Alert, game: Game, sport: str | None) -> str:
     clock = _snapshot_text(metadata, "clock", game.clock)
     details = [_format_period_value(period, game.competition)]
     if clock:
-        details.append(f"{clock} left" if sport in {"basketball", "football", "hockey"} else clock)
+        details.append(f"{clock} left" if sport in {"basketball", "football", "hockey"} and clock[0].isdigit() else clock)
     return " \u2022 ".join(detail for detail in details if detail)
 
 
@@ -249,6 +251,14 @@ def _final_label(alert: Alert, game: Game, sport: str | None) -> str:
     return "Final"
 
 
+def _period_start_label(alert: Alert, game: Game) -> str:
+    period = _snapshot_int(_alert_metadata(alert), "period", game.period)
+    if get_competition_profile(game.competition).sport == "football" and period == 3:
+        return "Second half"
+    unit = "Period" if alert.alert_type == "period_start" else "Quarter"
+    return f"{unit} {period}" if period else unit
+
+
 def _primary_status_line(
     alert: Alert,
     game: Game,
@@ -281,6 +291,8 @@ def _primary_status_line(
         _, _, new_away_score, new_home_score, _, _ = _score_event_values(alert, game)
         scoreline = _scoreline_from_values(new_away_score, new_home_score)
         return f"{_lead_change_text(alert, away_abbr, home_abbr)} · {away_abbr} {scoreline} {home_abbr}"
+    if alert.alert_type in {"quarter_start", "period_start"}:
+        return f"{_period_start_label(alert, game)} is underway · {away_abbr} {_scoreline(alert, game)} {home_abbr}"
     if alert.alert_type == "second_half_start":
         return f"Second half is live now · {away_abbr} {_scoreline(alert, game)} {home_abbr}"
     if alert.alert_type == "extra_time_start":
@@ -338,6 +350,8 @@ def build_alert_subject(alert: Alert, game: Game, home: Team | None, away: Team 
         _, _, new_away_score, new_home_score, _, _ = _score_event_values(alert, game)
         scoreline = _scoreline_from_values(new_away_score, new_home_score)
         return f"{_lead_change_text(alert, away_abbr, home_abbr)} · {away_abbr} {scoreline} {home_abbr}"
+    if alert.alert_type in {"quarter_start", "period_start"}:
+        return f"{_period_start_label(alert, game)} · {away_abbr} {_scoreline(alert, game)} {home_abbr}"
     if alert.alert_type == "second_half_start":
         return f"Second half · {away_abbr} {_scoreline(alert, game)} {home_abbr}"
     if alert.alert_type == "extra_time_start":
@@ -378,7 +392,7 @@ def build_alert_push_content(alert: Alert, game: Game, home: Team | None, away: 
     elif alert.alert_type == "penalty_kicks":
         period = _snapshot_int(_alert_metadata(alert), "period", game.period)
         body = "Penalty shootout underway" if period is not None and period >= 5 else timing or "Late in extra time"
-    elif alert.alert_type in {"lead_change", "close_game_late", "overtime_start", "second_half_start", "extra_time_start"}:
+    elif alert.alert_type in {"lead_change", "close_game_late", "overtime_start", "second_half_start", "extra_time_start", "quarter_start", "period_start"}:
         body = timing or "Play is underway"
     else:
         body = _primary_status_line(alert, game, away_abbr, home_abbr, sport)

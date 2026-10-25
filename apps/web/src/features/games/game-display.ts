@@ -53,7 +53,8 @@ export function formatGameTime(game: Game, sport: Sport): string {
       isClockAtZero(clock)
     )
       return "Halftime";
-    if (sport === "soccer" && clock.toUpperCase() === "HT") return "Halftime";
+    if (/^(HT|HALFTIME)$/i.test(clock)) return "Halftime";
+    if (/end|intermission/i.test(clock)) return clock;
     if (sport === "soccer" && clock) return clock;
     if (sport === "baseball" && clock && !isClockAtZero(clock)) return clock;
     if (sport === "baseball" && period && isClockAtZero(clock)) return period;

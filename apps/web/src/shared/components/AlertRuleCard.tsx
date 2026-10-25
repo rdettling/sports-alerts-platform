@@ -41,9 +41,9 @@ export function AlertRuleCard({
           <div className="alert-rule-title-wrap">
             <strong>{title}</strong>
           </div>
+          {controls ? <div className={controlsClasses}>{controls}</div> : null}
           {endSlot}
         </div>
-        {controls ? <div className={controlsClasses}>{controls}</div> : null}
       </div>
     </li>
   );

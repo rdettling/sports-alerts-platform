@@ -75,40 +75,41 @@ def _settings_from_request(
         payload.close_game_margin_threshold,
         payload.close_game_time_threshold_seconds,
     )
+    if alert_type in {"quarter_start", "period_start", "inning_start"}:
+        if payload.periods is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Start alerts require selected periods",
+            )
+        if any(value is not None for value in close_fields):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Thresholds are not supported",
+            )
+        allowed = (
+            range(1, 10) if alert_type == "inning_start"
+            else (2, 3, 4) if alert_type == "quarter_start" else (2, 3)
+        )
+        if any(period not in allowed for period in payload.periods):
+            raise HTTPException(status_code=422, detail="Unsupported period selection for this alert type")
+        return AlertSettings(is_enabled=payload.is_enabled, periods=payload.periods)
+    if payload.periods is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Period selection is only supported for start alerts",
+        )
     if alert_type == "close_game_late":
         if any(value is None for value in close_fields):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Close-game alerts require margin and time thresholds",
             )
-        if payload.inning_start_threshold is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Inning threshold is not supported",
-            )
         return AlertSettings(
             is_enabled=payload.is_enabled,
             close_game_margin_threshold=payload.close_game_margin_threshold,
             close_game_time_threshold_seconds=payload.close_game_time_threshold_seconds,
         )
-    if alert_type == "inning_start":
-        if payload.inning_start_threshold is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Inning alerts require a threshold",
-            )
-        if any(value is not None for value in close_fields):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Close-game thresholds are not supported",
-            )
-        return AlertSettings(
-            is_enabled=payload.is_enabled,
-            inning_start_threshold=payload.inning_start_threshold,
-        )
-    if any(
-        value is not None for value in (*close_fields, payload.inning_start_threshold)
-    ):
+    if any(value is not None for value in close_fields):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Thresholds are not supported",

@@ -12,8 +12,10 @@ import {
 import { PREFERENCE_LABELS, messageFromUnknown } from "../../shared/lib/dashboard-ui";
 import { CompetitionTabs } from "../../shared/components/DashboardFilters";
 import { AlertDeliverySettings } from "./AlertDeliverySettings";
+import { PeriodSelection } from "../../shared/components/PeriodSelection";
 import { AlertRuleCard } from "../../shared/components/AlertRuleCard";
 import {
+  type AlertSettingsChange,
   buildAlertSettingsPayload,
   getRuleFieldValue,
   ruleFieldsFor,
@@ -78,18 +80,7 @@ export function AlertsView({ token }: { token: string }) {
     return () => window.clearInterval(id);
   }, [loadAlertData]);
 
-  const updateRule = async (
-    preference: AlertPreference,
-    change:
-      | { is_enabled: boolean }
-      | {
-          fieldKey:
-            | "close_game_margin_threshold"
-            | "close_game_time_threshold_seconds"
-            | "inning_start_threshold";
-          fieldValue: number;
-        },
-  ) => {
+  const updateRule = async (preference: AlertPreference, change: AlertSettingsChange) => {
     const busyKey = `${preference.competition}:${preference.alert_type}`;
     setError(null);
     setBusyAlertType(busyKey);
@@ -180,7 +171,6 @@ export function AlertsView({ token }: { token: string }) {
                       const label =
                         PREFERENCE_LABELS[preference.alert_type] ?? preference.alert_type;
                       const fields = ruleFieldsFor(preference.alert_type, preference.is_enabled);
-                      const inlineField = fields.length === 1 ? fields[0] : null;
                       const isBusy =
                         busyAlertType === `${preference.competition}:${preference.alert_type}`;
                       return (
@@ -190,28 +180,6 @@ export function AlertsView({ token }: { token: string }) {
                           isDisabled={!preference.is_enabled}
                           endSlot={
                             <div className="alert-rule-header-end">
-                              {inlineField ? (
-                                <label className="alert-inline-field">
-                                  {inlineField.label}
-                                  <select
-                                    className="alert-rule-select"
-                                    value={getRuleFieldValue(preference, inlineField)}
-                                    onChange={(event) =>
-                                      void updateRule(preference, {
-                                        fieldKey: inlineField.key,
-                                        fieldValue: Number(event.target.value),
-                                      })
-                                    }
-                                    disabled={isBusy}
-                                  >
-                                    {inlineField.options.map((value) => (
-                                      <option key={value} value={value}>
-                                        {value}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              ) : null}
                               <button
                                 className={`alert-toggle ${preference.is_enabled ? "on" : "off"}`}
                                 type="button"
@@ -235,7 +203,16 @@ export function AlertsView({ token }: { token: string }) {
                             </div>
                           }
                           controls={
-                            fields.length > 1 ? (
+                            preference.alert_type === "quarter_start" ||
+                            preference.alert_type === "period_start" ||
+                            preference.alert_type === "inning_start" ? (
+                              <PeriodSelection
+                                alertType={preference.alert_type}
+                                periods={preference.periods ?? []}
+                                disabled={isBusy || !preference.is_enabled}
+                                onChange={(periods) => void updateRule(preference, { periods })}
+                              />
+                            ) : fields.length > 0 ? (
                               <>
                                 {fields.map((field) => (
                                   <label key={field.key}>

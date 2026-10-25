@@ -1,7 +1,9 @@
 import type { AlertSettings, AlertSettingsUpdate } from "../api";
 
-type RuleFieldKey =
-  "close_game_margin_threshold" | "close_game_time_threshold_seconds" | "inning_start_threshold";
+type RuleFieldKey = "close_game_margin_threshold" | "close_game_time_threshold_seconds";
+
+export type AlertSettingsChange =
+  { is_enabled?: boolean } | { periods: number[] } | { fieldKey: RuleFieldKey; fieldValue: number };
 
 type RuleFieldConfig = {
   key: RuleFieldKey;
@@ -33,16 +35,6 @@ export const ALERT_RULE_CONFIG: Record<string, RuleConfig> = {
       },
     ],
   },
-  inning_start: {
-    fields: [
-      {
-        key: "inning_start_threshold",
-        label: "Inning",
-        options: [1, 2, 3, 4, 5, 6, 7, 8, 9],
-        defaultValue: 7,
-      },
-    ],
-  },
 };
 
 export function ruleFieldsFor(alertType: string, isEnabled: boolean): RuleFieldConfig[] {
@@ -62,14 +54,14 @@ export function getRuleFieldValue(settings: AlertSettings, field: RuleFieldConfi
 
 export function buildAlertSettingsPayload(
   settings: AlertSettings & { alert_type: string },
-  change: { is_enabled?: boolean } | { fieldKey: RuleFieldKey; fieldValue: number },
+  change: AlertSettingsChange,
 ): AlertSettingsUpdate {
   const payload: AlertSettingsUpdate = {
     is_enabled:
       "is_enabled" in change ? (change.is_enabled ?? settings.is_enabled) : settings.is_enabled,
     close_game_margin_threshold: settings.close_game_margin_threshold,
     close_game_time_threshold_seconds: settings.close_game_time_threshold_seconds,
-    inning_start_threshold: settings.inning_start_threshold,
+    periods: "periods" in change ? change.periods : settings.periods,
   };
 
   for (const field of ALERT_RULE_CONFIG[settings.alert_type]?.fields ?? []) {
@@ -83,7 +75,6 @@ export function buildAlertSettingsPayload(
       payload.close_game_margin_threshold = nextValue;
     if (field.key === "close_game_time_threshold_seconds")
       payload.close_game_time_threshold_seconds = nextValue;
-    if (field.key === "inning_start_threshold") payload.inning_start_threshold = nextValue;
   }
 
   return payload;

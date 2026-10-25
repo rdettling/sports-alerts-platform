@@ -12,10 +12,12 @@ from app.services.resend import ResendResult
 
 
 SUPPORTED_TEST_ALERTS = {
-    "NBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
-    "WNBA": ("game_start", "close_game_late", "overtime_start", "final_result"),
+    "NBA": ("game_start", "quarter_start", "close_game_late", "overtime_start", "final_result"),
+    "WNBA": ("game_start", "quarter_start", "close_game_late", "overtime_start", "final_result"),
+    "NCAAB": ("game_start", "second_half_start", "close_game_late", "overtime_start", "final_result"),
     "NFL": (
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -24,6 +26,7 @@ SUPPORTED_TEST_ALERTS = {
     ),
     "FBS": (
         "game_start",
+        "quarter_start",
         "close_game_late",
         "overtime_start",
         "score_changed",
@@ -33,6 +36,7 @@ SUPPORTED_TEST_ALERTS = {
     "MLB": ("game_start", "inning_start", "extra_innings_start", "final_result"),
     "NHL": (
         "game_start",
+        "period_start",
         "close_game_late",
         "overtime_start",
         "score_changed",

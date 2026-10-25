@@ -106,7 +106,7 @@ export type AlertSettings = {
   is_enabled: boolean;
   close_game_margin_threshold: number | null;
   close_game_time_threshold_seconds: number | null;
-  inning_start_threshold: number | null;
+  periods: number[] | null;
 };
 
 export type AlertSettingsUpdate = AlertSettings;
@@ -151,6 +151,8 @@ export type AlertHistoryItem = {
 
 export type AlertType =
   | "game_start"
+  | "quarter_start"
+  | "period_start"
   | "close_game_late"
   | "overtime_start"
   | "inning_start"

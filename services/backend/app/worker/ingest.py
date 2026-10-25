@@ -14,6 +14,7 @@ from app.services.competitions import competition_supports_odds, competition_tea
 from app.worker import soccer
 from app.worker.alerts import evaluate_and_record_alerts
 from app.worker.cleanup import cleanup_games_outside_window
+from app.worker.period_events import PeriodStartEvent, classify_period_start
 from app.worker.planner import build_catalog_dates, build_live_requests
 from app.worker.score_events import ScoreChangeEvent, classify_score_change
 from app.worker.scoreboard import ScoreboardGame, TeamStrength
@@ -31,7 +32,7 @@ class GameUpdateResult:
     did_update: bool
     game_id: int | None
     score_change: ScoreChangeEvent | None = None
-    soccer_events: soccer.SoccerDerivedEvents | None = None
+    period_start: PeriodStartEvent | None = None
 
 
 @dataclass(frozen=True)
@@ -195,13 +196,14 @@ def _upsert_game(
     )
     strength_changed = home_strength_changed or away_strength_changed
     if existing:
+        period_start = classify_period_start(existing, payload)
         sport = get_competition_profile(competition).sport
         is_soccer = sport == "soccer"
         previous_snapshot = soccer.snapshot_state(existing) if is_soccer else None
-        soccer_events = soccer.classify_events(existing, payload) if is_soccer else None
-        score_change = soccer_events.score_change if soccer_events else None
-        if sport in {"football", "hockey"}:
-            score_change = classify_score_change(existing, payload, sport=sport)
+        score_change = (
+            classify_score_change(existing, payload, sport=sport)
+            if sport in {"soccer", "football", "hockey"} else None
+        )
         state_before = (
             _as_utc(existing.scheduled_start_time),
             existing.context_label,
@@ -261,12 +263,15 @@ def _upsert_game(
         )
         state_changed = state_before != state_after
         if previous_snapshot is not None and state_changed:
-            soccer.log_transition(previous_snapshot, payload, soccer_events)
+            soccer.log_transition(
+                previous_snapshot, payload, score_change=score_change,
+                period_start_type=period_start.alert_type if period_start else None,
+            )
         return GameUpdateResult(
             did_update=state_changed or strength_changed,
             game_id=existing.id,
             score_change=score_change,
-            soccer_events=soccer_events,
+            period_start=period_start,
         )
 
     created = Game(
@@ -311,7 +316,7 @@ def _upsert_games_and_collect(
     int,
     list[int],
     dict[int, ScoreChangeEvent],
-    dict[int, soccer.SoccerDerivedEvents],
+    dict[int, PeriodStartEvent],
 ]:
     if competition in {"FBS", "NCAAB"}:
         scoreboard_games = [
@@ -335,7 +340,7 @@ def _upsert_games_and_collect(
     updated = 0
     touched_game_ids: list[int] = []
     score_changes: dict[int, ScoreChangeEvent] = {}
-    soccer_events: dict[int, soccer.SoccerDerivedEvents] = {}
+    period_starts: dict[int, PeriodStartEvent] = {}
     for scoreboard_game in scoreboard_games:
         if only_external_ids is not None and scoreboard_game.external_game_id not in only_external_ids:
             continue
@@ -349,9 +354,9 @@ def _upsert_games_and_collect(
             touched_game_ids.append(result.game_id)
             if result.score_change is not None:
                 score_changes[result.game_id] = result.score_change
-            if result.soccer_events is not None:
-                soccer_events[result.game_id] = result.soccer_events
-    return updated, touched_game_ids, score_changes, soccer_events
+            if result.period_start is not None:
+                period_starts[result.game_id] = result.period_start
+    return updated, touched_game_ids, score_changes, period_starts
 
 
 def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> CatalogSyncResult:
@@ -366,7 +371,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
     db = SessionLocal()
     try:
         team_map, team_names = _competition_team_maps(db, competition)
-        updated, touched_game_ids, score_changes, soccer_events = _upsert_games_and_collect(
+        updated, touched_game_ids, score_changes, period_starts = _upsert_games_and_collect(
             db, competition, all_games, team_map, team_names
         )
         if all_games and not touched_game_ids:
@@ -378,7 +383,7 @@ def run_catalog_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> C
             db,
             touched_games,
             score_changes=score_changes,
-            soccer_events=soccer_events,
+            period_starts=period_starts,
         )
         games_removed = cleanup_games_outside_window(db, now)
         has_live_games = bool(
@@ -441,7 +446,7 @@ def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> Live
     db = SessionLocal()
     try:
         team_map, team_names = _competition_team_maps(db, competition)
-        updated, touched_game_ids, score_changes, soccer_events = _upsert_games_and_collect(
+        updated, touched_game_ids, score_changes, period_starts = _upsert_games_and_collect(
             db,
             competition,
             provider_games,
@@ -455,7 +460,7 @@ def run_live_sync(provider: ScoreboardFetcher, competition: str = "NBA") -> Live
             db,
             touched_games,
             score_changes=score_changes,
-            soccer_events=soccer_events,
+            period_starts=period_starts,
         )
         has_live_games = bool(
             db.scalar(

@@ -14,7 +14,7 @@ export function teamConferenceOptions(teams: Team[], competition: "all" | Compet
 export const TOP_25_FILTER = "Top 25";
 export const POWER_CONFERENCES_FILTER = "Power Conferences";
 
-const COMMON_POWER_CONFERENCES = ["ACC", "Big 12", "Big Ten", "Pac-12", "SEC"];
+const COMMON_POWER_CONFERENCES = ["ACC", "Big 12", "Big Ten", "SEC"];
 export const POWER_CONFERENCES: Partial<Record<Competition, string[]>> = {
   FBS: COMMON_POWER_CONFERENCES,
   NCAAB: [...COMMON_POWER_CONFERENCES, "Big East"].sort((a, b) => a.localeCompare(b)),

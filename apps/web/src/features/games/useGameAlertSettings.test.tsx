@@ -62,7 +62,7 @@ const inheritedItem = {
   is_enabled: true,
   close_game_margin_threshold: null,
   close_game_time_threshold_seconds: null,
-  inning_start_threshold: null,
+  periods: null,
 };
 
 describe("useGameAlertSettings", () => {
@@ -88,7 +88,7 @@ describe("useGameAlertSettings", () => {
         is_enabled: false,
         close_game_margin_threshold: null,
         close_game_time_threshold_seconds: null,
-        inning_start_threshold: null,
+        periods: null,
       }),
     );
     expect(result.current.gameAlertState?.items[0]).toEqual(overridden);
@@ -111,7 +111,7 @@ describe("useGameAlertSettings", () => {
         is_enabled: false,
         close_game_margin_threshold: null,
         close_game_time_threshold_seconds: null,
-        inning_start_threshold: null,
+        periods: null,
       }),
     );
     expect(result.current.gameAlertState?.items[0]).toEqual(inheritedItem);

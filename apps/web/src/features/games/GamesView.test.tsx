@@ -593,7 +593,7 @@ vi.mock("./useGamesData", () => ({
         (game) => game.competition === "FBS" && [4, 7].includes(game.id),
       );
       data.teams = data.teams.map((team) =>
-        [16, 18, 19].includes(team.id) ? { ...team, conference: "American" } : team,
+        [16, 18, 19].includes(team.id) ? { ...team, conference: "Pac-12" } : team,
       );
     }
     const teamsById = new Map(data.teams.map((team) => [team.id, team]));
@@ -983,16 +983,20 @@ it("defaults college basketball to power conferences, matching either team, with
     "West Coast",
   ]);
   expect(screen.getByText("Big East Home")).toBeInTheDocument();
-  expect(screen.getByText("Pac-12 Away")).toBeInTheDocument();
+  expect(screen.queryByText("Pac-12 Away")).toBeNull();
   expect(screen.queryByText("Mountain West Home")).toBeNull();
   fireEvent.change(conference, { target: { value: "all" } });
   expect(screen.getByText("Mountain West Home")).toBeInTheDocument();
+  expect(screen.getByText("Pac-12 Away")).toBeInTheDocument();
+  fireEvent.change(conference, { target: { value: "Pac-12" } });
+  expect(screen.getByText("Pac-12 Away")).toBeInTheDocument();
+  expect(screen.queryByText("Big East Home")).toBeNull();
   fireEvent.change(conference, { target: { value: "Top 25" } });
   expect(screen.getByText("Big East Home")).toBeInTheDocument();
   expect(screen.queryByText("Pac-12 Away")).toBeNull();
 });
 
-it("filters CFB power conferences using either team and excludes games outside the group", async () => {
+it("filters CFB using either power-conference team and excludes Pac-12-only games", async () => {
   vi.spyOn(Date, "now").mockReturnValue(new Date("2026-06-13T12:00:00Z").getTime());
   render(
     <GamesView token="non-power-token" onSignInRequired={vi.fn()} onManageLeagues={vi.fn()} />,

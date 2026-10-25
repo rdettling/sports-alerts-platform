@@ -11,7 +11,7 @@ class AlertSettings:
     is_enabled: bool
     close_game_margin_threshold: int | None = None
     close_game_time_threshold_seconds: int | None = None
-    inning_start_threshold: int | None = None
+    periods: list[int] | None = None
 
 
 def default_alert_settings(competition: str, alert_type: str) -> AlertSettings:
@@ -25,8 +25,12 @@ def default_alert_settings(competition: str, alert_type: str) -> AlertSettings:
             close_game_margin_threshold=margin,
             close_game_time_threshold_seconds=300,
         )
+    if alert_type == "quarter_start":
+        return AlertSettings(is_enabled=False, periods=[2, 3, 4])
+    if alert_type == "period_start":
+        return AlertSettings(is_enabled=False, periods=[2, 3])
     if alert_type == "inning_start":
-        return AlertSettings(is_enabled=False, inning_start_threshold=7)
+        return AlertSettings(is_enabled=False, periods=[7])
     if alert_type in {"score_changed", "lead_change", "second_half_start"}:
         return AlertSettings(is_enabled=False)
     return AlertSettings(is_enabled=True)
@@ -40,6 +44,11 @@ def resolve_alert_settings(
 ) -> AlertSettings:
     defaults = default_alert_settings(competition, alert_type)
     return AlertSettings(
+        periods=_resolve_value(
+            defaults.periods,
+            preference.periods_override if preference else None,
+            game_override.periods_override if game_override else None,
+        ),
         is_enabled=_resolve_value(
             defaults.is_enabled,
             preference.is_enabled_override if preference else None,
@@ -61,11 +70,6 @@ def resolve_alert_settings(
             if game_override
             else None,
         ),
-        inning_start_threshold=_resolve_value(
-            defaults.inning_start_threshold,
-            preference.inning_start_threshold_override if preference else None,
-            game_override.inning_start_threshold_override if game_override else None,
-        ),
     )
 
 
@@ -75,6 +79,7 @@ def apply_sparse_overrides(
     baseline: AlertSettings,
 ) -> bool:
     values = {
+        "periods_override": _override_value(settings.periods, baseline.periods),
         "is_enabled_override": _override_value(
             settings.is_enabled, baseline.is_enabled
         ),
@@ -85,10 +90,6 @@ def apply_sparse_overrides(
         "close_game_time_threshold_seconds_override": _override_value(
             settings.close_game_time_threshold_seconds,
             baseline.close_game_time_threshold_seconds,
-        ),
-        "inning_start_threshold_override": _override_value(
-            settings.inning_start_threshold,
-            baseline.inning_start_threshold,
         ),
     }
     for name, value in values.items():
