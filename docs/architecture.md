@@ -23,12 +23,12 @@ The scheduler thread runs continuously with an in-memory schedule and manages:
 
 - one shared catalog cycle across enabled competitions
 - narrower live sync loops by competition
-- twice-daily pregame odds sweeps
+- startup and twice-daily pregame odds sweeps
 - alert evaluation and delivery
 
 The worker reads enabled competitions at startup and on each scheduler iteration. When no job is due, it waits until the next scheduled job, capped at six hours. With no enabled competitions, it waits until the next UTC catalog boundary before checking again. There is no separate hourly settings poll. Waits are interruptible on shutdown; kickoff scheduling, live polling, odds sweeps, and job retries can all wake it sooner.
 
-Catalog runs once at worker startup, then at 00:00, 06:00, 12:00, and 18:00 UTC. Each regular cycle queues one attempt per enabled league; missed cycles are skipped rather than replayed. Failed catalog attempts retain a per-league retry deadline (30 seconds, exponentially increasing to one hour), while the fixed UTC clock continues unchanged. A successful catalog attempt reconciles that league's live job: it schedules the next kickoff or immediate live work, or leaves the job dormant when no eligible games exist. Due live jobs take priority, followed by odds work and ordinary catalog work; each competition's noon or midnight odds sweep follows its catalog attempt. Catalog HTTP work only reads ESPN and writes games. Odds work is a separate job at 00:00 and 12:00 UTC: one request per qualifying competition can price every eligible unpriced game in the next 48 hours. Each paid request is guarded by a persisted 16-credit UTC daily cap and a 25-credit provider reserve.
+Catalog runs once at worker startup, then at 00:00, 06:00, 12:00, and 18:00 UTC. Each regular cycle queues one attempt per enabled league; missed cycles are skipped rather than replayed. Failed catalog attempts retain a per-league retry deadline (30 seconds, exponentially increasing to one hour), while the fixed UTC clock continues unchanged. A successful catalog attempt reconciles that league's live job: it schedules the next kickoff or immediate live work, or leaves the job dormant when no eligible games exist. Due live jobs take priority, followed by odds work and ordinary catalog work; each competition's startup, noon, or midnight odds sweep follows its catalog attempt. Catalog HTTP work only reads ESPN and writes games. Odds work is a separate job at startup (including deploys and restarts) and at 00:00 and 12:00 UTC: one request per qualifying competition can price every eligible unpriced game in the next 48 hours. Each paid request is guarded by a persisted 16-credit UTC daily cap and a 25-credit provider reserve. Provider and quota failures wait for the next eligible sweep, without immediate retries. Odds jobs retain their last outcome independently of their future deadline; only successful fetches or completed checks with no eligible games advance their last-success timestamp.
 
 Admin league settings are saved immediately, but the sleeping worker discovers them on its next wake. Newly enabled leagues wait for the next shared catalog cycle, even if discovered earlier during live work, and may miss games or alerts for up to about 6 hours. Their existing live-job initialization can still monitor previously stored games. Disabled leagues are removed from the schedule before the next job is selected. Restarting the worker discovers current settings immediately and also reruns startup jobs.
 
@@ -160,7 +160,7 @@ Admin-only routes expose:
 
 Admin opens on Leagues and loads its summary. It has no periodic, manual, focus, or reconnect refetching. Changing the activity window fetches that summary; switching internal tabs reuses cached data. Competition-setting changes still refresh the summary, and failed reads retain cached values with an error. Already-requested reads retain the normal bounded retry and can resume after an offline pause.
 
-The Admin Leagues tab combines availability controls with the scheduler’s actual in-memory plan. The scheduler atomically replaces a memory-only report after discovery, catalog queuing, and job outcomes. Reports do not invalidate games or query the database. Backend startup immediately discovers competitions and reports its plan. Local countdowns update only while the panel is visible and make no requests.
+The Admin Leagues tab combines availability controls with the scheduler’s actual in-memory plan. The scheduler atomically replaces a memory-only report after discovery, catalog queuing, and job outcomes. Odds jobs include `last_outcome`, so Admin can distinguish request failures, budget limits, and missing configuration from no pending work. Reports do not invalidate games or query the database. Backend startup immediately discovers competitions and reports its plan. Local countdowns update only while the panel is visible and make no requests.
 
 Admin has two mounted panels, ordered Leagues then Activity & tools. Hidden panels retain selections and results. Leagues uses a compact schedule table with enabled leagues first, inline availability switches, and per-league live and odds status; its rows stack on smaller screens without hiding either schedule. Activity & tools places alert activity beside the current UTC day's odds budget and latest provider balance, with the test-alert form spanning below; all panels stack on smaller screens. Test inputs are disabled while sending, duplicate submissions are blocked, and the response is displayed directly without a summary reload.
 
@@ -168,7 +168,7 @@ Admin test alerts use transient sample objects to exercise the real Email and Pu
 
 ## SQLite Persistence
 
-The fresh `0001_sqlite` baseline supports only SQLite. A persistent local disk holds the database, WAL sidecars, and seven daily online snapshots. No compatibility or data-import path is retained. See [deployment](deployment.md) for the fresh cutover and backup/restore procedure.
+SQLite on a persistent local disk holds the database, WAL sidecars, and seven daily online snapshots. Alembic applies direct forward migrations before startup; application code supports only the latest revision. Normal deploys preserve personal data and stable team identities. Catalog seeding refreshes team details and memberships without deleting follows. See [deployment](deployment.md#schema-changes-and-data-preservation) for schema changes and backup/recovery.
 
 ## Design Constraints
 
@@ -179,6 +179,6 @@ The fresh `0001_sqlite` baseline supports only SQLite. A persistent local disk h
 - Odds are persisted and read from the DB instead of fetched from the browser path
 - RBAC is DB-backed through `users.role`
 - Settings are strict enough that missing required env values fail early
-- Sports-domain data is operationally disposable compared with user identity/auth data
+- Regenerable sports data can be rebuilt for schema changes; accounts, preferences, subscriptions, follows, and their referenced identities must be preserved. Normal game retention still expires old games and their game-specific state.
 
 SQLite stores all database timestamps in UTC. The shared `UTCDateTime` column type normalizes writes and restores UTC timezone information on reads, so API timestamps include `Z` and browsers render times and calendar days in the viewer's local timezone.

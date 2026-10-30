@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from app.db.models import Alert, AlertDelivery, OddsApiDailyUsage, User, Game
 from app.db.session import SessionLocal
-from app.schemas.schedule import ScheduleSnapshot
+from app.schemas.schedule import ScheduledJobOut, ScheduleSnapshot
 from app.services import worker_schedule
 from app.services.competitions import competition_teams_query
 
@@ -96,7 +96,12 @@ def test_ops_routes_return_data_for_admin(client, monkeypatch):
         "provider_observed_at": now.isoformat().replace("+00:00", "Z"),
     }
     assert summary_json["schedule"] is None
-    worker_schedule.snapshot = ScheduleSnapshot(reported_at=now, next_catalog_at=now, jobs=[])
+    worker_schedule.snapshot = ScheduleSnapshot(reported_at=now, next_catalog_at=now, jobs=[
+        ScheduledJobOut(
+            competition="NBA", job_type="odds_sync", next_run_at=now,
+            last_success_at=None, last_outcome="fetch_failed", state="scheduled",
+        ),
+    ])
     assert client.get("/ops/admin/summary", headers=headers).json()["schedule"] == worker_schedule.snapshot.model_dump(mode="json")
     assert set(summary_json["overview"]) == {"window", "total_alerts_created", "last_updated_at"}
     assert set(summary_json["delivery"]) == {"email_alerts", "push_alerts"}

@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -47,8 +48,8 @@ def test_sync_jobs_creates_and_removes_all_competition_jobs():
     }
 
 
-def test_startup_catalog_cycle_never_arms_odds_jobs():
-    now = datetime(2026, 9, 1, 3, tzinfo=timezone.utc)
+def test_non_odds_catalog_cycle_does_not_arm_immediate_odds_jobs():
+    now = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
     jobs = {}
     scheduler._sync_jobs(jobs, ["MLB"], now)
 
@@ -264,3 +265,126 @@ def test_budget_limited_odds_wait_for_next_midnight(monkeypatch):
 def test_sleep_is_bounded_by_the_next_catalog_boundary():
     now = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
     assert scheduler._next_due_seconds({}, now, now + timedelta(hours=6)) == 6 * 3600
+
+
+@pytest.mark.parametrize("hour", [3, 12])
+def test_startup_runs_catalog_then_odds_once_without_moving_regular_schedule(monkeypatch, hour):
+    now = datetime(2026, 9, 1, hour, tzinfo=timezone.utc)
+    stop = threading.Event()
+    calls = []
+    reports = []
+
+    def catalog(**kwargs):
+        calls.append(("catalog", kwargs["competition"]))
+        return scheduler.CatalogSyncResult("MLB", 0, 0, 0, 0, None)
+
+    def prices(competition, at):
+        calls.append(("odds", competition))
+        stop.set()
+        return scheduler.OddsSyncResult(competition, 1, 1)
+
+    monkeypatch.setattr(scheduler, "_utcnow", lambda: now)
+    monkeypatch.setattr(scheduler, "_load_active_competitions", lambda: ["MLB"])
+    monkeypatch.setattr(scheduler, "run_catalog_sync", catalog)
+    monkeypatch.setattr(scheduler, "_run_odds_sync_job", prices)
+    monkeypatch.setattr(scheduler.odds_sync, "has_eligible_games", lambda *_: True)
+    monkeypatch.setattr(scheduler.odds_sync, "next_eligible_start", lambda *_: now)
+    monkeypatch.setattr(scheduler, "_report_schedule", lambda jobs, at: reports.append(at))
+    monkeypatch.setattr(stop, "wait", lambda timeout: stop.set())
+
+    scheduler.run(stop)
+
+    assert calls == [("catalog", "MLB"), ("odds", "MLB")]
+    assert set(reports) == {scheduler._next_catalog_boundary(now)}
+
+
+@pytest.mark.parametrize("outcome", [
+    "fetched", "fetch_failed", "quota_failed", "budget_limited", "missing_api_key", "no_eligible_games",
+])
+@pytest.mark.parametrize("has_future_games", [True, False])
+def test_odds_reports_preserve_success_and_show_actual_next_sweep(
+    monkeypatch, caplog, outcome, has_future_games,
+):
+    now = datetime(2026, 9, 1, 3, tzinfo=timezone.utc)
+    previous_success = now - timedelta(hours=12)
+    stop = threading.Event()
+    reports = []
+    calls = []
+    sync_jobs = scheduler._sync_jobs
+
+    def seed_jobs(jobs, competitions, at):
+        changed = sync_jobs(jobs, competitions, at)
+        if changed:
+            jobs[(scheduler.ODDS_SYNC_JOB, "MLB")].last_success_at = previous_success
+        return changed
+
+    def prices(competition, at):
+        calls.append(at)
+        if len(calls) > 1:
+            stop.set()
+        return scheduler.OddsSyncResult(competition, 1, 0, outcome=outcome)
+
+    monkeypatch.setattr(scheduler, "_utcnow", lambda: now)
+    monkeypatch.setattr(scheduler, "_sync_jobs", seed_jobs)
+    monkeypatch.setattr(scheduler, "_load_active_competitions", lambda: ["MLB"])
+    monkeypatch.setattr(scheduler, "run_catalog_sync", lambda **_: scheduler.CatalogSyncResult("MLB", 0, 0, 0, 0, None))
+    monkeypatch.setattr(scheduler, "run_odds_sync", prices)
+    monkeypatch.setattr(scheduler.odds_sync, "has_eligible_games", lambda competition, at: at == now or has_future_games)
+    monkeypatch.setattr(scheduler.odds_sync, "next_eligible_start", lambda *_: now)
+    monkeypatch.setattr(scheduler.updates, "notify_schedule", reports.append)
+    monkeypatch.setattr(stop, "wait", lambda timeout: stop.set())
+
+    with caplog.at_level("INFO"):
+        scheduler.run(stop)
+
+    job = next(j for j in reports[-1].jobs if j.job_type == "odds_sync")
+    assert calls == [now]
+    assert job.last_outcome == outcome
+    assert job.last_success_at == (now if outcome in {"fetched", "no_eligible_games"} else previous_success)
+    if outcome == "budget_limited":
+        expected_next = datetime(2026, 9, 2, tzinfo=timezone.utc)
+        assert job.state == "budget_limited"
+    else:
+        expected_next = scheduler._next_odds_boundary(now) if has_future_games else None
+        assert job.state == ("scheduled" if has_future_games else "no_upcoming")
+    assert job.next_run_at == expected_next
+    assert f"next_run_at={expected_next}" in caplog.text
+    assert f"next_catalog_at={scheduler._next_catalog_boundary(now)}" in caplog.text
+    assert "next_run_seconds=" not in caplog.text
+    assert all(j.last_outcome is None for j in reports[-1].jobs if j.job_type != "odds_sync")
+
+
+def test_intermediate_catalog_preserves_failed_odds_outcome(monkeypatch):
+    now = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    jobs = {}
+    scheduler._sync_jobs(jobs, ["MLB"], now)
+    job = jobs[(scheduler.ODDS_SYNC_JOB, "MLB")]
+    job.last_outcome = "fetch_failed"
+    previous_success = now - timedelta(days=1)
+    job.last_success_at = previous_success
+    monkeypatch.setattr(scheduler.odds_sync, "has_eligible_games", lambda *_: True)
+
+    scheduler._queue_catalog_cycle(jobs, now, odds_slot=False)
+    scheduler._schedule_odds_after_catalog(jobs, "MLB", now, odds_slot=False)
+
+    assert job.last_outcome == "fetch_failed"
+    assert job.last_success_at == previous_success
+    assert job.next_run_at == scheduler._next_odds_boundary(now)
+
+
+def test_budget_limit_releases_at_midnight(monkeypatch):
+    now = datetime(2026, 9, 2, tzinfo=timezone.utc)
+    jobs = {}
+    scheduler._sync_jobs(jobs, ["MLB"], now)
+    job = jobs[(scheduler.ODDS_SYNC_JOB, "MLB")]
+    job.state = "budget_limited"
+    job.next_run_at = now
+    job.last_outcome = "budget_limited"
+    monkeypatch.setattr(scheduler.odds_sync, "has_eligible_games", lambda *_: True)
+
+    scheduler._queue_catalog_cycle(jobs, now, odds_slot=True)
+    scheduler._schedule_odds_after_catalog(jobs, "MLB", now, odds_slot=True)
+
+    assert job.state == "scheduled"
+    assert job.next_run_at == now
+    assert job.last_outcome == "budget_limited"

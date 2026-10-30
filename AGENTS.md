@@ -31,16 +31,22 @@ Good changes should make the repo easier to read, reason about, test, and modify
 
 Optimize for the clean current schema, not compatibility with historical schema shapes. The application supports only the latest Alembic revision; do not add runtime compatibility layers, dual reads or writes, deprecated columns, or old and new API shapes.
 
-Production sports-domain data is disposable. Games, odds, game-related follows, alert history, and similar derived state may be reset or regenerated when that produces a simpler design.
+Keep Alembic and use small, direct forward migrations. Migrations bring existing databases to the current schema; they do not require runtime support for old schemas. Ordinary deploys and restarts must preserve stored data.
+
+Treat data according to whether it represents a user choice:
+
+- Preserve accounts, authentication, team follows, alert preferences, push subscriptions, and league visibility/settings.
+- Preserve team IDs and provider identities referenced by follows. Refresh team names, catalog membership, standings, and rankings in place; catalog reconciliation must not delete personal follows.
+- Games, odds, standings, and derived alert history may be rebuilt when that makes a specific schema change simpler. Preserve or remap active game follows, unfollows, and per-game overrides before replacing referenced games. Normal expiration of games and their game-specific state under the existing retention policy is expected.
 
 Choose the simplest path to the clean target schema:
 
-- Use a straightforward forward migration when it reaches the target model directly, especially when it preserves user identity, authentication, preferences, or other difficult-to-recreate data.
-- Prefer reset and reseed when preserving disposable sports data would require complicated backfills, transitional code, compatibility columns, or a compromised target model.
-- Never retain an awkward schema merely to avoid a destructive migration.
-- Do not destructively reset user or authentication data unless the user has explicitly approved that tradeoff.
-- Keep the migration chain linear and compact. It may be deliberately squashed into a new baseline when migration history becomes a maintenance burden and the corresponding reset or cutover has been planned.
-- Do not rewrite an already-applied migration casually; use a new direct migration or an explicitly planned baseline reset.
+- Use a straightforward forward migration when it reaches the target model directly.
+- Prefer a targeted reset and reseed of regenerable sports data over complicated backfills, transitional code, compatibility columns, or a compromised target model. Do not reset the whole database for a sports-only change.
+- Never retain an awkward schema merely to avoid rebuilding disposable data.
+- Do not delete personal data or referenced identities unless the user has explicitly approved that loss. Permission to rebuild sports data is not permission to erase user choices.
+- Keep the migration chain linear and compact. Retain applied revisions; squash only when there is a concrete maintenance benefit and a planned cutover that preserves personal data or explicitly approves its loss.
+- Do not add reset commands, compatibility machinery, or export/import frameworks for hypothetical future schema changes.
 
 ## Avoid Creating Cleanup Debt
 
@@ -77,7 +83,7 @@ The SQLite deployment uses one Render backend with a file-backed SQLite database
 
 When production inspection is relevant, check Render CLI authentication first and initiate `render login` if needed. Do not request production authentication for local-only tasks.
 
-Use SQLite's online backup API for live snapshots. Keep backups private, copy them off the service's disk, and stop the backend before restoring. See `docs/deployment.md` for the fresh cutover and recovery procedure.
+Use SQLite's online backup API for live snapshots. Keep backups private, copy them off the service's disk, and stop the backend before restoring. See `docs/deployment.md` for schema changes, backups, and recovery.
 
 ## Verification
 

@@ -76,7 +76,7 @@ For the exact env shape, see [docs/configuration.md](docs/configuration.md).
 - `make logs SERVICE=api` — tail a single service
 - `make test` — run API and worker tests plus web formatting, lint, tests, and build
 
-The SQLite baseline is `0001_sqlite`; apply all Alembic revisions through head. Existing Postgres data is not imported. The `0002_league_preferences` migration resets only sport-wide alert preferences; users, follows, and game overrides are preserved. Run one backend instance and one Uvicorn process. Daily SQLite snapshots are retained locally; copy backups off the persistent disk for recovery from volume loss.
+Apply pending Alembic revisions through head before startup. Normal deploys preserve accounts, follows, preferences, subscriptions, and stable team identities. Use direct forward migrations; rebuild regenerable sports data only when a specific change benefits from it, while preserving active personal references. See [schema changes and data preservation](docs/deployment.md#schema-changes-and-data-preservation). Run one backend instance and one Uvicorn process. Daily SQLite snapshots are retained locally; copy backups off the persistent disk for recovery from volume loss.
 
 ## Architecture At A Glance
 

@@ -14,17 +14,15 @@ Deploy a static frontend and one always-on backend. The backend runs one Uvicorn
 
 Only files under `/var/data` survive deploys. Render disks cannot be shared across services, and disk-backed deploys briefly interrupt service. The browser reconnects its update stream after restart.
 
-## Fresh SQLite Cutover
+## Schema Changes and Data Preservation
 
-This branch deliberately starts fresh; it does not import or upgrade the old Postgres database.
+Normal deploys reuse the persistent SQLite database. The startup command applies pending Alembic revisions, then reconciles the team catalog in place. Already-applied migrations are not rerun. Deploys do not reset accounts, follows, preferences, or notification subscriptions.
 
-1. Stop the old background worker before starting this backend, preventing duplicate alerts.
-2. Add the persistent disk and replace the backend's `DATABASE_URL` with the SQLite URL above.
-3. Remove obsolete `POSTGRES_*`, `NEON_*`, `LIVE_UPDATE_API_URL`, and `LIVE_UPDATE_SECRET` settings.
-4. Deploy the backend. Its fresh schema, competition catalogs, and bootstrap admin are created automatically. Fresh databases enable all supported competitions; disable unwanted leagues in Admin.
-5. Deploy the frontend with `VITE_API_BASE_URL` pointing at this backend.
-6. Sign in again, recreate follows and preferences, and resubscribe notification devices.
-7. Retire the old worker and database after verifying the new service. This code does not delete the remote database.
+Use small forward migrations to reach the current schema. Keep applied revisions and support only the latest schema in application code; no runtime compatibility layer is needed.
+
+Preserve accounts, authentication, personal settings, follows, subscriptions, and the team identities they reference. Catalog changes may update team details and memberships without deleting team rows or follows. Games, odds, standings, and derived alert history may be rebuilt for a specific change when that avoids complicated backfills. Preserve or remap active game follows, unfollows, and per-game overrides before replacing referenced games; ordinary game retention still expires old game-specific state.
+
+Before a production schema change, take an online snapshot and copy it off the service's disk. If a change rebuilds sports data, document exactly which records will be cleared and how personal references survive. Use the existing backend to repopulate the affected sports data. A whole-database reset requires explicit approval to lose personal data; it is not a routine deployment step.
 
 ## Frontend
 
@@ -59,7 +57,3 @@ To restore, stop the backend, move the current database and any matching `-wal`/
 - Verify a test alert through the intended email and push channels.
 - Check that a daily backup exists and can be opened with `PRAGMA integrity_check`.
 - Restart the service and confirm persisted users and follows remain.
-
-## League preference cutover
-
-Deploy the frontend and backend together for the league-based alert preference API. Backend startup applies `0002_league_preferences`, which replaces only the user alert preference table and intentionally resets sport-wide settings to built-in league defaults. Users, authentication, follows, delivery settings, history, and game overrides remain intact. Explicit game overrides survive; inherited fields use the league settings. Downgrading this revision also clears preferences. Take an online backup before deployment; no full database reset is needed.

@@ -8,7 +8,7 @@ from time import monotonic
 
 from app.db.backup import create_daily_backup
 from app.db.session import SessionLocal
-from app.schemas.schedule import JobState, JobType, ScheduledJobOut, ScheduleSnapshot
+from app.schemas.schedule import JobState, JobType, OddsSyncOutcome, ScheduledJobOut, ScheduleSnapshot
 from app.services.competitions import get_active_competitions, get_competition_profile
 from app.worker import odds_sync, updates
 from app.worker.ingest import CatalogSyncResult, LiveSyncResult, run_catalog_sync, run_live_sync
@@ -31,6 +31,7 @@ class ScheduledJob:
     next_run_at: datetime | None
     failure_count: int = 0
     last_success_at: datetime | None = None
+    last_outcome: OddsSyncOutcome | None = None
     state: JobState = "awaiting_first_result"
     odds_after_catalog: bool = False
 
@@ -112,7 +113,7 @@ def _queue_catalog_cycle(
         for job in jobs.values():
             if job.job_type != ODDS_SYNC_JOB:
                 continue
-            if job.state == "budget_limited" and now.hour == 12:
+            if job.state == "budget_limited" and job.next_run_at is not None and job.next_run_at > now:
                 continue
             job.next_run_at = None
             job.state = "awaiting_first_result"
@@ -127,7 +128,9 @@ def _schedule_odds_after_catalog(
     odds_slot: bool,
 ) -> None:
     job = jobs.get((ODDS_SYNC_JOB, competition))
-    if job is None or (job.state == "budget_limited" and now.hour != 0):
+    if job is None or (
+        job.state == "budget_limited" and job.next_run_at is not None and job.next_run_at > now
+    ):
         return
     target = now if odds_slot else _next_odds_boundary(now)
     if odds_sync.has_eligible_games(competition, target):
@@ -199,18 +202,20 @@ def _mark_job_failed(job: ScheduledJob, now: datetime) -> int:
     return backoff_seconds
 
 
-def _log_job_success(
+def _log_job_result(
     *,
     result: CatalogSyncResult | LiveSyncResult | OddsSyncResult,
-    next_run_seconds: int,
+    next_run_at: datetime | None,
+    next_catalog_at: datetime,
     duration_ms: int,
 ) -> None:
     if isinstance(result, CatalogSyncResult):
         logger.info(
-            "Job completed job_type=catalog_sync competition=%s duration_ms=%s next_run_seconds=%s games_checked=%s games_updated=%s alerts_created=%s games_removed=%s",
+            "Job completed job_type=catalog_sync competition=%s duration_ms=%s next_run_at=%s next_catalog_at=%s games_checked=%s games_updated=%s alerts_created=%s games_removed=%s",
             result.competition,
             duration_ms,
-            next_run_seconds,
+            next_run_at,
+            next_catalog_at,
             result.games_checked,
             result.games_updated,
             result.alerts_created,
@@ -219,20 +224,22 @@ def _log_job_success(
         return
     if isinstance(result, OddsSyncResult):
         logger.info(
-            "Job completed job_type=odds_sync competition=%s duration_ms=%s next_run_seconds=%s games_checked=%s odds_snapshots_created=%s budget_limited=%s",
+            "Odds sweep finished job_type=odds_sync competition=%s duration_ms=%s next_run_at=%s next_catalog_at=%s games_checked=%s odds_snapshots_created=%s outcome=%s",
             result.competition,
             duration_ms,
-            next_run_seconds,
+            next_run_at,
+            next_catalog_at,
             result.games_checked,
             result.odds_snapshots_created,
-            result.budget_limited,
+            result.outcome,
         )
         return
     logger.info(
-        "Job completed job_type=live_sync competition=%s duration_ms=%s next_run_seconds=%s games_checked=%s games_updated=%s alerts_created=%s has_live_games=%s mode=%s",
+        "Job completed job_type=live_sync competition=%s duration_ms=%s next_run_at=%s next_catalog_at=%s games_checked=%s games_updated=%s alerts_created=%s has_live_games=%s mode=%s",
         result.competition,
         duration_ms,
-        next_run_seconds,
+        next_run_at,
+        next_catalog_at,
         result.games_checked,
         result.games_updated,
         result.alerts_created,
@@ -287,7 +294,9 @@ def _run_live_sync_job(competition: str, stop_event: threading.Event | None = No
 
 
 def _run_odds_sync_job(competition: str, now: datetime) -> OddsSyncResult:
-    return run_odds_sync(competition, now)
+    result = run_odds_sync(competition, now)
+    _notify_game_changes(result)
+    return result
 
 
 def _notify_game_changes(result: CatalogSyncResult | LiveSyncResult | OddsSyncResult) -> None:
@@ -318,6 +327,7 @@ def _report_schedule(jobs: JobSchedule, next_catalog_at: datetime) -> None:
                         job_type=job.job_type,
                         next_run_at=job.next_run_at,
                         last_success_at=job.last_success_at,
+                        last_outcome=job.last_outcome,
                         state=job.state,
                     )
                     for job in jobs.values()
@@ -339,7 +349,7 @@ def run(stop_event: threading.Event, delivery_wake_event: threading.Event | None
         now = _utcnow()
         changed = _sync_jobs(jobs, _load_active_competitions(), now)
         if startup_catalog_pending:
-            _queue_catalog_cycle(jobs, now, odds_slot=False)
+            _queue_catalog_cycle(jobs, now, odds_slot=True)
             startup_catalog_pending = False
             changed = True
         elif now >= next_catalog_at:
@@ -366,38 +376,30 @@ def run(stop_event: threading.Event, delivery_wake_event: threading.Event | None
                     due_job.odds_after_catalog = False
                 else:
                     _schedule_odds_after_catalog(jobs, due_job.competition, now, odds_slot=False)
-                next_run = None
+                _mark_job_success(due_job, None, _utcnow(), state="scheduled")
             elif due_job.job_type == LIVE_SYNC_JOB:
                 next_run, result = _run_live_sync_job(due_job.competition, stop_event)
+                _mark_job_success(due_job, next_run, _utcnow(), state=_live_mode(result))
             else:
                 result = _run_odds_sync_job(due_job.competition, now)
-                next_run = (
-                    max(1, int((_next_utc_midnight(now) - now).total_seconds()))
-                    if result.budget_limited
-                    else None
-                )
+                completed_at = _utcnow()
+                due_job.last_outcome = result.outcome
+                if result.outcome in {"fetched", "no_eligible_games"}:
+                    due_job.last_success_at = completed_at
+                    due_job.failure_count = 0
+                if result.outcome == "budget_limited":
+                    due_job.state = "budget_limited"
+                    due_job.next_run_at = _next_utc_midnight(completed_at)
+                else:
+                    _schedule_odds_after_catalog(jobs, due_job.competition, completed_at, odds_slot=False)
             if delivery_wake_event is not None and getattr(result, "alerts_created", 0):
                 delivery_wake_event.set()
             completed_at = _utcnow()
-            duration_ms = int((monotonic() - started_at) * 1000)
-            _log_job_success(
+            _log_job_result(
                 result=result,
-                next_run_seconds=next_run or max(0, int((next_catalog_at - completed_at).total_seconds())),
-                duration_ms=duration_ms,
-            )
-            _mark_job_success(
-                due_job,
-                next_run,
-                completed_at,
-                state=(
-                    _live_mode(result)
-                    if isinstance(result, LiveSyncResult)
-                    else "budget_limited"
-                    if isinstance(result, OddsSyncResult) and result.budget_limited
-                    else "no_upcoming"
-                    if isinstance(result, OddsSyncResult)
-                    else "scheduled"
-                ),
+                next_run_at=due_job.next_run_at,
+                next_catalog_at=next_catalog_at,
+                duration_ms=int((monotonic() - started_at) * 1000),
             )
         except Exception:
             if due_job.job_type == CATALOG_SYNC_JOB and due_job.odds_after_catalog:

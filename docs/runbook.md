@@ -36,7 +36,7 @@ Backend startup immediately starts the scheduler and publishes its first plan. A
 
 If reports stay unavailable, check `/healthz` and backend startup logs. Schedule reports are shared in process; there is no internal HTTP endpoint or shared secret to configure.
 
-`Catalog cycle queued` logs show the league count and UTC slot. Verify that completion times do not move the regular UTC schedule, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior.
+`Catalog cycle queued` logs show the league count and UTC slot. Job result logs report the actual `next_run_at` (unset when dormant) separately from `next_catalog_at`; an odds deadline is the next eligible sweep, not the next catalog cycle. Verify that completion times do not move the regular UTC schedule, retries affect only the failing league, and the next regular cycle replaces pending retries. Consult [worker scheduling](architecture.md#worker-scheduling) for startup and missed-cycle behavior.
 
 ## Games Screen Is Stale
 
@@ -81,11 +81,18 @@ Checks:
 
 1. Confirm `ODDS_API_KEY` is nonblank and valid if you expect odds
 2. Confirm the worker is running
-3. Check worker logs for odds fetch failures during catalog sync
+3. Admin reports each odds job's `last_outcome` separately from its next deadline. Request failures and missing configuration remain visible until the next attempt; they do not advance `last_success_at`.
+4. Filter worker logs by `competition=FBS` (or the affected league). `Odds sweep finished` records `outcome`: `fetched`, `fetch_failed`, `quota_failed`, `budget_limited`, `missing_api_key`, or `no_eligible_games`.
+5. For failed requests, `Odds request failed` identifies `stage=quota` or `stage=prices`, duration, configured timeout, exception type, nested reason type, and HTTP status. Request URLs, API keys, and raw exception messages are omitted.
+6. For successful requests, `Odds coverage` shows parsed provider moneyline matchups, checked games, saved odds, and unmatched games. Its sample contains at most five unmatched game IDs, teams, and start times. Zero parsed matchups means no usable moneylines; nonzero matchups with missing games calls for comparing provider coverage, team names, and kickoff times.
 
 Expected behavior:
 
 - when `ODDS_API_KEY` is blank, games still load but odds values can be empty
+- odds sweeps run after each league's startup catalog attempt (including deploys and restarts), then at 00:00 and 12:00 UTC for unpriced eligible games within 48 hours; fetch and quota failures wait for the next sweep, without immediate retries
+- startup sweeps retain the persisted daily credit cap and provider reserve, and do not move the regular UTC schedule
+- Saved odds invalidate the game feed cache and publish a game update just like score changes. No odds change means no update event.
+- `outcome=fetched` means the request succeeded, even when no odds matched; request failures have explicit failure outcomes
 
 ## Worker Running But Alerts Not Arriving
 
@@ -119,7 +126,7 @@ Admin is the source of truth for which supported competitions are active. Inacti
 
 New competition profiles added to an existing environment start inactive. Review their provider configuration and team catalog, then activate them from Admin when they are ready to consume sync resources and appear throughout the app. Seasonal activation is manual; the app does not infer availability from calendar dates or temporary gaps in scheduled games.
 
-For the NHL rollout, deploy the migration and API first so startup seeding creates the 32-team catalog and inactive `NHL` row. Confirm the Admin league entry and team catalog, deploy the worker and web app, then enable NHL manually. Preseason games should ingest normally with `is_odds_eligible = false`.
+For the NHL rollout, deploy the migration and API first so startup seeding creates the 32-team catalog and inactive `NHL` row. Confirm the Admin league entry and team catalog, deploy the web app, then enable NHL manually. Preseason games should ingest normally with `is_odds_eligible = false`.
 
 ## Bad Local State
 
@@ -131,24 +138,6 @@ Escalation path:
 4. `make reset`
 
 `make reset` deletes local DB data, including local sign-in/session state in the database.
-
-## Complete Database Reset And Reseed
-
-Use this only when you intend to delete users, login state, push subscriptions, follows, preferences, alerts, and sports data. The script rebuilds the database through the latest Alembic revision and restores the code-owned competition and team catalogs.
-
-For a production baseline cutover, follow the ordered procedure in [deployment.md](deployment.md#clean-baseline-cutover). The reset must run from the new code before the new API starts.
-
-1. Stop or pause the worker
-2. Run:
-
-```sh
-cd services/backend
-uv run python scripts/reset_database.py --yes
-```
-
-3. Restart API and worker
-4. Confirm competitions and canonical teams were reseeded and ingest resumes cleanly
-5. Sign in again and restore any desired follows and preferences
 
 ## Strict Env Startup Failures
 

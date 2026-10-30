@@ -263,3 +263,59 @@ def test_inning_migration_preserves_preferences_and_game_overrides(tmp_path):
         assert connection.execute(text("SELECT inning_start_threshold_override FROM user_alert_preferences")).scalar() == 5
         assert connection.execute(text("SELECT inning_start_threshold_override FROM user_game_alert_overrides")).scalar() == 9
     engine.dispose()
+
+
+def test_redeploy_preserves_personal_data_and_referenced_identities(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import (
+        Game, PushSubscription, Team, User, UserAlertPreference,
+        UserGameAlertOverride, UserGameFollow, UserTeamFollow,
+    )
+    from app.services.competitions import competition_teams_query
+    from app.services.seed import ensure_bootstrap_admin, ensure_seeded_teams
+
+    database_url = f"sqlite:///{tmp_path / 'redeploy.db'}"
+    _alembic(database_url, "upgrade", "head")
+    engine = create_engine(database_url)
+    try:
+        with Session(engine) as db:
+            ensure_seeded_teams(db)
+            home, away = db.scalars(competition_teams_query("NBA").order_by(Team.id).limit(2)).all()
+            user = User(email="preserve@example.com", email_alerts_enabled=False, hidden_competitions=["MLB"])
+            game = Game(
+                external_game_id="preserved-game", competition="NBA",
+                home_team_id=home.id, away_team_id=away.id,
+                scheduled_start_time=datetime.now(timezone.utc) + timedelta(days=1),
+            )
+            db.add_all([user, game])
+            db.flush()
+            team_follow = UserTeamFollow(user_id=user.id, team_id=home.id)
+            game_follow = UserGameFollow(user_id=user.id, game_id=game.id)
+            preference = UserAlertPreference(user_id=user.id, competition="NBA", alert_type="close_game", is_enabled_override=False)
+            override = UserGameAlertOverride(user_id=user.id, game_id=game.id, alert_type="close_game", is_enabled_override=True)
+            subscription = PushSubscription(user_id=user.id, endpoint="https://push.example/device", p256dh="device-key", auth="device-auth")
+            db.add_all([team_follow, game_follow, preference, override, subscription])
+            db.commit()
+            identities = [(type(row), row.id) for row in (user, home, away, game, team_follow, game_follow, preference, override, subscription)]
+            home.name = "Outdated name"
+            db.commit()
+
+            _alembic(database_url, "upgrade", "head")
+            ensure_seeded_teams(db)
+            ensure_bootstrap_admin(db, "admin@example.com")
+            db.expire_all()
+
+            assert all(db.get(model, row_id) is not None for model, row_id in identities)
+            assert user.email_alerts_enabled is False
+            assert user.hidden_competitions == ["MLB"]
+            assert home.name != "Outdated name"
+            assert team_follow.team_id == home.id
+            assert game_follow.game_id == game.id
+            assert preference.is_enabled_override is False
+            assert override.is_enabled_override is True
+            assert (subscription.endpoint, subscription.p256dh, subscription.auth) == (
+                "https://push.example/device", "device-key", "device-auth",
+            )
+    finally:
+        engine.dispose()

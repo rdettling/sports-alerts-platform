@@ -116,7 +116,7 @@ def test_ingest_run_failure(db_session):
     assert db_session.scalar(select(Game)) is None
 
 
-def test_catalog_providers_run_without_database_checkout(db_session, monkeypatch):
+def test_catalog_providers_run_without_database_checkout(db_session):
     active_connections = 0
 
     def checkout(*_args):
@@ -132,13 +132,8 @@ def test_catalog_providers_run_without_database_checkout(db_session, monkeypatch
             assert active_connections == 0
             return make_success_provider().fetch_games(competition, requests)
 
-    def fetch_odds(_competition):
-        assert active_connections == 0
-        return {}
-
     event.listen(engine, "checkout", checkout)
     event.listen(engine, "checkin", checkin)
-    monkeypatch.setattr("app.worker.odds.fetch_odds_index", fetch_odds)
     try:
         run_catalog_sync(Provider())
     finally:

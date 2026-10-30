@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
 import unicodedata
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from difflib import SequenceMatcher
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -16,7 +14,6 @@ from app.db.models import GameOddsCurrent, GameOddsOutcomeCurrent
 from app.services.competitions import get_competition_profile
 from app.config import settings
 
-logger = logging.getLogger(__name__)
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4/sports"
 ODDS_API_REGION = "us"
 ODDS_MARKET = "h2h"
@@ -61,8 +58,6 @@ class OddsSnapshot:
     bookmaker: str | None
     last_update: datetime | None
     commence_time: datetime | None = None
-    home_team_name: str | None = None
-    away_team_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -216,41 +211,6 @@ def select_best_for_reversed_neutral_site_game(
     )
 
 
-def match_failure_reason(
-    options: list[OddsSnapshot] | OddsSnapshot | None,
-    scheduled_start_time: datetime,
-) -> str:
-    if not options:
-        return "provider_matchup_missing"
-    if select_best_for_game(options, scheduled_start_time) is None:
-        return "provider_start_time_mismatch"
-    return "unknown"
-
-
-def closest_provider_matchups(
-    matchup_key: tuple[str, str],
-    odds_index: dict[tuple[str, str], list[OddsSnapshot]],
-    limit: int = 3,
-) -> tuple[str, ...]:
-    target = " ".join(matchup_key)
-    ranked = sorted(
-        odds_index.items(),
-        key=lambda item: SequenceMatcher(None, target, " ".join(item[0])).ratio(),
-        reverse=True,
-    )
-    matches: list[str] = []
-    for key, snapshots in ranked:
-        if SequenceMatcher(None, target, " ".join(key)).ratio() < 0.55:
-            break
-        snapshot = snapshots[0]
-        home_name = snapshot.home_team_name or key[0]
-        away_name = snapshot.away_team_name or key[1]
-        matches.append(f"{away_name} @ {home_name}")
-        if len(matches) == limit:
-            break
-    return tuple(matches)
-
-
 def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -317,8 +277,6 @@ def _extract_event_moneyline(event: dict) -> OddsSnapshot | None:
                 bookmaker=bookmaker.get("title") if isinstance(bookmaker, dict) else None,
                 last_update=_parse_datetime(bookmaker.get("last_update") if isinstance(bookmaker, dict) else None),
                 commence_time=_parse_datetime(event.get("commence_time")),
-                home_team_name=raw_home_name,
-                away_team_name=raw_away_name,
             )
     return None
 
@@ -347,7 +305,10 @@ def _parse_odds_index(payload: object) -> dict[tuple[str, str], list[OddsSnapsho
     return odds_index
 
 
-def _fetch_provider_result(competition: str) -> OddsProviderResult:
+def fetch_odds_with_usage(competition: str) -> OddsProviderResult:
+    if not settings.odds_api_key.strip():
+        return OddsProviderResult({})
+    competition = competition.strip().upper()
     query = urlencode(
         {
             "apiKey": settings.odds_api_key.strip(),
@@ -370,35 +331,6 @@ def _fetch_provider_result(competition: str) -> OddsProviderResult:
         credits_used=int(used) if used and used.isdigit() else None,
         credits_remaining=int(remaining) if remaining and remaining.isdigit() else None,
     )
-
-
-def _fetch_from_provider(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
-    return _fetch_provider_result(competition).odds_index
-
-
-def fetch_odds_index(competition: str) -> dict[tuple[str, str], list[OddsSnapshot]]:
-    if not settings.odds_api_key.strip():
-        return {}
-
-    normalized = competition.strip().upper()
-    try:
-        profile = get_competition_profile(normalized)
-    except ValueError:
-        return {}
-    if profile.odds_sport_key is None:
-        return {}
-
-    try:
-        return _fetch_from_provider(normalized)
-    except Exception as exc:
-        logger.warning("Odds API request failed: %s", exc)
-        return {}
-
-
-def fetch_odds_with_usage(competition: str) -> OddsProviderResult:
-    if not settings.odds_api_key.strip():
-        return OddsProviderResult({})
-    return _fetch_provider_result(competition.strip().upper())
 
 
 def fetch_quota_status() -> OddsProviderResult:

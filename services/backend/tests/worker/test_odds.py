@@ -1,32 +1,7 @@
 from datetime import datetime, timezone
 
 from app.worker import odds
-from app.worker.odds import OddsOutcome, OddsSnapshot, _odds_sport_key_for_competition, closest_provider_matchups, game_key, select_best_for_reversed_neutral_site_game, select_best_for_single_team
-
-
-def test_blank_api_key_disables_fetch(monkeypatch):
-    monkeypatch.setattr(odds.settings, "odds_api_key", " ")
-    monkeypatch.setattr(
-        odds,
-        "_fetch_from_provider",
-        lambda _competition: (_ for _ in ()).throw(AssertionError("provider should not be called")),
-    )
-
-    assert odds.fetch_odds_index("NBA") == {}
-
-
-def test_provider_failure_returns_no_odds(monkeypatch, caplog):
-    monkeypatch.setattr(odds.settings, "odds_api_key", "test-key")
-    monkeypatch.setattr(
-        odds,
-        "_fetch_from_provider",
-        lambda _competition: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
-    )
-
-    with caplog.at_level("WARNING", logger="app.worker.odds"):
-        assert odds.fetch_odds_index("NBA") == {}
-
-    assert "Odds API request failed: provider unavailable" in caplog.text
+from app.worker.odds import OddsOutcome, OddsSnapshot, _odds_sport_key_for_competition, game_key, select_best_for_reversed_neutral_site_game, select_best_for_single_team
 
 
 def test_mls_name_aliases_match_seeded_names():
@@ -151,20 +126,54 @@ def test_reversed_neutral_site_odds_use_the_scoreboard_team_sides():
     ]
 
 
-def test_closest_provider_matchups_keeps_provider_team_names():
-    provider_odds = OddsSnapshot(
-        outcomes=(),
-        bookmaker=None,
-        last_update=None,
-        home_team_name="Southern Mississippi Golden Eagles",
-        away_team_name="Connecticut Huskies",
-    )
 
-    assert closest_provider_matchups(
-        game_key("Southern Miss Golden Eagles", "UConn Huskies"),
-        {
-            game_key("Southern Mississippi Golden Eagles", "Connecticut Huskies"): [
-                provider_odds
-            ]
-        },
-    ) == ("Connecticut Huskies @ Southern Mississippi Golden Eagles",)
+
+def test_blank_api_key_disables_provider_request(monkeypatch):
+    monkeypatch.setattr(odds.settings, "odds_api_key", " ")
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("must not contact provider without a key")
+
+    monkeypatch.setattr(odds, "urlopen", unexpected)
+    assert odds.fetch_odds_with_usage("NBA") == odds.OddsProviderResult({})
+
+
+def test_provider_entry_point_parses_moneylines_and_usage(monkeypatch):
+    import io
+    import json
+    from urllib.parse import parse_qs, urlparse
+
+    payload = [{
+        "home_team": "Boston Celtics",
+        "away_team": "Atlanta Hawks",
+        "commence_time": "2026-10-31T23:00:00Z",
+        "bookmakers": [{
+            "title": "Test Book",
+            "last_update": "2026-10-30T12:00:00Z",
+            "markets": [{"key": "h2h", "outcomes": [
+                {"name": "Atlanta Hawks", "price": 125},
+                {"name": "Boston Celtics", "price": -145},
+            ]}],
+        }],
+    }]
+
+    def response(url, timeout):
+        assert urlparse(url).path == "/v4/sports/basketball_nba/odds"
+        assert parse_qs(urlparse(url).query) == {
+            "apiKey": ["test-odds-key"], "regions": ["us"], "markets": ["h2h"], "oddsFormat": ["american"],
+        }
+        assert timeout == 6
+        stream = io.BytesIO(json.dumps(payload).encode())
+        stream.headers = {"x-requests-used": "12", "x-requests-remaining": "488"}
+        return stream
+
+    monkeypatch.setattr(odds, "urlopen", response)
+    result = odds.fetch_odds_with_usage(" nba ")
+    assert (result.credits_used, result.credits_remaining) == (12, 488)
+    snapshot, = result.odds_index[game_key("Boston Celtics", "Atlanta Hawks")]
+    assert snapshot.bookmaker == "Test Book"
+    assert snapshot.last_update == datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+    assert snapshot.commence_time == datetime(2026, 10, 31, 23, tzinfo=timezone.utc)
+    assert [(o.team_side, o.price_american) for o in snapshot.outcomes] == [("away", 125), ("home", -145)]
+    assert odds.select_best_for_game(snapshot, datetime(2026, 11, 2, tzinfo=timezone.utc)) is None
+    assert odds.select_best_for_game(snapshot, snapshot.commence_time) is snapshot

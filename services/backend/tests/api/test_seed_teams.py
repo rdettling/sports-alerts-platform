@@ -20,6 +20,7 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
             competition_teams_query("NBA").where(Team.external_team_id == nba_id)
         )
         assert nba is not None
+        original_nba_id = nba.id
         nba.name = "Stale name"
         nba.abbreviation = "OLD"
 
@@ -52,6 +53,7 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
         unknown = db.scalar(select(Team).where(Team.provider_scope == "test"))
 
         assert restored_nba is not None
+        assert restored_nba.id == original_nba_id
         assert (restored_nba.name, restored_nba.abbreviation) == (
             nba_name,
             nba_abbreviation,
@@ -74,7 +76,7 @@ def test_ensure_seeded_teams_reconciles_catalog_without_deleting_unknown_teams()
         )
 
 
-def test_ensure_seeded_teams_removes_discovered_fbs_memberships_and_follows():
+def test_catalog_membership_changes_preserve_team_identity_and_follows():
     with SessionLocal() as db:
         ensure_seeded_teams(db)
         opponent = Team(
@@ -100,7 +102,11 @@ def test_ensure_seeded_teams_removes_discovered_fbs_memberships_and_follows():
 
         assert db.get(Team, opponent_id) is not None
         assert db.get(CompetitionTeam, ("FBS", opponent_id)) is None
-        assert db.get(UserTeamFollow, follow_id) is None
+        db.expire_all()
+        preserved = db.get(UserTeamFollow, follow_id)
+        assert preserved is not None
+        assert preserved.user_id == user.id
+        assert preserved.team_id == opponent_id
 
 
 def test_ensure_seeded_teams_assigns_every_fbs_program_to_a_conference():

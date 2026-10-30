@@ -134,6 +134,24 @@ export function AdminLeaguesPanel({
                 } else if (odds.state === "queued") {
                   oddsValue = "Queued";
                   oddsDetail = "Waiting to run";
+                } else if (
+                  odds.last_outcome === "fetch_failed" ||
+                  odds.last_outcome === "quota_failed"
+                ) {
+                  oddsValue =
+                    odds.last_outcome === "fetch_failed"
+                      ? "Odds fetch failed"
+                      : "Quota check failed";
+                  oddsDetail = odds.next_run_at
+                    ? `Next sweep: ${countdown(odds.next_run_at, now)}`
+                    : "Rechecked after catalog";
+                  oddsDanger = true;
+                } else if (odds.last_outcome === "missing_api_key") {
+                  oddsValue = "Odds API key missing";
+                  oddsDetail = odds.next_run_at
+                    ? `Next sweep: ${countdown(odds.next_run_at, now)}`
+                    : "Configure ODDS_API_KEY";
+                  oddsDanger = true;
                 } else if (odds.state === "no_upcoming") {
                   oddsValue = "No pending odds";
                   oddsDetail = "Rechecked after catalog";
@@ -142,7 +160,7 @@ export function AdminLeaguesPanel({
                   oddsDetail = "Reload for worker status";
                 } else if (odds.state === "budget_limited") {
                   oddsValue = "Budget limited";
-                  oddsDetail = retryCountdown(odds.next_run_at, now);
+                  oddsDetail = `Next sweep: ${countdown(odds.next_run_at, now)}`;
                 } else if (odds.state === "retry_scheduled") {
                   oddsValue = retryCountdown(odds.next_run_at, now);
                   oddsDetail = "Previous attempt failed";

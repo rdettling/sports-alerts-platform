@@ -75,6 +75,7 @@ describe("AdminView", () => {
             job_type: "catalog_sync",
             next_run_at: new Date(Date.now() + 7_200_000).toISOString(),
             last_success_at: reportedAt,
+            last_outcome: null,
             state: "scheduled",
           },
           {
@@ -82,6 +83,7 @@ describe("AdminView", () => {
             job_type: "live_sync",
             next_run_at: new Date(Date.now() + 3_000).toISOString(),
             last_success_at: reportedAt,
+            last_outcome: null,
             state: "live",
           },
           {
@@ -89,6 +91,7 @@ describe("AdminView", () => {
             job_type: "catalog_sync",
             next_run_at: new Date(Date.now() + 90_000).toISOString(),
             last_success_at: null,
+            last_outcome: null,
             state: "retry_scheduled",
           },
           {
@@ -96,6 +99,7 @@ describe("AdminView", () => {
             job_type: "live_sync",
             next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
             last_success_at: null,
+            last_outcome: null,
             state: "waiting_for_start",
           },
         ],
@@ -155,6 +159,7 @@ describe("AdminView", () => {
             state: "queued",
             next_run_at: new Date().toISOString(),
             last_success_at: null,
+            last_outcome: null,
           },
           {
             competition: "WNBA",
@@ -162,6 +167,7 @@ describe("AdminView", () => {
             state: "live",
             next_run_at: new Date(Date.now() + 3600000).toISOString(),
             last_success_at: null,
+            last_outcome: null,
           },
         ],
       },
@@ -232,6 +238,7 @@ describe("AdminView", () => {
             next_run_at: new Date(Date.now() + 60_000).toISOString(),
             state: "awaiting_first_result",
             last_success_at: null,
+            last_outcome: null,
           },
           {
             competition: "WNBA",
@@ -239,6 +246,7 @@ describe("AdminView", () => {
             next_run_at: null,
             state: "no_upcoming",
             last_success_at: null,
+            last_outcome: null,
           },
           {
             competition: "NBA",
@@ -246,6 +254,7 @@ describe("AdminView", () => {
             next_run_at: new Date(Date.now() + 60_000).toISOString(),
             state: "live",
             last_success_at: null,
+            last_outcome: null,
           },
         ],
       },

@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import CompetitionTeam, Team, User, UserTeamFollow
+from app.db.models import CompetitionTeam, Team, User
 from app.services.competitions import (
     ensure_competition_settings,
     get_competition_profile,
@@ -69,16 +69,6 @@ def ensure_seeded_teams(db: Session) -> None:
         (membership.competition, membership.team_id)
         for membership in existing_memberships
     }
-    stale_college_team_ids = {
-        membership.team_id
-        for membership in existing_memberships
-        if membership.competition in {"FBS", "NCAAB"}
-        and (membership.competition, membership.team_id) not in desired_memberships
-    }
-    for follow in db.scalars(
-        select(UserTeamFollow).where(UserTeamFollow.team_id.in_(stale_college_team_ids))
-    ):
-        db.delete(follow)
     for membership in existing_memberships:
         if (membership.competition, membership.team_id) not in desired_memberships:
             db.delete(membership)

@@ -186,6 +186,14 @@ export type PushSubscriptionPayload = {
 
 export type OpsAdminOverviewWindow = "1h" | "6h" | "24h" | "7d";
 
+export type OddsSyncOutcome =
+  | "fetched"
+  | "fetch_failed"
+  | "quota_failed"
+  | "budget_limited"
+  | "missing_api_key"
+  | "no_eligible_games";
+
 export type ScheduleSnapshot = {
   reported_at: string;
   next_catalog_at: string;
@@ -194,6 +202,7 @@ export type ScheduleSnapshot = {
     job_type: "catalog_sync" | "live_sync" | "odds_sync";
     next_run_at: string | null;
     last_success_at: string | null;
+    last_outcome: OddsSyncOutcome | null;
     state:
       | "awaiting_first_result"
       | "queued"

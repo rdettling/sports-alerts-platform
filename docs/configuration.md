@@ -49,7 +49,7 @@ Delivery:
 
 `ODDS_API_KEY` enables optional moneyline snapshots. Blank skips odds fetching. The daily credit cap is shared across competitions.
 
-The scheduler and delivery dispatcher start with the API. They need no separate URL, shared internal secret, or worker service. Catalog sync runs every six hours, odds sweeps twice daily when needed, and live intervals come from competition profiles.
+The scheduler and delivery dispatcher start with the API. They need no separate URL, shared internal secret, or worker service. Catalog sync runs at startup and every six hours, odds sweeps follow the startup catalog attempt and run twice daily when needed, and live intervals come from competition profiles.
 
 ## Frontend
 

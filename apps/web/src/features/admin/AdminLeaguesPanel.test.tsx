@@ -154,7 +154,7 @@ describe("AdminLeaguesPanel", () => {
     ["awaiting_first_result", "Awaiting catalog", "Odds run follows catalog"],
     ["queued", "Queued", "Waiting to run"],
     ["no_upcoming", "No pending odds", "Rechecked after catalog"],
-    ["budget_limited", "Budget limited", "Retry in"],
+    ["budget_limited", "Budget limited", "Next sweep:"],
     ["retry_scheduled", "Retry in", "Previous attempt failed"],
     ["scheduled", "In 1m", "Scheduled odds sync"],
   ] as const)("renders the %s odds state", (state, value, detail) => {
@@ -167,6 +167,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "live_sync",
           next_run_at: nextRun,
           last_success_at: null,
+          last_outcome: null,
           state: "waiting_for_start",
         },
         {
@@ -174,6 +175,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "odds_sync",
           next_run_at: nextRun,
           last_success_at: null,
+          last_outcome: null,
           state,
         },
       ]),
@@ -194,6 +196,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "live_sync",
           next_run_at: null,
           last_success_at: new Date().toISOString(),
+          last_outcome: null,
           state: "no_upcoming",
         },
         {
@@ -201,6 +204,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "odds_sync",
           next_run_at: null,
           last_success_at: new Date().toISOString(),
+          last_outcome: null,
           state: "no_upcoming",
         },
       ]),
@@ -223,6 +227,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "live_sync",
           next_run_at: null,
           last_success_at: null,
+          last_outcome: null,
           state: "waiting_for_start",
         },
         {
@@ -230,6 +235,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "odds_sync",
           next_run_at: null,
           last_success_at: null,
+          last_outcome: null,
           state: "scheduled",
         },
       ]),
@@ -253,6 +259,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "live_sync",
           next_run_at: retryAt,
           last_success_at: null,
+          last_outcome: null,
           state: "retry_scheduled",
         },
         {
@@ -260,6 +267,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "odds_sync",
           next_run_at: passedAt,
           last_success_at: null,
+          last_outcome: null,
           state: "scheduled",
         },
         {
@@ -267,6 +275,7 @@ describe("AdminLeaguesPanel", () => {
           job_type: "live_sync",
           next_run_at: retryAt,
           last_success_at: null,
+          last_outcome: null,
           state: "scheduled",
         },
       ]),
@@ -281,4 +290,52 @@ describe("AdminLeaguesPanel", () => {
     expect(nflRow.getByText("Worker confirmation pending")).toBeInTheDocument();
     expect(nflRow.getByText("Odds disabled")).toBeInTheDocument();
   });
+
+  it.each([
+    ["fetch_failed", "Odds fetch failed"],
+    ["quota_failed", "Quota check failed"],
+    ["missing_api_key", "Odds API key missing"],
+  ] as const)("shows %s even without a future deadline", (outcome, label) => {
+    renderPanel(
+      [item],
+      makeSchedule([
+        {
+          competition: item.competition,
+          job_type: "odds_sync",
+          next_run_at: null,
+          last_success_at: null,
+          last_outcome: outcome,
+          state: "no_upcoming",
+        },
+      ]),
+    );
+    expect(screen.getByText(label)).toHaveClass("is-danger");
+    expect(screen.queryByText("No pending odds")).toBeNull();
+    expect(
+      screen.getByText(
+        outcome === "missing_api_key" ? "Configure ODDS_API_KEY" : "Rechecked after catalog",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["fetch_failed", "quota_failed", "missing_api_key"] as const)(
+    "shows the next sweep after %s without implying an immediate retry",
+    (outcome) => {
+      renderPanel(
+        [item],
+        makeSchedule([
+          {
+            competition: item.competition,
+            job_type: "odds_sync",
+            next_run_at: new Date(Date.now() + 60_000).toISOString(),
+            last_success_at: new Date(Date.now() - 3600_000).toISOString(),
+            last_outcome: outcome,
+            state: "scheduled",
+          },
+        ]),
+      );
+      expect(screen.getByText(/^Next sweep: In 1m/)).toBeInTheDocument();
+      expect(screen.queryByText(/^Retry in/)).toBeNull();
+    },
+  );
 });
