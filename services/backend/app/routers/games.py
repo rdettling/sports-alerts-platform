@@ -14,11 +14,11 @@ def list_games(
     status: str | None = Query(default=None, description="Filter by game status"),
     competition: str | None = Query(default=None, description="Filter by competition, e.g. NBA or MLB"),
     include_finals: bool = Query(default=False, description="Include final games in results"),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int | None = Query(default=None, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[GameOut]:
     response.headers["Cache-Control"] = "no-store"
-    if status is None and competition is None and include_finals and limit == 500:
+    if status is None and competition is None and include_finals and limit is None:
         return game_feed_cache.get()
     return load_games(
         db, status=status, competition=competition, include_finals=include_finals, limit=limit,

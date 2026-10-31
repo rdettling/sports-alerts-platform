@@ -32,7 +32,7 @@ def test_cache_hits_do_not_open_connections_and_expiry_does_not_slide(monkeypatc
         event.remove(engine, "checkout", unexpected_checkout)
     now = 130.0
     assert cache.get() is not first
-    assert calls == [{"include_finals": True, "limit": 500}] * 2
+    assert calls == [{"include_finals": True}] * 2
 
 
 def test_concurrent_misses_share_one_fill(monkeypatch):

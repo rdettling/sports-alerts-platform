@@ -42,7 +42,7 @@ export function gamesFallbackInterval(games: Game[] | undefined, now = Date.now(
 export function gamesQueryOptions() {
   return queryOptions({
     queryKey: dashboardQueryKeys.games,
-    queryFn: () => listGames({ includeFinals: true, limit: 500 }),
+    queryFn: () => listGames({ includeFinals: true }),
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnReconnect: false,

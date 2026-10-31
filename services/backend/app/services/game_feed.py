@@ -21,7 +21,7 @@ def load_games(
     status: str | None = None,
     competition: str | None = None,
     include_finals: bool = False,
-    limit: int = 50,
+    limit: int | None = None,
 ) -> list[GameOut]:
     active_competitions = get_active_competitions(db)
     now = datetime.now(timezone.utc)
@@ -100,7 +100,7 @@ class GameFeedCache:
                     generation = self._generation
                 started_at = monotonic()
                 with SessionLocal() as db:
-                    games = load_games(db, include_finals=True, limit=500)
+                    games = load_games(db, include_finals=True)
                 with self._state_lock:
                     # Invalidation can arrive while the database read is in flight.
                     if generation != self._generation:

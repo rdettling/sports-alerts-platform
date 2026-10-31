@@ -136,7 +136,7 @@ Notable modeling decisions:
 
 SSE keep-alives do not query SQLite. Quiet feeds use a 30-minute fallback or the next future start; visible screens also refresh on reconnect or foregrounding.
 
-The API caches only the public dashboard request (`include_finals=true`, `limit=500`, no status/competition filters) for 30 seconds. Concurrent misses share one fill; cached response models retain no ORM entities, database sessions, or connections. Cache hits do not extend expiry. An invalidation during a fill discards that result and reloads using a new session. Competition enable/disable commits also invalidate the cache. Other game queries read the database directly, and all game responses use `Cache-Control: no-store` to prevent browser/CDN caching.
+The API caches only the public dashboard request (`include_finals=true`, no limit or status/competition filters) for up to 30 seconds. The dashboard returns every game in the window from 36 hours ago through seven days ahead, without a row cap. Explicitly limited game queries still accept 1–500 results. Concurrent misses share one fill; cached response models retain no ORM entities, database sessions, or connections. Cache hits do not extend expiry. An invalidation during a fill discards that result and reloads using a new session. Competition enable/disable commits also invalidate the cache. Other game queries read the database directly, and all game responses use `Cache-Control: no-store` to prevent browser/CDN caching.
 
 ### Alert Evaluation
 

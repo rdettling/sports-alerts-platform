@@ -372,12 +372,58 @@ def test_games_filter_by_wnba(client):
     assert [game["external_game_id"] for game in response.json()] == ["test-wnba-game"]
 
 
-def test_games_accepts_raised_dashboard_limit(client):
+def test_games_validates_explicit_limits(client):
     assert client.get("/games?limit=500").status_code == 200
     assert client.get("/games?limit=501").status_code == 422
 
 
-DASHBOARD_GAMES_URL = "/games?include_finals=true&limit=500"
+DASHBOARD_GAMES_URL = "/games?include_finals=true"
+
+
+def test_dashboard_returns_complete_window_beyond_500_games(client):
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        teams = db.scalars(competition_teams_query("NBA").limit(2)).all()
+        games = [
+            Game(
+                external_game_id=f"full-feed-{index}",
+                competition="NBA",
+                home_team_id=teams[0].id,
+                away_team_id=teams[1].id,
+                scheduled_start_time=now + timedelta(days=6) * index / 649,
+                status="scheduled",
+                is_final=False,
+            )
+            for index in range(650)
+        ]
+        db.add_all(games)
+        for label, start in [("expired", now - timedelta(hours=37)), ("future", now + timedelta(days=8))]:
+            db.add(Game(
+                external_game_id=label, competition="NBA",
+                home_team_id=teams[0].id, away_team_id=teams[1].id,
+                scheduled_start_time=start, status="scheduled", is_final=False,
+            ))
+        db.flush()
+        db.add(GameOddsCurrent(
+            game_id=games[-1].id, bookmaker="DraftKings", fetched_at=now,
+            outcomes=[GameOddsOutcomeCurrent(
+                outcome_key="home", outcome_label="Home", outcome_order=0,
+                price_american=-110, team_side="home",
+            )],
+        ))
+        db.commit()
+
+    for _ in range(2):
+        response = client.get(DASHBOARD_GAMES_URL)
+        assert response.status_code == 200
+        payload = response.json()
+        assert [game["external_game_id"] for game in payload] == [f"full-feed-{index}" for index in range(650)]
+        assert payload[-1]["home_team"]["name"]
+        assert payload[-1]["odds"]["outcomes"][0]["price_american"] == -110
+
+    limited = client.get(f"{DASHBOARD_GAMES_URL}&limit=500")
+    assert limited.status_code == 200
+    assert len(limited.json()) == 500
 
 
 def test_dashboard_cache_invalidates_before_worker_broadcast(client, monkeypatch):
@@ -436,7 +482,7 @@ def test_dashboard_cache_is_not_used_for_other_query_shapes(client):
         row.is_final = True
         db.commit()
     assert client.get("/games").json() == []
-    for query in ["include_finals=true", "status=final&include_finals=true&limit=500", "competition=NBA&include_finals=true&limit=500"]:
+    for query in ["include_finals=true&limit=50", "status=final&include_finals=true&limit=500", "competition=NBA&include_finals=true&limit=500"]:
         response = client.get(f"/games?{query}")
         assert response.headers["cache-control"] == "no-store"
         assert response.json()[0]["status"] == "final"

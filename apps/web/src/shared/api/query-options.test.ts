@@ -1,6 +1,7 @@
 import type { Game } from ".";
 
-import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CATALOG_STALE_TIME_MS,
@@ -12,6 +13,20 @@ import {
 } from "./query-options";
 
 describe("dashboard queries", () => {
+  it("requests the complete game feed without a row limit", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("[]"));
+    const client = new QueryClient();
+    try {
+      await client.fetchQuery(gamesQueryOptions());
+      const url = new URL(String(fetch.mock.calls[0][0]));
+      expect(url.pathname).toBe("/games");
+      expect([...url.searchParams]).toEqual([["include_finals", "true"]]);
+    } finally {
+      client.clear();
+      fetch.mockRestore();
+    }
+  });
+
   it("fetches games on mount and leaves ongoing refreshes to the coordinator", () => {
     expect(gamesQueryOptions().refetchInterval).toBeUndefined();
     expect(gamesQueryOptions().staleTime).toBe(0);
